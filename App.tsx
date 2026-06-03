@@ -242,7 +242,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handlePop = () => {
+    const handleNav = () => {
       const v = parseViewFromHash(window.location.hash);
       if (v) {
         if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
@@ -250,8 +250,14 @@ const App: React.FC = () => {
         localStorage.setItem(STORAGE_KEYS.VIEW, v);
       }
     };
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
+    // popstate: browser back/forward on desktop
+    // hashchange: some mobile browsers fire this instead of popstate
+    window.addEventListener('popstate', handleNav);
+    window.addEventListener('hashchange', handleNav);
+    return () => {
+      window.removeEventListener('popstate', handleNav);
+      window.removeEventListener('hashchange', handleNav);
+    };
   }, [currentUser]);
 
   useEffect(() => {
