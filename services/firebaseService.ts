@@ -1,8 +1,8 @@
 
-import { initializeApp } from 'firebase/app';
+import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, uploadString, uploadBytesResumable } from 'firebase/storage';
+import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense } from '../types';
 
 export const firebaseConfig = {
@@ -17,7 +17,24 @@ export const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app);
+const CENTRAL_STORAGE_APP_NAME = "centralized-storage";
+const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
+const centralizedStorageConfig = {
+    projectId: "calculator-55611",
+    storageBucket: CENTRAL_STORAGE_BUCKET,
+};
+const STORAGE_ROOT = "tohid-dayhami-platform";
+export type CentralStorageFolder = "uploads" | "images" | "documents" | "temp";
+export const storageFolders: Record<CentralStorageFolder, string> = {
+    uploads: `${STORAGE_ROOT}/uploads`,
+    images: `${STORAGE_ROOT}/images`,
+    documents: `${STORAGE_ROOT}/documents`,
+    temp: `${STORAGE_ROOT}/temp`,
+};
+const centralizedStorageApp = getApps().some(({ name }) => name === CENTRAL_STORAGE_APP_NAME)
+    ? getApp(CENTRAL_STORAGE_APP_NAME)
+    : initializeApp(centralizedStorageConfig, CENTRAL_STORAGE_APP_NAME);
+const storage = getStorage(centralizedStorageApp, `gs://${CENTRAL_STORAGE_BUCKET}`);
 export let analytics: Analytics | null = null;
 
 isSupported()
@@ -190,74 +207,91 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.5): Promis
     });
 };
 
-const fileToDataURL = (file: File): Promise<string> => {
+const sanitizeFileName = (fileName: string) => {
+    const cleaned = fileName
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9._-]/g, "_");
+    return cleaned || "file";
+};
+
+const assertCentralStoragePath = (path: string) => {
+    if (!path.startsWith(`${STORAGE_ROOT}/`)) {
+        throw new Error("Storage path must stay inside the centralized project folder.");
+    }
+    return path;
+};
+
+const buildCentralStoragePath = (fileName: string, folder: CentralStorageFolder = "uploads") => {
+    const timestamp = Date.now();
+    return `${storageFolders[folder]}/${timestamp}-${sanitizeFileName(fileName)}`;
+};
+
+const pathFromDownloadUrl = (url: string) => {
+    const parsed = new URL(url);
+    const marker = "/o/";
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex === -1) return url;
+    return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+};
+
+const normalizeStoragePath = (pathOrUrl: string) => {
+    const path = pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")
+        ? pathFromDownloadUrl(pathOrUrl)
+        : pathOrUrl.replace(/^gs:\/\/[^/]+\//, "");
+    return assertCentralStoragePath(path);
+};
+
+export const uploadFile = (
+    file: File,
+    folder: CentralStorageFolder = "uploads",
+    onProgress?: (progress: number) => void
+): Promise<{ url: string; path: string }> => {
+    const path = buildCentralStoragePath(file.name, folder);
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+        uploadTask.on(
+            "state_changed",
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                onProgress?.(progress);
+            },
+            reject,
+            async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve({ url, path });
+            }
+        );
     });
+};
+
+export const getFileUrl = async (pathOrUrl: string) => {
+    const path = normalizeStoragePath(pathOrUrl);
+    return getDownloadURL(ref(storage, path));
+};
+
+export const deleteFile = async (pathOrUrl: string) => {
+    const path = normalizeStoragePath(pathOrUrl);
+    await deleteObject(ref(storage, path));
 };
 
 export const uploadFileWithProgress = async (
     file: File, 
     onProgress: (progress: number) => void,
     onSuccess: (url: string) => void,
-    onError: (error: Error) => void
+    onError: (error: Error) => void,
+    folder: CentralStorageFolder = "uploads"
 ) => {
-    if (file.type.startsWith('image/')) {
-        try {
-            onProgress(20);
-            const base64 = await compressImage(file, 800, 0.5);
-            onProgress(60);
-            if (base64) {
-                setTimeout(() => {
-                    onProgress(100);
-                    onSuccess(base64);
-                }, 300); 
-                return; 
-            }
-        } catch (e) {
-            console.error("Compression failed", e);
-        }
+    try {
+        const { url } = await uploadFile(file, folder, onProgress);
+        onProgress(100);
+        onSuccess(url);
+    } catch (error) {
+        console.error("Storage Error:", error);
+        onError(new Error("آپلود ناموفق. لطفاً اتصال اینترنت را بررسی کنید."));
     }
-    if (file.type === 'application/pdf' && file.size < 2 * 1024 * 1024) {
-        try {
-            onProgress(30);
-            const base64 = await fileToDataURL(file);
-            onProgress(100);
-            onSuccess(base64);
-            return;
-        } catch (e) {}
-    }
-    const dateFolder = new Date().toISOString().split('T')[0];
-    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storageRef = ref(storage, `uploads/${dateFolder}/${Date.now()}_${safeName}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-    const watchdog = setTimeout(() => {
-        if (uploadTask.snapshot.bytesTransferred === 0) {
-            uploadTask.cancel();
-            onError(new Error("آپلود کند است یا دسترسی مسدود شده است."));
-        }
-    }, 15000);
-    uploadTask.on('state_changed',
-        (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            onProgress(progress);
-            if (progress > 0) clearTimeout(watchdog);
-        },
-        (error) => {
-            clearTimeout(watchdog);
-            console.error("Storage Error:", error);
-            onError(new Error("آپلود ناموفق. لطفاً اتصال اینترنت را بررسی کنید."));
-        },
-        () => {
-            clearTimeout(watchdog);
-            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-                onSuccess(downloadURL);
-            });
-        }
-    );
 };
 
 // --- Reports ---

@@ -335,7 +335,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       },
       (err) => {
         setFormData(prev => ({ ...prev, files: prev.files?.map(f => f.name === file.name ? { ...f, status: 'error' } : f) }));
-      }
+      },
+      'documents'
     );
   };
 

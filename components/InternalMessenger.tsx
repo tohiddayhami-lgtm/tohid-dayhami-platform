@@ -133,7 +133,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
           const file = e.target.files[0];
           const newFile: AttachedFile = { name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 };
           setAttachments(prev => [...prev, newFile]);
-          uploadFileWithProgress(file, (progress) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, progress } : f)), (url) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, content: url, status: 'success', progress: 100 } : f)), (err) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error' } : f)));
+          uploadFileWithProgress(file, (progress) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, progress } : f)), (url) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, content: url, status: 'success', progress: 100 } : f)), (err) => setAttachments(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error' } : f)), 'uploads');
       }
   };
 

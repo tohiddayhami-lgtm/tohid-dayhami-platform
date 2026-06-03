@@ -125,14 +125,14 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]; if (!file) return;
       setIsProcessingImage(true);
-      uploadFileWithProgress(file, () => {}, (url) => { setFormData(prev => ({ ...prev, avatar: url })); setIsProcessingImage(false); }, (err) => { alert(err.message); setIsProcessingImage(false); });
+      uploadFileWithProgress(file, () => {}, (url) => { setFormData(prev => ({ ...prev, avatar: url })); setIsProcessingImage(false); }, (err) => { alert(err.message); setIsProcessingImage(false); }, 'images');
   };
 
   const handleDocFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]; if (!file) return;
       if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
       setNewDocFile({ name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 });
-      uploadFileWithProgress(file, (progress) => { setNewDocFile(prev => prev ? { ...prev, progress } : null); }, (url) => { setNewDocFile(prev => prev ? { ...prev, content: url, status: 'success', progress: 100 } : null); }, (err) => { setNewDocFile(prev => prev ? { ...prev, status: 'error', errorMsg: err.message } : null); });
+      uploadFileWithProgress(file, (progress) => { setNewDocFile(prev => prev ? { ...prev, progress } : null); }, (url) => { setNewDocFile(prev => prev ? { ...prev, content: url, status: 'success', progress: 100 } : null); }, (err) => { setNewDocFile(prev => prev ? { ...prev, status: 'error', errorMsg: err.message } : null); }, 'documents');
   };
 
   const handleAddDocument = () => {

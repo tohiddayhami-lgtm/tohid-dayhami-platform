@@ -137,7 +137,8 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       uploadFileWithProgress(file,
         (progress) => setFiles(prev => prev.map(f => f.name === file.name ? { ...f, progress } : f)),
         (url) => setFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'success', content: url, progress: 100 } : f)),
-        (err) => setFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', errorMsg: err.message } : f))
+        (err) => setFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', errorMsg: err.message } : f)),
+        'uploads'
       );
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
