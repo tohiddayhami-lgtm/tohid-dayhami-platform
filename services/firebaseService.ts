@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle, AnalyticsEvent } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -747,6 +747,66 @@ export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) => 
     return onSnapshot(
         query(collection(db, 'news'), orderBy('publishedAt', 'desc')),
         (snap) => callback(snap.docs.map(d => d.data() as NewsArticle)),
+        () => {}
+    );
+};
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+
+let _countryCache: { country: string; countryCode: string; city: string } | null = null;
+
+const getCountryInfo = async () => {
+    if (_countryCache) return _countryCache;
+    const cached = sessionStorage.getItem('_analytics_geo');
+    if (cached) { _countryCache = JSON.parse(cached); return _countryCache!; }
+    try {
+        const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
+        const d = await res.json();
+        _countryCache = { country: d.country_name || 'Unknown', countryCode: d.country_code || 'XX', city: d.city || '' };
+    } catch {
+        _countryCache = { country: 'Unknown', countryCode: 'XX', city: '' };
+    }
+    sessionStorage.setItem('_analytics_geo', JSON.stringify(_countryCache));
+    return _countryCache!;
+};
+
+const getSessionId = () => {
+    let sid = sessionStorage.getItem('_analytics_sid');
+    if (!sid) { sid = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; sessionStorage.setItem('_analytics_sid', sid); }
+    return sid;
+};
+
+const getDevice = (): 'mobile' | 'tablet' | 'desktop' => {
+    const ua = navigator.userAgent;
+    if (/Mobi|Android/i.test(ua)) return 'mobile';
+    if (/Tablet|iPad/i.test(ua)) return 'tablet';
+    return 'desktop';
+};
+
+export const logPageView = async (view: string, articleSlug?: string) => {
+    if (view === 'admin') return; // don't track admin sessions
+    try {
+        const geo = await getCountryInfo();
+        const event: AnalyticsEvent = {
+            id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            view,
+            articleSlug: articleSlug || '',
+            country: geo.country,
+            countryCode: geo.countryCode,
+            city: geo.city,
+            device: getDevice(),
+            sessionId: getSessionId(),
+            referrer: document.referrer ? new URL(document.referrer).hostname : 'direct',
+        };
+        await setDoc(doc(db, 'analytics', event.id), sanitizeData(event));
+    } catch {}
+};
+
+export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => void) => {
+    return onSnapshot(
+        query(collection(db, 'analytics'), orderBy('timestamp', 'desc'), limit(5000)),
+        (snap) => callback(snap.docs.map(d => d.data() as AnalyticsEvent)),
         () => {}
     );
 };

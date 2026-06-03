@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
 import { SettingsManager } from './SettingsManager';
 import { NewsManager } from './NewsManager';
-import { IconNewspaper, IconGlobe, IconImage, IconPort } from './Icons';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { IconNewspaper, IconGlobe, IconImage, IconPort, IconBarChart2 as IconAnalytics } from './Icons';
 import { InternalMessenger } from './InternalMessenger';
 import { InvoiceModal } from './InvoiceModal';
 import { TaskManager } from './TaskManager';
@@ -32,6 +33,7 @@ interface Props {
   meetings: Meeting[];
   kpis?: KPI[];
   news?: NewsArticle[];
+  analyticsEvents?: AnalyticsEvent[];
   config: AppConfig;
   onCreateTicket: (ticket: Ticket) => Promise<void>;
   onUpdateTicket: (ticketId: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility?: 'public' | 'internal') => void;
@@ -57,6 +59,7 @@ export const AdminDashboard: React.FC<Props> = ({
   meetings,
   kpis = [],
   news = [],
+  analyticsEvents = [],
   config,
   onCreateTicket,
   onUpdateTicket,
@@ -80,7 +83,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -950,7 +953,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 {hasCustomerAccess && (<button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'customers' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconUsers className="w-5 h-5" /><span className="font-medium">{t.customers}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'services' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBriefcase className="w-5 h-5" /><span className="font-medium">{t.services}</span></button>)}
                 {isAdmin && (<><div className="px-4 py-2 text-xs font-bold text-gray-400 mt-4 border-t border-gray-100 pt-4">Admin</div><button onClick={() => setActiveTab('personnel')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'personnel' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconShield className="w-5 h-5" /><span className="font-medium">{t.personnel}</span></button><button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconSettings className="w-5 h-5" /><span className="font-medium">{t.settings}</span></button></>)}
-                {isMaster && (<><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'news_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconNewspaper className="w-5 h-5" /><span className="font-medium">{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'seo' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconGlobe className="w-5 h-5" /><span className="font-medium">{t.seo}</span></button></>)}
+                {isMaster && (<><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button><button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'analytics' ? 'bg-cyan-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconAnalytics className="w-5 h-5" /><span className="font-medium">{lang === 'fa' ? 'آمار بازدید' : 'Analytics'}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'news_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconNewspaper className="w-5 h-5" /><span className="font-medium">{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'seo' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconGlobe className="w-5 h-5" /><span className="font-medium">{t.seo}</span></button></>)}
             </div>
             <button onClick={onLogout} className="w-full text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-colors mt-6">{t.logout}</button>
         </div>
@@ -1300,6 +1303,10 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'settings' && isAdmin && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}
+
+        {activeTab === 'analytics' && isMaster && (
+          <AnalyticsDashboard events={analyticsEvents} lang={lang} />
+        )}
 
         {activeTab === 'news_mgmt' && isMaster && (
           <div className="animate-fade-in">

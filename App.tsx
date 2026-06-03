@@ -16,7 +16,7 @@ import {
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings,
   subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
-  subscribeToNews
+  subscribeToNews, logPageView, subscribeToAnalytics
 } from './services/firebaseService';
 
 export type Language = 'fa' | 'en';
@@ -139,6 +139,7 @@ const App: React.FC = () => {
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
+  const [analyticsEvents, setAnalyticsEvents] = useState<import('./types').AnalyticsEvent[]>([]);
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>(INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -158,11 +159,12 @@ const App: React.FC = () => {
     return null;
   };
 
-  const setView = (newView: ViewState) => {
+  const setView = (newView: ViewState, articleSlug?: string) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
     const newHash = VIEW_HASH[newView];
     if (window.location.hash !== newHash) history.pushState(null, '', newHash);
+    logPageView(newView, articleSlug);
   };
 
   const toAbsoluteUrl = (url: string) => {
@@ -224,21 +226,17 @@ const App: React.FC = () => {
     }
 
     // Hash is the single source of truth for navigation
-    if (hashView && hashView !== 'landing') {
-      // URL has a specific route hash → go there
-      if (hashView === 'admin' && !storedUser) {
-        // Admin hash but no session → landing
-        setViewState('landing');
-        history.replaceState(null, '', '#/');
-      } else {
-        setViewState(hashView);
+    const initialView = (() => {
+      if (hashView && hashView !== 'landing') {
+        if (hashView === 'admin' && !storedUser) return 'landing' as const;
+        return hashView;
       }
-    } else {
-      // No hash, or hash is just #/ → always landing
-      // (typing the domain directly always opens the home page)
-      setViewState('landing');
-      history.replaceState(null, '', '#/');
-    }
+      return 'landing' as const;
+    })();
+
+    setViewState(initialView);
+    if (!hashView || hashView === 'landing') history.replaceState(null, '', '#/');
+    logPageView(initialView);
   }, []);
 
   useEffect(() => {
@@ -302,7 +300,8 @@ const App: React.FC = () => {
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); };
+    const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); };
   }, []);
 
   const normalizeRoleName = (role?: string) => (role || '')
@@ -716,6 +715,7 @@ const App: React.FC = () => {
                     meetings={meetings}
                     kpis={kpis}
                     news={news}
+                    analyticsEvents={analyticsEvents}
                     config={appConfig}
                     onCreateTicket={async (t) => handleNewTicket(t)}
                     onUpdateTicket={handleUpdateTicket}

@@ -495,3 +495,16 @@ export interface AppConfig {
   metaPortUrl?: string;
   heroBgImage?: string;
 }
+
+export interface AnalyticsEvent {
+  id: string;
+  timestamp: string;
+  view: string;
+  articleSlug?: string;
+  country: string;
+  countryCode: string;
+  city: string;
+  device: 'mobile' | 'tablet' | 'desktop';
+  sessionId: string;
+  referrer?: string;
+}
