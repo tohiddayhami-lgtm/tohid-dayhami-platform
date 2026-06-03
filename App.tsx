@@ -175,21 +175,33 @@ const App: React.FC = () => {
     const unsubSettings = subscribeToSettings(
       (cfg) => { if (cfg) setAppConfig(cfg); },
       (srv) => { if (srv) setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); },
-      (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), permissions: p.permissions || {} }))); }
+      (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
     return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); };
   }, []);
 
+  const normalizeRoleName = (role?: string) => (role || '')
+    .trim()
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/\u200c/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+
   const calculateAssignee = useCallback((serviceIdOrTitle: string): string | undefined => {
     const config = appConfig.assignmentConfig;
     if (!config || config.mode === 'manual' || !config.serviceRoleMap) return undefined;
-    let targetRole = config.serviceRoleMap[serviceIdOrTitle];
+    let targetRole = config.serviceRoleMap[serviceIdOrTitle]?.trim();
     if (!targetRole) {
       const serviceObj = services.find(s => s.title === serviceIdOrTitle || s.titleEn === serviceIdOrTitle || s.title.includes(serviceIdOrTitle));
-      if (serviceObj) targetRole = config.serviceRoleMap[serviceObj.id];
+      if (serviceObj) targetRole = config.serviceRoleMap[serviceObj.id]?.trim();
     }
     if (!targetRole) return undefined;
-    const eligibleStaff = personnel.filter(p => p.roles.includes(targetRole) && p.status === 'active');
+    const normalizedTargetRole = normalizeRoleName(targetRole);
+    const eligibleStaff = personnel.filter(p =>
+      (p.status || 'active') === 'active' &&
+      (p.roles || []).some(role => normalizeRoleName(role) === normalizedTargetRole)
+    );
     if (eligibleStaff.length === 0) return undefined;
     if (config.mode === 'random') return eligibleStaff[Math.floor(Math.random() * eligibleStaff.length)].id;
     if (config.mode === 'auto_load_balance') {
