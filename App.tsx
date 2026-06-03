@@ -384,7 +384,7 @@ const App: React.FC = () => {
       </header>
 
       {/* ── Main ── */}
-      <main className="flex-grow w-full max-w-6xl mx-auto px-5 py-8">
+      <main className={`flex-grow w-full max-w-6xl mx-auto px-5 ${view === 'landing' ? 'py-0' : 'py-8'}`}>
         {isLoadingData && view !== 'landing' ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3 text-gray-400">
@@ -398,58 +398,106 @@ const App: React.FC = () => {
             {view === 'landing' && (
               <div className="animate-fade-in">
 
-                {/* Hero */}
-                <section className="text-center py-24 md:py-32">
-                  <p className="text-xs font-medium text-gray-400 tracking-widest uppercase mb-6">
-                    {lang === 'fa' ? 'پلتفرم هوشمند صادراتی' : 'Smart Export Platform'}
-                  </p>
-                  <h1 className="text-4xl md:text-6xl font-semibold text-gray-900 leading-tight mb-6 tracking-tight">
+                {/* ── Hero ── */}
+                <section className="pt-10 pb-12 text-center border-b border-gray-100">
+                  <span className="inline-flex items-center gap-1.5 border border-gray-200 text-[11px] text-gray-500 px-3 py-1 rounded-full mb-5">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
+                    {lang === 'fa' ? 'پلتفرم رسمی خدمات صادراتی توحید دیهیمی' : 'Tohid Dayhami Official Export Platform'}
+                  </span>
+                  <h1 className="text-3xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 tracking-tight">
                     {lang === 'fa'
                       ? (appConfig.landingHeroTitle || 'مسیر جهانی شدن کسب‌وکار شما')
-                      : 'Globalize Your Business'}
+                      : 'Your Path to Global Business'}
                   </h1>
-                  <p className="text-base md:text-lg text-gray-500 mb-10 max-w-xl mx-auto leading-relaxed">
+                  <p className="text-sm md:text-base text-gray-500 max-w-md mx-auto mb-7 leading-relaxed">
                     {lang === 'fa' ? (appConfig.landingHeroSubtitle || t.landingSubtitle) : t.landingSubtitle}
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <div className="flex flex-wrap gap-2 justify-center">
                     <button
                       onClick={() => setView('new-ticket')}
-                      className="px-7 py-3 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-black transition-colors"
+                      className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black transition-colors"
                     >
                       {t.startBtn}
                     </button>
                     <button
                       onClick={() => setView('tracking')}
-                      className="px-7 py-3 bg-white text-gray-700 border border-gray-200 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
+                      className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                     >
                       {t.trackBtn}
                     </button>
                   </div>
                 </section>
 
-                {/* Features */}
-                <section className="border-t border-gray-100 py-16">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-gray-100 rounded-2xl overflow-hidden">
-                    {t.features.map((f, i) => (
-                      <div key={i} className="bg-white p-8">
-                        <div className="text-2xl mb-4">{['📂', '🌍', '📊'][i]}</div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-2">{f.title}</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+                {/* ── Services ── */}
+                <section className="py-8 border-b border-gray-100">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
+                    {lang === 'fa' ? 'خدمات تخصصی ما' : 'Our Services'}
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {services.filter(s => s.isActive).map((service, i) => (
+                      <button
+                        key={service.id}
+                        onClick={() => setView('new-ticket')}
+                        className="text-start p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-gray-300 hover:bg-white transition-all group"
+                      >
+                        <span className="text-[10px] font-mono text-gray-400 block mb-1.5">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="text-sm font-medium text-gray-800 group-hover:text-gray-900 leading-snug block">
+                          {lang === 'en' && service.titleEn ? service.titleEn : service.title}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── Stats ── */}
+                <section className="py-8 border-b border-gray-100">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {[
+                      { num: lang === 'fa' ? '+۱۰۰' : '100+', label: lang === 'fa' ? 'مشتری موفق' : 'Clients' },
+                      { num: lang === 'fa' ? '+۳۰' : '30+',   label: lang === 'fa' ? 'کشور هدف' : 'Countries' },
+                      { num: lang === 'fa' ? '+۵'  : '5+',    label: lang === 'fa' ? 'سال تجربه' : 'Years' },
+                      { num: lang === 'fa' ? '۲۴/۷' : '24/7', label: lang === 'fa' ? 'پشتیبانی آنلاین' : 'Support' },
+                    ].map((s, i) => (
+                      <div key={i}>
+                        <div className="text-2xl md:text-3xl font-bold text-gray-900 mb-0.5">{s.num}</div>
+                        <div className="text-xs text-gray-500">{s.label}</div>
                       </div>
                     ))}
                   </div>
                 </section>
 
-                {/* Daily Tip */}
+                {/* ── How it works ── */}
+                <section className="py-8 border-b border-gray-100">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
+                    {lang === 'fa' ? 'نحوه دریافت خدمات' : 'How It Works'}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {t.features.map((f, i) => (
+                      <div key={i} className="flex gap-3 p-4 rounded-xl border border-gray-100">
+                        <div className="w-6 h-6 bg-gray-900 rounded flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-white text-[10px] font-bold">{i + 1}</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{f.title}</h3>
+                          <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── Daily Tip ── */}
                 {appConfig.showDailyTips && appConfig.dailyTips && appConfig.dailyTips.length > 0 && (
-                  <section className="py-8">
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 flex gap-4 items-start max-w-2xl mx-auto">
-                      <IconBulb className="w-5 h-5 text-gray-400 mt-0.5 shrink-0" />
+                  <section className="py-6 border-b border-gray-100">
+                    <div className="flex gap-3 items-start">
+                      <IconBulb className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wider">
-                          {lang === 'fa' ? 'نکته روز' : 'Daily Tip'}
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          {lang === 'fa' ? 'نکته صادراتی روز' : 'Export Tip'}
                         </p>
-                        <p className="text-sm text-gray-700 leading-relaxed">
+                        <p className="text-sm text-gray-600 leading-relaxed">
                           {appConfig.dailyTips[Math.floor(Math.random() * appConfig.dailyTips.length)]}
                         </p>
                       </div>
@@ -457,7 +505,29 @@ const App: React.FC = () => {
                   </section>
                 )}
 
-                {/* Featured Businesses */}
+                {/* ── CTA ── */}
+                <section className="py-8 mb-6">
+                  <div className="bg-gray-900 rounded-2xl p-8 md:p-10 text-center">
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-3">
+                      {lang === 'fa' ? 'شروع همکاری' : 'Get Started'}
+                    </p>
+                    <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
+                      {lang === 'fa' ? 'آماده ورود به بازارهای جهانی هستید؟' : 'Ready to go global?'}
+                    </h2>
+                    <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
+                      {lang === 'fa'
+                        ? 'درخواست خود را ثبت کنید، کارشناسان ما در اسرع وقت با شما تماس می‌گیرند.'
+                        : 'Submit your request and our experts will reach out promptly.'}
+                    </p>
+                    <button
+                      onClick={() => setView('new-ticket')}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+                    >
+                      {t.startBtn}
+                    </button>
+                  </div>
+                </section>
+
                 {appConfig.featuredBusinesses && appConfig.featuredBusinesses.length > 0 && (
                   <FeaturedBusinesses businesses={appConfig.featuredBusinesses} lang={lang} />
                 )}
@@ -515,8 +585,8 @@ const App: React.FC = () => {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-6 text-center">
-        <p className="text-xs text-gray-400">{appConfig.footerText || t.footer}</p>
+      <footer className="border-t border-gray-100 py-4 text-center">
+        <p className="text-[11px] text-gray-400">{appConfig.footerText || t.footer}</p>
       </footer>
 
       {/* Mobile bottom nav */}
