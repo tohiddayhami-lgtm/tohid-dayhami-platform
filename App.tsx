@@ -137,6 +137,12 @@ const App: React.FC = () => {
   }, [lang]);
 
   useEffect(() => {
+    // Public shareable form link: /#form
+    const isPublicFormLink = window.location.hash === '#form';
+    if (isPublicFormLink) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
     const storedView = localStorage.getItem(STORAGE_KEYS.VIEW);
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
@@ -148,10 +154,12 @@ const App: React.FC = () => {
         try {
           setCurrentUser(JSON.parse(storedUser));
           localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, now.toString());
-          if (storedView) setViewState(storedView as ViewState);
+          if (!isPublicFormLink && storedView) setViewState(storedView as ViewState);
         } catch { handleLogout(); }
       }
     }
+
+    if (isPublicFormLink) setViewState('new-ticket');
   }, []);
 
   useEffect(() => {

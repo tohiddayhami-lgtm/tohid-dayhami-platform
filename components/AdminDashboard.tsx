@@ -101,6 +101,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const [quickReportText, setQuickReportText] = useState('');
   const [quickReportItems, setQuickReportItems] = useState<string[]>([]);
   const [isSavingQuickReport, setIsSavingQuickReport] = useState(false);
+  const [formLinkCopied, setFormLinkCopied] = useState(false);
 
   const [projectForm, setProjectForm] = useState<ProjectDetails>({
       isActive: false,
@@ -286,7 +287,11 @@ export const AdminDashboard: React.FC<Props> = ({
           next: 'بعدی',
           quickReport: 'گزارش خطی فعالیت امروز (ثبت سریع)',
           quickReportHint: 'شرح فعالیت خود را بنویسید و اینتر بزنید...',
-          submitQuick: 'ثبت نهایی گزارش امروز'
+          submitQuick: 'ثبت نهایی گزارش امروز',
+          formLinkTitle: 'لینک اشتراک‌گذاری فرم درخواست',
+          formLinkDesc: 'این لینک را برای مشتریان ارسال کنید تا فرم درخواست خدمات را تکمیل کنند. درخواست‌ها مستقیم وارد سامانه می‌شوند.',
+          copyLink: 'کپی لینک',
+          linkCopied: 'لینک کپی شد'
       },
       en: {
           overview: 'Overview & Dashboard',
@@ -416,7 +421,11 @@ export const AdminDashboard: React.FC<Props> = ({
           next: 'Next',
           quickReport: 'Daily Linear Report (Quick Add)',
           quickReportHint: 'Describe your activity and press enter...',
-          submitQuick: 'Submit Today\'s Report'
+          submitQuick: 'Submit Today\'s Report',
+          formLinkTitle: 'Shareable Form Link',
+          formLinkDesc: 'Send this link to customers so they can fill out the service request form. Submissions go directly into the system.',
+          copyLink: 'Copy Link',
+          linkCopied: 'Link Copied'
       }
   }[lang];
 
@@ -916,6 +925,33 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'goals' && <GoalTracker currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
+
+                 {/* Shareable Form Link */}
+                 {(isAdmin || isMaster) && (() => {
+                   const formUrl = `${window.location.origin}${window.location.pathname}#form`;
+                   return (
+                     <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                       <div className="flex-1 min-w-0">
+                         <p className="text-xs font-semibold text-gray-700 mb-0.5">{t.formLinkTitle}</p>
+                         <p className="text-[11px] text-gray-400 mb-2">{t.formLinkDesc}</p>
+                         <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                           <span className="text-xs font-mono text-gray-600 truncate flex-1 select-all">{formUrl}</span>
+                         </div>
+                       </div>
+                       <button
+                         onClick={() => {
+                           navigator.clipboard.writeText(formUrl);
+                           setFormLinkCopied(true);
+                           setTimeout(() => setFormLinkCopied(false), 2500);
+                         }}
+                         className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${formLinkCopied ? 'bg-green-100 text-green-700' : 'bg-gray-900 text-white hover:bg-black'}`}
+                       >
+                         {formLinkCopied ? <><IconCheck className="w-4 h-4" /> {t.linkCopied}</> : <><IconCopy className="w-4 h-4" /> {t.copyLink}</>}
+                       </button>
+                     </div>
+                   );
+                 })()}
+
                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><div className="text-gray-500 text-xs mb-1">{t.myTasks}</div><div className="text-2xl font-black text-indigo-600">{myTasksCount}</div></div>
                      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"><div className="text-gray-500 text-xs mb-1">{t.allRequests}</div><div className="text-2xl font-black text-gray-800">{tickets.filter(t => t.status !== 'تکمیل شده' && t.status !== 'لغو شده').length}</div></div>
