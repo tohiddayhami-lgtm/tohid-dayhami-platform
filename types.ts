@@ -38,7 +38,7 @@ export interface ServiceOption {
   titleEn?: string;
   description: string;
   descriptionEn?: string;
-  icon: string;
+  icon?: string;
   price?: Price;
   isActive: boolean;
   subServices?: SubService[];

@@ -53,18 +53,21 @@ export const DICTIONARY = {
 };
 
 const DEFAULT_SERVICES: ServiceOption[] = [
-  { id: 's1', title: 'مشاوره تخصصی صادرات', titleEn: 'Expert Export Consultation', description: 'مشاوره ورود به بازار و قوانین گمرکی', descriptionEn: 'Market entry strategy and customs regulations', icon: '🌍', isActive: true, price: { amount: 5000000, currency: 'IRR' } },
-  { id: 's2', title: 'خدمات مدیریت صادرات (EMC)', titleEn: 'Export Management (EMC)', description: 'برون‌سپاری کامل فرایند فروش خارجی', descriptionEn: 'Complete outsourcing of foreign sales processes', icon: '🤝', isActive: true, price: { amount: 0, currency: 'IRR' } },
-  { id: 's3', title: 'طراحی بسته‌بندی صادراتی', titleEn: 'Export Packaging Design', description: 'طراحی استاندارد برای بازارهای جهانی', descriptionEn: 'Standard design for global markets', icon: '📦', isActive: true, price: { amount: 30000000, currency: 'IRR' } },
-  { id: 's4', title: 'طراحی گرافیک و کاتالوگ', titleEn: 'Graphic Design & Catalog', description: 'تولید محتوای بصری بین‌المللی', descriptionEn: 'International visual content production', icon: '🎨', isActive: true, price: { amount: 15000000, currency: 'IRR' }, subServices: [
+  { id: 's3', title: 'خدمات طراحی بسته بندی', titleEn: 'Packaging Design', description: 'طراحی استاندارد برای بازارهای جهانی', descriptionEn: 'Standard design for global markets', isActive: true, price: { amount: 30000000, currency: 'IRR' } },
+  { id: 's4', title: 'خدمات طراحی گرافیک', titleEn: 'Graphic Design', description: 'تولید محتوای بصری بین‌المللی', descriptionEn: 'International visual content production', isActive: true, price: { amount: 15000000, currency: 'IRR' }, subServices: [
       { id: 'sub1', title: 'طراحی لوگو', titleEn: 'Logo Design', price: { amount: 5000000, currency: 'IRR' } },
       { id: 'sub2', title: 'کارت ویزیت', titleEn: 'Business Card', price: { amount: 2000000, currency: 'IRR' } },
       { id: 'sub3', title: 'کاتالوگ دیجیتال', titleEn: 'Digital Catalog', price: { amount: 10000000, currency: 'IRR' } },
       { id: 'sub4', title: 'هویت بصری (برندینگ)', titleEn: 'Visual Identity', price: { amount: 25000000, currency: 'IRR' } }
   ]},
-  { id: 's5', title: 'تورهای تجاری', titleEn: 'Business Trade Tours', description: 'اعزام هیئت تجاری و بازدید از نمایشگاه', descriptionEn: 'Trade delegation dispatch and exhibition visits', icon: '✈️', isActive: true, price: { amount: 1500, currency: 'USD' } },
-  { id: 's6', title: 'دوره آموزشی بازرگانی', titleEn: 'Trade Training Courses', description: 'کارگاه‌های تخصصی صادرات و واردات', descriptionEn: 'Specialized export and import workshops', icon: '🎓', isActive: true, price: { amount: 3000000, currency: 'IRR' } },
-  { id: 's7', title: 'غرفه مجازی', titleEn: 'Virtual Exhibition Booth', description: 'نمایش محصولات در نمایشگاه‌های آنلاین', descriptionEn: 'Product display in online exhibitions', icon: '💻', isActive: true, price: { amount: 10000000, currency: 'IRR' } },
+  { id: 's8', title: 'خدمات خرید محصول صادراتی', titleEn: 'Export Product Procurement', description: 'تامین و خرید محصولات برای صادرات', descriptionEn: 'Sourcing and procurement of export products', isActive: true, price: { amount: 0, currency: 'IRR' } },
+  { id: 's9', title: 'خدمات فروش محصول صادراتی', titleEn: 'Export Product Sales', description: 'بازاریابی و فروش در بازارهای خارجی', descriptionEn: 'Marketing and sales in foreign markets', isActive: true, price: { amount: 0, currency: 'IRR' } },
+  { id: 's10', title: 'خرید نرم افزار تخصصی صادراتی توحید پلاس', titleEn: 'Tohid Plus Export Software', description: 'نرم افزار تخصصی مدیریت فرآیند صادرات', descriptionEn: 'Specialized export management software', isActive: true, price: { amount: 0, currency: 'IRR' } },
+  { id: 's1', title: 'خدمات مشاوره تخصصی', titleEn: 'Expert Consultation', description: 'مشاوره ورود به بازار و قوانین گمرکی', descriptionEn: 'Market entry strategy and customs regulations', isActive: true, price: { amount: 5000000, currency: 'IRR' } },
+  { id: 's7', title: 'خدمات غرفه مجازی متاپورت', titleEn: 'Metaport Virtual Booth', description: 'نمایش محصولات در نمایشگاه‌های آنلاین', descriptionEn: 'Product display in online exhibitions', isActive: true, price: { amount: 10000000, currency: 'IRR' } },
+  { id: 's11', title: 'خدمات ثبت شرکت در عمان', titleEn: 'Company Registration in Oman', description: 'ثبت و راه‌اندازی شرکت در کشور عمان', descriptionEn: 'Company registration and setup in Oman', isActive: true, price: { amount: 0, currency: 'IRR' } },
+  { id: 's12', title: 'انتقادات و پیشنهادات', titleEn: 'Feedback & Suggestions', description: 'ارسال پیشنهادات و انتقادات به تیم ما', descriptionEn: 'Send your feedback and suggestions to our team', isActive: true, price: { amount: 0, currency: 'IRR' } },
+  { id: 's_other', title: 'سایر', titleEn: 'Other', description: 'سایر خدمات مورد نیاز', descriptionEn: 'Other required services', isActive: true, price: { amount: 0, currency: 'IRR' } },
 ];
 
 const DEFAULT_PERSONNEL: Personnel[] = [

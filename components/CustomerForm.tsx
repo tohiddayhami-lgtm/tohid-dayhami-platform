@@ -69,6 +69,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedSubServices, setSelectedSubServices] = useState<Record<string, string[]>>({});
+  const [otherText, setOtherText] = useState('');
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successTicketIds, setSuccessTicketIds] = useState<string[] | null>(null);
@@ -165,10 +166,14 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
         const ticketId = `EXP-${Math.floor(1000 + Math.random() * 9000)}-${serviceId.substring(0, 2).toUpperCase()}`;
         generatedIds.push(ticketId);
 
-        let analysisSummary = description;
+        const effectiveDescription = serviceId === 's_other' && otherText
+          ? `${description}\n\nسایر: ${otherText}`.trim()
+          : description;
+
+        let analysisSummary = effectiveDescription;
         try {
-          if (description.length > 10) {
-            const analysis = await analyzeTicket(description, (lang === 'en' && selectedService?.titleEn ? selectedService.titleEn : selectedService?.title) || 'General');
+          if (effectiveDescription.length > 10) {
+            const analysis = await analyzeTicket(effectiveDescription, (lang === 'en' && selectedService?.titleEn ? selectedService.titleEn : selectedService?.title) || 'General');
             analysisSummary = analysis.summary;
           }
         } catch { }
@@ -176,7 +181,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
         ticketsToCreate.push({
           id: ticketId, customerName: formData['fullName'], companyName: formData['companyName'],
           location: formData['location'], phoneNumber: formData['phoneNumber'], whatsappNumber: formData['whatsappNumber'],
-          businessType: formData['businessType'], serviceId, selectedSubServices: subs, description,
+          businessType: formData['businessType'], serviceId, selectedSubServices: subs, description: effectiveDescription,
           files: validFiles, status: TicketStatus.SUBMITTED, createdAt: new Date().toISOString(),
           aiAnalysis: analysisSummary, priority: 'Medium',
           timeline: [{ type: 'creation', title: lang === 'fa' ? 'ثبت درخواست' : 'Request Submitted', description: lang === 'fa' ? `درخواست سرویس ${selectedService?.title} ثبت شد.` : `Service request submitted.`, actorName: formData['fullName'] || 'Customer', timestamp: new Date().toISOString() }],
@@ -237,16 +242,16 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   }
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in py-4">
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900">{t.header}</h2>
-        <p className="text-sm text-gray-500 mt-1">{t.subHeader}</p>
+    <div className="max-w-2xl mx-auto animate-fade-in py-2">
+      <div className="mb-5">
+        <h2 className="text-lg font-semibold text-gray-900">{t.header}</h2>
+        <p className="text-xs text-gray-400 mt-0.5">{t.subHeader}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-5">
 
         {/* Dynamic Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {config.formFields.map(field => (
             <FieldItem key={field.id} field={field} value={formData[field.key]} onChange={handleInputChange} lang={lang} />
           ))}
@@ -254,32 +259,31 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
 
         {/* Service Selection */}
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 pb-2 border-b border-gray-100">
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 pb-2 border-b border-gray-100">
             {t.service}
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {services.map(service => {
               const isSelected = selectedServiceIds.includes(service.id);
               return (
-                <div key={service.id} className={`rounded-xl border transition-all ${isSelected ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
-                  <div onClick={() => toggleService(service.id)} className="cursor-pointer flex items-center gap-3 p-3.5">
+                <div key={service.id} className={`rounded-lg border transition-all ${isSelected ? 'border-gray-800 bg-gray-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
+                  <div onClick={() => toggleService(service.id)} className="cursor-pointer flex items-center gap-2.5 px-3 py-2.5">
                     <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}>
                       {isSelected && <IconCheck className="w-2.5 h-2.5 text-white" />}
                     </div>
-                    <span className="text-base leading-none">{service.icon}</span>
-                    <span className={`text-sm font-medium ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                    <span className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
                       {lang === 'en' && service.titleEn ? service.titleEn : service.title}
                     </span>
                   </div>
 
                   {isSelected && service.subServices && service.subServices.length > 0 && (
-                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-1.5 animate-fade-in">
-                      <p className="text-[11px] font-medium text-gray-400 mb-2">{t.subServiceTitle}</p>
+                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-1 animate-fade-in">
+                      <p className="text-[11px] font-medium text-gray-400 mb-1.5">{t.subServiceTitle}</p>
                       {service.subServices.map(sub => {
                         const isSubSelected = selectedSubServices[service.id]?.includes(sub.id);
                         return (
                           <div key={sub.id} onClick={(e) => { e.stopPropagation(); toggleSubService(service.id, sub.id); }}
-                            className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-100">
+                            className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded hover:bg-gray-100">
                             <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${isSubSelected ? 'bg-gray-700 border-gray-700' : 'bg-white border-gray-300'}`}>
                               {isSubSelected && <IconCheck className="w-2 h-2 text-white" />}
                             </div>
@@ -287,6 +291,19 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {isSelected && service.id === 's_other' && (
+                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 animate-fade-in">
+                      <textarea
+                        value={otherText}
+                        onChange={(e) => setOtherText(e.target.value)}
+                        placeholder={lang === 'fa' ? 'خدمات مورد نیاز خود را توضیح دهید...' : 'Describe the service you need...'}
+                        rows={2}
+                        className={inputBase}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </div>
                   )}
                 </div>
@@ -297,10 +314,10 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
 
         {/* File Upload */}
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 pb-2 border-b border-gray-100">
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 pb-2 border-b border-gray-100">
             {t.files}
           </label>
-          <p className="text-xs text-gray-400 mb-3">{t.fileHint}</p>
+          <p className="text-xs text-gray-400 mb-2">{t.fileHint}</p>
           <button type="button" onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors">
             <IconPaperclip className="w-4 h-4" />
@@ -341,7 +358,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-2 border-t border-gray-100">
+        <div className="flex gap-3 pt-3 border-t border-gray-100">
           <button type="button" onClick={onCancel} disabled={isSubmitting}
             className="px-5 py-2.5 text-sm text-gray-500 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">
             {t.cancel}
