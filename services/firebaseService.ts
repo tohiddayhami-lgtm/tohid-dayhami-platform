@@ -790,7 +790,7 @@ export const logPageView = async (view: string, articleSlug?: string) => {
         const event: AnalyticsEvent = {
             id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             timestamp: new Date().toISOString(),
-            view,
+            page: view,
             articleSlug: articleSlug || '',
             country: geo.country,
             countryCode: geo.countryCode,

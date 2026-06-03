@@ -499,7 +499,7 @@ export interface AppConfig {
 export interface AnalyticsEvent {
   id: string;
   timestamp: string;
-  view: string;
+  page: string;
   articleSlug?: string;
   country: string;
   countryCode: string;

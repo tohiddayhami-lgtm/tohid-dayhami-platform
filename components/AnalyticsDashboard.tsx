@@ -70,7 +70,7 @@ export const AnalyticsDashboard: React.FC<Props> = ({ events, lang }) => {
 
   // Sections
   const sectionMap = new Map<string, number>();
-  for (const e of rangeEvents) sectionMap.set(e.view, (sectionMap.get(e.view) || 0) + 1);
+  for (const e of rangeEvents) sectionMap.set(e.page, (sectionMap.get(e.page) || 0) + 1);
   const topSections = [...sectionMap.entries()].sort((a, b) => b[1] - a[1]);
   const maxSection = topSections[0]?.[1] || 1;
 
@@ -256,7 +256,7 @@ export const AnalyticsDashboard: React.FC<Props> = ({ events, lang }) => {
                     {new Date(e.timestamp).toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
                   </td>
                   <td className="py-1.5"><span className="me-1">{FLAG(e.countryCode)}</span>{e.country}</td>
-                  <td className="py-1.5 text-gray-700">{getSectionLabel(e.view, lang)}{e.articleSlug ? ` — ${e.articleSlug.slice(0, 20)}` : ''}</td>
+                  <td className="py-1.5 text-gray-700">{getSectionLabel(e.page, lang)}{e.articleSlug ? ` — ${e.articleSlug.slice(0, 20)}` : ''}</td>
                   <td className="py-1.5 text-gray-500">{e.device}</td>
                   <td className="py-1.5 text-gray-500">{e.referrer === 'direct' ? (lang === 'fa' ? 'مستقیم' : 'Direct') : e.referrer}</td>
                 </tr>
