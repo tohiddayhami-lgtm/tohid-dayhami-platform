@@ -2,8 +2,8 @@
 import React, { useState, useRef, memo, useCallback } from 'react';
 import { ServiceOption, Ticket, TicketStatus, AttachedFile, AppConfig, FormField } from '../types';
 import { analyzeTicket } from '../services/geminiService';
-import { findCustomerByLoyaltyCode, uploadFileWithProgress } from '../services/firebaseService';
-import { IconCheck, IconBriefcase, IconPaperclip, IconTrash, IconFile, IconSearch, IconFlag, IconAlertTriangle } from './Icons';
+import { uploadFileWithProgress } from '../services/firebaseService';
+import { IconCheck, IconBriefcase, IconPaperclip, IconTrash, IconFile, IconSearch } from './Icons';
 import { Language } from '../App';
 
 interface Props {
@@ -106,16 +106,10 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedSubServices, setSelectedSubServices] = useState<Record<string, string[]>>({});
-  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
   
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successTicketIds, setSuccessTicketIds] = useState<string[] | null>(null);
-  
-  // Loyalty State
-  const [loyaltyCode, setLoyaltyCode] = useState('');
-  const [loyaltyStatus, setLoyaltyStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-  const [discountApplied, setDiscountApplied] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,17 +133,8 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       quote: 'صادرات، نبض تپنده اقتصاد است. از اینکه جهانی می‌اندیشید سپاسگزاریم.',
       trackBtn: 'پیگیری وضعیت درخواست',
       homeBtn: 'بازگشت به صفحه اصلی',
-      loyaltyTitle: 'کد وفاداری / معرف',
-      loyaltyPlaceholder: 'کد را وارد کنید (اختیاری)',
-      checkCode: 'بررسی کد',
-      validCode: 'کد تایید شد! ۵٪ تخفیف روی درخواست‌ها اعمال شد.',
-      invalidCode: 'کد وارد شده نامعتبر است.',
       friendlyNote: 'اگر کدهای رهگیری را ذخیره نکردید نگران نباشید، با تماس با پشتیبانی و اعلام شماره موبایل می‌توانید آنها را بازیابی کنید.',
       uploadError: 'خطا در آپلود.',
-      priorityTitle: 'میزان فوریت درخواست',
-      priorityLow: 'عادی',
-      priorityMedium: 'فوری',
-      priorityHigh: 'خیلی فوری (اضطراری)',
       subServiceTitle: 'جزئیات خدمات'
     },
     en: {
@@ -171,17 +156,8 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       quote: 'Exporting is the heartbeat of the economy. Thank you for thinking globally.',
       trackBtn: 'Track Application',
       homeBtn: 'Back to Home',
-      loyaltyTitle: 'Loyalty / Referral Code',
-      loyaltyPlaceholder: 'Enter code (Optional)',
-      checkCode: 'Check Code',
-      validCode: 'Code valid! 5% discount applied.',
-      invalidCode: 'Invalid code.',
       friendlyNote: 'Don\'t worry if you didn\'t save the tracking codes. Contact support with your phone number to retrieve them.',
       uploadError: 'Upload Error.',
-      priorityTitle: 'Request Urgency',
-      priorityLow: 'Normal',
-      priorityMedium: 'Urgent',
-      priorityHigh: 'Very Urgent (Emergency)',
       subServiceTitle: 'Service Details'
     }
   }[lang];
@@ -205,23 +181,6 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
               : [...currentSubs, subId];
           return { ...prev, [serviceId]: updatedSubs };
       });
-  };
-
-  const handleLoyaltyCheck = async () => {
-      if (!loyaltyCode.trim()) return;
-      setLoyaltyStatus('checking');
-      try {
-          const customer = await findCustomerByLoyaltyCode(loyaltyCode.trim());
-          if (customer) {
-              setLoyaltyStatus('valid');
-              setDiscountApplied(true);
-          } else {
-              setLoyaltyStatus('invalid');
-              setDiscountApplied(false);
-          }
-      } catch (e) {
-          setLoyaltyStatus('invalid');
-      }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,7 +274,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
           const ticketId = `EXP-${Math.floor(1000 + Math.random() * 9000)}-${serviceId.substring(0,2).toUpperCase()}`;
           generatedIds.push(ticketId);
 
-          // Attempt AI analysis for summary only (priority is now manual)
+          // Attempt AI analysis for summary only.
           let analysisSummary = description;
           
           try {
@@ -325,7 +284,6 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
                     (lang === 'en' && selectedService?.titleEn ? selectedService.titleEn : selectedService?.title) || 'General'
                  );
                  analysisSummary = analysis.summary;
-                 // We ignore analysis.priority here as we use user selected priority
              }
           } catch(e) { console.log("AI Skipped"); }
 
@@ -344,7 +302,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
             status: TicketStatus.SUBMITTED,
             createdAt: new Date().toISOString(),
             aiAnalysis: analysisSummary,
-            priority: priority, // Use manual priority
+            priority: 'Medium',
             timeline: [
               {
                 type: 'creation',
@@ -355,7 +313,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
               }
             ],
             customData: formData,
-            discountApplied: discountApplied
+            discountApplied: false
           };
           
           ticketsToCreate.push(newTicket);
@@ -454,67 +412,6 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
                 lang={lang} 
              />
            ))}
-        </div>
-
-        {/* Priority Selection */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-200">
-            <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <IconFlag className="w-5 h-5 text-indigo-600" />
-                {t.priorityTitle}
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-                <button
-                    type="button"
-                    onClick={() => setPriority('Low')}
-                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${priority === 'Low' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500 hover:border-green-200'}`}
-                >
-                    <div className={`w-4 h-4 rounded-full ${priority === 'Low' ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                    <span className="font-bold text-sm">{t.priorityLow}</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setPriority('Medium')}
-                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${priority === 'Medium' ? 'border-yellow-500 bg-yellow-50 text-yellow-700' : 'border-gray-200 text-gray-500 hover:border-yellow-200'}`}
-                >
-                    <div className={`w-4 h-4 rounded-full ${priority === 'Medium' ? 'bg-yellow-500' : 'bg-gray-300'}`}></div>
-                    <span className="font-bold text-sm">{t.priorityMedium}</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setPriority('High')}
-                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${priority === 'High' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500 hover:border-red-200'}`}
-                >
-                    <IconAlertTriangle className={`w-4 h-4 ${priority === 'High' ? 'text-red-500' : 'text-gray-300'}`} />
-                    <span className="font-bold text-sm">{t.priorityHigh}</span>
-                </button>
-            </div>
-        </div>
-
-        {/* Loyalty Code */}
-        <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
-             <label className="block text-sm font-bold text-indigo-900 mb-2">{t.loyaltyTitle}</label>
-             <div className="flex gap-2">
-                 <input 
-                     className="flex-grow px-4 py-3 rounded-xl border border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-center tracking-wider"
-                     placeholder={t.loyaltyPlaceholder}
-                     value={loyaltyCode}
-                     onChange={(e) => { setLoyaltyCode(e.target.value.toUpperCase()); setLoyaltyStatus('idle'); }}
-                 />
-                 <button 
-                    type="button" 
-                    onClick={handleLoyaltyCheck}
-                    disabled={!loyaltyCode || loyaltyStatus === 'checking'}
-                    className="bg-indigo-600 text-white px-6 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50"
-                 >
-                     {t.checkCode}
-                 </button>
-             </div>
-             {loyaltyStatus === 'valid' && (
-                 <div className="mt-2 text-green-600 font-bold flex items-center gap-2 text-sm"><IconCheck className="w-4 h-4" /> {t.validCode}</div>
-             )}
-             {loyaltyStatus === 'invalid' && (
-                 <div className="mt-2 text-red-500 font-bold text-sm">{t.invalidCode}</div>
-             )}
         </div>
 
         {/* Service Selection (Multi) */}
