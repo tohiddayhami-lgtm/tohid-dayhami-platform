@@ -46,8 +46,12 @@ const FieldItem = memo(({ field, value, onChange, lang }: FieldItemProps) => {
     case 'select':
       inputElement = (
         <select required={field.required} className={inputBase} value={value || ''} onChange={handleChange}>
-          <option value="">انتخاب کنید</option>
-          {field.options?.map((opt, idx) => <option key={idx} value={opt.trim()}>{opt.trim()}</option>)}
+          <option value="">{lang === 'en' ? 'Select...' : 'انتخاب کنید'}</option>
+          {field.options?.map((opt, idx) => (
+            <option key={idx} value={opt.trim()}>
+              {lang === 'en' && field.optionsEn?.[idx] ? field.optionsEn[idx] : opt.trim()}
+            </option>
+          ))}
         </select>
       );
       break;

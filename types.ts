@@ -440,7 +440,8 @@ export interface FormField {
   required: boolean;
   placeholder?: string;
   placeholderEn?: string;
-  options?: string[]; 
+  options?: string[];
+  optionsEn?: string[];
   isSystem?: boolean; 
   order: number;
 }
