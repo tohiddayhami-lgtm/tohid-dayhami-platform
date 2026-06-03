@@ -65,7 +65,7 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
         <div className="flex items-center gap-3 text-xs text-gray-400 mb-6 pb-6 border-b border-gray-100">
           <span>{selectedArticle.author}</span>
           <span>·</span>
-          <span dir="ltr">{formatDateFa(selectedArticle.publishedAt)}</span>
+          <span>{formatDateFa(selectedArticle.publishedAt)}</span>
           {selectedArticle.tags.length > 0 && (
             <>
               <span>·</span>
@@ -159,7 +159,7 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
                 </p>
                 <div className="flex items-center justify-between text-[11px] text-gray-400">
                   <span>{article.author}</span>
-                  <span dir="ltr">{formatDateFa(article.publishedAt)}</span>
+                  <span>{formatDateFa(article.publishedAt)}</span>
                 </div>
               </div>
             </button>
