@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { NewsArticle } from '../types';
-import { IconPlus, IconEdit, IconTrash, IconCheck, IconNewspaper, IconImage } from './Icons';
+import { IconPlus, IconEdit, IconTrash, IconCheck, IconNewspaper, IconImage, IconUpload } from './Icons';
 import { saveNewsArticleToCloud, deleteNewsArticleFromCloud } from '../services/firebaseService';
 
 interface Props {
@@ -32,7 +32,51 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
   const [form, setForm] = useState<Partial<NewsArticle>>(emptyForm());
   const [tagsInput, setTagsInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'list' | 'form'>('list');
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as NewsArticle[];
+      if (!Array.isArray(data)) { alert('فرمت JSON نادرست است. باید آرایه باشد.'); return; }
+      let count = 0;
+      for (const item of data) {
+        if (!item.title || !item.content) continue;
+        const article: NewsArticle = {
+          id:              item.id || `news_${Date.now()}_${count}`,
+          slug:            item.slug || item.title.replace(/\s+/g, '-'),
+          title:           item.title,
+          titleEn:         item.titleEn || '',
+          summary:         item.summary || '',
+          summaryEn:       item.summaryEn || '',
+          content:         item.content,
+          contentEn:       item.contentEn || '',
+          category:        item.category || 'سایر',
+          tags:            Array.isArray(item.tags) ? item.tags : [],
+          author:          item.author || 'تیم توحید دیهمی',
+          publishedAt:     item.publishedAt || new Date().toISOString(),
+          isPublished:     item.isPublished ?? false,
+          coverImage:      item.coverImage || '',
+          viewCount:       item.viewCount ?? 0,
+          metaDescription: item.metaDescription || '',
+          metaKeywords:    item.metaKeywords || '',
+        };
+        await saveNewsArticleToCloud(article);
+        count++;
+      }
+      alert(`${count} مقاله با موفقیت وارد شد.`);
+    } catch (err: any) {
+      alert('خطا در خواندن فایل: ' + err.message);
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const handleEdit = (article: NewsArticle) => {
     setForm({ ...article });
@@ -100,10 +144,21 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
           <h2 className="text-base font-semibold text-gray-900">مدیریت اخبار و مقالات</h2>
           <p className="text-xs text-gray-400 mt-0.5">{articles.length} مقاله — {articles.filter(a => a.isPublished).length} منتشر شده</p>
         </div>
-        <button onClick={handleNew}
-          className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-black transition-colors">
-          <IconPlus className="w-4 h-4" /> مقاله جدید
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <IconUpload className="w-4 h-4" />
+            {importing ? 'در حال وارد کردن...' : 'Import JSON'}
+          </button>
+          <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportJson} />
+          <button onClick={handleNew}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-black transition-colors">
+            <IconPlus className="w-4 h-4" /> مقاله جدید
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
