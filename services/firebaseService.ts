@@ -5,13 +5,13 @@ import { getStorage, ref, uploadBytes, getDownloadURL, uploadString, uploadBytes
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense } from '../types';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
-  authDomain: "company-crm-103aa.firebaseapp.com",
-  projectId: "company-crm-103aa",
-  storageBucket: "company-crm-103aa.firebasestorage.app",
-  messagingSenderId: "299697909758",
-  appId: "1:299697909758:web:f364faba178ed5e3b01aaf",
-  measurementId: "G-N426FMEKMR"
+  apiKey: "AIzaSyBW7pdULZj0YObz0duOFrTcNSp-1Fzf1I4",
+  authDomain: "tohid-dayhami-platform.firebaseapp.com",
+  projectId: "tohid-dayhami-platform",
+  storageBucket: "tohid-dayhami-platform.firebasestorage.app",
+  messagingSenderId: "126172233148",
+  appId: "1:126172233148:web:5749427746ba7458673fb9",
+  measurementId: "G-PHSTJHV790"
 };
 
 const app = initializeApp(firebaseConfig);
