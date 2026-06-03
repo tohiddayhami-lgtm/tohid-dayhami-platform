@@ -172,9 +172,10 @@ const App: React.FC = () => {
     }
 
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
-    const storedView = localStorage.getItem(STORAGE_KEYS.VIEW);
+    const storedView = localStorage.getItem(STORAGE_KEYS.VIEW) as ViewState | null;
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
+
     if (storedUser && lastActive) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
         handleLogout();
@@ -182,12 +183,19 @@ const App: React.FC = () => {
         try {
           setCurrentUser(JSON.parse(storedUser));
           localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, now.toString());
-          if (!isPublicFormLink && storedView) setViewState(storedView as ViewState);
         } catch { handleLogout(); }
       }
     }
 
-    if (isPublicFormLink) setViewState('new-ticket');
+    if (isPublicFormLink) {
+      setViewState('new-ticket');
+    } else if (storedView && storedView !== 'admin') {
+      // Restore public pages on refresh regardless of session
+      setViewState(storedView);
+    } else if (storedView === 'admin' && storedUser) {
+      // Restore admin page only when logged in
+      setViewState('admin');
+    }
   }, []);
 
   useEffect(() => {
@@ -368,15 +376,26 @@ const App: React.FC = () => {
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
 
-          {/* Logo */}
-          <button onClick={() => setView('landing')} className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-black rounded-lg flex items-center justify-center">
-              <IconShield className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-gray-900">
-              {lang === 'fa' ? appConfig.appTitle : appConfig.appTitleEn}
-            </span>
-          </button>
+          {/* Logo + Back */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView('landing')} className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-black rounded-lg flex items-center justify-center">
+                <IconShield className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-sm font-semibold text-gray-900 hidden sm:inline">
+                {lang === 'fa' ? appConfig.appTitle : appConfig.appTitleEn}
+              </span>
+            </button>
+            {view !== 'landing' && (
+              <button
+                onClick={() => setView('landing')}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 border-s border-gray-200 ps-3 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6" /></svg>
+                {lang === 'fa' ? 'بازگشت' : 'Back'}
+              </button>
+            )}
+          </div>
 
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-1">

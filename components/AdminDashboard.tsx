@@ -82,6 +82,9 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '' });
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [faviconProgress, setFaviconProgress] = useState(0);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'my' | 'history'>(canViewAllTickets ? 'all' : 'my');
   const [projectSubTab, setProjectSubTab] = useState<'active' | 'history'>('active');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
@@ -305,7 +308,7 @@ export const AdminDashboard: React.FC<Props> = ({
           ogTitle: 'عنوان اشتراک (OG Title)',
           ogDesc: 'توضیحات اشتراک (OG Description)',
           ogImage: 'تصویر اشتراک (OG Image URL)',
-          favicon: 'آدرس فاوآیکون (URL)',
+          favicon: 'فاوآیکون سایت',
           saveSeo: 'ذخیره تنظیمات سئو'
       },
       en: {
@@ -449,7 +452,7 @@ export const AdminDashboard: React.FC<Props> = ({
           ogTitle: 'OG Title',
           ogDesc: 'OG Description',
           ogImage: 'OG Image URL',
-          favicon: 'Favicon URL',
+          favicon: 'Site Favicon',
           saveSeo: 'Save SEO Settings'
       }
   }[lang];
@@ -1289,13 +1292,59 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100">{t.seo}</p>
 
-              {/* Favicon */}
+              {/* Favicon Upload */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">{t.favicon}</label>
-                <div className="flex gap-2 items-center">
-                  {seoForm.favicon && <img src={seoForm.favicon} alt="favicon" className="w-6 h-6 rounded" onError={e => (e.currentTarget.style.display = 'none')} />}
-                  <input dir="ltr" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.favicon} onChange={e => setSeoForm(p => ({ ...p, favicon: e.target.value }))} placeholder="https://yourdomain.com/favicon.ico" />
+                <label className="block text-xs font-medium text-gray-600 mb-2">فاوآیکون سایت</label>
+                <div className="flex items-center gap-3">
+                  {/* Preview */}
+                  <div className="w-12 h-12 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 overflow-hidden">
+                    {seoForm.favicon
+                      ? <img src={seoForm.favicon} alt="favicon" className="w-8 h-8 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} />
+                      : <span className="text-xs text-gray-300">ICO</span>
+                    }
+                  </div>
+                  {/* Upload button */}
+                  <div className="flex-1">
+                    <button
+                      type="button"
+                      disabled={faviconUploading}
+                      onClick={() => faviconInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      <IconUpload className="w-4 h-4" />
+                      {faviconUploading ? `در حال آپلود... ${faviconProgress}%` : 'آپلود فاوآیکون (ICO / PNG / SVG)'}
+                    </button>
+                    {faviconUploading && (
+                      <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1">
+                        <div className="bg-gray-800 h-1 rounded-full transition-all" style={{ width: `${faviconProgress}%` }} />
+                      </div>
+                    )}
+                    {seoForm.favicon && !faviconUploading && (
+                      <p className="text-[11px] text-emerald-600 mt-1">فاوآیکون آپلود شده و فعال است</p>
+                    )}
+                  </div>
                 </div>
+                <input
+                  ref={faviconInputRef}
+                  type="file"
+                  accept=".ico,.png,.svg,.jpg,.jpeg,image/x-icon,image/png,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 1 * 1024 * 1024) { alert('فایل نباید بیشتر از ۱ مگابایت باشد.'); return; }
+                    setFaviconUploading(true);
+                    setFaviconProgress(0);
+                    uploadFileWithProgress(
+                      file,
+                      (p) => setFaviconProgress(p),
+                      (url) => { setSeoForm(prev => ({ ...prev, favicon: url })); setFaviconUploading(false); },
+                      (err) => { alert('خطا در آپلود: ' + err.message); setFaviconUploading(false); },
+                      'images'
+                    );
+                    if (faviconInputRef.current) faviconInputRef.current.value = '';
+                  }}
+                />
               </div>
 
               {/* SEO Title */}
