@@ -16,9 +16,11 @@ const CATEGORIES_FA = ['همه', 'اخبار صادرات', 'بازارهای ه
 function formatDateFa(iso: string): string {
   try {
     const d = new Date(iso);
-    const parts = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).formatToParts(d);
-    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
-    return `${get('day')} ${get('month')} ${get('year')}`;
+    const dateParts = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).formatToParts(d);
+    const get = (type: string) => dateParts.find(p => p.type === type)?.value ?? '';
+    const timeParts = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d);
+    const getT = (type: string) => timeParts.find(p => p.type === type)?.value ?? '';
+    return `${get('day')} ${get('month')} ${get('year')} — ${getT('hour')}:${getT('minute')}`;
   } catch { return iso; }
 }
 
