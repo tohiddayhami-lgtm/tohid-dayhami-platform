@@ -480,7 +480,105 @@ const App: React.FC = () => {
               <div className="animate-fade-in">
 
                 {/* ── Hero ── */}
-                <section className="pt-10 pb-12 text-center border-b border-gray-100">
+                <section className="relative pt-10 pb-12 text-center border-b border-gray-100 overflow-hidden">
+                  {/* Export illustration background */}
+                  <div className="absolute inset-0 pointer-events-none select-none" aria-hidden="true">
+                    <svg viewBox="0 0 1200 380" xmlns="http://www.w3.org/2000/svg" className="w-full h-full" preserveAspectRatio="xMidYMid slice">
+                      <g stroke="#64748b" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.13">
+
+                        {/* Ocean waves */}
+                        <path d="M0 340 C150 318 350 355 550 332 S900 312 1200 338" strokeWidth="1.2"/>
+                        <path d="M0 360 C180 343 360 368 580 352 S950 334 1200 356" strokeWidth="0.8"/>
+                        <path d="M0 375 C200 362 420 378 640 368 S980 352 1200 370" strokeWidth="0.5"/>
+
+                        {/* === CONTAINER SHIP (left) === */}
+                        <path d="M15 295 L255 295 L272 322 L0 322 Z" strokeWidth="1.8"/>
+                        <rect x="25"  y="267" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="53"  y="267" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="81"  y="267" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="109" y="267" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="137" y="267" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="25"  y="239" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="53"  y="239" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="81"  y="239" width="26" height="28" strokeWidth="1.2"/>
+                        <rect x="109" y="239" width="26" height="28" strokeWidth="1.2"/>
+                        {/* superstructure */}
+                        <rect x="178" y="248" width="50" height="47" strokeWidth="1.6"/>
+                        <rect x="190" y="232" width="28" height="16" strokeWidth="1.2"/>
+                        {/* funnel */}
+                        <path d="M204 232 L204 210 L212 204 L220 210 L220 232" strokeWidth="1.5"/>
+                        {/* mast */}
+                        <line x1="145" y1="267" x2="145" y2="235" strokeWidth="1"/>
+                        <line x1="135" y1="240" x2="155" y2="240" strokeWidth="0.8"/>
+
+                        {/* === PORT CRANE (far left) === */}
+                        <line x1="5"  y1="322" x2="5"  y2="140" strokeWidth="2"/>
+                        <line x1="5"  y1="140" x2="115" y2="140" strokeWidth="2"/>
+                        <line x1="115" y1="140" x2="115" y2="210" strokeWidth="1.5"/>
+                        <line x1="5"   y1="145" x2="35"  y2="322" strokeWidth="0.8"/>
+                        <line x1="5"   y1="145" x2="-5"  y2="322" strokeWidth="0.8"/>
+                        <line x1="85"  y1="140" x2="85"  y2="238" strokeWidth="1"/>
+                        <line x1="100" y1="140" x2="100" y2="238" strokeWidth="1"/>
+                        <rect x="78"  y="238" width="28" height="22" strokeWidth="1.2"/>
+                        {/* crane crossbeams */}
+                        <line x1="5" y1="200" x2="40" y2="200" strokeWidth="0.8"/>
+                        <line x1="5" y1="260" x2="25" y2="260" strokeWidth="0.8"/>
+
+                        {/* === AIRPLANE (top right) === */}
+                        <ellipse cx="1020" cy="68" rx="75" ry="13" strokeWidth="1.6"/>
+                        <path d="M1000 68 L938 44 L958 68 L938 92 L1000 68" strokeWidth="1.3"/>
+                        <path d="M1072 68 L1098 53 L1093 68 L1098 83 L1072 68" strokeWidth="1.2"/>
+                        <path d="M1095 68 L1115 68" strokeWidth="1.8"/>
+                        <ellipse cx="958" cy="56" rx="13" ry="5" strokeWidth="1"/>
+                        <ellipse cx="958" cy="80" rx="13" ry="5" strokeWidth="1"/>
+                        {/* vapor trails */}
+                        <path d="M940 68 Q870 55 810 62" strokeWidth="0.7" strokeDasharray="4,4"/>
+                        <path d="M940 70 Q870 80 800 72" strokeWidth="0.5" strokeDasharray="4,4"/>
+
+                        {/* === CONTAINER TRUCK (right) === */}
+                        <rect x="800" y="278" width="195" height="42" strokeWidth="1.6"/>
+                        <line x1="862" y1="278" x2="862" y2="320" strokeWidth="1"/>
+                        <line x1="924" y1="278" x2="924" y2="320" strokeWidth="1"/>
+                        <line x1="986" y1="278" x2="986" y2="320" strokeWidth="1"/>
+                        <rect x="995" y="268" width="60" height="52" rx="4" strokeWidth="1.6"/>
+                        <path d="M995 292 L1055 292" strokeWidth="1"/>
+                        <path d="M1005 268 L1005 256 L1040 256 L1055 268" strokeWidth="1.2"/>
+                        <circle cx="830"  cy="325" r="9" strokeWidth="1.5"/>
+                        <circle cx="896"  cy="325" r="9" strokeWidth="1.5"/>
+                        <circle cx="1010" cy="325" r="9" strokeWidth="1.5"/>
+                        <circle cx="1045" cy="325" r="9" strokeWidth="1.5"/>
+
+                        {/* === STACKED CONTAINERS (right background) === */}
+                        <rect x="1100" y="210" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1126" y="210" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1152" y="210" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1100" y="228" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1126" y="228" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1152" y="228" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1100" y="246" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1126" y="246" width="24" height="18" strokeWidth="1"/>
+                        <rect x="1152" y="246" width="24" height="18" strokeWidth="1"/>
+
+                        {/* === GLOBE (faint, center) === */}
+                        <circle cx="600" cy="188" r="52" strokeWidth="0.6"/>
+                        <ellipse cx="600" cy="188" rx="52" ry="18" strokeWidth="0.6"/>
+                        <ellipse cx="600" cy="188" rx="52" ry="36" strokeWidth="0.5"/>
+                        <line x1="600" y1="136" x2="600" y2="240" strokeWidth="0.6"/>
+                        <line x1="548" y1="188" x2="652" y2="188" strokeWidth="0.6"/>
+                        <path d="M558 158 Q600 168 642 158" strokeWidth="0.5"/>
+                        <path d="M558 218 Q600 208 642 218" strokeWidth="0.5"/>
+
+                        {/* === SHIPPING ROUTE (dashed) === */}
+                        <path d="M255 308 Q420 265 600 285 Q780 305 1000 295" strokeWidth="0.9" strokeDasharray="7,5"/>
+
+                        {/* === SMALL CARGO PLANE (left upper) === */}
+                        <ellipse cx="220" cy="80" rx="38" ry="7" strokeWidth="1"/>
+                        <path d="M210 80 L182 68 L192 80 L182 92 L210 80" strokeWidth="0.9"/>
+                        <path d="M248 80 L262 73 L259 80 L262 87 L248 80" strokeWidth="0.9"/>
+
+                      </g>
+                    </svg>
+                  </div>
                   <span className="inline-flex items-center gap-1.5 border border-gray-200 text-[11px] text-gray-500 px-3 py-1 rounded-full mb-5">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
                     {lang === 'fa' ? 'پلتفرم رسمی خدمات صادراتی توحید دیهمی' : 'Tohid Dayhami Official Export Platform'}
