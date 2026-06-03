@@ -66,7 +66,12 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
     history.pushState(null, '', '#/news');
   };
 
-  const published = articles.filter(a => a.isPublished);
+  const now = Date.now();
+
+  // isPublished AND publishedAt has passed (scheduled publishing)
+  const published = articles
+    .filter(a => a.isPublished && new Date(a.publishedAt).getTime() <= now)
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
 
   const getCategories = (a: NewsArticle): string[] =>
     a.categories && a.categories.length > 0 ? a.categories : [a.category];

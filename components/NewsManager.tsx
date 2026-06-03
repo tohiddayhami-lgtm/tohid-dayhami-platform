@@ -117,8 +117,10 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
       let count = 0;
       for (const item of data) {
         if (!item.title || !item.content) continue;
+        // Always generate a fresh unique ID to prevent overwriting existing articles
+        const uniqueId = `news_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${count}`;
         const article: NewsArticle = {
-          id:              item.id || `news_${Date.now()}_${count}`,
+          id:              uniqueId,
           slug:            item.slug || item.title.replace(/\s+/g, '-'),
           title:           item.title,
           titleEn:         item.titleEn || '',
