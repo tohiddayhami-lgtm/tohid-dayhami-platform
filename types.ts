@@ -419,6 +419,7 @@ export interface NewsArticle {
   content: string;
   contentEn?: string;
   category: string;
+  categories?: string[];
   tags: string[];
   publishedAt: string;
   isPublished: boolean;

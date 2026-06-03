@@ -126,7 +126,8 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
           summaryEn:       item.summaryEn || '',
           content:         item.content,
           contentEn:       item.contentEn || '',
-          category:        item.category || 'سایر',
+          category:        (Array.isArray(item.categories) && item.categories.length > 0 ? item.categories[0] : item.category) || 'سایر',
+          categories:      Array.isArray(item.categories) && item.categories.length > 0 ? item.categories : (item.category ? [item.category] : ['سایر']),
           tags:            Array.isArray(item.tags) ? item.tags : [],
           author:          item.author || 'تیم توحید دیهمی',
           publishedAt:     item.publishedAt || new Date().toISOString(),
@@ -149,7 +150,10 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
   };
 
   const handleEdit = (article: NewsArticle) => {
-    setForm({ ...article });
+    const cats = article.categories && article.categories.length > 0
+      ? article.categories
+      : article.category ? [article.category] : [];
+    setForm({ ...article, categories: cats });
     setTagsInput((article.tags || []).join(', '));
     setEditingId(article.id);
     setActiveTab('form');
@@ -180,7 +184,8 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
         summaryEn: form.summaryEn || '',
         content: form.content!,
         contentEn: form.contentEn || '',
-        category: form.category || 'اخبار صادرات',
+        category: (form.categories && form.categories.length > 0 ? form.categories[0] : form.category) || 'اخبار صادرات',
+        categories: form.categories && form.categories.length > 0 ? form.categories : (form.category ? [form.category] : ['اخبار صادرات']),
         publishedAt: form.publishedAt || new Date().toISOString(),
         isPublished: form.isPublished ?? false,
         coverImage: form.coverImage || '',
@@ -312,11 +317,27 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Title (English)</label>
                 <input className={`${inp} dir-ltr`} value={form.titleEn || ''} onChange={e => setForm(p => ({ ...p, titleEn: e.target.value }))} placeholder="Article title in English" dir="ltr" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">دسته‌بندی</label>
-                <select className={inp} value={form.category || ''} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-2">دسته‌بندی <span className="text-gray-400 font-normal">(می‌توانید چند دسته انتخاب کنید)</span></label>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map(cat => {
+                    const selected = (form.categories && form.categories.length > 0 ? form.categories : (form.category ? [form.category] : [])).includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          const current = form.categories && form.categories.length > 0 ? form.categories : (form.category ? [form.category] : []);
+                          const next = selected ? current.filter(c => c !== cat) : [...current, cat];
+                          setForm(p => ({ ...p, categories: next, category: next[0] || '' }));
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${selected ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">نویسنده</label>

@@ -28,8 +28,11 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
 
   const published = articles.filter(a => a.isPublished);
 
+  const getCategories = (a: NewsArticle): string[] =>
+    a.categories && a.categories.length > 0 ? a.categories : [a.category];
+
   const filtered = published.filter(a => {
-    const matchCat = activeCategory === 'همه' || a.category === activeCategory;
+    const matchCat = activeCategory === 'همه' || getCategories(a).includes(activeCategory);
     const q = search.toLowerCase();
     const matchSearch = !q || a.title.toLowerCase().includes(q) || a.summary.toLowerCase().includes(q);
     return matchCat && matchSearch;
@@ -52,10 +55,12 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
           </div>
         )}
 
-        <div className="mb-4">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 border border-gray-200 px-2 py-0.5 rounded">
-            {selectedArticle.category}
-          </span>
+        <div className="flex gap-1.5 flex-wrap mb-4">
+          {getCategories(selectedArticle).map(cat => (
+            <span key={cat} className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 border border-gray-200 px-2 py-0.5 rounded">
+              {cat}
+            </span>
+          ))}
         </div>
 
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight mb-3">
@@ -150,7 +155,11 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
                 </div>
               )}
               <div className="p-4">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{article.category}</span>
+                <div className="flex gap-1 flex-wrap">
+                  {getCategories(article).map(cat => (
+                    <span key={cat} className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{cat}</span>
+                  ))}
+                </div>
                 <h3 className="text-sm font-semibold text-gray-900 mt-1 mb-2 leading-snug line-clamp-2 group-hover:text-gray-700">
                   {lang === 'en' && article.titleEn ? article.titleEn : article.title}
                 </h3>
