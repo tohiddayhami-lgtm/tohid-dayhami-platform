@@ -100,7 +100,7 @@ const INITIAL_CONFIG: AppConfig = {
     { id: 'f7', key: 'businessType', label: 'نوع کسب‌وکار', labelEn: 'Business Type', type: 'select', required: true, options: ['تولیدی', 'بازرگانی', 'صنایع دستی', 'کشاورزی', 'خدماتی', 'دانش‌بنیان', 'سایر'], order: 8, isSystem: true },
     { id: 'f8', key: 'description', label: 'شرح درخواست و اطلاعات محصول', labelEn: 'Description', type: 'textarea', required: true, placeholder: 'توضیحات کامل...', order: 9, isSystem: true },
   ],
-  assignmentConfig: { mode: 'manual', serviceRoleMap: {} }
+  assignmentConfig: { mode: 'manual', targetType: 'role', serviceRoleMap: {}, servicePersonnelMap: {} }
 };
 
 const STORAGE_KEYS = { USER: 'crm_session_user', VIEW: 'crm_last_view', LAST_ACTIVE: 'crm_last_active' };
@@ -190,7 +190,20 @@ const App: React.FC = () => {
 
   const calculateAssignee = useCallback((serviceIdOrTitle: string): string | undefined => {
     const config = appConfig.assignmentConfig;
-    if (!config || config.mode === 'manual' || !config.serviceRoleMap) return undefined;
+    if (!config || config.mode === 'manual') return undefined;
+
+    const findServiceId = () => {
+      const serviceObj = services.find(s => s.id === serviceIdOrTitle || s.title === serviceIdOrTitle || s.titleEn === serviceIdOrTitle || s.title.includes(serviceIdOrTitle));
+      return serviceObj?.id || serviceIdOrTitle;
+    };
+
+    if (config.targetType === 'personnel') {
+      const selectedPersonId = config.servicePersonnelMap?.[findServiceId()];
+      const selectedPerson = personnel.find(p => p.id === selectedPersonId && (p.status || 'active') === 'active');
+      return selectedPerson?.id;
+    }
+
+    if (!config.serviceRoleMap) return undefined;
     let targetRole = config.serviceRoleMap[serviceIdOrTitle]?.trim();
     if (!targetRole) {
       const serviceObj = services.find(s => s.title === serviceIdOrTitle || s.titleEn === serviceIdOrTitle || s.title.includes(serviceIdOrTitle));

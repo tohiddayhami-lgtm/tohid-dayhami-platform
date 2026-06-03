@@ -1213,7 +1213,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'customers' && hasCustomerAccess && <CustomerManager customers={customers} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} />}
         {activeTab === 'personnel' && isAdmin && <PersonnelManager personnel={personnel} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
-        {activeTab === 'settings' && isAdmin && <SettingsManager config={config} onUpdate={onUpdateConfig} isMaster={isMaster} />}
+        {activeTab === 'settings' && isAdmin && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}
         {activeTab === 'logs' && isMaster && (

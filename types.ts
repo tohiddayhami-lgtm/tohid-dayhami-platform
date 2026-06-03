@@ -438,10 +438,13 @@ export interface InvoiceTemplate {
 }
 
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';
+export type AssignmentTargetType = 'role' | 'personnel';
 
 export interface AssignmentConfig {
   mode: AssignmentMode;
+  targetType?: AssignmentTargetType;
   serviceRoleMap: Record<string, string>; 
+  servicePersonnelMap?: Record<string, string>;
 }
 
 export interface AppConfig {

@@ -1,17 +1,33 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode } from '../types';
+import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode, AssignmentConfig } from '../types';
 import { IconSettings, IconPlus, IconTrash, IconEdit, IconCheck, IconLayout, IconInvoice, IconUpload, IconDatabase, IconShield, IconBulb, IconMagic, IconClipboard, IconFolder, IconBriefcase, IconStar, IconLink, IconCopy, IconUsers } from './Icons';
 import { compressImage, backupSystemData, clearSystemData, saveCustomFormToCloud, deleteCustomFormFromCloud, subscribeToCustomForms, updateCustomFormInCloud, firebaseConfig, subscribeToSettings } from '../services/firebaseService';
 import { generateFormFields } from '../services/geminiService';
 
 interface Props {
   config: AppConfig;
+  personnel: Personnel[];
   onUpdate: (newConfig: AppConfig) => void;
   isMaster?: boolean;
 }
 
-export const SettingsManager: React.FC<Props> = ({ config, onUpdate, isMaster = false }) => {
+const getDefaultAssignmentConfig = (): AssignmentConfig => ({
+  mode: 'manual',
+  targetType: 'role',
+  serviceRoleMap: {},
+  servicePersonnelMap: {},
+});
+
+const normalizeAssignmentConfig = (assignmentConfig?: AssignmentConfig): AssignmentConfig => ({
+  ...getDefaultAssignmentConfig(),
+  ...(assignmentConfig || {}),
+  targetType: assignmentConfig?.targetType || 'role',
+  serviceRoleMap: assignmentConfig?.serviceRoleMap || {},
+  servicePersonnelMap: assignmentConfig?.servicePersonnelMap || {},
+});
+
+export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, isMaster = false }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'form' | 'custom_forms' | 'invoice' | 'maintenance' | 'daily' | 'businesses' | 'google_forms' | 'assignment'>('general');
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [customForms, setCustomForms] = useState<CustomForm[]>([]);
@@ -50,7 +66,7 @@ export const SettingsManager: React.FC<Props> = ({ config, onUpdate, isMaster = 
   const bizImageInputRef = useRef<HTMLInputElement>(null);
 
   // Assignment Config State
-  const [assignmentConfig, setAssignmentConfig] = useState(config.assignmentConfig || { mode: 'manual' as AssignmentMode, serviceRoleMap: {} });
+  const [assignmentConfig, setAssignmentConfig] = useState<AssignmentConfig>(normalizeAssignmentConfig(config.assignmentConfig));
 
   // Google Form Integration State
   const [selectedServiceForScript, setSelectedServiceForScript] = useState('');
@@ -89,7 +105,7 @@ export const SettingsManager: React.FC<Props> = ({ config, onUpdate, isMaster = 
     setDailyTips(config.dailyTips || []);
     setShowDailyTips(config.showDailyTips || false);
     setFeaturedBusinesses(config.featuredBusinesses || []);
-    setAssignmentConfig(config.assignmentConfig || { mode: 'manual', serviceRoleMap: {} });
+    setAssignmentConfig(normalizeAssignmentConfig(config.assignmentConfig));
     if (config.invoiceTemplate) {
         setInvoiceTemplate(config.invoiceTemplate);
     }
@@ -425,10 +441,35 @@ function onFormSubmit(e) {
                       </div>
                   </div>
 
-                  {/* Service -> Role Mapping */}
+                  {/* Assignment Target Selection */}
+                  {(assignmentConfig.mode === 'auto_load_balance' || assignmentConfig.mode === 'random') && (
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                      <label className="block text-sm font-bold text-gray-700 mb-3">روش ارجاع</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                          onClick={() => setAssignmentConfig(prev => ({ ...prev, targetType: 'personnel' }))}
+                          className={`p-4 rounded-xl border-2 text-center transition-all ${assignmentConfig.targetType === 'personnel' ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-white hover:border-emerald-200'}`}
+                        >
+                          <div className="font-bold mb-1">ارجاع از طریق اسم</div>
+                          <div className="text-xs opacity-70">برای هر سرویس، شخص مسئول را مستقیم انتخاب کنید</div>
+                        </button>
+                        <button
+                          onClick={() => setAssignmentConfig(prev => ({ ...prev, targetType: 'role' }))}
+                          className={`p-4 rounded-xl border-2 text-center transition-all ${(assignmentConfig.targetType || 'role') === 'role' ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-gray-200 bg-white hover:border-indigo-200'}`}
+                        >
+                          <div className="font-bold mb-1">ارجاع از طریق سمت</div>
+                          <div className="text-xs opacity-70">برای هر سرویس، سمت سازمانی را انتخاب کنید</div>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Service Mapping */}
                   {(assignmentConfig.mode === 'auto_load_balance' || assignmentConfig.mode === 'random') && (
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 font-bold text-gray-700">نقشه‌برداری خدمات به سمت‌ها (Service Mapping)</div>
+                          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 font-bold text-gray-700">
+                            {assignmentConfig.targetType === 'personnel' ? 'نقشه‌برداری خدمات به اشخاص' : 'نقشه‌برداری خدمات به سمت‌ها'}
+                          </div>
                           <div className="divide-y divide-gray-100">
                               {services.map(service => (
                                   <div key={service.id} className="flex items-center justify-between px-6 py-4 hover:bg-gray-50">
@@ -438,25 +479,41 @@ function onFormSubmit(e) {
                                       </div>
                                       <div className="flex items-center gap-2">
                                           <span className="text-xs text-gray-500">ارجاع به:</span>
-                                          <select 
-                                              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white outline-none focus:border-indigo-500"
-                                              value={assignmentConfig.serviceRoleMap[service.id] || ''}
-                                              onChange={(e) => setAssignmentConfig(prev => ({
-                                                  ...prev,
-                                                  serviceRoleMap: { ...prev.serviceRoleMap, [service.id]: e.target.value }
-                                              }))}
-                                          >
-                                              <option value="">-- انتخاب کنید --</option>
-                                              {config.personnelRoles?.map(role => (
-                                                  <option key={role} value={role}>{role}</option>
-                                              ))}
-                                          </select>
+                                          {assignmentConfig.targetType === 'personnel' ? (
+                                            <select
+                                                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white outline-none focus:border-emerald-500"
+                                                value={assignmentConfig.servicePersonnelMap?.[service.id] || ''}
+                                                onChange={(e) => setAssignmentConfig(prev => ({
+                                                    ...prev,
+                                                    servicePersonnelMap: { ...(prev.servicePersonnelMap || {}), [service.id]: e.target.value }
+                                                }))}
+                                            >
+                                                <option value="">-- انتخاب شخص --</option>
+                                                {personnel.filter(person => (person.status || 'active') === 'active').map(person => (
+                                                    <option key={person.id} value={person.id}>{person.fullName} ({(person.roles || []).join(', ')})</option>
+                                                ))}
+                                            </select>
+                                          ) : (
+                                            <select 
+                                                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white outline-none focus:border-indigo-500"
+                                                value={assignmentConfig.serviceRoleMap[service.id] || ''}
+                                                onChange={(e) => setAssignmentConfig(prev => ({
+                                                    ...prev,
+                                                    serviceRoleMap: { ...prev.serviceRoleMap, [service.id]: e.target.value }
+                                                }))}
+                                            >
+                                                <option value="">-- انتخاب سمت --</option>
+                                                {config.personnelRoles?.map(role => (
+                                                    <option key={role} value={role}>{role}</option>
+                                                ))}
+                                            </select>
+                                          )}
                                       </div>
                                   </div>
                               ))}
                           </div>
                           <div className="p-4 bg-yellow-50 text-xs text-yellow-800 border-t border-yellow-100">
-                              توجه: سیستم فقط طبق همین نقشه مستر ارجاع می‌دهد. اگر برای یک سرویس "سمت سازمانی" انتخاب نشود، پرونده به هیچ فردی ارجاع خودکار نمی‌شود و برای ارجاع دستی در داشبورد باقی می‌ماند.
+                              توجه: سیستم فقط طبق همین نقشه مستر ارجاع می‌دهد. اگر برای یک سرویس شخص یا سمت انتخاب نشود، پرونده به هیچ فردی ارجاع خودکار نمی‌شود و برای ارجاع دستی در داشبورد باقی می‌ماند.
                           </div>
                       </div>
                   )}
