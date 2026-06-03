@@ -14,9 +14,18 @@ const FLAG = (code: string) => {
   } catch { return '🌐'; }
 };
 
-const VIEW_LABELS: Record<string, string> = {
-  landing: 'صفحه اصلی', 'new-ticket': 'فرم درخواست',
-  tracking: 'پیگیری', news: 'اخبار', admin: 'پنل ادمین',
+const VIEW_LABELS: Record<string, { fa: string; en: string; icon: string }> = {
+  'landing':    { fa: 'صفحه اصلی',       en: 'Home',            icon: '🏠' },
+  'new-ticket': { fa: 'فرم درخواست',     en: 'Request Form',    icon: '📝' },
+  'tracking':   { fa: 'پیگیری درخواست',  en: 'Tracking',        icon: '🔍' },
+  'news':       { fa: 'اخبار و مقالات',  en: 'News',            icon: '📰' },
+  'admin':      { fa: 'پنل مدیریت',      en: 'Admin Panel',     icon: '⚙️' },
+};
+
+const getSectionLabel = (view: string, lang: Language) => {
+  const entry = VIEW_LABELS[view];
+  if (entry) return `${entry.icon} ${lang === 'fa' ? entry.fa : entry.en}`;
+  return view || '—';
 };
 
 const BAR_COLORS = ['bg-indigo-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500',
@@ -174,12 +183,15 @@ export const AnalyticsDashboard: React.FC<Props> = ({ events, lang }) => {
           <p className="text-xs font-semibold text-gray-500 mb-3">{lang === 'fa' ? 'پربازدیدترین بخش‌ها' : 'Most Visited Sections'}</p>
           {topSections.length === 0
             ? <p className="text-xs text-gray-400">{lang === 'fa' ? 'داده‌ای موجود نیست' : 'No data yet'}</p>
-            : <div className="space-y-2.5">
+            : <div className="space-y-3">
                 {topSections.map(([view, count], i) => (
-                  <div key={view}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-gray-700">{VIEW_LABELS[view] || view}</span>
-                      <span className="text-xs font-semibold text-gray-500">{count}</span>
+                  <div key={view || i}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-gray-800">{getSectionLabel(view, lang)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{Math.round((count / rangeEvents.length) * 100)}%</span>
+                        <span className="text-sm font-bold text-gray-700">{count}</span>
+                      </div>
                     </div>
                     <Bar value={count} max={maxSection} color={BAR_COLORS[i % BAR_COLORS.length]} />
                   </div>
@@ -244,7 +256,7 @@ export const AnalyticsDashboard: React.FC<Props> = ({ events, lang }) => {
                     {new Date(e.timestamp).toLocaleString('fa-IR', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
                   </td>
                   <td className="py-1.5"><span className="me-1">{FLAG(e.countryCode)}</span>{e.country}</td>
-                  <td className="py-1.5 text-gray-700">{VIEW_LABELS[e.view] || e.view}{e.articleSlug ? ` / ${e.articleSlug.slice(0, 15)}...` : ''}</td>
+                  <td className="py-1.5 text-gray-700">{getSectionLabel(e.view, lang)}{e.articleSlug ? ` — ${e.articleSlug.slice(0, 20)}` : ''}</td>
                   <td className="py-1.5 text-gray-500">{e.device}</td>
                   <td className="py-1.5 text-gray-500">{e.referrer === 'direct' ? (lang === 'fa' ? 'مستقیم' : 'Direct') : e.referrer}</td>
                 </tr>
