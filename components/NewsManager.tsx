@@ -70,7 +70,7 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
         publishedAt: form.publishedAt || new Date().toISOString(),
         isPublished: form.isPublished ?? false,
         coverImage: form.coverImage || '',
-        author: form.author || 'تیم توحید دیهیمی',
+        author: form.author || 'تیم توحید دیهمی',
         viewCount: form.viewCount ?? 0,
         metaDescription: form.metaDescription || '',
         metaKeywords: form.metaKeywords || '',

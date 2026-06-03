@@ -433,7 +433,7 @@ const App: React.FC = () => {
                 <section className="pt-10 pb-12 text-center border-b border-gray-100">
                   <span className="inline-flex items-center gap-1.5 border border-gray-200 text-[11px] text-gray-500 px-3 py-1 rounded-full mb-5">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
-                    {lang === 'fa' ? 'پلتفرم رسمی خدمات صادراتی توحید دیهیمی' : 'Tohid Dayhami Official Export Platform'}
+                    {lang === 'fa' ? 'پلتفرم رسمی خدمات صادراتی توحید دیهمی' : 'Tohid Dayhami Official Export Platform'}
                   </span>
                   <h1 className="text-3xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 tracking-tight">
                     {lang === 'fa'

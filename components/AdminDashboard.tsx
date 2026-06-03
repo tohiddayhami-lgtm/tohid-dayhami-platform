@@ -1301,7 +1301,7 @@ export const AdminDashboard: React.FC<Props> = ({
               {/* SEO Title */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{t.seoTitle}</label>
-                <input className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.seoTitle} onChange={e => setSeoForm(p => ({ ...p, seoTitle: e.target.value }))} placeholder="پلتفرم جامع صادراتی توحید دیهیمی" />
+                <input className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.seoTitle} onChange={e => setSeoForm(p => ({ ...p, seoTitle: e.target.value }))} placeholder="پلتفرم جامع صادراتی توحید دیهمی" />
               </div>
 
               {/* Meta Description */}
