@@ -4,28 +4,27 @@ service firebase.storage {
   match /b/{bucket}/o {
     function isAllowedFile() {
       return request.resource != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|application/pdf|text/.*|application/msword|application/vnd.openxmlformats-officedocument.*');
+        && request.resource.size < 50 * 1024 * 1024;
     }
 
-    match /tohid-dayhami-platform/uploads/{fileName=**} {
+    match /tohid-dayhami-platform/uploads/{allPaths=**} {
       allow read: if true;
       allow write: if isAllowedFile();
     }
 
-    match /tohid-dayhami-platform/images/{fileName=**} {
+    match /tohid-dayhami-platform/images/{allPaths=**} {
       allow read: if true;
       allow write: if request.resource != null
-        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.size < 50 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }
 
-    match /tohid-dayhami-platform/documents/{fileName=**} {
+    match /tohid-dayhami-platform/documents/{allPaths=**} {
       allow read: if true;
       allow write: if isAllowedFile();
     }
 
-    match /tohid-dayhami-platform/temp/{fileName=**} {
+    match /tohid-dayhami-platform/temp/{allPaths=**} {
       allow read: if true;
       allow write: if isAllowedFile();
     }

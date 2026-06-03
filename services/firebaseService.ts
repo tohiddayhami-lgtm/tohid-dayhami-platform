@@ -237,14 +237,16 @@ const normalizeStoragePath = (pathOrUrl: string) => {
 
 const getStorageErrorMessage = (error: unknown) => {
     const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
+    const storagePath = typeof error === "object" && error && "storagePath" in error ? String((error as { storagePath?: unknown }).storagePath) : "نامشخص";
     const message = error instanceof Error ? error.message : "";
+    const details = `Bucket: ${CENTRAL_STORAGE_BUCKET} | Path: ${storagePath} | Code: ${code || "unknown"}`;
 
     if (code === "storage/unauthorized") {
-        return "دسترسی آپلود در Firebase Storage مجاز نیست. قوانین Storage پروژه calculator-55611 را برای مسیر tohid-dayhami-platform/uploads بررسی کنید.";
+        return `دسترسی آپلود در Firebase Storage مجاز نیست. Rules پروژه ${CENTRAL_STORAGE_PROJECT_ID}، وضعیت Publish شدن Rules، و App Check را بررسی کنید. ${details}`;
     }
 
     if (code === "storage/bucket-not-found") {
-        return `Bucket مرکزی پیدا نشد: ${CENTRAL_STORAGE_BUCKET}`;
+        return `Bucket مرکزی پیدا نشد. ${details}`;
     }
 
     if (code === "storage/canceled") {
@@ -255,7 +257,7 @@ const getStorageErrorMessage = (error: unknown) => {
         return "آپلود به دلیل کندی یا قطعی شبکه متوقف شد. دوباره تلاش کنید.";
     }
 
-    return message || "آپلود ناموفق. لطفاً اتصال اینترنت و تنظیمات Firebase Storage را بررسی کنید.";
+    return `${message || "آپلود ناموفق. لطفاً اتصال اینترنت و تنظیمات Firebase Storage را بررسی کنید."} ${details}`;
 };
 
 export const uploadFile = (
@@ -274,7 +276,13 @@ export const uploadFile = (
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                 onProgress?.(progress);
             },
-            reject,
+            (error) => {
+                Object.assign(error, {
+                    storageBucket: CENTRAL_STORAGE_BUCKET,
+                    storagePath: path,
+                });
+                reject(error);
+            },
             async () => {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
                 resolve({ url, path });
