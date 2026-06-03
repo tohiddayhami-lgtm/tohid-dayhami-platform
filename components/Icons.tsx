@@ -252,3 +252,13 @@ export const IconGlobe = ({ className }: { className?: string }) => (
 export const IconImage = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
 );
+
+export const IconPort = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M12 2v8"/>
+    <path d="M4.93 10.93a10 10 0 1 0 14.14 0"/>
+    <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+    <path d="M2 22h20"/>
+    <path d="M6 18v-3a6 6 0 0 0 12 0v-3"/>
+  </svg>
+);

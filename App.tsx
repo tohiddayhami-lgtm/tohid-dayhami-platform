@@ -7,7 +7,7 @@ import { LoginView } from './components/LoginView';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI, NewsArticle } from './types';
-import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock } from './components/Icons';
+import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
   saveCustomerToCloud, saveCustomersBulkToCloud, updateCustomerInCloud, deleteCustomerFromCloud,
@@ -400,9 +400,9 @@ const App: React.FC = () => {
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-1">
             {[
-              { id: 'new-ticket', label: t.newTicket,  icon: <IconPlus className="w-3.5 h-3.5" /> },
-              { id: 'tracking',   label: t.tracking,   icon: <IconSearch className="w-3.5 h-3.5" /> },
-              { id: 'news',       label: lang === 'fa' ? 'اخبار' : 'News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
+              { id: 'new-ticket', label: t.newTicket,                           icon: <IconPlus      className="w-3.5 h-3.5" /> },
+              { id: 'tracking',   label: t.tracking,                            icon: <IconSearch    className="w-3.5 h-3.5" /> },
+              { id: 'news',       label: lang === 'fa' ? 'اخبار' : 'News',      icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
                 key={item.id}
@@ -414,6 +414,17 @@ const App: React.FC = () => {
                 {item.label}
               </button>
             ))}
+            {/* Tohid Meta Port — external link */}
+            <a
+              href={appConfig.metaPortUrl || '#'}
+              target={appConfig.metaPortUrl ? '_blank' : undefined}
+              rel="noopener noreferrer"
+              onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+            >
+              <IconPort className="w-3.5 h-3.5" />
+              Tohid Meta Port
+            </a>
           </nav>
 
           {/* Right side: lang toggle + staff login icon */}
@@ -661,6 +672,16 @@ const App: React.FC = () => {
             <span className="text-[10px] font-medium">{item.label}</span>
           </button>
         ))}
+        <a
+          href={appConfig.metaPortUrl || '#'}
+          target={appConfig.metaPortUrl ? '_blank' : undefined}
+          rel="noopener noreferrer"
+          onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
+          className="flex flex-col items-center gap-0.5 px-3 py-1 text-gray-400"
+        >
+          <IconPort className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Meta Port</span>
+        </a>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
 import { SettingsManager } from './SettingsManager';
 import { NewsManager } from './NewsManager';
-import { IconNewspaper, IconGlobe, IconImage } from './Icons';
+import { IconNewspaper, IconGlobe, IconImage, IconPort } from './Icons';
 import { InternalMessenger } from './InternalMessenger';
 import { InvoiceModal } from './InvoiceModal';
 import { TaskManager } from './TaskManager';
@@ -81,7 +81,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo'>('overview');
-  const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '' });
+  const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
   const faviconInputRef = useRef<HTMLInputElement>(null);
@@ -1385,6 +1385,25 @@ export const AdminDashboard: React.FC<Props> = ({
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">{t.ogImage}</label>
                 <input dir="ltr" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.ogImage} onChange={e => setSeoForm(p => ({ ...p, ogImage: e.target.value }))} placeholder="https://yourdomain.com/og-image.jpg" />
+              </div>
+            </div>
+
+            {/* MetaPort Link */}
+            <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                <IconPort className="w-4 h-4 text-gray-500" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tohid Meta Port — لینک هایپر</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">آدرس لینک (URL)</label>
+                <input
+                  dir="ltr"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400"
+                  value={seoForm.metaPortUrl || ''}
+                  onChange={e => setSeoForm(p => ({ ...p, metaPortUrl: e.target.value }))}
+                  placeholder="https://metaport.example.com"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">این لینک در نوار ناوبار سایت نمایش داده می‌شود و در تب جدید باز می‌شود.</p>
               </div>
             </div>
 

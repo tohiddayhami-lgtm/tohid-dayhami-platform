@@ -490,4 +490,5 @@ export interface AppConfig {
   ogTitle?: string;
   ogDescription?: string;
   ogImage?: string;
+  metaPortUrl?: string;
 }
