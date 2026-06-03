@@ -134,6 +134,11 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
   };
 
+  const toAbsoluteUrl = (url: string) => {
+    if (!url) return '#';
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  };
+
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
@@ -416,7 +421,7 @@ const App: React.FC = () => {
             ))}
             {/* Tohid Meta Port — external link */}
             <a
-              href={appConfig.metaPortUrl || '#'}
+              href={toAbsoluteUrl(appConfig.metaPortUrl || '')}
               target={appConfig.metaPortUrl ? '_blank' : undefined}
               rel="noopener noreferrer"
               onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
@@ -673,7 +678,7 @@ const App: React.FC = () => {
           </button>
         ))}
         <a
-          href={appConfig.metaPortUrl || '#'}
+          href={toAbsoluteUrl(appConfig.metaPortUrl || '')}
           target={appConfig.metaPortUrl ? '_blank' : undefined}
           rel="noopener noreferrer"
           onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
