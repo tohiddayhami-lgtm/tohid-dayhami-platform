@@ -114,11 +114,14 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
       const text = await file.text();
       const data = JSON.parse(text) as NewsArticle[];
       if (!Array.isArray(data)) { alert('فرمت JSON نادرست است. باید آرایه باشد.'); return; }
+      // Base time: now. Each article gets now - (index * 1min) so first item in JSON = newest
+      const baseTime = Date.now();
       let count = 0;
       for (const item of data) {
         if (!item.title || !item.content) continue;
-        // Always generate a fresh unique ID to prevent overwriting existing articles
-        const uniqueId = `news_${Date.now()}_${Math.random().toString(36).slice(2, 7)}_${count}`;
+        const uniqueId = `news_${baseTime}_${Math.random().toString(36).slice(2, 7)}_${count}`;
+        // First article (count=0) gets the latest timestamp → appears first in sorted list
+        const publishedAt = new Date(baseTime - count * 60000).toISOString();
         const article: NewsArticle = {
           id:              uniqueId,
           slug:            item.slug || item.title.replace(/\s+/g, '-'),
@@ -132,8 +135,8 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
           categories:      Array.isArray(item.categories) && item.categories.length > 0 ? item.categories : (item.category ? [item.category] : ['سایر']),
           tags:            Array.isArray(item.tags) ? item.tags : [],
           author:          item.author || 'تیم توحید دیهمی',
-          publishedAt:     item.publishedAt || new Date().toISOString(),
-          isPublished:     item.isPublished ?? false,
+          publishedAt,
+          isPublished:     item.isPublished ?? true,
           coverImage:      item.coverImage || '',
           viewCount:       item.viewCount ?? 0,
           metaDescription: item.metaDescription || '',
