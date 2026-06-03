@@ -482,11 +482,12 @@ const App: React.FC = () => {
                 {/* ── Hero ── */}
                 <section className="relative pt-10 pb-12 text-center border-b border-gray-100 overflow-hidden">
                   {appConfig.heroBgImage && (
-                    <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+                    <div className="absolute inset-0 pointer-events-none" style={{zIndex: 0}} aria-hidden="true">
                       <img src={appConfig.heroBgImage} alt="" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-white/80" />
+                      <div className="absolute inset-0 bg-white/75" />
                     </div>
                   )}
+                  <div className="relative" style={{zIndex: 1}}>
                   <span className="inline-flex items-center gap-1.5 border border-gray-200 text-[11px] text-gray-500 px-3 py-1 rounded-full mb-5">
                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" />
                     {lang === 'fa' ? 'پلتفرم رسمی خدمات صادراتی توحید دیهمی' : 'Tohid Dayhami Official Export Platform'}
@@ -513,6 +514,7 @@ const App: React.FC = () => {
                       {t.trackBtn}
                     </button>
                   </div>
+                  </div>{/* end z-index wrapper */}
                 </section>
 
                 {/* ── Services ── */}
