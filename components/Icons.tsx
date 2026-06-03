@@ -255,8 +255,17 @@ export const IconImage = ({ className }: { className?: string }) => (
 
 export const IconPort = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M3 9l1-5h16l1 5"/>
-    <path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/>
-    <path d="M9 9v3a3 3 0 0 0 6 0V9"/>
+    {/* hull */}
+    <path d="M3 14h18l-2 5H5L3 14z"/>
+    {/* deck containers row */}
+    <rect x="4" y="10" width="4" height="4"/>
+    <rect x="10" y="10" width="4" height="4"/>
+    <rect x="16" y="10" width="4" height="4"/>
+    {/* superstructure */}
+    <rect x="14" y="6" width="4" height="4"/>
+    {/* funnel/chimney */}
+    <path d="M17 6V4"/>
+    {/* waterline waves */}
+    <path d="M1 20c1-1 2-1 3 0s2 1 3 0 2-1 3 0 2 1 3 0 2-1 3 0 2 1 3 0"/>
   </svg>
 );
