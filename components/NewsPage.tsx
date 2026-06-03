@@ -15,7 +15,9 @@ const CATEGORIES_FA = ['همه', 'اخبار صادرات', 'بازارهای ه
 function formatDateFa(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' });
+    const parts = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }).formatToParts(d);
+    const get = (type: string) => parts.find(p => p.type === type)?.value ?? '';
+    return `${get('day')} ${get('month')} ${get('year')}`;
   } catch { return iso; }
 }
 
