@@ -492,4 +492,5 @@ export interface AppConfig {
   ogDescription?: string;
   ogImage?: string;
   metaPortUrl?: string;
+  heroBgImage?: string;
 }

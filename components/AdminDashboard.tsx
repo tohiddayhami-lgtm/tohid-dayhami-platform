@@ -85,6 +85,9 @@ export const AdminDashboard: React.FC<Props> = ({
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  const [heroBgUploading, setHeroBgUploading] = useState(false);
+  const [heroBgProgress, setHeroBgProgress] = useState(0);
+  const heroBgInputRef = useRef<HTMLInputElement>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'my' | 'history'>(canViewAllTickets ? 'all' : 'my');
   const [projectSubTab, setProjectSubTab] = useState<'active' | 'history'>('active');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
@@ -1360,6 +1363,62 @@ export const AdminDashboard: React.FC<Props> = ({
                       'images'
                     );
                     if (faviconInputRef.current) faviconInputRef.current.value = '';
+                  }}
+                />
+              </div>
+
+              {/* Hero Background Image */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">تصویر پس‌زمینه صفحه اصلی</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-20 h-14 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden shrink-0">
+                    {config.heroBgImage
+                      ? <img src={config.heroBgImage} alt="hero bg" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-300">بدون تصویر</div>
+                    }
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <button
+                      type="button"
+                      disabled={heroBgUploading}
+                      onClick={() => heroBgInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50 w-full justify-center"
+                    >
+                      <IconUpload className="w-4 h-4" />
+                      {heroBgUploading ? `در حال آپلود... ${heroBgProgress}%` : 'آپلود تصویر (JPG / PNG / WebP)'}
+                    </button>
+                    {heroBgUploading && (
+                      <div className="w-full bg-gray-100 rounded-full h-1">
+                        <div className="bg-gray-800 h-1 rounded-full transition-all" style={{ width: `${heroBgProgress}%` }} />
+                      </div>
+                    )}
+                    {config.heroBgImage && !heroBgUploading && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-emerald-600">تصویر فعال است — با overlay سفید ۸۰٪ نمایش داده می‌شود</p>
+                        <button type="button" onClick={() => onUpdateConfig({ ...config, heroBgImage: '' })} className="text-[11px] text-red-400 hover:text-red-600">حذف</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <input
+                  ref={heroBgInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) { alert('فایل نباید بیشتر از ۵ مگابایت باشد.'); return; }
+                    setHeroBgUploading(true);
+                    setHeroBgProgress(0);
+                    uploadFileWithProgress(
+                      file,
+                      (p) => setHeroBgProgress(p),
+                      (url) => { onUpdateConfig({ ...config, heroBgImage: url }); setHeroBgUploading(false); },
+                      (err) => { alert('خطا در آپلود: ' + err.message); setHeroBgUploading(false); },
+                      'images'
+                    );
+                    if (heroBgInputRef.current) heroBgInputRef.current.value = '';
                   }}
                 />
               </div>
