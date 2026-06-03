@@ -1,5 +1,5 @@
 
-import { getApp, getApps, initializeApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
@@ -17,12 +17,8 @@ export const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const CENTRAL_STORAGE_APP_NAME = "centralized-storage";
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
-const centralizedStorageConfig = {
-    projectId: "calculator-55611",
-    storageBucket: CENTRAL_STORAGE_BUCKET,
-};
+const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
 const STORAGE_ROOT = "tohid-dayhami-platform";
 export type CentralStorageFolder = "uploads" | "images" | "documents" | "temp";
 export const storageFolders: Record<CentralStorageFolder, string> = {
@@ -31,10 +27,7 @@ export const storageFolders: Record<CentralStorageFolder, string> = {
     documents: `${STORAGE_ROOT}/documents`,
     temp: `${STORAGE_ROOT}/temp`,
 };
-const centralizedStorageApp = getApps().some(({ name }) => name === CENTRAL_STORAGE_APP_NAME)
-    ? getApp(CENTRAL_STORAGE_APP_NAME)
-    : initializeApp(centralizedStorageConfig, CENTRAL_STORAGE_APP_NAME);
-const storage = getStorage(centralizedStorageApp, `gs://${CENTRAL_STORAGE_BUCKET}`);
+const storage = getStorage(app, `gs://${CENTRAL_STORAGE_BUCKET}`);
 export let analytics: Analytics | null = null;
 
 isSupported()
@@ -242,6 +235,29 @@ const normalizeStoragePath = (pathOrUrl: string) => {
     return assertCentralStoragePath(path);
 };
 
+const getStorageErrorMessage = (error: unknown) => {
+    const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
+    const message = error instanceof Error ? error.message : "";
+
+    if (code === "storage/unauthorized") {
+        return "دسترسی آپلود در Firebase Storage مجاز نیست. قوانین Storage پروژه calculator-55611 را برای مسیر tohid-dayhami-platform/uploads بررسی کنید.";
+    }
+
+    if (code === "storage/bucket-not-found") {
+        return `Bucket مرکزی پیدا نشد: ${CENTRAL_STORAGE_BUCKET}`;
+    }
+
+    if (code === "storage/canceled") {
+        return "آپلود لغو شد.";
+    }
+
+    if (code === "storage/retry-limit-exceeded") {
+        return "آپلود به دلیل کندی یا قطعی شبکه متوقف شد. دوباره تلاش کنید.";
+    }
+
+    return message || "آپلود ناموفق. لطفاً اتصال اینترنت و تنظیمات Firebase Storage را بررسی کنید.";
+};
+
 export const uploadFile = (
     file: File,
     folder: CentralStorageFolder = "uploads",
@@ -290,7 +306,7 @@ export const uploadFileWithProgress = async (
         onSuccess(url);
     } catch (error) {
         console.error("Storage Error:", error);
-        onError(new Error("آپلود ناموفق. لطفاً اتصال اینترنت را بررسی کنید."));
+        onError(new Error(getStorageErrorMessage(error)));
     }
 };
 

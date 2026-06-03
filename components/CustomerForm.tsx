@@ -323,7 +323,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
                     <div className="flex items-center gap-2">
                       {file.status === 'uploading' && <span className="text-xs text-blue-500">{Math.round(file.progress || 0)}%</span>}
                       {file.status === 'success' && <IconCheck className="w-4 h-4 text-green-500" />}
-                      {file.status === 'error' && <span className="text-xs text-red-500">{t.uploadError}</span>}
+                      {file.status === 'error' && <span className="text-xs text-red-500">{file.errorMsg || t.uploadError}</span>}
                       <button type="button" onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 transition-colors">
                         <IconTrash className="w-3.5 h-3.5" />
                       </button>
