@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -731,4 +731,22 @@ export const subscribeToSettings = (
             if (doc.id === 'personnel') onPersonnel(doc.data().list);
         });
     }, (error) => {});
+};
+
+export const saveNewsArticleToCloud = async (article: NewsArticle): Promise<void> => {
+    await setDoc(doc(db, 'news', article.id), sanitizeData(article));
+    logSystemAction('UPDATE', 'News', `مقاله "${article.title}" ذخیره شد`, 'Admin');
+};
+
+export const deleteNewsArticleFromCloud = async (id: string): Promise<void> => {
+    await deleteDoc(doc(db, 'news', id));
+    logSystemAction('DELETE', 'News', `مقاله حذف شد`, 'Admin');
+};
+
+export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) => {
+    return onSnapshot(
+        query(collection(db, 'news'), orderBy('publishedAt', 'desc')),
+        (snap) => callback(snap.docs.map(d => d.data() as NewsArticle)),
+        () => {}
+    );
 };

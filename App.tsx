@@ -5,8 +5,9 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { TrackingView } from './components/TrackingView';
 import { LoginView } from './components/LoginView';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI } from './types';
-import { IconLayout, IconPlus, IconSearch, IconShield, IconBulb } from './components/Icons';
+import { NewsPage } from './components/NewsPage';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI, NewsArticle } from './types';
+import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
   saveCustomerToCloud, saveCustomersBulkToCloud, updateCustomerInCloud, deleteCustomerFromCloud,
@@ -14,7 +15,8 @@ import {
   saveServicesToCloud,
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings,
-  subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction
+  subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
+  subscribeToNews
 } from './services/firebaseService';
 
 export type Language = 'fa' | 'en';
@@ -120,6 +122,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
+  const [news, setNews] = useState<NewsArticle[]>([]);
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>(INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -135,6 +138,31 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
   }, [lang]);
+
+  useEffect(() => {
+    const title = appConfig.seoTitle || appConfig.appTitle;
+    document.title = title;
+    const setMeta = (name: string, content: string) => {
+      let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
+      if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el); }
+      el.content = content;
+    };
+    const setOg = (prop: string, content: string) => {
+      let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement | null;
+      if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+      el.content = content;
+    };
+    if (appConfig.seoDescription) setMeta('description', appConfig.seoDescription);
+    if (appConfig.seoKeywords) setMeta('keywords', appConfig.seoKeywords);
+    if (appConfig.ogTitle) setOg('og:title', appConfig.ogTitle);
+    if (appConfig.ogDescription) setOg('og:description', appConfig.ogDescription);
+    if (appConfig.ogImage) setOg('og:image', appConfig.ogImage);
+    if (appConfig.favicon) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+      if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+      link.href = appConfig.favicon;
+    }
+  }, [appConfig]);
 
   useEffect(() => {
     // Public shareable form link: /#form
@@ -188,7 +216,8 @@ const App: React.FC = () => {
       (srv) => { if (srv) setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); },
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); };
+    const unsubNews = subscribeToNews((data) => setNews(data));
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); };
   }, []);
 
   const normalizeRoleName = (role?: string) => (role || '')
@@ -352,9 +381,9 @@ const App: React.FC = () => {
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-1">
             {[
-              { id: 'new-ticket', label: t.newTicket, icon: <IconPlus className="w-3.5 h-3.5" /> },
-              { id: 'tracking',   label: t.tracking,  icon: <IconSearch className="w-3.5 h-3.5" /> },
-              { id: 'admin',      label: t.expertPanel, icon: <IconLayout className="w-3.5 h-3.5" /> },
+              { id: 'new-ticket', label: t.newTicket,  icon: <IconPlus className="w-3.5 h-3.5" /> },
+              { id: 'tracking',   label: t.tracking,   icon: <IconSearch className="w-3.5 h-3.5" /> },
+              { id: 'news',       label: lang === 'fa' ? 'اخبار' : 'News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
                 key={item.id}
@@ -368,17 +397,19 @@ const App: React.FC = () => {
             ))}
           </nav>
 
-          {/* Right side: lang + mobile menu */}
+          {/* Right side: lang toggle + staff login icon */}
           <div className="flex items-center gap-2">
             <div className="flex border border-gray-200 rounded-lg overflow-hidden text-xs">
               <button onClick={() => setLang('fa')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'fa' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>FA</button>
               <button onClick={() => setLang('en')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'en' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>EN</button>
             </div>
-            <div className="md:hidden">
-              <button onClick={() => setView(view === 'landing' ? 'new-ticket' : 'landing')} className="p-1.5 text-gray-500">
-                <IconLayout className="w-5 h-5" />
-              </button>
-            </div>
+            <button
+              onClick={() => setView('admin')}
+              title={t.expertPanel}
+              className={`p-1.5 rounded-lg transition-colors ${view === 'admin' ? 'text-gray-900 bg-gray-100' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'}`}
+            >
+              <IconLock className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
@@ -549,6 +580,10 @@ const App: React.FC = () => {
               <TrackingView tickets={tickets} services={services} lang={lang} />
             )}
 
+            {view === 'news' && (
+              <NewsPage articles={news} lang={lang} onBack={() => setView('landing')} />
+            )}
+
             {view === 'admin' && (
               <>
                 {!currentUser ? (
@@ -565,6 +600,7 @@ const App: React.FC = () => {
                     tasks={tasks}
                     meetings={meetings}
                     kpis={kpis}
+                    news={news}
                     config={appConfig}
                     onCreateTicket={async (t) => handleNewTicket(t)}
                     onUpdateTicket={handleUpdateTicket}
@@ -592,14 +628,15 @@ const App: React.FC = () => {
       {/* Mobile bottom nav */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-100 flex justify-around py-2 z-50">
         {[
-          { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />, label: t.newTicket },
-          { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />, label: t.tracking },
-          { id: 'admin',      icon: <IconLayout className="w-5 h-5" />, label: t.expertPanel },
+          { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />,      label: t.newTicket },
+          { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />,     label: t.tracking },
+          { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار' : 'News' },
+          { id: 'admin',      icon: <IconLock className="w-5 h-5" />,       label: t.expertPanel },
         ].map(item => (
           <button
             key={item.id}
             onClick={() => setView(item.id as ViewState)}
-            className={`flex flex-col items-center gap-0.5 px-4 py-1 ${view === item.id ? 'text-gray-900' : 'text-gray-400'}`}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 ${view === item.id ? 'text-gray-900' : 'text-gray-400'}`}
           >
             {item.icon}
             <span className="text-[10px] font-medium">{item.label}</span>

@@ -386,7 +386,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News';
   entityId?: string;
   details: string;
   actorName: string;
@@ -407,7 +407,27 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news';
+
+export interface NewsArticle {
+  id: string;
+  title: string;
+  titleEn?: string;
+  slug: string;
+  summary: string;
+  summaryEn?: string;
+  content: string;
+  contentEn?: string;
+  category: string;
+  tags: string[];
+  publishedAt: string;
+  isPublished: boolean;
+  coverImage?: string;
+  author: string;
+  viewCount: number;
+  metaDescription?: string;
+  metaKeywords?: string;
+}
 
 export type FormFieldType = 'text' | 'textarea' | 'email' | 'tel' | 'select' | 'header' | 'date' | 'checkbox';
 
@@ -459,8 +479,15 @@ export interface AppConfig {
   showDailyTips?: boolean;
   featuredBusinesses?: FeaturedBusiness[];
   formFields: FormField[];
-  personnelRoles?: string[]; 
+  personnelRoles?: string[];
   invoiceTemplate?: InvoiceTemplate;
   assignmentConfig?: AssignmentConfig;
-  topPerformerId?: string; // Master choice
+  topPerformerId?: string;
+  favicon?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
 }

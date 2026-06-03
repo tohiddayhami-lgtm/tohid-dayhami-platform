@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
 import { SettingsManager } from './SettingsManager';
+import { NewsManager } from './NewsManager';
+import { IconNewspaper, IconGlobe, IconImage } from './Icons';
 import { InternalMessenger } from './InternalMessenger';
 import { InvoiceModal } from './InvoiceModal';
 import { TaskManager } from './TaskManager';
@@ -26,9 +28,10 @@ interface Props {
   personnel: Personnel[];
   customers: Customer[];
   messages: InternalMessage[];
-  tasks: Task[]; 
-  meetings: Meeting[]; 
+  tasks: Task[];
+  meetings: Meeting[];
   kpis?: KPI[];
+  news?: NewsArticle[];
   config: AppConfig;
   onCreateTicket: (ticket: Ticket) => Promise<void>;
   onUpdateTicket: (ticketId: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility?: 'public' | 'internal') => void;
@@ -43,16 +46,17 @@ interface Props {
   lang: Language;
 }
 
-export const AdminDashboard: React.FC<Props> = ({ 
+export const AdminDashboard: React.FC<Props> = ({
   currentUser,
-  tickets, 
-  services, 
-  personnel, 
+  tickets,
+  services,
+  personnel,
   customers,
   messages,
   tasks,
   meetings,
   kpis = [],
+  news = [],
   config,
   onCreateTicket,
   onUpdateTicket,
@@ -76,7 +80,8 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'customers' | 'settings' | 'financial' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo'>('overview');
+  const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '' });
   const [filterMode, setFilterMode] = useState<'all' | 'my' | 'history'>(canViewAllTickets ? 'all' : 'my');
   const [projectSubTab, setProjectSubTab] = useState<'active' | 'history'>('active');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
@@ -291,7 +296,17 @@ export const AdminDashboard: React.FC<Props> = ({
           formLinkTitle: 'لینک اشتراک‌گذاری فرم درخواست',
           formLinkDesc: 'این لینک را برای مشتریان ارسال کنید تا فرم درخواست خدمات را تکمیل کنند. درخواست‌ها مستقیم وارد سامانه می‌شوند.',
           copyLink: 'کپی لینک',
-          linkCopied: 'لینک کپی شد'
+          linkCopied: 'لینک کپی شد',
+          news_mgmt: 'مدیریت اخبار',
+          seo: 'سئو و فاوآیکون',
+          seoTitle: 'عنوان صفحه (SEO Title)',
+          seoDesc: 'توضیحات متا (Meta Description)',
+          seoKeywords: 'کلمات کلیدی',
+          ogTitle: 'عنوان اشتراک (OG Title)',
+          ogDesc: 'توضیحات اشتراک (OG Description)',
+          ogImage: 'تصویر اشتراک (OG Image URL)',
+          favicon: 'آدرس فاوآیکون (URL)',
+          saveSeo: 'ذخیره تنظیمات سئو'
       },
       en: {
           overview: 'Overview & Dashboard',
@@ -425,7 +440,17 @@ export const AdminDashboard: React.FC<Props> = ({
           formLinkTitle: 'Shareable Form Link',
           formLinkDesc: 'Send this link to customers so they can fill out the service request form. Submissions go directly into the system.',
           copyLink: 'Copy Link',
-          linkCopied: 'Link Copied'
+          linkCopied: 'Link Copied',
+          news_mgmt: 'News Management',
+          seo: 'SEO & Favicon',
+          seoTitle: 'SEO Title',
+          seoDesc: 'Meta Description',
+          seoKeywords: 'Keywords',
+          ogTitle: 'OG Title',
+          ogDesc: 'OG Description',
+          ogImage: 'OG Image URL',
+          favicon: 'Favicon URL',
+          saveSeo: 'Save SEO Settings'
       }
   }[lang];
 
@@ -913,7 +938,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 {hasCustomerAccess && (<button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'customers' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconUsers className="w-5 h-5" /><span className="font-medium">{t.customers}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'services' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBriefcase className="w-5 h-5" /><span className="font-medium">{t.services}</span></button>)}
                 {isAdmin && (<><div className="px-4 py-2 text-xs font-bold text-gray-400 mt-4 border-t border-gray-100 pt-4">Admin</div><button onClick={() => setActiveTab('personnel')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'personnel' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconShield className="w-5 h-5" /><span className="font-medium">{t.personnel}</span></button><button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconSettings className="w-5 h-5" /><span className="font-medium">{t.settings}</span></button></>)}
-                {isMaster && (<><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button></>)}
+                {isMaster && (<><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'news_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconNewspaper className="w-5 h-5" /><span className="font-medium">{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'seo' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconGlobe className="w-5 h-5" /><span className="font-medium">{t.seo}</span></button></>)}
             </div>
             <button onClick={onLogout} className="w-full text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-colors mt-6">{t.logout}</button>
         </div>
@@ -1252,6 +1277,77 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'settings' && isAdmin && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}
+
+        {activeTab === 'news_mgmt' && isMaster && (
+          <div className="animate-fade-in">
+            <NewsManager articles={news} />
+          </div>
+        )}
+
+        {activeTab === 'seo' && isMaster && (
+          <div className="animate-fade-in space-y-4 max-w-2xl">
+            <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100">{t.seo}</p>
+
+              {/* Favicon */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.favicon}</label>
+                <div className="flex gap-2 items-center">
+                  {seoForm.favicon && <img src={seoForm.favicon} alt="favicon" className="w-6 h-6 rounded" onError={e => (e.currentTarget.style.display = 'none')} />}
+                  <input dir="ltr" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.favicon} onChange={e => setSeoForm(p => ({ ...p, favicon: e.target.value }))} placeholder="https://yourdomain.com/favicon.ico" />
+                </div>
+              </div>
+
+              {/* SEO Title */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.seoTitle}</label>
+                <input className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.seoTitle} onChange={e => setSeoForm(p => ({ ...p, seoTitle: e.target.value }))} placeholder="پلتفرم جامع صادراتی توحید دیهیمی" />
+              </div>
+
+              {/* Meta Description */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.seoDesc} <span className="text-gray-400">({seoForm.seoDescription.length}/160)</span></label>
+                <textarea className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" rows={3} maxLength={160} value={seoForm.seoDescription} onChange={e => setSeoForm(p => ({ ...p, seoDescription: e.target.value }))} placeholder="توضیحات سایت برای موتورهای جستجو..." />
+              </div>
+
+              {/* Keywords */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.seoKeywords}</label>
+                <input className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.seoKeywords} onChange={e => setSeoForm(p => ({ ...p, seoKeywords: e.target.value }))} placeholder="صادرات، بازرگانی، مشاوره صادرات، عمان" />
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100">Open Graph (Social Media Preview)</p>
+
+              {/* OG Title */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.ogTitle}</label>
+                <input className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.ogTitle} onChange={e => setSeoForm(p => ({ ...p, ogTitle: e.target.value }))} placeholder="عنوان نمایش در شبکه‌های اجتماعی" />
+              </div>
+
+              {/* OG Description */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.ogDesc}</label>
+                <textarea className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" rows={2} value={seoForm.ogDescription} onChange={e => setSeoForm(p => ({ ...p, ogDescription: e.target.value }))} placeholder="توضیحات در شبکه‌های اجتماعی..." />
+              </div>
+
+              {/* OG Image */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{t.ogImage}</label>
+                <input dir="ltr" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-gray-400" value={seoForm.ogImage} onChange={e => setSeoForm(p => ({ ...p, ogImage: e.target.value }))} placeholder="https://yourdomain.com/og-image.jpg" />
+              </div>
+            </div>
+
+            <button
+              onClick={() => onUpdateConfig({ ...config, ...seoForm })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm rounded-lg hover:bg-black transition-colors"
+            >
+              <IconCheck className="w-4 h-4" /> {t.saveSeo}
+            </button>
+          </div>
+        )}
+
         {activeTab === 'logs' && isMaster && (
             <div className="space-y-4 animate-fade-in">
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><IconHistory className="w-6 h-6" /> {t.auditLogs}</h2></div>
