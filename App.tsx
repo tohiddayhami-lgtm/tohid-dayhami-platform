@@ -123,6 +123,7 @@ const App: React.FC = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
+  const [isLoadingNews, setIsLoadingNews] = useState(true);
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>(INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -244,7 +245,7 @@ const App: React.FC = () => {
       (srv) => { if (srv) setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); },
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
-    const unsubNews = subscribeToNews((data) => setNews(data));
+    const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
     return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); };
   }, []);
 
@@ -639,7 +640,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'news' && (
-              <NewsPage articles={news} lang={lang} onBack={() => setView('landing')} />
+              <NewsPage articles={news} lang={lang} onBack={() => setView('landing')} isLoading={isLoadingNews} />
             )}
 
             {view === 'admin' && (

@@ -8,6 +8,7 @@ interface Props {
   articles: NewsArticle[];
   lang: Language;
   onBack: () => void;
+  isLoading?: boolean;
 }
 
 const CATEGORIES_FA = ['همه', 'اخبار صادرات', 'بازارهای هدف', 'قوانین و مقررات', 'موفقیت‌های مشتریان', 'راهنما و آموزش', 'سایر'];
@@ -21,7 +22,7 @@ function formatDateFa(iso: string): string {
   } catch { return iso; }
 }
 
-export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
+export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = false }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('همه');
   const [search, setSearch] = useState('');
@@ -132,7 +133,22 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack }) => {
       </div>
 
       {/* Articles Grid */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="border border-gray-100 rounded-xl overflow-hidden bg-white animate-pulse">
+              <div className="w-full h-40 bg-gray-100" />
+              <div className="p-4 space-y-2">
+                <div className="h-2.5 bg-gray-100 rounded w-1/3" />
+                <div className="h-4 bg-gray-100 rounded w-4/5" />
+                <div className="h-4 bg-gray-100 rounded w-3/5" />
+                <div className="h-3 bg-gray-100 rounded w-full mt-3" />
+                <div className="h-3 bg-gray-100 rounded w-4/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <IconNewspaper className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{lang === 'fa' ? 'مقاله‌ای یافت نشد.' : 'No articles found.'}</p>
