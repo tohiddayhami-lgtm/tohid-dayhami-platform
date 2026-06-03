@@ -111,8 +111,23 @@ const INITIAL_CONFIG: AppConfig = {
 const STORAGE_KEYS = { USER: 'crm_session_user', VIEW: 'crm_last_view', LAST_ACTIVE: 'crm_last_active' };
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
+const getInitialView = (): ViewState => {
+  const hash = window.location.hash;
+  if (!hash || hash === '#' || hash === '#/') return 'landing';
+  if (hash === '#/form' || hash === '#form') return 'new-ticket';
+  if (hash === '#/tracking') return 'tracking';
+  if (hash.startsWith('#/news')) return 'news';
+  if (hash === '#/admin') {
+    try {
+      const u = localStorage.getItem('crm_session_user');
+      if (u) return 'admin';
+    } catch {}
+  }
+  return 'landing';
+};
+
 const App: React.FC = () => {
-  const [view, setViewState] = useState<ViewState>('landing');
+  const [view, setViewState] = useState<ViewState>(getInitialView);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>(DEFAULT_SERVICES);
