@@ -208,8 +208,7 @@ const App: React.FC = () => {
     if (unassigned.length === 0) return;
     const processAssignments = async () => {
       for (const ticket of unassigned) {
-        let assigneeId = calculateAssignee(ticket.serviceId);
-        if (!assigneeId) { const sm = personnel.find(p => p.roles.includes('مدیر فروش') || p.roles.includes('Sales Manager')); if (sm) assigneeId = sm.id; }
+        const assigneeId = calculateAssignee(ticket.serviceId);
         if (assigneeId) {
           const assignee = personnel.find(p => p.id === assigneeId);
           if (assignee) {
