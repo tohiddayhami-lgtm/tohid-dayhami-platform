@@ -225,7 +225,22 @@ const App: React.FC = () => {
     const unsubMeetings = subscribeToMeetings((data) => setMeetings(data));
     const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
     const unsubSettings = subscribeToSettings(
-      (cfg) => { if (cfg) setAppConfig(cfg); },
+      (cfg) => {
+        if (cfg) {
+          const mergedFields = (cfg.formFields || []).map(field => {
+            if (!field.isSystem) return field;
+            const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
+            if (!def) return field;
+            return {
+              ...field,
+              labelEn:       field.labelEn       || def.labelEn,
+              placeholderEn: field.placeholderEn || def.placeholderEn,
+              optionsEn:     field.optionsEn     || def.optionsEn,
+            };
+          });
+          setAppConfig({ ...cfg, formFields: mergedFields });
+        }
+      },
       (srv) => { if (srv) setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); },
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
@@ -451,7 +466,7 @@ const App: React.FC = () => {
 
       {/* ── Main ── */}
       <main className={`flex-grow w-full max-w-6xl mx-auto px-5 ${view === 'landing' ? 'py-0' : 'py-8'}`}>
-        {isLoadingData && view !== 'landing' ? (
+        {isLoadingData && view === 'admin' ? (
           <div className="flex items-center justify-center h-64">
             <div className="flex flex-col items-center gap-3 text-gray-400">
               <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
