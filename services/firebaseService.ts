@@ -1,0 +1,664 @@
+
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadString, uploadBytesResumable } from 'firebase/storage';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense } from '../types';
+
+export const firebaseConfig = {
+  apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
+  authDomain: "company-crm-103aa.firebaseapp.com",
+  projectId: "company-crm-103aa",
+  storageBucket: "company-crm-103aa.firebasestorage.app",
+  messagingSenderId: "299697909758",
+  appId: "1:299697909758:web:f364faba178ed5e3b01aaf",
+  measurementId: "G-N426FMEKMR"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// --- Strategic Objectives (OKRs) Functions ---
+
+export const saveObjective = async (obj: StrategicObjective) => {
+    await setDoc(doc(db, "objectives", obj.id), sanitizeData(obj));
+    logSystemAction('CREATE', 'Objective', `هدف استراتژیک جدید: ${obj.title}`, 'مدیریت', obj.id);
+};
+
+export const updateObjective = async (id: string, updates: Partial<StrategicObjective>) => {
+    await updateDoc(doc(db, "objectives", id), sanitizeData({ ...updates, updatedAt: new Date().toISOString() }));
+};
+
+export const deleteObjective = async (id: string) => {
+    await deleteDoc(doc(db, "objectives", id));
+    logSystemAction('DELETE', 'Objective', `حذف هدف استراتژیک`, 'مدیریت', id);
+};
+
+export const subscribeToObjectives = (callback: (objs: StrategicObjective[]) => void) => {
+    const q = query(collection(db, "objectives"), orderBy("createdAt", "desc"));
+    return onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(d => d.data() as StrategicObjective);
+        callback(list);
+    });
+};
+
+// --- Goal Tracker Functions ---
+
+export const saveUserGoals = async (goals: UserGoals) => {
+    const docId = `${goals.userId}_${goals.period}`;
+    await setDoc(doc(db, "user_goals", docId), sanitizeData(goals));
+};
+
+export const subscribeToAllUserGoalsByPeriod = (period: GoalPeriod, callback: (goals: UserGoals[]) => void) => {
+    const q = query(collection(db, "user_goals"), where("period", "==", period));
+    return onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(d => d.data() as UserGoals);
+        callback(list);
+    });
+};
+
+export const subscribeToUserGoals = (userId: string, period: GoalPeriod, callback: (goals: UserGoals | null) => void) => {
+    const docId = `${userId}_${period}`;
+    return onSnapshot(doc(db, "user_goals", docId), (snap) => {
+        if (snap.exists()) {
+            callback(snap.data() as UserGoals);
+        } else {
+            callback(null);
+        }
+    });
+};
+
+// --- Expenses Functions ---
+
+export const saveExpense = async (expense: Expense, actorName: string) => {
+    await setDoc(doc(db, "expenses", expense.id), sanitizeData(expense));
+    logSystemAction('CREATE', 'Expense', `هزینه جدید ثبت شد: ${expense.title}`, actorName, expense.id);
+};
+
+export const updateExpense = async (id: string, updates: Partial<Expense>, actorName: string) => {
+    await updateDoc(doc(db, "expenses", id), sanitizeData(updates));
+    logSystemAction('UPDATE', 'Expense', `بروزرسانی هزینه`, actorName, id);
+};
+
+export const deleteExpense = async (id: string, actorName: string) => {
+    await deleteDoc(doc(db, "expenses", id));
+    logSystemAction('DELETE', 'Expense', `حذف هزینه`, actorName, id);
+};
+
+export const subscribeToExpenses = (callback: (expenses: Expense[]) => void) => {
+    const q = query(collection(db, "expenses"), orderBy("date", "desc"));
+    return onSnapshot(q, (snapshot) => {
+        const list = snapshot.docs.map(d => d.data() as Expense);
+        callback(list);
+    });
+};
+
+// --- Helper Functions ---
+
+export const sanitizeData = (data: any): any => {
+  const seen = new WeakSet();
+
+  const deepCopy = (obj: any): any => {
+    if (obj === undefined || obj === null) return null;
+    if (typeof obj !== 'object') return obj;
+    if (obj instanceof Date) return obj.toISOString();
+    if (seen.has(obj)) return null;
+    seen.add(obj);
+
+    if (Array.isArray(obj)) {
+      return obj.map(deepCopy).filter(item => item !== undefined);
+    }
+
+    const proto = Object.getPrototypeOf(obj);
+    if (proto && proto.constructor && proto.constructor.name !== 'Object') {
+        if (proto !== null) return null;
+    }
+    
+    if (obj._reactName || (obj.nativeEvent && obj.target) || (obj.nodeType && obj.nodeName) || (obj.i && obj.src)) {
+        return null;
+    }
+
+    const res: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (key.startsWith('_') || key === 'src' || key === 'target' || key === 'view' || key === 'nativeEvent' || key === 'rawFile') continue;
+        try {
+            const val = deepCopy(obj[key]);
+            if (val !== undefined) {
+                res[key] = val;
+            }
+        } catch (e) {
+            res[key] = null;
+        }
+      }
+    }
+    return res;
+  };
+
+  try {
+      return deepCopy(data);
+  } catch (e) {
+      console.error("Sanitization failed", e);
+      return null;
+  }
+};
+
+export const compressImage = (file: File, maxWidth = 800, quality = 0.5): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!file.type.startsWith('image/')) {
+            return resolve("");
+        }
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    resolve(dataUrl);
+                } else {
+                    resolve(event.target?.result as string);
+                }
+            };
+            img.onerror = () => resolve(""); 
+        };
+        reader.onerror = () => resolve("");
+    });
+};
+
+const fileToDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
+
+export const uploadFileWithProgress = async (
+    file: File, 
+    onProgress: (progress: number) => void,
+    onSuccess: (url: string) => void,
+    onError: (error: Error) => void
+) => {
+    if (file.type.startsWith('image/')) {
+        try {
+            onProgress(20);
+            const base64 = await compressImage(file, 800, 0.5);
+            onProgress(60);
+            if (base64) {
+                setTimeout(() => {
+                    onProgress(100);
+                    onSuccess(base64);
+                }, 300); 
+                return; 
+            }
+        } catch (e) {
+            console.error("Compression failed", e);
+        }
+    }
+    if (file.type === 'application/pdf' && file.size < 2 * 1024 * 1024) {
+        try {
+            onProgress(30);
+            const base64 = await fileToDataURL(file);
+            onProgress(100);
+            onSuccess(base64);
+            return;
+        } catch (e) {}
+    }
+    const dateFolder = new Date().toISOString().split('T')[0];
+    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storageRef = ref(storage, `uploads/${dateFolder}/${Date.now()}_${safeName}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+    const watchdog = setTimeout(() => {
+        if (uploadTask.snapshot.bytesTransferred === 0) {
+            uploadTask.cancel();
+            onError(new Error("آپلود کند است یا دسترسی مسدود شده است."));
+        }
+    }, 15000);
+    uploadTask.on('state_changed',
+        (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            onProgress(progress);
+            if (progress > 0) clearTimeout(watchdog);
+        },
+        (error) => {
+            clearTimeout(watchdog);
+            console.error("Storage Error:", error);
+            onError(new Error("آپلود ناموفق. لطفاً اتصال اینترنت را بررسی کنید."));
+        },
+        () => {
+            clearTimeout(watchdog);
+            getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+                onSuccess(downloadURL);
+            });
+        }
+    );
+};
+
+// --- Reports ---
+
+export const saveReport = async (report: PerformanceReport) => {
+    const reportId = report.id || `rep-${Date.now()}`;
+    await setDoc(doc(db, "reports", reportId), sanitizeData({ ...report, id: reportId }));
+    logSystemAction('CREATE', 'Report', `گزارش ${report.type} ثبت شد`, report.userName, reportId);
+    return reportId;
+};
+
+export const updateReport = async (id: string, updates: Partial<PerformanceReport>, actorName: string) => {
+    await updateDoc(doc(db, "reports", id), sanitizeData(updates));
+    logSystemAction('UPDATE', 'Report', `گزارش ویرایش شد`, actorName, id);
+};
+
+export const subscribeToReports = (callback: (reports: PerformanceReport[]) => void) => {
+    const q = query(collection(db, "reports"));
+    return onSnapshot(q, (snapshot) => {
+        const reports = snapshot.docs.map(d => d.data() as PerformanceReport);
+        reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(reports);
+    }, (e) => {});
+};
+
+// --- Rest of Maintenance/Logging ---
+
+export const backupSystemData = async () => {
+    try {
+        const collections = ['tickets', 'customers', 'settings', 'messages', 'tasks', 'meetings', 'kpis', 'custom_forms', 'sales_records', 'reports', 'user_goals', 'objectives', 'expenses'];
+        const data: any = {};
+        for (const col of collections) {
+            const snap = await getDocs(collection(db, col));
+            data[col] = snap.docs.map(d => d.data());
+        }
+        const safeData = sanitizeData(data);
+        const blob = new Blob([JSON.stringify(safeData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CRM_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        return true;
+    } catch (e) {
+        console.error("Backup failed", e);
+        return false;
+    }
+};
+
+export const clearSystemData = async () => {
+    try {
+        const ticketsSnap = await getDocs(collection(db, 'tickets'));
+        const batch = writeBatch(db);
+        ticketsSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        return true;
+    } catch (e) {
+        console.error("Clear failed", e);
+        return false;
+    }
+};
+
+export const logSystemAction = async (
+    actionType: SystemLog['actionType'],
+    entity: SystemLog['entity'],
+    details: string,
+    actorName: string,
+    entityId?: string,
+    backupData?: any,
+    collectionName?: string
+) => {
+    try {
+        const logEntry: SystemLog = {
+            id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            actionType,
+            entity,
+            details,
+            actorName,
+            entityId,
+            timestamp: new Date().toISOString(),
+            backupData,
+            collectionName
+        };
+        await setDoc(doc(db, "system_logs", logEntry.id), sanitizeData(logEntry));
+    } catch (e) {
+        console.error("Failed to log action", e);
+    }
+};
+
+export const subscribeToSystemLogs = (callback: (logs: SystemLog[]) => void) => {
+    const q = query(collection(db, "system_logs"), orderBy("timestamp", "desc"), limit(100));
+    return onSnapshot(q, (snapshot) => {
+        const logs = snapshot.docs.map(d => d.data() as SystemLog);
+        callback(logs);
+    }, (e) => {});
+};
+
+export const fetchAnalyticsData = async () => {
+    try {
+        const q = query(collection(db, "system_logs"), orderBy("timestamp", "desc"), limit(1000));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => d.data() as SystemLog);
+    } catch (e) {
+        console.error("Analytics fetch failed", e);
+        return [];
+    }
+};
+
+export const restoreEntityFromLog = async (log: SystemLog): Promise<boolean> => {
+    if (!log.backupData || !log.collectionName || !log.entityId) return false;
+    try {
+        await setDoc(doc(db, log.collectionName, log.entityId), log.backupData);
+        await logSystemAction('UPDATE', log.entity, `بازیابی اطلاعات حذف شده`, log.actorName, log.entityId);
+        return true;
+    } catch (e) {
+        console.error("Restoration failed", e);
+        return false;
+    }
+};
+
+const cleanFilesForDB = (files: AttachedFile[] | undefined) => {
+    if (!files) return [];
+    return files.map(f => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        content: f.content 
+    })).filter(f => f.content && !f.content.startsWith('blob:')); 
+};
+
+export const saveSalesRecord = async (sale: SalesRecord) => {
+    await setDoc(doc(db, "sales_records", sale.id), sanitizeData(sale));
+    logSystemAction('CREATE', 'Sale', `فروش جدید ثبت شد: ${sale.serviceTitle}`, sale.salespersonName, sale.id);
+};
+
+export const updateSalesRecord = async (id: string, updates: Partial<SalesRecord>, actorName: string) => {
+    await updateDoc(doc(db, "sales_records", id), sanitizeData({ ...updates, updatedAt: new Date().toISOString(), updatedBy: actorName }));
+    logSystemAction('UPDATE', 'Sale', `رکورد فروش ویرایش شد`, actorName, id);
+};
+
+export const deleteSalesRecord = async (id: string, actorName: string) => {
+    await deleteDoc(doc(db, "sales_records", id));
+    logSystemAction('DELETE', 'Sale', `رکورد فروش حذف شد`, actorName, id);
+};
+
+export const subscribeToSalesRecords = (callback: (sales: SalesRecord[]) => void) => {
+    const q = query(collection(db, "sales_records"));
+    return onSnapshot(q, (snapshot) => {
+        const sales = snapshot.docs.map(d => d.data() as SalesRecord);
+        // Changed to DESC (newest first) so that the latest records appear at the top
+        sales.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(sales);
+    }, (e) => {});
+};
+
+export const saveTicketToCloud = async (ticket: Ticket) => {
+  try {
+    const ticketToSave = { 
+        ...ticket, 
+        files: cleanFilesForDB(ticket.files)
+    };
+    await setDoc(doc(db, "tickets", ticket.id), sanitizeData(ticketToSave));
+    logSystemAction('CREATE', 'Ticket', `تیکت جدید با عنوان ${ticket.serviceId} برای ${ticket.customerName} ایجاد شد`, 'سیستم/مشتری', ticket.id);
+    return ticket.id;
+  } catch (e) {
+    console.error("Error adding ticket: ", e);
+    throw e;
+  }
+};
+
+export const updateTicketInCloud = async (id: string, updates: Partial<Ticket>) => {
+  try {
+    const ticketRef = doc(db, "tickets", id);
+    const finalUpdates = { ...updates };
+    if (updates.projectData && updates.projectData.projectFiles) {
+        finalUpdates.projectData.projectFiles = cleanFilesForDB(updates.projectData.projectFiles);
+    }
+    if (updates.files) {
+        finalUpdates.files = cleanFilesForDB(updates.files);
+    }
+    await updateDoc(ticketRef, sanitizeData(finalUpdates));
+  } catch (e) {
+    throw e;
+  }
+};
+
+export const deleteTicketFromCloud = async (id: string) => {
+  const ref = doc(db, "tickets", id);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
+  await deleteDoc(ref);
+  logSystemAction('DELETE', 'Ticket', `تیکت با شناسه ${id} حذف شد`, 'Master', id, data, 'tickets');
+};
+
+export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) => {
+  const q = query(collection(db, "tickets"));
+  return onSnapshot(q, (querySnapshot) => {
+    const tickets = querySnapshot.docs.map(doc => doc.data() as Ticket);
+    tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    callback(tickets);
+  }, (error) => {});
+};
+
+export const saveCustomerToCloud = async (customer: Customer) => {
+  await setDoc(doc(db, "customers", customer.id), sanitizeData(customer));
+};
+
+export const updateCustomerInCloud = async (id: string, updates: Partial<Customer>) => {
+  await updateDoc(doc(db, "customers", id), sanitizeData(updates));
+  logSystemAction('UPDATE', 'Customer', `اطلاعات مشتری بروزرسانی شد`, 'کاربر سیستم', id);
+};
+
+export const deleteCustomerFromCloud = async (id: string) => {
+  const ref = doc(db, "customers", id);
+  const snap = await getDoc(ref);
+  const data = snap.exists() ? snap.data() : null;
+  await deleteDoc(ref);
+  logSystemAction('DELETE', 'Customer', `مشتری حذف شد`, 'Master', id, data, 'customers');
+};
+
+export const saveCustomersBulkToCloud = async (customers: Customer[]) => {
+    const batchSize = 400;
+    for (let i = 0; i < customers.length; i += batchSize) {
+        const chunk = customers.slice(i, i + batchSize);
+        await Promise.all(chunk.map(c => setDoc(doc(db, "customers", c.id), sanitizeData(c))));
+    }
+    logSystemAction('CREATE', 'Customer', `${customers.length} مشتری به صورت گروهی ایمپورت شدند`, 'سیستم');
+};
+
+export const subscribeToCustomers = (callback: (customers: Customer[]) => void) => {
+  return onSnapshot(collection(db, "customers"), (snap) => {
+    const list = snap.docs.map(doc => doc.data() as Customer);
+    callback(list);
+  }, (error) => {});
+};
+
+export const findCustomerByLoyaltyCode = async (code: string): Promise<Customer | null> => {
+    if (!code) return null;
+    const q = query(collection(db, "customers"), where("loyaltyCode", "==", code), limit(1));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].data() as Customer;
+    }
+    return null;
+};
+
+export const sendInternalMessage = async (message: InternalMessage) => {
+  try {
+      const msgToSave = { 
+          ...message, 
+          files: cleanFilesForDB(message.files)
+      };
+      await setDoc(doc(db, "messages", message.id), sanitizeData(msgToSave));
+      logSystemAction('CREATE', 'Message', `پیام جدید از ${message.senderName} ارسال شد`, message.senderName, message.id);
+  } catch(e) {
+      throw e;
+  }
+};
+
+export const updateMessageInCloud = async (id: string, updates: Partial<InternalMessage>) => {
+    await updateDoc(doc(db, "messages", id), sanitizeData(updates));
+};
+
+export const deleteMessageFromCloud = async (id: string) => {
+    const ref = doc(db, "messages", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'Message', `پیام حذف شد`, 'Master', id, data, 'messages');
+};
+
+export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void) => {
+    const q = query(collection(db, "messages"));
+    return onSnapshot(q, (snapshot) => {
+        const msgs = snapshot.docs.map(d => d.data() as InternalMessage);
+        msgs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(msgs);
+    }, (e) => {});
+};
+
+export const saveTaskToCloud = async (task: Task) => {
+    await setDoc(doc(db, "tasks", task.id), sanitizeData(task));
+    logSystemAction('CREATE', 'Task', `وظیفه جدید "${task.title}" ایجاد شد`, task.creatorName, task.id);
+};
+
+export const updateTaskInCloud = async (id: string, updates: Partial<Task>) => {
+    await updateDoc(doc(db, "tasks", id), sanitizeData(updates));
+};
+
+export const deleteTaskFromCloud = async (id: string) => {
+    const ref = doc(db, "tasks", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'Task', `وظیفه حذف شد`, 'کاربر', id, data, 'tasks');
+};
+
+export const subscribeToTasks = (callback: (tasks: Task[]) => void) => {
+    const q = query(collection(db, "tasks"));
+    return onSnapshot(q, (snapshot) => {
+        const tasks = snapshot.docs.map(d => d.data() as Task);
+        tasks.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(tasks);
+    }, (e) => {});
+};
+
+export const saveMeetingToCloud = async (meeting: Meeting) => {
+    await setDoc(doc(db, "meetings", meeting.id), sanitizeData(meeting));
+    logSystemAction('CREATE', 'Meeting', `جلسه "${meeting.title}" تنظیم شد`, meeting.organizerName, meeting.id);
+};
+
+export const updateMeetingInCloud = async (id: string, updates: Partial<Meeting>, actorName: string) => {
+    await updateDoc(doc(db, "meetings", id), sanitizeData(updates));
+    logSystemAction('UPDATE', 'Meeting', `جلسه بروزرسانی شد`, actorName, id);
+};
+
+export const deleteMeetingFromCloud = async (id: string) => {
+    const ref = doc(db, "meetings", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'Meeting', `جلسه لغو/حذف شد`, 'کاربر', id, data, 'meetings');
+};
+
+export const subscribeToMeetings = (callback: (meetings: Meeting[]) => void) => {
+    const q = query(collection(db, "meetings"));
+    return onSnapshot(q, (snapshot) => {
+        const meetings = snapshot.docs.map(d => d.data() as Meeting);
+        callback(meetings);
+    }, (e) => {});
+};
+
+export const saveKPIToCloud = async (kpi: KPI) => {
+    await setDoc(doc(db, "kpis", kpi.id), sanitizeData(kpi));
+    logSystemAction('CREATE', 'KPI', `شاخص عملکرد "${kpi.title}" ایجاد شد`, 'Master', kpi.id);
+};
+
+export const updateKPIInCloud = async (id: string, updates: Partial<KPI>) => {
+    await updateDoc(doc(db, "kpis", id), sanitizeData(updates));
+    logSystemAction('UPDATE', 'KPI', `شاخص عملکرد بروزرسانی شد`, 'System', id);
+};
+
+export const deleteKPIFromCloud = async (id: string) => {
+    const ref = doc(db, "kpis", id);
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'KPI', `شاخص عملکرد حذف شد`, 'Master', id);
+};
+
+export const subscribeToKPIs = (callback: (kpis: KPI[]) => void) => {
+    const q = query(collection(db, "kpis"));
+    return onSnapshot(q, (snapshot) => {
+        const kpis = snapshot.docs.map(d => d.data() as KPI);
+        callback(kpis);
+    }, (e) => {});
+};
+
+export const saveCustomFormToCloud = async (form: CustomForm, actorName: string) => {
+    await setDoc(doc(db, "custom_forms", form.id), sanitizeData(form));
+    logSystemAction('CREATE', 'CustomForm', `فرم "${form.title}" ایجاد شد`, actorName, form.id);
+};
+
+export const updateCustomFormInCloud = async (id: string, updates: Partial<CustomForm>, actorName: string) => {
+    await updateDoc(doc(db, "custom_forms", id), sanitizeData(updates));
+    logSystemAction('UPDATE', 'CustomForm', `فرم بروزرسانی شد`, actorName, id);
+};
+
+export const deleteCustomFormFromCloud = async (id: string, actorName: string) => {
+    const ref = doc(db, "custom_forms", id);
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'CustomForm', `فرم حذف شد`, actorName, id);
+};
+
+export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) => {
+    const q = query(collection(db, "custom_forms"));
+    return onSnapshot(q, (snapshot) => {
+        const forms = snapshot.docs.map(d => d.data() as CustomForm);
+        callback(forms);
+    }, (e) => {});
+};
+
+export const saveAppConfigToCloud = async (config: AppConfig) => {
+    await setDoc(doc(db, "settings", "appConfig"), sanitizeData(config));
+    logSystemAction('UPDATE', 'System', `تنظیمات سیستم تغییر کرد`, 'Admin');
+};
+
+export const saveServicesToCloud = async (services: ServiceOption[]) => {
+    await setDoc(doc(db, "settings", "services"), { list: sanitizeData(services) });
+    logSystemAction('UPDATE', 'System', `لیست خدمات/تعرفه‌ها بروز شد`, 'Admin');
+};
+
+export const savePersonnelToCloud = async (personnel: Personnel[]) => {
+    const cleanList = personnel.map(p => {
+        const cleanDocs = (p.documents || []).map(docItem => {
+             const cleanedFiles = cleanFilesForDB([docItem.file]);
+             return cleanedFiles.length > 0 ? { ...docItem, file: cleanedFiles[0] } : null;
+        }).filter(d => d !== null);
+        return { ...p, documents: cleanDocs };
+    });
+    await setDoc(doc(db, "settings", "personnel"), { list: sanitizeData(cleanList) });
+    logSystemAction('UPDATE', 'Personnel', `لیست پرسنل بروزرسانی شد`, 'Admin');
+};
+
+export const subscribeToSettings = (
+    onConfig: (c: AppConfig) => void,
+    onServices: (s: ServiceOption[]) => void,
+    onPersonnel: (p: Personnel[]) => void
+) => {
+    return onSnapshot(collection(db, "settings"), (snap) => {
+        snap.docs.forEach(doc => {
+            if (doc.id === 'appConfig') onConfig(doc.data() as AppConfig);
+            if (doc.id === 'services') onServices(doc.data().list);
+            if (doc.id === 'personnel') onPersonnel(doc.data().list);
+        });
+    }, (error) => {});
+};
