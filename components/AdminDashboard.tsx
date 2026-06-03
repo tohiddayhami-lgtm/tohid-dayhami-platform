@@ -514,6 +514,11 @@ export const AdminDashboard: React.FC<Props> = ({
       return lang === 'en' && s.titleEn ? s.titleEn : s.title;
   };
 
+  const getAssigneeName = (id?: string) => {
+      if (!id) return null;
+      return personnel.find(p => p.id === id)?.fullName || null;
+  };
+
   const getSubServiceTitle = (serviceId: string, subId: string) => {
       const s = services.find(s => s.id === serviceId);
       const sub = s?.subServices?.find(sub => sub.id === subId);
@@ -564,8 +569,9 @@ export const AdminDashboard: React.FC<Props> = ({
           const matchesCompany = (t.companyName || '').toLowerCase().includes(term); 
           const matchesPhone = (t.phoneNumber || '').includes(term);
           const matchesService = (getServiceTitle(t.serviceId) || '').toLowerCase().includes(term);
+          const matchesAssignee = (getAssigneeName(t.assignedTo) || '').toLowerCase().includes(term);
           const matchesDesc = (t.description || '').toLowerCase().includes(term);
-          if (!matchesId && !matchesCustomer && !matchesCompany && !matchesPhone && !matchesService && !matchesDesc) return false;
+          if (!matchesId && !matchesCustomer && !matchesCompany && !matchesPhone && !matchesService && !matchesAssignee && !matchesDesc) return false;
       }
       return true;
     }).sort((a, b) => {
@@ -1074,7 +1080,7 @@ export const AdminDashboard: React.FC<Props> = ({
                              <IconSearch className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                          </div>
                      </div>
-                     <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-4 py-3 rounded-tr-lg text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
+                     <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-4 py-3 rounded-tr-lg text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3">{t.expert}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
                         <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3 text-center text-xs font-bold text-gray-400">
                                 {filteredTickets.length - ((currentPage - 1) * ITEMS_PER_PAGE + idx)}
@@ -1095,6 +1101,17 @@ export const AdminDashboard: React.FC<Props> = ({
                                 <div className="text-[10px] text-gray-400 dir-ltr">{new Date(ticket.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                             </td>
                             <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(ticket.status)}`}>{ticket.status}</span></td>
+                            <td className="px-4 py-3">
+                                {getAssigneeName(ticket.assignedTo) ? (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                        {getAssigneeName(ticket.assignedTo)}
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                                        {t.notAssigned}
+                                    </span>
+                                )}
+                            </td>
                             <td className="px-4 py-3 text-center"><button onClick={() => setSelectedTicketId(ticket.id)} className="bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors">{t.check}</button></td>
                         </tr>
                      ))}</tbody></table>{paginatedTickets.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">{t.notFound}</div>}</div>
