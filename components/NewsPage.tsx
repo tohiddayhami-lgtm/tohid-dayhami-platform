@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NewsArticle } from '../types';
 import { IconSearch, IconArrowRight, IconNewspaper } from './Icons';
 import { Language } from '../App';
@@ -27,6 +27,42 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
   const [activeCategory, setActiveCategory] = useState('همه');
   const [search, setSearch] = useState('');
 
+  // Read article slug from URL hash on mount + when articles load
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#/news/')) {
+      const slug = decodeURIComponent(hash.replace('#/news/', ''));
+      const found = articles.find(a => a.slug === slug || a.id === slug);
+      if (found) setSelectedId(found.id);
+    }
+  }, [articles]);
+
+  // Browser back/forward button
+  useEffect(() => {
+    const handlePop = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/news/')) {
+        const slug = decodeURIComponent(hash.replace('#/news/', ''));
+        const found = articles.find(a => a.slug === slug || a.id === slug);
+        setSelectedId(found ? found.id : null);
+      } else {
+        setSelectedId(null);
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [articles]);
+
+  const selectArticle = (id: string, slug: string) => {
+    setSelectedId(id);
+    history.pushState(null, '', `#/news/${encodeURIComponent(slug)}`);
+  };
+
+  const goBackToList = () => {
+    setSelectedId(null);
+    history.pushState(null, '', '#/news');
+  };
+
   const published = articles.filter(a => a.isPublished);
 
   const getCategories = (a: NewsArticle): string[] =>
@@ -44,7 +80,7 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
   if (selectedArticle) {
     return (
       <div className="max-w-3xl mx-auto animate-fade-in py-4">
-        <button onClick={() => setSelectedId(null)}
+        <button onClick={goBackToList}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 mb-6 transition-colors">
           <IconArrowRight className="w-3.5 h-3.5 rotate-180" />
           {lang === 'fa' ? 'بازگشت به اخبار' : 'Back to News'}
@@ -158,7 +194,7 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
           {filtered.map(article => (
             <button
               key={article.id}
-              onClick={() => setSelectedId(article.id)}
+              onClick={() => selectArticle(article.id, article.slug)}
               className="text-start border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:shadow-sm transition-all group bg-white"
             >
               {article.coverImage ? (

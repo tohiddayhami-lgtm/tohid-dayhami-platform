@@ -130,9 +130,24 @@ const App: React.FC = () => {
 
   const t = DICTIONARY[lang];
 
+  const VIEW_HASH: Record<ViewState, string> = {
+    landing: '#/', 'new-ticket': '#/form', tracking: '#/tracking', admin: '#/admin', news: '#/news',
+  };
+
+  const parseViewFromHash = (hash: string): ViewState | null => {
+    if (!hash || hash === '#' || hash === '#/') return 'landing';
+    if (hash === '#/form' || hash === '#form') return 'new-ticket';
+    if (hash === '#/tracking') return 'tracking';
+    if (hash === '#/admin') return 'admin';
+    if (hash.startsWith('#/news')) return 'news';
+    return null;
+  };
+
   const setView = (newView: ViewState) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
+    const newHash = VIEW_HASH[newView];
+    if (window.location.hash !== newHash) history.pushState(null, '', newHash);
   };
 
   const toAbsoluteUrl = (url: string) => {
@@ -171,11 +186,11 @@ const App: React.FC = () => {
   }, [appConfig]);
 
   useEffect(() => {
-    // Public shareable form link: /#form
-    const isPublicFormLink = window.location.hash === '#form';
-    if (isPublicFormLink) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
+    const hash = window.location.hash;
+    const hashView = parseViewFromHash(hash);
+
+    // Normalize legacy #form link
+    if (hash === '#form') history.replaceState(null, '', '#/form');
 
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
     const storedView = localStorage.getItem(STORAGE_KEYS.VIEW) as ViewState | null;
@@ -193,16 +208,32 @@ const App: React.FC = () => {
       }
     }
 
-    if (isPublicFormLink) {
-      setViewState('new-ticket');
-    } else if (storedView && storedView !== 'admin') {
-      // Restore public pages on refresh regardless of session
-      setViewState(storedView);
-    } else if (storedView === 'admin' && storedUser) {
-      // Restore admin page only when logged in
-      setViewState('admin');
+    // Hash takes priority; fall back to stored view
+    if (hashView && hashView !== 'landing') {
+      if (hashView === 'admin' && !storedUser) {
+        setViewState('landing');
+        history.replaceState(null, '', '#/');
+      } else {
+        setViewState(hashView);
+      }
+    } else if (!hash || hash === '#/' || hash === '#') {
+      if (storedView && storedView !== 'admin') setViewState(storedView);
+      else if (storedView === 'admin' && storedUser) setViewState('admin');
     }
   }, []);
+
+  useEffect(() => {
+    const handlePop = () => {
+      const v = parseViewFromHash(window.location.hash);
+      if (v) {
+        if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
+        setViewState(v);
+        localStorage.setItem(STORAGE_KEYS.VIEW, v);
+      }
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [currentUser]);
 
   useEffect(() => {
     const updateActivity = () => { if (currentUser) localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, Date.now().toString()); };
