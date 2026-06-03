@@ -208,17 +208,21 @@ const App: React.FC = () => {
       }
     }
 
-    // Hash takes priority; fall back to stored view
+    // Hash is the single source of truth for navigation
     if (hashView && hashView !== 'landing') {
+      // URL has a specific route hash → go there
       if (hashView === 'admin' && !storedUser) {
+        // Admin hash but no session → landing
         setViewState('landing');
         history.replaceState(null, '', '#/');
       } else {
         setViewState(hashView);
       }
-    } else if (!hash || hash === '#/' || hash === '#') {
-      if (storedView && storedView !== 'admin') setViewState(storedView);
-      else if (storedView === 'admin' && storedUser) setViewState('admin');
+    } else {
+      // No hash, or hash is just #/ → always landing
+      // (typing the domain directly always opens the home page)
+      setViewState('landing');
+      history.replaceState(null, '', '#/');
     }
   }, []);
 
