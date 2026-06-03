@@ -536,9 +536,9 @@ const App: React.FC = () => {
                 <section className="py-8 border-b border-gray-100">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {[
-                      { num: lang === 'fa' ? '+۱۰۰' : '100+', label: lang === 'fa' ? 'مشتری موفق' : 'Clients' },
-                      { num: lang === 'fa' ? '+۳۰' : '30+',   label: lang === 'fa' ? 'کشور هدف' : 'Countries' },
-                      { num: lang === 'fa' ? '+۵'  : '5+',    label: lang === 'fa' ? 'سال تجربه' : 'Years' },
+                      { num: lang === 'fa' ? '+۷۰۰' : '700+', label: lang === 'fa' ? 'مشتری موفق' : 'Clients' },
+                      { num: lang === 'fa' ? '+۳۰'  : '30+',  label: lang === 'fa' ? 'کشور هدف' : 'Countries' },
+                      { num: lang === 'fa' ? '+۱۲'  : '12+',  label: lang === 'fa' ? 'سال تجربه' : 'Years' },
                       { num: lang === 'fa' ? '۲۴/۷' : '24/7', label: lang === 'fa' ? 'پشتیبانی آنلاین' : 'Support' },
                     ].map((s, i) => (
                       <div key={i}>
