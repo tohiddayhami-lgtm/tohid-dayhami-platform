@@ -22,10 +22,13 @@ function formatDateFa(iso: string): string {
   } catch { return iso; }
 }
 
+const PAGE_SIZE = 9;
+
 export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = false }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('همه');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   // Read article slug from URL hash on mount + when articles load
   useEffect(() => {
@@ -70,10 +73,19 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
 
   const filtered = published.filter(a => {
     const matchCat = activeCategory === 'همه' || getCategories(a).includes(activeCategory);
-    const q = search.toLowerCase();
-    const matchSearch = !q || a.title.toLowerCase().includes(q) || a.summary.toLowerCase().includes(q);
+    const q = search.trim().toLowerCase();
+    const matchSearch = !q ||
+      a.title.toLowerCase().includes(q) ||
+      (a.titleEn || '').toLowerCase().includes(q) ||
+      a.summary.toLowerCase().includes(q) ||
+      (a.content || '').toLowerCase().includes(q) ||
+      (a.tags || []).some(t => t.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const selectedArticle = selectedId ? articles.find(a => a.id === selectedId) : null;
 
@@ -153,14 +165,14 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
           <IconSearch className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-gray-400" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             placeholder={lang === 'fa' ? 'جستجو در اخبار...' : 'Search news...'}
             className="w-full ps-9 pe-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-gray-400"
           />
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {CATEGORIES_FA.map(cat => (
-            <button key={cat} onClick={() => setActiveCategory(cat)}
+            <button key={cat} onClick={() => { setActiveCategory(cat); setPage(1); }}
               className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${activeCategory === cat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {cat}
             </button>
@@ -190,8 +202,16 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
           <p className="text-sm">{lang === 'fa' ? 'مقاله‌ای یافت نشد.' : 'No articles found.'}</p>
         </div>
       ) : (
+        <>
+        {filtered.length > 0 && (
+          <p className="text-xs text-gray-400 mb-3">
+            {lang === 'fa'
+              ? `${filtered.length} مقاله — صفحه ${safePage} از ${totalPages}`
+              : `${filtered.length} articles — page ${safePage} of ${totalPages}`}
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(article => (
+          {paginated.map(article => (
             <button
               key={article.id}
               onClick={() => selectArticle(article.id, article.slug)}
@@ -226,6 +246,38 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
             </button>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-1.5 mt-8">
+            <button
+              onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo(0, 0); }}
+              disabled={safePage === 1}
+              className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              {lang === 'fa' ? '← قبلی' : '← Prev'}
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                onClick={() => { setPage(p); window.scrollTo(0, 0); }}
+                className={`w-8 h-8 text-xs rounded-lg transition-colors ${p === safePage ? 'bg-gray-900 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {p}
+              </button>
+            ))}
+
+            <button
+              onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo(0, 0); }}
+              disabled={safePage === totalPages}
+              className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              {lang === 'fa' ? 'بعدی →' : 'Next →'}
+            </button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
