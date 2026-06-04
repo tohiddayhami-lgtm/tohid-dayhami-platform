@@ -54,10 +54,11 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 const fmtNum = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+// OMR always 3 decimal places (1 OMR = 1000 baisa)
+const fmtOMR = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const fmtM   = (n: number) => {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (Math.abs(n) >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  if (Math.abs(n) >= 1_000) return `${n.toFixed(3)}`;
+  return n.toFixed(3);
 };
 
 // ── Quick Converter sub-component ────────────────────────────────────────────
@@ -542,7 +543,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     <div className={`flex justify-between items-center py-0.5 ${top?'border-t border-gray-300 mt-1 pt-1.5':''} ${indent?'pr-3':''}`}>
       <span className={`text-[10px] ${bold?'font-black text-gray-800':'font-medium text-gray-500'}`}>{label}</span>
       <span className={`text-[10px] font-black tabular-nums ${bold?(value<0?'text-rose-600':'text-gray-900'):(value<0?'text-rose-600':'text-gray-700')}`}>
-        {value<0?`(${fmtNum(Math.abs(value))})`:fmtNum(value)}
+        {value<0?`(${fmtOMR(Math.abs(value))})`:fmtOMR(value)}
       </span>
     </div>
   );
@@ -686,29 +687,29 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
           <div className="text-emerald-600 text-[10px] font-bold mb-0.5">جمع درآمد</div>
-          <div className="text-base font-black text-emerald-700">{fmtNum(+kpiIncOMR.toFixed(4))}</div>
+          <div className="text-base font-black text-emerald-700">{fmtOMR(kpiIncOMR)}</div>
           <div className="text-[9px] text-emerald-400 mt-0.5 flex justify-between">
             <span>{filteredInc.length} رکورد</span>
-            <span>دریافتی: {fmtNum(+kpiIncReceivedOMR.toFixed(4))}</span>
+            <span>دریافتی: {fmtOMR(kpiIncReceivedOMR)}</span>
           </div>
           {kpiIncPendingOMR > 0.0001 && (
-            <div className="text-[9px] text-amber-500 font-bold mt-0.5">مانده دریافتنی: {fmtNum(+kpiIncPendingOMR.toFixed(4))}</div>
+            <div className="text-[9px] text-amber-500 font-bold mt-0.5">مانده دریافتنی: {fmtOMR(kpiIncPendingOMR)}</div>
           )}
         </div>
 
         <div className="bg-rose-50 px-4 py-3 rounded-xl border border-rose-100 shadow-sm">
           <div className="text-rose-600 text-[10px] font-bold mb-0.5">جمع هزینه</div>
-          <div className="text-base font-black text-rose-700">{fmtNum(+kpiExpOMR.toFixed(4))}</div>
+          <div className="text-base font-black text-rose-700">{fmtOMR(kpiExpOMR)}</div>
           <div className="text-[9px] text-rose-400 mt-0.5 flex justify-between">
             <span>{filteredExp.length} رکورد</span>
-            <span>پرداخت: {fmtNum(+kpiExpPaidOMR.toFixed(4))}</span>
+            <span>پرداخت: {fmtOMR(kpiExpPaidOMR)}</span>
           </div>
         </div>
 
         <div className={`px-4 py-3 rounded-xl border shadow-sm ${kpiNetOMR>=0?'bg-indigo-50 border-indigo-100':'bg-amber-50 border-amber-100'}`}>
           <div className={`text-[10px] font-bold mb-0.5 ${kpiNetOMR>=0?'text-indigo-600':'text-amber-600'}`}>خالص جریان نقدی</div>
           <div className={`text-base font-black ${kpiNetOMR>=0?'text-indigo-700':'text-amber-700'}`}>
-            {kpiNetOMR>=0?'+':''}{fmtNum(+kpiNetOMR.toFixed(4))}
+            {kpiNetOMR>=0?'+':''}{fmtOMR(kpiNetOMR)}
           </div>
           <div className={`text-[9px] mt-0.5 font-bold ${kpiNetOMR>=0?'text-indigo-400':'text-amber-500'}`}>
             {kpiNetOMR>=0?'سودده ▲':'زیان‌ده ▼'}
@@ -717,7 +718,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
 
         <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
           <div className="text-gray-400 text-[10px] font-bold mb-0.5">معوقات پرداختی</div>
-          <div className="text-base font-black text-amber-600">{fmtNum(+kpiArrearsOMR.toFixed(4))}</div>
+          <div className="text-base font-black text-amber-600">{fmtOMR(kpiArrearsOMR)}</div>
           <div className="flex gap-1 mt-1.5 flex-wrap">
             <span className="text-[9px] bg-green-100 text-green-600 px-1.5 rounded font-bold">{paidCnt} تسویه</span>
             <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 rounded font-bold">{partialCnt} بخشی</span>
@@ -871,7 +872,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       {isCur&&<div className="text-[7px] text-indigo-400">●</div>}
                     </div>
                     <div className={`text-[8px] font-black ${net>=0?'text-emerald-600':'text-rose-600'}`}>
-                      {net>=0?'+':''}{fmtM(net)}
+                      {net>=0?'+':''}{fmtOMR(net)}
                     </div>
                   </div>
                 );
@@ -895,7 +896,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   ].map(item=>(
                     <div key={item.l} className={`${item.b} rounded-lg p-1.5 text-center`}>
                       <div className="text-[8px] text-gray-400">{item.l} ماه جاری</div>
-                      <div className={`text-xs font-black ${item.c}`}>{fmtM(item.v)}</div>
+                      <div className={`text-xs font-black ${item.c}`}>{fmtOMR(item.v)}</div>
                     </div>
                   ))}
                 </div>
@@ -985,7 +986,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       <td className="px-3 py-2 whitespace-nowrap">
                         {/* OMR primary */}
                         <div className="font-black text-emerald-700 text-xs">
-                          {fmtNum(+omr(received, sr.currency||'IRR').toFixed(4))}
+                          {fmtOMR(omr(received, sr.currency||'IRR'))}
                           <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
                         </div>
                         {/* original secondary */}
@@ -1002,7 +1003,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                         </div>
                         {sr.saleAmount > received && (
                           <div className="text-[8px] text-amber-600 font-bold mt-0.5">
-                            مانده: {fmtNum(+omr(sr.saleAmount-received,sr.currency||'IRR').toFixed(4))} OMR
+                            مانده: {fmtOMR(omr(sr.saleAmount-received,sr.currency||'IRR'))} OMR
                           </div>
                         )}
                       </td>
@@ -1056,10 +1057,10 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                     <td className="px-3 py-2 whitespace-nowrap">
                       {/* OMR primary */}
                       <div className="font-black text-rose-700 text-xs">
-                        {fmtNum(+omr(ex.paidAmount||0, ex.currency||'IRR').toFixed(4))}
+                        {fmtOMR(omr(ex.paidAmount||0, ex.currency||'IRR'))}
                         <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
                         <span className="text-[9px] text-gray-400 font-normal opacity-70">
-                          / {fmtNum(+omr(ex.amount, ex.currency||'IRR').toFixed(4))}
+                          / {fmtOMR(omr(ex.amount, ex.currency||'IRR'))}
                         </span>
                       </div>
                       {/* original secondary */}
