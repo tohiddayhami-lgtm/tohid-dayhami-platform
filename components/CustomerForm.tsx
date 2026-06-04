@@ -3,7 +3,7 @@ import React, { useState, useRef, memo, useCallback } from 'react';
 import { ServiceOption, Ticket, TicketStatus, AttachedFile, AppConfig, FormField } from '../types';
 import { analyzeTicket } from '../services/geminiService';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { IconCheck, IconBriefcase, IconPaperclip, IconTrash, IconFile, IconSearch } from './Icons';
+import { IconCheck, IconBriefcase, IconPaperclip, IconTrash, IconFile, IconSearch, IconLayout, IconImage, IconMagic, IconTrendingUp, IconBulb, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconPort, IconShield, IconMegaphone, IconAward, IconTarget, IconCloud, IconFolder } from './Icons';
 import { Language } from '../App';
 
 interface Props {
@@ -23,6 +23,28 @@ interface FieldItemProps {
 }
 
 const inputBase = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-colors";
+
+// Map service title keywords → professional SVG icon
+const getServiceIcon = (service: { id: string; title: string; titleEn?: string }) => {
+  const t = (service.title + ' ' + (service.titleEn || '')).toLowerCase();
+  if (service.id === 's_other' || t.includes('سایر') || t.includes('other'))          return IconMessageSquare;
+  if (t.includes('بسته‌بندی') || t.includes('packaging') || t.includes('بسته'))      return IconLayout;
+  if (t.includes('گرافیک') || t.includes('graphic') || t.includes('طراحی'))          return IconMagic;
+  if (t.includes('صادرات') || t.includes('export') || t.includes('تجارت'))           return IconTrendingUp;
+  if (t.includes('فروش') || t.includes('sales') || t.includes('sale'))               return IconTarget;
+  if (t.includes('مشاوره') || t.includes('consul') || t.includes('expert'))          return IconBulb;
+  if (t.includes('نرم‌افزار') || t.includes('software') || t.includes('سیستم'))     return IconDatabase;
+  if (t.includes('ثبت') || t.includes('شرکت') || t.includes('register'))             return IconFileText;
+  if (t.includes('بازخورد') || t.includes('feedback') || t.includes('پیشنهاد'))     return IconMessageSquare;
+  if (t.includes('متاپورت') || t.includes('metaport') || t.includes('مجازی'))       return IconPort;
+  if (t.includes('برند') || t.includes('brand') || t.includes('هویت'))              return IconAward;
+  if (t.includes('تبلیغ') || t.includes('market') || t.includes('مارکتینگ'))        return IconMegaphone;
+  if (t.includes('وب') || t.includes('web') || t.includes('سایت') || t.includes('دیجیتال')) return IconGlobe;
+  if (t.includes('امنیت') || t.includes('security'))                                 return IconShield;
+  if (t.includes('پروژه') || t.includes('project'))                                  return IconFolder;
+  if (t.includes('ابر') || t.includes('cloud') || t.includes('هاستینگ'))            return IconCloud;
+  return IconBriefcase; // default
+};
 
 const FieldItem = memo(({ field, value, onChange, lang }: FieldItemProps) => {
   const getLabel = (f: FormField) => (lang === 'en' && f.labelEn ? f.labelEn : f.label);
@@ -266,58 +288,80 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
           <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 pb-2 border-b border-gray-100">
             {t.service}
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {services.map(service => {
               const isSelected = selectedServiceIds.includes(service.id);
+              const ServiceIcon = getServiceIcon(service);
+              const desc = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
+
               return (
-                <div key={service.id} className={`rounded-lg border transition-all ${isSelected ? 'border-gray-800 bg-gray-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
-                  <div onClick={() => toggleService(service.id)} className="cursor-pointer flex items-start gap-2.5 px-3 py-2.5">
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors mt-0.5 ${isSelected ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}>
-                      {isSelected && <IconCheck className="w-2.5 h-2.5 text-white" />}
+                <div key={service.id}
+                  className={`rounded-xl border transition-all duration-200 overflow-hidden
+                    ${isSelected
+                      ? 'border-gray-800 bg-gray-900 shadow-md'
+                      : 'border-gray-200 bg-white hover:border-gray-400 hover:shadow-sm'}`}>
+
+                  {/* ── header row (always visible) ── */}
+                  <div onClick={() => toggleService(service.id)}
+                    className="cursor-pointer flex items-center gap-3 px-4 py-3">
+                    {/* icon */}
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors
+                      ${isSelected ? 'bg-white/10' : 'bg-gray-100'}`}>
+                      <ServiceIcon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-gray-500'}`} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
-                        {service.icon && <span className="ml-1">{service.icon}</span>}
-                        {lang === 'en' && service.titleEn ? service.titleEn : service.title}
-                      </div>
-                      {(() => {
-                        const desc = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
-                        if (!desc || service.id === 's_other') return null;
-                        return (
-                          <p className={`text-[11px] mt-0.5 leading-relaxed ${isSelected ? 'text-gray-500' : 'text-gray-400'}`}>
-                            {desc}
-                          </p>
-                        );
-                      })()}
+                    {/* title */}
+                    <span className={`flex-1 text-sm font-medium ${isSelected ? 'text-white' : 'text-gray-700'}`}>
+                      {lang === 'en' && service.titleEn ? service.titleEn : service.title}
+                    </span>
+                    {/* checkmark */}
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all
+                      ${isSelected ? 'bg-white border-white' : 'border-gray-300'}`}>
+                      {isSelected && <IconCheck className="w-3 h-3 text-gray-900" />}
                     </div>
                   </div>
 
+                  {/* ── description (only when selected) ── */}
+                  {isSelected && desc && service.id !== 's_other' && (
+                    <div className="px-4 pb-3 animate-fade-in">
+                      <p className="text-xs text-gray-300 leading-relaxed border-t border-white/10 pt-2">
+                        {desc}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── sub-services ── */}
                   {isSelected && service.subServices && service.subServices.length > 0 && (
-                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-1 animate-fade-in">
-                      <p className="text-[11px] font-medium text-gray-400 mb-1.5">{t.subServiceTitle}</p>
+                    <div className="px-4 pb-3 pt-1 border-t border-white/10 space-y-1 animate-fade-in">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{t.subServiceTitle}</p>
                       {service.subServices.map(sub => {
                         const isSubSelected = selectedSubServices[service.id]?.includes(sub.id);
                         return (
-                          <div key={sub.id} onClick={(e) => { e.stopPropagation(); toggleSubService(service.id, sub.id); }}
-                            className="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded hover:bg-gray-100">
-                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${isSubSelected ? 'bg-gray-700 border-gray-700' : 'bg-white border-gray-300'}`}>
-                              {isSubSelected && <IconCheck className="w-2 h-2 text-white" />}
+                          <div key={sub.id}
+                            onClick={(e) => { e.stopPropagation(); toggleSubService(service.id, sub.id); }}
+                            className={`flex items-center gap-2.5 cursor-pointer px-2.5 py-2 rounded-lg transition-colors
+                              ${isSubSelected ? 'bg-white/15' : 'hover:bg-white/10'}`}>
+                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors
+                              ${isSubSelected ? 'bg-white border-white' : 'border-gray-500'}`}>
+                              {isSubSelected && <IconCheck className="w-2 h-2 text-gray-900" />}
                             </div>
-                            <span className="text-xs text-gray-600">{lang === 'en' && sub.titleEn ? sub.titleEn : sub.title}</span>
+                            <span className="text-xs text-gray-300">
+                              {lang === 'en' && sub.titleEn ? sub.titleEn : sub.title}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
                   )}
 
+                  {/* ── other service text ── */}
                   {isSelected && service.id === 's_other' && (
-                    <div className="px-3 pb-3 pt-1 border-t border-gray-100 animate-fade-in">
+                    <div className="px-4 pb-4 pt-1 border-t border-white/10 animate-fade-in">
                       <textarea
                         value={otherText}
                         onChange={(e) => setOtherText(e.target.value)}
                         placeholder={lang === 'fa' ? 'خدمات مورد نیاز خود را توضیح دهید...' : 'Describe the service you need...'}
                         rows={2}
-                        className={inputBase}
+                        className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-sm text-white placeholder-gray-500 outline-none focus:border-white/40 resize-none"
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
