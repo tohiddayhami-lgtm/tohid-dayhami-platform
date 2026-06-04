@@ -774,61 +774,91 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
 
             <div className={showPLDetails ? 'max-h-[70vh] overflow-y-auto pr-1' : ''}>
 
-              {/* ─── Income ─── */}
+              {/* ─── Income — grouped by category ─── */}
               <div className="text-[9px] font-black text-emerald-600 uppercase mb-1 mt-1">درآمد</div>
-              <div
-                className={`flex justify-between items-center py-0.5 ${showPLDetails && plInc.length > 0 ? 'cursor-pointer hover:bg-gray-100 rounded' : ''}`}
-                onClick={() => showPLDetails && setOpenCats(p => ({...p, __income__: !p.__income__}))}
-              >
-                <span className="text-[10px] font-black text-gray-800 flex items-center gap-1">
-                  {showPLDetails && plInc.length > 0 && (
-                    <span className="text-[8px] text-indigo-400">{openCats['__income__'] ? '▼' : '▶'}</span>
-                  )}
-                  جمع درآمد فروش و خدمات
-                  {showPLDetails && plInc.length > 0 && (
-                    <span className="text-[8px] text-gray-400">({plInc.length})</span>
-                  )}
-                </span>
-                <span className="text-[10px] font-black tabular-nums text-gray-900">{fmtOMR(plRevenue)}</span>
-              </div>
-              {showPLDetails && openCats['__income__'] && plInc.length > 0 && (
-                <div className="mr-5 mt-0.5 mb-2 space-y-0.5 border-r-2 border-emerald-300 pr-2">
-                  {plInc.map(sr => {
-                    const recvOMR = omr(sr.receivedAmount ?? sr.saleAmount, sr.currency||'IRR');
-                    const totalOMR = omr(sr.saleAmount, sr.currency||'IRR');
-                    const isPending = (sr.paymentStatus||'received') !== 'received';
-                    return (
-                      <div key={sr.id} className="flex justify-between items-start py-0.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[9px] font-bold text-gray-700 truncate">{sr.customerName}</div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${incCatColor(sr.serviceTitle||'other_income')}`}>
-                              {incCatLabel(sr.serviceTitle||'other_income')}
-                            </span>
-                            <span className="text-[8px] text-gray-400 dir-ltr font-mono">{sr.depositDate}</span>
-                            {sr.currency !== 'OMR' && (
-                              <span className="text-[8px] text-gray-400">{fmtNum(sr.saleAmount)} {sr.currency}</span>
-                            )}
-                            {isPending && (
-                              <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${incStatusBadge(sr.paymentStatus)}`}>
-                                {incStatusLabel(sr.paymentStatus)}
+              {(() => {
+                // group plInc by serviceTitle (income category key)
+                const groups: Record<string, SalesRecord[]> = {};
+                plInc.forEach(sr => {
+                  const k = sr.serviceTitle || 'other_income';
+                  if (!groups[k]) groups[k] = [];
+                  groups[k].push(sr);
+                });
+                const groupEntries = Object.entries(groups);
+                if (groupEntries.length === 0) {
+                  return <div className="text-[9px] text-gray-400 pr-3 py-0.5">درآمدی در این دوره ثبت نشده</div>;
+                }
+                return (
+                  <>
+                    {groupEntries.map(([catKey, items]) => {
+                      const catTotal = items.reduce((s, sr) => s + omr(sr.receivedAmount ?? sr.saleAmount, sr.currency||'IRR'), 0);
+                      const openKey  = `__inc_${catKey}__`;
+                      const isOpen   = !!openCats[openKey];
+                      return (
+                        <React.Fragment key={catKey}>
+                          {/* category header row */}
+                          <div
+                            className={`flex justify-between items-center py-0.5 pr-3 ${showPLDetails ? 'cursor-pointer hover:bg-emerald-50 rounded' : ''}`}
+                            onClick={() => showPLDetails && setOpenCats(p => ({...p, [openKey]: !p[openKey]}))}
+                          >
+                            <span className="text-[10px] font-medium text-gray-600 flex items-center gap-1">
+                              {showPLDetails && (
+                                <span className="text-[8px] text-emerald-500">{isOpen ? '▼' : '▶'}</span>
+                              )}
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${incCatColor(catKey)}`}>
+                                {incCatLabel(catKey)}
                               </span>
-                            )}
+                              {showPLDetails && (
+                                <span className="text-[8px] text-gray-400">({items.length})</span>
+                              )}
+                            </span>
+                            <span className="text-[10px] font-black tabular-nums text-emerald-700">{fmtOMR(catTotal)}</span>
                           </div>
-                        </div>
-                        <div className="text-right shrink-0 mr-2">
-                          <div className="text-[9px] font-black text-emerald-700 tabular-nums">{fmtOMR(recvOMR)}</div>
-                          {isPending && totalOMR > recvOMR && (
-                            <div className="text-[8px] text-amber-600 font-bold">
-                              مانده: {fmtOMR(totalOMR - recvOMR)}
+                          {/* detail rows */}
+                          {showPLDetails && isOpen && (
+                            <div className="mr-5 mb-1 space-y-0.5 border-r-2 border-emerald-200 pr-2">
+                              {items.map(sr => {
+                                const recvOMR  = omr(sr.receivedAmount ?? sr.saleAmount, sr.currency||'IRR');
+                                const totalOMR = omr(sr.saleAmount, sr.currency||'IRR');
+                                const isPending = (sr.paymentStatus||'received') !== 'received';
+                                return (
+                                  <div key={sr.id} className="flex justify-between items-start py-0.5">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-[9px] font-bold text-gray-700 truncate">{sr.customerName}</div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[8px] text-gray-400 dir-ltr font-mono">{sr.depositDate}</span>
+                                        {sr.currency !== 'OMR' && (
+                                          <span className="text-[8px] text-gray-400">{fmtNum(sr.saleAmount)} {sr.currency}</span>
+                                        )}
+                                        {isPending && (
+                                          <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${incStatusBadge(sr.paymentStatus)}`}>
+                                            {incStatusLabel(sr.paymentStatus)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0 mr-2">
+                                      <div className="text-[9px] font-black text-emerald-700 tabular-nums">{fmtOMR(recvOMR)}</div>
+                                      {isPending && totalOMR > recvOMR && (
+                                        <div className="text-[8px] text-amber-600 font-bold">مانده: {fmtOMR(totalOMR - recvOMR)}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                        </React.Fragment>
+                      );
+                    })}
+                    {/* income total */}
+                    <div className="flex justify-between items-center py-0.5 border-t border-emerald-200 mt-0.5 pt-1">
+                      <span className="text-[10px] font-black text-gray-800">جمع درآمد</span>
+                      <span className="text-[10px] font-black tabular-nums text-emerald-800">{fmtOMR(plRevenue)}</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* ─── COGS ─── */}
               {plCogs > 0 && (
