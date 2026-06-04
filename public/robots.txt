@@ -5,4 +5,4 @@ Allow: /
 Disallow: /#dashboard
 Disallow: /#admin
 
-Sitemap: https://YOUR-DOMAIN.COM/sitemap.xml
+Sitemap: https://tohiddayhami.com/sitemap.xml
