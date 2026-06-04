@@ -279,11 +279,13 @@ export interface SalesRecord {
   serviceId: string;
   serviceTitle: string;
   customerName: string;
-  saleAmount: number;
+  saleAmount: number;           // Total contract / invoice amount
+  receivedAmount?: number;      // Amount actually received so far
+  paymentStatus?: 'received' | 'partial' | 'pending';
   currency: Currency;
   commissionRate: number;
   commissionAmount: number;
-  commissionPaid?: boolean; // New Field for Payment Tracking
+  commissionPaid?: boolean;
   depositAccount: string;
   depositDate: string;
   notes?: string;

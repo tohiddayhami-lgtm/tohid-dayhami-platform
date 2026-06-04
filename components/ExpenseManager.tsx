@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile, SalesRecord } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconUsers, IconRefreshCw, IconMoney, IconChart, IconTrendingUp } from './Icons';
-import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords, saveSalesRecord, deleteSalesRecord } from '../services/firebaseService';
+import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords, saveSalesRecord, updateSalesRecord, deleteSalesRecord } from '../services/firebaseService';
 import { Language } from '../App';
 
 interface Props {
@@ -180,9 +180,13 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [dispPaidAmt, setDispPaidAmt] = useState('');
 
   // Income form
-  const blankInc = { title:'', category:'service_revenue', amount:0, currency:'IRR' as Currency, date: todayStr, account:'', notes:'' };
-  const [incForm,    setIncForm]    = useState(blankInc);
-  const [dispIncAmt, setDispIncAmt] = useState('');
+  const blankInc = { title:'', category:'service_revenue', amount:0, receivedAmount:0, currency:'IRR' as Currency, date: todayStr, account:'', notes:'' };
+  const [incForm,         setIncForm]         = useState(blankInc);
+  const [editingInc,      setEditingInc]      = useState<SalesRecord | null>(null);
+  const [showIncPayModal, setShowIncPayModal] = useState<SalesRecord | null>(null);
+  const [dispIncAmt,      setDispIncAmt]      = useState('');
+  const [dispIncReceived, setDispIncReceived] = useState('');
+  const [dispIncNewReceipt, setDispIncNewReceipt] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMaster = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
@@ -420,38 +424,96 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
 
   // ── income form handlers ───────────────────────────────────────────────────
   const openAddInc = () => {
-    setIncForm(blankInc); setDispIncAmt(''); setShowIncModal(true);
+    setEditingInc(null);
+    setIncForm(blankInc);
+    setDispIncAmt(''); setDispIncReceived('');
+    setShowIncModal(true);
   };
+
+  const openEditInc = (sr: SalesRecord) => {
+    setEditingInc(sr);
+    setIncForm({
+      title:          sr.customerName,
+      category:       sr.serviceTitle || 'service_revenue',
+      amount:         sr.saleAmount,
+      receivedAmount: sr.receivedAmount || 0,
+      currency:       sr.currency,
+      date:           sr.depositDate,
+      account:        sr.depositAccount || '',
+      notes:          sr.notes || '',
+    });
+    setDispIncAmt(sr.saleAmount.toLocaleString());
+    setDispIncReceived((sr.receivedAmount || 0).toLocaleString());
+    setShowIncModal(true);
+  };
+
+  const openIncPay = (sr: SalesRecord) => {
+    setShowIncPayModal(sr);
+    setDispIncNewReceipt('');
+  };
+
+  const calcIncStatus = (total: number, received: number): 'received'|'partial'|'pending' =>
+    received >= total ? 'received' : received > 0 ? 'partial' : 'pending';
 
   const saveInc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!incForm.title || !incForm.amount) return;
     setIsSubmitting(true);
+    const total    = parseAmt(dispIncAmt);
+    const received = parseAmt(dispIncReceived);
+    const status   = calcIncStatus(total, received);
+    const now      = new Date().toISOString();
     const rec: SalesRecord = {
-      id:            `inc-${Date.now()}`,
-      salespersonId: currentUser.id,
+      id:              editingInc?.id || `inc-${Date.now()}`,
+      salespersonId:   currentUser.id,
       salespersonName: currentUser.fullName,
-      serviceId:     incForm.category,
-      serviceTitle:  incForm.category,
-      customerName:  incForm.title,
-      saleAmount:    parseAmt(dispIncAmt),
-      currency:      incForm.currency,
+      serviceId:       incForm.category,
+      serviceTitle:    incForm.category,
+      customerName:    incForm.title,
+      saleAmount:      total,
+      receivedAmount:  received,
+      paymentStatus:   status,
+      currency:        incForm.currency,
       commissionRate:   0,
       commissionAmount: 0,
       commissionPaid:   true,
-      depositAccount: incForm.account || '-',
-      depositDate:    incForm.date,
-      notes:          incForm.notes,
-      createdAt:      new Date().toISOString(),
+      depositAccount:  incForm.account || '-',
+      depositDate:     incForm.date,
+      notes:           incForm.notes,
+      createdAt:       editingInc?.createdAt || now,
+      updatedAt:       editingInc ? now : undefined,
+      updatedBy:       editingInc ? currentUser.fullName : undefined,
     };
-    await saveSalesRecord(rec);
-    setIsSubmitting(false); setShowIncModal(false);
+    if (editingInc) await updateSalesRecord(rec.id, rec, currentUser.fullName);
+    else            await saveSalesRecord(rec);
+    setIsSubmitting(false); setShowIncModal(false); setEditingInc(null);
+  };
+
+  const saveIncPay = async () => {
+    if (!showIncPayModal) return;
+    setIsSubmitting(true);
+    const added      = parseAmt(dispIncNewReceipt);
+    const newReceived = (showIncPayModal.receivedAmount || 0) + added;
+    const status     = calcIncStatus(showIncPayModal.saleAmount, newReceived);
+    await updateSalesRecord(showIncPayModal.id, {
+      receivedAmount: newReceived,
+      paymentStatus:  status,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser.fullName,
+    }, currentUser.fullName);
+    setIsSubmitting(false); setShowIncPayModal(null);
   };
 
   const delInc = async (id: string) => {
     if (window.confirm('آیا از حذف این رکورد درآمد اطمینان دارید؟'))
       await deleteSalesRecord(id, currentUser.fullName);
   };
+
+  const incStatusBadge = (s?: string) =>
+    s==='received' ? 'bg-emerald-100 text-emerald-700' :
+    s==='partial'  ? 'bg-blue-100 text-blue-700'       : 'bg-amber-100 text-amber-700';
+  const incStatusLabel = (s?: string) =>
+    s==='received' ? 'دریافت‌شده' : s==='partial' ? 'دریافت بخشی' : 'در انتظار دریافت';
 
   // ── file upload ────────────────────────────────────────────────────────────
   const handleFileSelect = async (ev: React.ChangeEvent<HTMLInputElement>) => {
@@ -910,6 +972,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
               {tableRows.map(row => {
                 if (row.kind === 'income') {
                   const sr = row.data as SalesRecord;
+                  const received = sr.receivedAmount ?? sr.saleAmount;
+                  const pct = sr.saleAmount > 0 ? Math.min(100, (received / sr.saleAmount) * 100) : 100;
+                  const status = sr.paymentStatus || (received >= sr.saleAmount ? 'received' : received > 0 ? 'partial' : 'received');
                   return (
                     <tr key={sr.id} className="hover:bg-emerald-50/30 transition-colors bg-emerald-50/10">
                       <td className="px-3 py-2">
@@ -917,11 +982,22 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       </td>
                       <td className="px-3 py-2">
                         <div className="font-bold text-emerald-800 text-xs">{sr.customerName}</div>
-                        {sr.notes && <div className="text-[9px] text-gray-400 mt-0.5">{sr.notes}</div>}
+                        {sr.notes && <div className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[140px]">{sr.notes}</div>}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="font-black text-emerald-600 text-xs">{fmtNum(sr.saleAmount)}</span>
-                        <span className="text-[8px] text-gray-400 mr-1">{sr.currency}</span>
+                        <span className="font-black text-emerald-600 text-xs">{fmtNum(received)}</span>
+                        <span className="text-[9px] text-gray-400 opacity-60"> / {fmtNum(sr.saleAmount)}</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{width:`${pct}%`}}/>
+                          </div>
+                          <span className="text-[8px] font-bold text-gray-400 uppercase">{sr.currency}</span>
+                        </div>
+                        {sr.saleAmount > received && (
+                          <div className="text-[8px] text-amber-600 font-bold mt-0.5">
+                            مانده: {fmtNum(sr.saleAmount - received)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${incCatColor(sr.serviceTitle||'other_income')}`}>
@@ -931,14 +1007,26 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       <td className="px-3 py-2 text-gray-500 text-xs">{sr.depositAccount||'—'}</td>
                       <td className="px-3 py-2 text-gray-400 dir-ltr font-mono text-[10px]">{sr.depositDate}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">دریافت‌شده</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${incStatusBadge(status)}`}>
+                          {incStatusLabel(status)}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {isMaster && (
-                          <button onClick={()=>delInc(sr.id)} className="p-1 text-red-400 hover:bg-red-50 rounded">
-                            <IconTrash className="w-3.5 h-3.5"/>
+                        <div className="flex justify-center gap-0.5">
+                          <button onClick={()=>openIncPay(sr)}
+                            className="p-1 text-emerald-500 hover:bg-emerald-50 rounded" title="ثبت دریافت جدید">
+                            <IconMoney className="w-3.5 h-3.5"/>
                           </button>
-                        )}
+                          <button onClick={()=>openEditInc(sr)}
+                            className="p-1 text-blue-400 hover:bg-blue-50 rounded" title="ویرایش">
+                            <IconEdit className="w-3.5 h-3.5"/>
+                          </button>
+                          {isMaster && (
+                            <button onClick={()=>delInc(sr.id)} className="p-1 text-red-400 hover:bg-red-50 rounded">
+                              <IconTrash className="w-3.5 h-3.5"/>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1007,9 +1095,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
           <div className="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e=>e.stopPropagation()}>
             <div className="p-5 border-b bg-emerald-50 flex justify-between items-center">
               <h3 className="font-black text-lg text-emerald-900 flex items-center gap-2">
-                <IconTrendingUp className="w-5 h-5"/> ثبت درآمد جدید
+                <IconTrendingUp className="w-5 h-5"/> {editingInc ? 'ویرایش درآمد' : 'ثبت درآمد جدید'}
               </h3>
-              <button onClick={()=>setShowIncModal(false)} className="p-2 hover:bg-emerald-100 rounded-full">✕</button>
+              <button onClick={()=>{ setShowIncModal(false); setEditingInc(null); }} className="p-2 hover:bg-emerald-100 rounded-full">✕</button>
             </div>
             <form onSubmit={saveInc} className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
               <div>
@@ -1078,6 +1166,44 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   </select>
                 </div>
               </div>
+              {/* Received amount */}
+              <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-3">
+                <label className="block text-[10px] font-bold text-emerald-700 mb-1.5 uppercase tracking-widest">
+                  مبلغ دریافت‌شده تاکنون
+                  <span className="normal-case font-normal text-emerald-500 mr-1">(می‌توان کمتر از مبلغ قرارداد باشد)</span>
+                </label>
+                <input type="text"
+                  className="w-full px-4 py-3 rounded-xl border border-emerald-200 outline-none focus:border-emerald-500 font-black text-emerald-700 dir-ltr text-right bg-white"
+                  value={dispIncReceived}
+                  onChange={e=>{ const f=fmtInput(e.target.value); setDispIncReceived(f); setIncForm(p=>({...p,receivedAmount:parseAmt(f)})); }}
+                  placeholder="0 — اگر هنوز چیزی دریافت نشده خالی بگذارید"/>
+                {(() => {
+                  const total = parseAmt(dispIncAmt);
+                  const recv  = parseAmt(dispIncReceived);
+                  if (!total) return null;
+                  const remaining = total - recv;
+                  const pct = Math.min(100, total > 0 ? (recv/total)*100 : 0);
+                  const st  = calcIncStatus(total, recv);
+                  return (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all" style={{width:`${pct}%`}}/>
+                      </div>
+                      <div className="flex justify-between text-[9px] font-bold">
+                        <span className={incStatusBadge(st) + ' px-2 py-0.5 rounded-full'}>{incStatusLabel(st)}</span>
+                        {remaining > 0 && <span className="text-amber-600">مانده: {fmtNum(remaining)}</span>}
+                        {remaining <= 0 && recv > 0 && <span className="text-emerald-600">تسویه کامل ✓</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {(() => { const a=parseAmt(dispIncReceived); const h=convHint(a,incForm.currency||'IRR'); if(!a)return null; return (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}
+                    {h.usd&&<span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">≈ {h.usd}</span>}
+                    {h.irr&&<span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">≈ {h.irr}</span>}
+                  </div>); })()}
+              </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">حساب / کانال دریافت</label>
                 <input className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium"
@@ -1095,7 +1221,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-2xl border border-transparent hover:border-gray-200">انصراف</button>
               <button onClick={saveInc} disabled={isSubmitting}
                 className="flex-1 py-3 bg-emerald-600 text-white font-black rounded-2xl shadow-xl shadow-emerald-200 hover:bg-emerald-700 flex justify-center items-center gap-2">
-                {isSubmitting?<IconRefreshCw className="w-5 h-5 animate-spin"/>:<><IconCheck className="w-5 h-5"/>ثبت درآمد</>}
+                {isSubmitting?<IconRefreshCw className="w-5 h-5 animate-spin"/>:<><IconCheck className="w-5 h-5"/>{editingInc?'ذخیره تغییرات':'ثبت درآمد'}</>}
               </button>
             </div>
           </div>
@@ -1281,6 +1407,94 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
               <button onClick={savePay} disabled={isSubmitting||!dispPaidAmt}
                 className="flex-1 py-3 bg-green-600 text-white font-black rounded-xl shadow-lg shadow-green-200 hover:bg-green-700 flex justify-center items-center gap-2">
                 {isSubmitting?<IconRefreshCw className="w-5 h-5 animate-spin"/>:<><IconCheck className="w-5 h-5"/>ثبت پرداخت</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ Income Partial Receipt Modal ══ */}
+      {showIncPayModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setShowIncPayModal(null)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
+            <div className="p-5 border-b bg-emerald-50 flex justify-between items-center">
+              <h3 className="font-black text-lg text-emerald-900 flex items-center gap-2">
+                <IconMoney className="w-5 h-5"/> ثبت دریافت مرحله‌ای
+              </h3>
+              <button onClick={()=>setShowIncPayModal(null)} className="p-2 hover:bg-emerald-100 rounded-full">✕</button>
+            </div>
+            <div className="p-7 space-y-5">
+              {/* contract summary */}
+              <div>
+                <div className="text-sm font-bold text-gray-800">{showIncPayModal.customerName}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{incCatLabel(showIncPayModal.serviceTitle||'')}</div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2.5">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-500">مبلغ قرارداد / فاکتور:</span>
+                  <span className="text-gray-800 dir-ltr">{fmtNum(showIncPayModal.saleAmount)} {showIncPayModal.currency}</span>
+                </div>
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-gray-500">دریافت‌شده تاکنون:</span>
+                  <span className="text-emerald-700 dir-ltr">{fmtNum(showIncPayModal.receivedAmount||0)} {showIncPayModal.currency}</span>
+                </div>
+                <div className="h-2 bg-emerald-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full"
+                    style={{width:`${showIncPayModal.saleAmount>0?Math.min(100,((showIncPayModal.receivedAmount||0)/showIncPayModal.saleAmount)*100):0}%`}}/>
+                </div>
+                <div className="flex justify-between text-sm font-black border-t border-emerald-200 pt-2">
+                  <span className="text-gray-600">مانده دریافتنی:</span>
+                  <span className="text-amber-600 dir-ltr">
+                    {fmtNum(showIncPayModal.saleAmount - (showIncPayModal.receivedAmount||0))} {showIncPayModal.currency}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">
+                  مبلغ دریافتی جدید
+                </label>
+                <input type="text" autoFocus
+                  className="w-full px-4 py-4 rounded-xl border-2 border-emerald-100 outline-none focus:border-emerald-500 font-black text-2xl text-emerald-700 dir-ltr text-center"
+                  value={dispIncNewReceipt}
+                  onChange={e=>setDispIncNewReceipt(fmtInput(e.target.value))}
+                  placeholder="0"/>
+                {(() => { const a=parseAmt(dispIncNewReceipt); const h=convHint(a,showIncPayModal.currency||'IRR'); if(!a)return null; return (
+                  <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+                    {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}
+                    {h.usd&&<span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">≈ {h.usd}</span>}
+                    {h.irr&&<span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">≈ {h.irr}</span>}
+                  </div>); })()}
+                {/* preview of new state */}
+                {(() => {
+                  const added = parseAmt(dispIncNewReceipt);
+                  if (!added) return null;
+                  const newRecv = (showIncPayModal.receivedAmount||0) + added;
+                  const remaining = showIncPayModal.saleAmount - newRecv;
+                  const newStatus = calcIncStatus(showIncPayModal.saleAmount, newRecv);
+                  return (
+                    <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-1">
+                      <div className="text-[9px] font-bold text-gray-400 uppercase mb-1.5">پیش‌نمایش پس از ثبت</div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full transition-all"
+                          style={{width:`${Math.min(100,showIncPayModal.saleAmount>0?(newRecv/showIncPayModal.saleAmount)*100:0)}%`}}/>
+                      </div>
+                      <div className="flex justify-between text-[10px] font-black mt-1">
+                        <span className={`${incStatusBadge(newStatus)} px-2 py-0.5 rounded-full`}>{incStatusLabel(newStatus)}</span>
+                        {remaining > 0
+                          ? <span className="text-amber-600">مانده: {fmtNum(remaining)}</span>
+                          : <span className="text-emerald-600 font-black">تسویه کامل ✓</span>
+                        }
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="p-5 bg-gray-50 flex gap-3">
+              <button onClick={()=>setShowIncPayModal(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-xl">انصراف</button>
+              <button onClick={saveIncPay} disabled={isSubmitting||!dispIncNewReceipt}
+                className="flex-1 py-3 bg-emerald-600 text-white font-black rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 flex justify-center items-center gap-2">
+                {isSubmitting?<IconRefreshCw className="w-5 h-5 animate-spin"/>:<><IconCheck className="w-5 h-5"/>ثبت دریافت</>}
               </button>
             </div>
           </div>
