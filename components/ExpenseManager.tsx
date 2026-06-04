@@ -155,6 +155,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [reportPeriod,  setReportPeriod]  = useState<'month'|'year'|'all'>('month');
   const [reportCurrency,setReportCurrency]= useState<'all'|'IRR'|'USD'|'OMR'>('all');
   const [tableView,     setTableView]     = useState<'all'|'expense'|'income'>('all');
+  const [showPLDetails, setShowPLDetails] = useState(false);
+  const [openCats,      setOpenCats]      = useState<Record<string,boolean>>({});
 
   // Exchange rates (persisted in localStorage)
   const [rates, setRates] = useState<{USD_IRR:number;OMR_IRR:number}>(() => {
@@ -756,47 +758,222 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* ── P&L Statement ── */}
-          <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-            <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
-              صورت سود و زیان · {periodLabel}
-            </div>
-
-            <div className="text-[9px] font-black text-gray-400 uppercase mb-1">درآمد</div>
-            <PLRow label="درآمد فروش و خدمات" value={plRevenue} bold />
-
-            <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">بهای تمام‌شده</div>
-            <PLRow label="بهای تمام‌شده" value={-plCogs} indent />
-            <PLRow label="سود ناخالص" value={grossProfit} bold top />
-
-            <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های عملیاتی</div>
-            {['salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission'].map((k:string)=>{
-              const v=byCat(k);
-              if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
-            })}
-            {['operational','salary','marketing','rent','designer_commission'].map((k:string)=>{
-              const v=byCat(k);
-              if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
-            })}
-            <PLRow label="سود عملیاتی (EBIT)" value={ebit} bold top />
-
-            <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های غیرعملیاتی</div>
-            {['tax_legal','depreciation','financial_costs','other','non_operational','tax'].map((k:string)=>{
-              const v=byCat(k);
-              if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
-            })}
-
-            <div className="border-t-2 border-gray-400 mt-1 pt-1.5">
-              <PLRow label="سود / زیان خالص دوره" value={netIncome} bold />
-            </div>
-            {plCapex > 0 && (
-              <div className="border-t border-dashed border-gray-200 mt-2 pt-1.5">
-                <div className="text-[9px] font-black text-teal-500 mb-0.5">یادداشت</div>
-                <PLRow label="سرمایه‌گذاری / CapEx (خارج از P&L)" value={plCapex} />
+          <div className={`bg-gray-50 rounded-xl p-3 border border-gray-200 ${showPLDetails ? 'lg:col-span-3' : ''}`}>
+            {/* header */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                صورت سود و زیان · {periodLabel}
               </div>
-            )}
+              <button
+                onClick={() => setShowPLDetails(v => !v)}
+                className={`text-[9px] font-black px-2.5 py-1 rounded-lg border transition-all ${showPLDetails ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
+              >
+                {showPLDetails ? '▲ بستن جزئیات' : '▼ نمایش جزئیات'}
+              </button>
+            </div>
+
+            <div className={showPLDetails ? 'max-h-[70vh] overflow-y-auto pr-1' : ''}>
+
+              {/* ─── Income ─── */}
+              <div className="text-[9px] font-black text-emerald-600 uppercase mb-1 mt-1">درآمد</div>
+              <PLRow label="جمع درآمد فروش و خدمات" value={plRevenue} bold />
+              {showPLDetails && plInc.length > 0 && (
+                <div className="mr-3 mt-1 mb-2 space-y-0.5 border-r-2 border-emerald-200 pr-2">
+                  {plInc.map(sr => (
+                    <div key={sr.id} className="flex justify-between items-start py-0.5 group">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[9px] font-bold text-gray-700 truncate">{sr.customerName}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${incCatColor(sr.serviceTitle||'other_income')}`}>
+                            {incCatLabel(sr.serviceTitle||'other_income')}
+                          </span>
+                          <span className="text-[8px] text-gray-400 dir-ltr font-mono">{sr.depositDate}</span>
+                          {sr.currency !== 'OMR' && (
+                            <span className="text-[8px] text-gray-400">{fmtNum(sr.saleAmount)} {sr.currency}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black text-emerald-700 tabular-nums mr-2 shrink-0">
+                        {fmtOMR(omr(sr.receivedAmount??sr.saleAmount, sr.currency||'IRR'))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ─── COGS ─── */}
+              {plCogs > 0 && (
+                <>
+                  <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">بهای تمام‌شده</div>
+                  {(() => {
+                    const catItems = plExp.filter(e => (allExpCats[e.category]?.group||'below') === 'cogs');
+                    return (
+                      <>
+                        {catItems.length > 0 && showPLDetails ? (
+                          <div className="mr-3 space-y-0.5 border-r-2 border-purple-200 pr-2 mb-1">
+                            {catItems.map(e => (
+                              <div key={e.id} className="flex justify-between items-start py-0.5">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[9px] font-bold text-gray-700 truncate">{e.title}</div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-[8px] px-1 py-0.5 rounded font-bold ${expCatColor(e.category)}`}>{expCatLabel(e.category)}</span>
+                                    <span className="text-[8px] text-gray-400 dir-ltr font-mono">{e.date}</span>
+                                    {e.paidTo && <span className="text-[8px] text-gray-400 truncate max-w-[80px]">{e.paidTo}</span>}
+                                    {e.currency !== 'OMR' && <span className="text-[8px] text-gray-400">{fmtNum(e.amount)} {e.currency}</span>}
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-black text-rose-600 tabular-nums mr-2 shrink-0">
+                                  ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <PLRow label="بهای تمام‌شده" value={-plCogs} indent />
+                        )}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+              <PLRow label="سود ناخالص" value={grossProfit} bold top />
+
+              {/* ─── OPEX ─── */}
+              <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های عملیاتی</div>
+              {[
+                'salary_benefits','rent_utilities','marketing_ads','admin_general',
+                'it_software','sales_commission','operational','salary','marketing','rent','designer_commission',
+                ...Object.keys(customExpCats).filter(k => (customExpCats[k] as {group:string}).group === 'opex'),
+              ].map((k:string) => {
+                const v = byCat(k);
+                if (!v) return null;
+                const items = plExp.filter(e => e.category === k);
+                const isOpen = openCats[k];
+                return (
+                  <React.Fragment key={k}>
+                    <div
+                      className={`flex justify-between items-center py-0.5 pr-3 ${showPLDetails && items.length > 0 ? 'cursor-pointer hover:bg-gray-100 rounded' : ''}`}
+                      onClick={() => showPLDetails && setOpenCats(p => ({...p, [k]: !p[k]}))}
+                    >
+                      <span className="text-[10px] font-medium text-gray-500 flex items-center gap-1">
+                        {showPLDetails && items.length > 0 && (
+                          <span className="text-[8px] text-indigo-400">{isOpen ? '▼' : '▶'}</span>
+                        )}
+                        {allExpCats[k]?.label || k}
+                        {showPLDetails && <span className="text-[8px] text-gray-400">({items.length})</span>}
+                      </span>
+                      <span className="text-[10px] font-black tabular-nums text-rose-600">({fmtOMR(v)})</span>
+                    </div>
+                    {showPLDetails && isOpen && items.length > 0 && (
+                      <div className="mr-5 mb-1 space-y-0.5 border-r-2 border-rose-200 pr-2">
+                        {items.map(e => (
+                          <div key={e.id} className="flex justify-between items-start py-0.5">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[9px] font-bold text-gray-700 truncate">{e.title}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[8px] text-gray-400 dir-ltr font-mono">{e.date}</span>
+                                {e.paidTo && <span className="text-[8px] text-gray-400 truncate max-w-[100px]">{e.paidTo}</span>}
+                                {e.currency !== 'OMR' && <span className="text-[8px] text-gray-400">{fmtNum(e.amount)} {e.currency}</span>}
+                                <span className={`text-[8px] px-1 py-0.5 rounded font-bold ${statusBadge(e.status)}`}>{statusLabel(e.status)}</span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 mr-2">
+                              <div className="text-[9px] font-black text-rose-600 tabular-nums">
+                                ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                              </div>
+                              {e.paidAmount !== e.amount && (
+                                <div className="text-[8px] text-emerald-600 font-bold">
+                                  پرداخت: {fmtOMR(omr(e.paidAmount||0, e.currency||'IRR'))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              <PLRow label="سود عملیاتی (EBIT)" value={ebit} bold top />
+
+              {/* ─── Below the line ─── */}
+              {plBelow > 0 && (
+                <>
+                  <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های غیرعملیاتی</div>
+                  {[
+                    'tax_legal','depreciation','financial_costs','other','non_operational','tax',
+                    ...Object.keys(customExpCats).filter(k => (customExpCats[k] as {group:string}).group === 'below'),
+                  ].map((k:string) => {
+                    const v = byCat(k);
+                    if (!v) return null;
+                    const items = plExp.filter(e => e.category === k);
+                    const isOpen = openCats[k];
+                    return (
+                      <React.Fragment key={k}>
+                        <div
+                          className={`flex justify-between items-center py-0.5 pr-3 ${showPLDetails && items.length > 0 ? 'cursor-pointer hover:bg-gray-100 rounded' : ''}`}
+                          onClick={() => showPLDetails && setOpenCats(p => ({...p, [k]: !p[k]}))}
+                        >
+                          <span className="text-[10px] font-medium text-gray-500 flex items-center gap-1">
+                            {showPLDetails && items.length > 0 && (
+                              <span className="text-[8px] text-indigo-400">{isOpen ? '▼' : '▶'}</span>
+                            )}
+                            {allExpCats[k]?.label || k}
+                            {showPLDetails && <span className="text-[8px] text-gray-400">({items.length})</span>}
+                          </span>
+                          <span className="text-[10px] font-black tabular-nums text-rose-600">({fmtOMR(v)})</span>
+                        </div>
+                        {showPLDetails && isOpen && items.length > 0 && (
+                          <div className="mr-5 mb-1 space-y-0.5 border-r-2 border-amber-200 pr-2">
+                            {items.map(e => (
+                              <div key={e.id} className="flex justify-between items-start py-0.5">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[9px] font-bold text-gray-700 truncate">{e.title}</div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[8px] text-gray-400 dir-ltr font-mono">{e.date}</span>
+                                    {e.paidTo && <span className="text-[8px] text-gray-400 truncate max-w-[100px]">{e.paidTo}</span>}
+                                    {e.currency !== 'OMR' && <span className="text-[8px] text-gray-400">{fmtNum(e.amount)} {e.currency}</span>}
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-black text-rose-600 tabular-nums mr-2 shrink-0">
+                                  ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* ─── Net Income ─── */}
+              <div className="border-t-2 border-gray-400 mt-1 pt-1.5">
+                <PLRow label="سود / زیان خالص دوره" value={netIncome} bold />
+              </div>
+              {plCapex > 0 && (
+                <div className="border-t border-dashed border-gray-200 mt-2 pt-1.5">
+                  <div className="text-[9px] font-black text-teal-500 mb-0.5">یادداشت</div>
+                  <PLRow label="سرمایه‌گذاری / CapEx (خارج از P&L)" value={plCapex} />
+                  {showPLDetails && plExp.filter(e=>e.category==='capex').map(e => (
+                    <div key={e.id} className="flex justify-between items-start py-0.5 mr-3 pr-2 border-r-2 border-teal-200">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[9px] font-bold text-gray-700 truncate">{e.title}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[8px] text-gray-400 dir-ltr font-mono">{e.date}</span>
+                          {e.paidTo && <span className="text-[8px] text-gray-400">{e.paidTo}</span>}
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black text-teal-700 tabular-nums mr-2 shrink-0">
+                        {fmtOMR(omr(e.amount, e.currency||'IRR'))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
           </div>
 
           {/* ── Category Breakdown ── */}
