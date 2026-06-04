@@ -53,11 +53,11 @@ const MONTH_NAMES: Record<string, string> = {
   '09':'سپتامبر','10':'اکتبر','11':'نوامبر','12':'دسامبر'
 };
 
-const fmtNum = (n: number) => n.toLocaleString();
+const fmtNum = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 const fmtM   = (n: number) => {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +70,18 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [expenses,     setExpenses]     = useState<Expense[]>([]);
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
 
+  // Custom categories (persisted in localStorage)
+  const [customExpCats, setCustomExpCats] = useState<Record<string,{label:string;group:string}>>(() => {
+    try { return JSON.parse(localStorage.getItem('customExpCats') || '{}'); } catch { return {}; }
+  });
+  const [customIncCats, setCustomIncCats] = useState<Record<string,string>>(() => {
+    try { return JSON.parse(localStorage.getItem('customIncCats') || '{}'); } catch { return {}; }
+  });
+  const [newExpCatName, setNewExpCatName] = useState('');
+  const [newIncCatName, setNewIncCatName] = useState('');
+  const [showAddExpCat, setShowAddExpCat] = useState(false);
+  const [showAddIncCat, setShowAddIncCat] = useState(false);
+
   // UI state
   const [showExpModal,  setShowExpModal]  = useState(false);
   const [showIncModal,  setShowIncModal]  = useState(false);
@@ -77,6 +89,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [editingExp,    setEditingExp]    = useState<Expense | null>(null);
   const [isSubmitting,  setIsSubmitting]  = useState(false);
   const [reportPeriod,  setReportPeriod]  = useState<'month'|'year'|'all'>('month');
+  const [reportCurrency,setReportCurrency]= useState<'all'|'IRR'|'USD'|'OMR'>('all');
   const [tableView,     setTableView]     = useState<'all'|'expense'|'income'>('all');
 
   // Filters — default date to current month so data shows immediately
@@ -111,13 +124,50 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     v.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
 
-  const fmtInput = (v: string) =>
-    normalizeDigits(v).replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  // Supports decimals: keeps one dot, formats integer part with commas
+  const fmtInput = (v: string) => {
+    const norm = normalizeDigits(v);
+    const dotIdx = norm.indexOf('.');
+    if (dotIdx >= 0) {
+      const intPart = norm.substring(0, dotIdx).replace(/\D/g,'');
+      const decPart = norm.substring(dotIdx + 1).replace(/\D/g,'').substring(0, 6);
+      return `${intPart.replace(/\B(?=(\d{3})+(?!\d))/g,',')}. ${decPart}`.replace('. ', '.');
+    }
+    return norm.replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  };
 
-  const expCatLabel  = (k: string) => EXP_CAT[k]?.label || k;
-  const expCatColor  = (k: string) => EXP_CAT[k]?.color || 'bg-gray-100 text-gray-600';
-  const incCatLabel  = (k: string) => INC_CAT[k]?.label || k;
-  const incCatColor  = (k: string) => INC_CAT[k]?.color || 'bg-green-100 text-green-700';
+  const parseAmt = (disp: string) => parseFloat(normalizeDigits(disp).replace(/,/g,'')) || 0;
+
+  // Custom category helpers — typed
+  const customExpEntries = Object.entries(customExpCats).map(([k,v]) => [k,{label:(v as {label:string;group:string}).label, group:(v as {label:string;group:string}).group, color:'bg-violet-100 text-violet-700'}] as [string, {label:string;group:string;color:string}]);
+  const allExpCats: Record<string,{label:string;group:string;color:string}> = { ...EXP_CAT, ...Object.fromEntries(customExpEntries) };
+  const customIncEntries = Object.entries(customIncCats).map(([k,v]) => [k,{label:String(v), color:'bg-violet-100 text-violet-700'}] as [string,{label:string;color:string}]);
+  const allIncCats: Record<string,{label:string;color:string}> = { ...INC_CAT, ...Object.fromEntries(customIncEntries) };
+
+  const addCustomExpCat = () => {
+    if (!newExpCatName.trim()) return;
+    const key = `cust_exp_${Date.now()}`;
+    const updated = {...customExpCats, [key]:{label:newExpCatName.trim(),group:'opex'}};
+    setCustomExpCats(updated);
+    localStorage.setItem('customExpCats', JSON.stringify(updated));
+    setExpForm(p => ({...p, category: key as ExpenseCategory}));
+    setNewExpCatName(''); setShowAddExpCat(false);
+  };
+
+  const addCustomIncCat = () => {
+    if (!newIncCatName.trim()) return;
+    const key = `cust_inc_${Date.now()}`;
+    const updated = {...customIncCats, [key]: newIncCatName.trim()};
+    setCustomIncCats(updated);
+    localStorage.setItem('customIncCats', JSON.stringify(updated));
+    setIncForm(p => ({...p, category: key}));
+    setNewIncCatName(''); setShowAddIncCat(false);
+  };
+
+  const expCatLabel  = (k: string) => allExpCats[k]?.label || EXP_CAT[k]?.label || k;
+  const expCatColor  = (k: string) => allExpCats[k]?.color || EXP_CAT[k]?.color || 'bg-gray-100 text-gray-600';
+  const incCatLabel  = (k: string) => allIncCats[k]?.label || INC_CAT[k]?.label || k;
+  const incCatColor  = (k: string) => allIncCats[k]?.color || INC_CAT[k]?.color || 'bg-green-100 text-green-700';
 
   const statusBadge = (s: string) =>
     s==='paid'    ? 'bg-green-100 text-green-700' :
@@ -146,50 +196,63 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     return mDate && mSrch;
   });
 
-  // ── KPI stats ──────────────────────────────────────────────────────────────
-  const totalExpAmt  = filteredExp.reduce((s,e) => s+(e.amount||0), 0);
-  const totalExpPaid = filteredExp.reduce((s,e) => s+(e.paidAmount||0), 0);
-  const totalIncAmt  = filteredInc.reduce((s,s2) => s+(s2.saleAmount||0), 0);
-  const netBalance   = totalIncAmt - totalExpAmt;
+  // ── KPI stats per currency ─────────────────────────────────────────────────
+  const expByCur: Record<string,{total:number;paid:number}> = {};
+  filteredExp.forEach(e => {
+    const c = e.currency||'IRR';
+    if (!expByCur[c]) expByCur[c] = {total:0,paid:0};
+    expByCur[c].total += e.amount||0;
+    expByCur[c].paid  += e.paidAmount||0;
+  });
+  const incByCur: Record<string,number> = {};
+  filteredInc.forEach(sr => {
+    const c = sr.currency||'IRR';
+    incByCur[c] = (incByCur[c]||0) + (sr.saleAmount||0);
+  });
+  const allCurs = [...new Set([...Object.keys(expByCur),...Object.keys(incByCur)])];
 
-  // ── P&L engine (report period) ─────────────────────────────────────────────
+  const totalExpPaid = filteredExp.reduce((s,e) => s+(e.paidAmount||0), 0);
+
+  const paidCnt    = filteredExp.filter(e=>e.status==='paid').length;
+  const partialCnt = filteredExp.filter(e=>e.status==='partial').length;
+  const pendingCnt = filteredExp.filter(e=>e.status==='pending').length;
+
+  // ── P&L engine (report period + currency) ──────────────────────────────────
   const inPeriod = (d: string) => {
     if (reportPeriod === 'month') return d.startsWith(currentMonth);
     if (reportPeriod === 'year')  return d.startsWith(currentYear);
     return true;
   };
-  const plExp = expenses.filter(ex => inPeriod(ex.date));
-  const plInc = salesRecords.filter(sr => inPeriod(sr.depositDate || sr.createdAt || ''));
+  const inCur = (c: string) => reportCurrency === 'all' || c === reportCurrency;
 
-  const plRevenue  = plInc.reduce((s,r) => s+(r.saleAmount||0), 0);
-  const byGroup    = (g: string) => plExp.filter(e=>(EXP_CAT[e.category]?.group||'below')===g).reduce((s,e)=>s+(e.amount||0),0);
-  const plCogs     = byGroup('cogs');
-  const grossProfit= plRevenue - plCogs;
-  const plOpex     = byGroup('opex');
-  const ebit       = grossProfit - plOpex;
-  const plBelow    = byGroup('below');
-  const netIncome  = ebit - plBelow;
-  const plCapex    = byGroup('capex');
+  const plExp = expenses.filter(ex => inPeriod(ex.date) && inCur(ex.currency||'IRR'));
+  const plInc = salesRecords.filter(sr => inPeriod(sr.depositDate||sr.createdAt||'') && inCur(sr.currency||'IRR'));
+
+  const plRevenue   = plInc.reduce((s,r) => s+(r.saleAmount||0), 0);
+  const byGroup     = (g: string) => plExp.filter(e=>(allExpCats[e.category]?.group||EXP_CAT[e.category]?.group||'below')===g).reduce((s,e)=>s+(e.amount||0),0);
+  const plCogs      = byGroup('cogs');
+  const grossProfit = plRevenue - plCogs;
+  const plOpex      = byGroup('opex');
+  const ebit        = grossProfit - plOpex;
+  const plBelow     = byGroup('below');
+  const netIncome   = ebit - plBelow;
+  const plCapex     = byGroup('capex');
 
   const plCatBreak: Record<string,number> = {};
   plExp.forEach(e => { plCatBreak[e.category] = (plCatBreak[e.category]||0) + (e.amount||0); });
   const sortedCats = Object.entries(plCatBreak).sort((a,b)=>b[1]-a[1]);
   const maxCatAmt  = Math.max(...sortedCats.map(c=>c[1]), 1);
 
-  const paidCnt    = filteredExp.filter(e=>e.status==='paid').length;
-  const partialCnt = filteredExp.filter(e=>e.status==='partial').length;
-  const pendingCnt = filteredExp.filter(e=>e.status==='pending').length;
-
-  // ── monthly chart data (all-time, current month always present) ────────────
+  // ── monthly chart (filtered by reportCurrency) ─────────────────────────────
   const monthlyData: Record<string,{expenses:number;expPaid:number;income:number}> = {};
   monthlyData[currentMonth] = {expenses:0, expPaid:0, income:0};
-  expenses.forEach(ex => {
+  expenses.filter(ex => inCur(ex.currency||'IRR')).forEach(ex => {
     const m = ex.date?.substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
     monthlyData[m].expenses += ex.amount||0;
     monthlyData[m].expPaid  += ex.paidAmount||0;
   });
-  salesRecords.forEach(sr => {
+  salesRecords.filter(sr => inCur(sr.currency||'IRR')).forEach(sr => {
     const m = (sr.depositDate||sr.createdAt||'').substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
     monthlyData[m].income += sr.saleAmount||0;
@@ -214,8 +277,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     e.preventDefault();
     if (!expForm.title || !expForm.amount) return;
     setIsSubmitting(true);
-    const amount = Number(expForm.amount);
-    const paid   = Number(expForm.paidAmount||0);
+    const amount = parseAmt(dispAmt);
+    const paid   = parseAmt(dispPaidAmt);
     const status: 'paid'|'pending'|'partial' = paid>=amount?'paid':paid>0?'partial':'pending';
     const exp: Expense = {
       id: editingExp?.id || `exp-${Date.now()}`,
@@ -265,7 +328,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       serviceId:     incForm.category,
       serviceTitle:  incForm.category,
       customerName:  incForm.title,
-      saleAmount:    Number(incForm.amount),
+      saleAmount:    parseAmt(dispIncAmt),
       currency:      incForm.currency,
       commissionRate:   0,
       commissionAmount: 0,
@@ -350,33 +413,59 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         </div>
       </div>
 
-      {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
-          <div className="text-emerald-600 text-[10px] font-bold mb-1">جمع درآمد (فیلترشده)</div>
-          <div className="text-sm font-black text-emerald-700">{fmtNum(totalIncAmt)}</div>
-          <div className="text-[9px] text-emerald-400 mt-0.5">{filteredInc.length} رکورد</div>
-        </div>
-        <div className="bg-rose-50 px-4 py-3 rounded-xl border border-rose-100 shadow-sm">
-          <div className="text-rose-600 text-[10px] font-bold mb-1">جمع هزینه (فیلترشده)</div>
-          <div className="text-sm font-black text-rose-700">{fmtNum(totalExpAmt)}</div>
-          <div className="text-[9px] text-rose-400 mt-0.5">پرداخت‌شده: {fmtNum(totalExpPaid)}</div>
-        </div>
-        <div className={`px-4 py-3 rounded-xl border shadow-sm ${netBalance>=0?'bg-indigo-50 border-indigo-100':'bg-amber-50 border-amber-100'}`}>
-          <div className={`text-[10px] font-bold mb-1 ${netBalance>=0?'text-indigo-600':'text-amber-600'}`}>خالص جریان نقدی</div>
-          <div className={`text-sm font-black ${netBalance>=0?'text-indigo-700':'text-amber-700'}`}>
-            {netBalance>=0?'+':''}{fmtNum(netBalance)}
+      {/* ── KPI Cards — per currency ── */}
+      <div className="space-y-2">
+        {allCurs.length === 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {['درآمد','هزینه','خالص','معوقات'].map(l=>(
+              <div key={l} className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+                <div className="text-gray-400 text-[10px] font-bold mb-1">{l}</div>
+                <div className="text-sm font-black text-gray-300">—</div>
+              </div>
+            ))}
           </div>
-          <div className="text-[9px] text-gray-400 mt-0.5">{netBalance>=0?'سودده':'زیان‌ده'}</div>
-        </div>
-        <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
-          <div className="text-gray-400 text-[10px] font-bold mb-1">معوقات پرداختی</div>
-          <div className="text-sm font-black text-amber-600">{fmtNum(totalExpAmt - totalExpPaid)}</div>
-          <div className="flex gap-1 mt-1">
-            <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">{paidCnt} تسویه</span>
-            <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded font-bold">{pendingCnt} معوق</span>
-          </div>
-        </div>
+        )}
+        {allCurs.map(cur => {
+          const inc  = incByCur[cur]  || 0;
+          const exp  = expByCur[cur]?.total || 0;
+          const paid = expByCur[cur]?.paid  || 0;
+          const net  = inc - exp;
+          const arrears = exp - paid;
+          return (
+            <div key={cur} className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* currency label */}
+              <div className="md:col-span-4 flex items-center gap-2 pt-1">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{cur}</span>
+                <div className="flex-1 h-px bg-gray-200"/>
+              </div>
+              <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
+                <div className="text-emerald-600 text-[10px] font-bold mb-1">درآمد</div>
+                <div className="text-sm font-black text-emerald-700">{fmtNum(inc)}</div>
+                <div className="text-[9px] text-emerald-400">{filteredInc.filter(s=>(s.currency||'IRR')===cur).length} رکورد</div>
+              </div>
+              <div className="bg-rose-50 px-4 py-3 rounded-xl border border-rose-100 shadow-sm">
+                <div className="text-rose-600 text-[10px] font-bold mb-1">هزینه</div>
+                <div className="text-sm font-black text-rose-700">{fmtNum(exp)}</div>
+                <div className="text-[9px] text-rose-400">پرداخت: {fmtNum(paid)}</div>
+              </div>
+              <div className={`px-4 py-3 rounded-xl border shadow-sm ${net>=0?'bg-indigo-50 border-indigo-100':'bg-amber-50 border-amber-100'}`}>
+                <div className={`text-[10px] font-bold mb-1 ${net>=0?'text-indigo-600':'text-amber-600'}`}>خالص</div>
+                <div className={`text-sm font-black ${net>=0?'text-indigo-700':'text-amber-700'}`}>
+                  {net>=0?'+':''}{fmtNum(net)}
+                </div>
+                <div className="text-[9px] text-gray-400">{net>=0?'مثبت':'منفی'}</div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+                <div className="text-gray-400 text-[10px] font-bold mb-1">معوقات</div>
+                <div className="text-sm font-black text-amber-600">{fmtNum(arrears)}</div>
+                <div className="flex gap-1 mt-1">
+                  <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">{paidCnt} تسویه</span>
+                  <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded font-bold">{pendingCnt} معوق</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ══ Financial Report Panel ══ */}
@@ -386,11 +475,18 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
             <IconChart className="w-4 h-4 text-indigo-600"/>
             <span className="text-xs font-bold text-indigo-800">گزارش مالی — صورت وضعیت شرکت</span>
           </div>
-          <div className="flex gap-1 mr-auto">
+          <div className="flex gap-1 mr-auto flex-wrap">
             {(['month','year','all'] as const).map(p=>(
               <button key={p} onClick={()=>setReportPeriod(p)}
                 className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${reportPeriod===p?'bg-indigo-600 text-white border-indigo-600':'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>
                 {p==='month'?'ماه جاری':p==='year'?'سال جاری':'کل دوره'}
+              </button>
+            ))}
+            <div className="w-px bg-indigo-200 mx-1 self-stretch"/>
+            {(['all','IRR','USD','OMR'] as const).map(c=>(
+              <button key={c} onClick={()=>setReportCurrency(c)}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all border ${reportCurrency===c?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                {c==='all'?'همه ارزها':c}
               </button>
             ))}
           </div>
@@ -726,9 +822,30 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">سرفصل درآمد</label>
                   <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 bg-white font-bold text-sm"
-                    value={incForm.category} onChange={e=>setIncForm({...incForm,category:e.target.value})}>
-                    {NEW_INC_CATS.map(k=><option key={k} value={k}>{INC_CAT[k].label}</option>)}
+                    value={incForm.category} onChange={e=>{ if(e.target.value==='__new__'){setShowAddIncCat(true);}else{setIncForm({...incForm,category:e.target.value});}}}>
+                    <optgroup label="── سرفصل‌های درآمدی ──">
+                      {NEW_INC_CATS.map(k=><option key={k} value={k}>{INC_CAT[k].label}</option>)}
+                    </optgroup>
+                    {Object.keys(customIncCats).length > 0 && (
+                      <optgroup label="── سرفصل‌های سفارشی ──">
+                        {Object.entries(customIncCats).map(([k,v])=>(
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="──────────────">
+                      <option value="__new__">➕ افزودن سرفصل جدید...</option>
+                    </optgroup>
                   </select>
+                  {showAddIncCat && (
+                    <div className="mt-2 flex gap-2 items-center bg-violet-50 border border-violet-200 rounded-xl px-3 py-2">
+                      <input autoFocus className="flex-1 text-xs bg-transparent outline-none font-bold text-violet-800 placeholder-violet-400"
+                        placeholder="نام سرفصل درآمد جدید..." value={newIncCatName} onChange={e=>setNewIncCatName(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();addCustomIncCat();}}}/>
+                      <button type="button" onClick={addCustomIncCat} className="text-[10px] font-black bg-violet-600 text-white px-2 py-1 rounded-lg">ثبت</button>
+                      <button type="button" onClick={()=>{setShowAddIncCat(false);setNewIncCatName('');}} className="text-[10px] text-gray-400 hover:text-red-500">✕</button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">تاریخ دریافت</label>
@@ -825,7 +942,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">سرفصل حسابداری</label>
                   <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 bg-white font-bold text-sm"
-                    value={expForm.category} onChange={e=>setExpForm({...expForm,category:e.target.value as ExpenseCategory})}>
+                    value={expForm.category} onChange={e=>{ if(e.target.value==='__new__'){setShowAddExpCat(true);}else{setExpForm({...expForm,category:e.target.value as ExpenseCategory});}}}>
                     <optgroup label="── بهای تمام‌شده ──"><option value="cogs">{EXP_CAT.cogs.label}</option></optgroup>
                     <optgroup label="── هزینه‌های عملیاتی ──">
                       {['salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission'].map(k=>(
@@ -838,7 +955,26 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       ))}
                     </optgroup>
                     <optgroup label="── سرمایه‌گذاری ──"><option value="capex">{EXP_CAT.capex.label}</option></optgroup>
+                    {Object.keys(customExpCats).length > 0 && (
+                      <optgroup label="── سرفصل‌های سفارشی ──">
+                        {Object.entries(customExpCats).map(([k,v])=>(
+                          <option key={k} value={k}>{(v as {label:string}).label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="──────────────">
+                      <option value="__new__">➕ افزودن سرفصل جدید...</option>
+                    </optgroup>
                   </select>
+                  {showAddExpCat && (
+                    <div className="mt-2 flex gap-2 items-center bg-violet-50 border border-violet-200 rounded-xl px-3 py-2">
+                      <input autoFocus className="flex-1 text-xs bg-transparent outline-none font-bold text-violet-800 placeholder-violet-400"
+                        placeholder="نام سرفصل جدید..." value={newExpCatName} onChange={e=>setNewExpCatName(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();addCustomExpCat();}}}/>
+                      <button type="button" onClick={addCustomExpCat} className="text-[10px] font-black bg-violet-600 text-white px-2 py-1 rounded-lg">ثبت</button>
+                      <button type="button" onClick={()=>{setShowAddExpCat(false);setNewExpCatName('');}} className="text-[10px] text-gray-400 hover:text-red-500">✕</button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">تاریخ پرداخت</label>
