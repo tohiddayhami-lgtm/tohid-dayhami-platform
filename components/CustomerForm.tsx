@@ -96,6 +96,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedSubServices, setSelectedSubServices] = useState<Record<string, string[]>>({});
   const [otherText, setOtherText] = useState('');
+  const [requestDesc, setRequestDesc] = useState('');
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successTicketIds, setSuccessTicketIds] = useState<string[] | null>(null);
@@ -184,7 +185,10 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
     try {
       const ticketsToCreate: Ticket[] = [];
       const generatedIds: string[] = [];
-      const description = formData['description'] || '';
+      const description = [
+        requestDesc ? `شرح درخواست:\n${requestDesc}` : '',
+        formData['description'] ? `اطلاعات محصول:\n${formData['description']}` : '',
+      ].filter(Boolean).join('\n\n') || '';
 
       for (const serviceId of selectedServiceIds) {
         const selectedService = services.find(s => s.id === serviceId);
@@ -370,6 +374,22 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
               );
             })}
           </div>
+        </div>
+
+        {/* Request Description */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 pb-2 border-b border-gray-100">
+            {lang === 'fa' ? 'شرح درخواست' : 'Request Description'}
+          </label>
+          <textarea
+            rows={3}
+            className={inputBase}
+            placeholder={lang === 'fa'
+              ? 'هدف و نیاز خود را از این خدمت توضیح دهید...'
+              : 'Describe your goal and need for this service...'}
+            value={requestDesc}
+            onChange={e => setRequestDesc(e.target.value)}
+          />
         </div>
 
         {/* File Upload */}

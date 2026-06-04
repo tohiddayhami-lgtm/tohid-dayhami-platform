@@ -103,7 +103,7 @@ const INITIAL_CONFIG: AppConfig = {
     { id: 'f6', key: 'email', label: 'ایمیل (اختیاری)', labelEn: 'Email (Optional)', type: 'email', required: false, placeholder: 'email@example.com', placeholderEn: 'email@example.com', order: 6, isSystem: true },
     { id: 'h2', key: 'h_req', label: 'جزئیات درخواست', labelEn: 'Request Details', type: 'header', required: false, order: 7, isSystem: true },
     { id: 'f7', key: 'businessType', label: 'نوع کسب‌وکار', labelEn: 'Business Type', type: 'select', required: true, options: ['تولیدی', 'بازرگانی', 'صنایع دستی', 'کشاورزی', 'خدماتی', 'دانش‌بنیان', 'سایر'], optionsEn: ['Manufacturing', 'Trading', 'Handicrafts', 'Agriculture', 'Services', 'Knowledge-Based', 'Other'], order: 8, isSystem: true },
-    { id: 'f8', key: 'description', label: 'شرح درخواست و اطلاعات محصول', labelEn: 'Request Description & Product Info', type: 'textarea', required: true, placeholder: 'توضیحات کامل درخواست و مشخصات محصول خود را بنویسید...', placeholderEn: 'Please describe your request and product details...', order: 9, isSystem: true },
+    { id: 'f8', key: 'description', label: 'اطلاعات محصول', labelEn: 'Product Information', type: 'textarea', required: true, placeholder: 'مشخصات کامل محصول خود را بنویسید (ابعاد، جنس، رنگ، تیراژ و ...)...', placeholderEn: 'Describe your product details (dimensions, material, color, quantity...)...', order: 9, isSystem: true },
   ],
   assignmentConfig: { mode: 'manual', targetType: 'role', serviceRoleMap: {}, servicePersonnelMap: {} }
 };
