@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- صفحه اصلی / فرم مشتری -->
+  <url>
+    <loc>https://YOUR-DOMAIN.COM/</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://YOUR-DOMAIN.COM/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://YOUR-DOMAIN.COM/?lang=en"/>
+  </url>
+
+  <!-- فرم درخواست مشتری -->
+  <url>
+    <loc>https://YOUR-DOMAIN.COM/#form</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- پیگیری درخواست -->
+  <url>
+    <loc>https://YOUR-DOMAIN.COM/#tracking</loc>
+    <lastmod>2026-06-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>
