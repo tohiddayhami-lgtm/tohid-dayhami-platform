@@ -724,10 +724,7 @@ export const subscribeToSettings = (
     onServices: (s: ServiceOption[]) => void,
     onPersonnel: (p: Personnel[]) => void
 ) => {
-    // includeMetadataChanges lets us detect cache vs server data.
-    // We skip stale cache snapshots to avoid flash of old content on reload.
-    return onSnapshot(collection(db, "settings"), { includeMetadataChanges: true }, (snap) => {
-        if (snap.metadata.fromCache) return; // wait for fresh server data
+    return onSnapshot(collection(db, "settings"), (snap) => {
         snap.docs.forEach(doc => {
             if (doc.id === 'appConfig') onConfig(doc.data() as AppConfig);
             if (doc.id === 'services') onServices(doc.data().list);
