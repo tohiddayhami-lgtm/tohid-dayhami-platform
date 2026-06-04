@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconClock, IconUsers, IconRefreshCw, IconMoney } from './Icons';
+import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconClock, IconUsers, IconRefreshCw, IconMoney, IconChart } from './Icons';
 import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 
@@ -361,92 +361,240 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     }
   };
 
+  const [showReport, setShowReport] = useState(false);
+
+  // Category breakdown for report
+  const getCategoryReport = () => {
+    const cats: Record<string, { total: number; paid: number; count: number; currency: string }> = {};
+    filteredExpenses.forEach(ex => {
+      const key = ex.category;
+      const cur = ex.currency || 'IRR';
+      if (!cats[key]) cats[key] = { total: 0, paid: 0, count: 0, currency: cur };
+      cats[key].total += ex.amount || 0;
+      cats[key].paid += ex.paidAmount || 0;
+      cats[key].count += 1;
+    });
+    return Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
+  };
+
+  // Monthly breakdown for report
+  const getMonthlyReport = () => {
+    const months: Record<string, { total: number; paid: number }> = {};
+    filteredExpenses.forEach(ex => {
+      const month = ex.date?.substring(0, 7) || 'نامشخص';
+      if (!months[month]) months[month] = { total: 0, paid: 0 };
+      months[month].total += ex.amount || 0;
+      months[month].paid += ex.paidAmount || 0;
+    });
+    return Object.entries(months).sort((a, b) => a[0].localeCompare(b[0]));
+  };
+
+  const categoryReport = getCategoryReport();
+  const monthlyReport = getMonthlyReport();
+  const maxCatTotal = Math.max(...categoryReport.map(c => c[1].total), 1);
+  const maxMonthTotal = Math.max(...monthlyReport.map(m => m[1].total), 1);
+  const paidCount = filteredExpenses.filter(e => e.status === 'paid').length;
+  const partialCount = filteredExpenses.filter(e => e.status === 'partial').length;
+  const pendingCount = filteredExpenses.filter(e => e.status === 'pending').length;
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm gap-4">
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm gap-3">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <div className="bg-rose-100 text-rose-600 p-2 rounded-lg"><IconWallet className="w-6 h-6" /></div>
+          <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+            <div className="bg-rose-100 text-rose-600 p-1.5 rounded-lg"><IconWallet className="w-4 h-4" /></div>
             {t.header}
           </h2>
-          <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t.sub}</p>
         </div>
-        <button onClick={handleOpenAdd} className="bg-rose-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-rose-700 flex items-center gap-2 shadow-lg shadow-rose-200 transition-all">
-          <IconPlus className="w-5 h-5" /> {t.add}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowReport(v => !v)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all ${showReport ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
+          >
+            <IconChart className="w-4 h-4" /> {showReport ? 'بستن گزارش' : 'گزارش تحلیلی'}
+          </button>
+          <button onClick={handleOpenAdd} className="bg-rose-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-700 flex items-center gap-1.5 shadow-md shadow-rose-200 transition-all">
+            <IconPlus className="w-4 h-4" /> {t.add}
+          </button>
+        </div>
       </div>
 
-      {/* Stats Cards - Multi-currency Support */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Total Expenses Card */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="text-gray-500 text-xs font-bold mb-2">{t.stats.total}</div>
-          <div className="space-y-1">
+      {/* Stats Cards - Compact */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+          <div className="text-gray-400 text-[10px] font-bold mb-1">{t.stats.total}</div>
+          <div className="space-y-0.5">
             {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-lg font-black text-gray-800 flex justify-between items-baseline">
+              <div key={cur} className="text-sm font-black text-gray-800 flex justify-between items-baseline">
                 <span>{currencyStats[cur].total.toLocaleString()}</span>
-                <span className="text-[10px] text-gray-400 font-bold mr-1">{cur}</span>
+                <span className="text-[9px] text-gray-400 font-bold mr-1">{cur}</span>
               </div>
-            )) : <div className="text-xl font-black text-gray-300">0</div>}
+            )) : <div className="text-sm font-black text-gray-300">0</div>}
           </div>
         </div>
 
-        {/* Paid Expenses Card */}
-        <div className="bg-green-50 p-5 rounded-2xl border border-green-100 shadow-sm">
-          <div className="text-green-700 text-xs font-bold mb-2">{t.stats.paid}</div>
-          <div className="space-y-1">
+        <div className="bg-green-50 px-4 py-3 rounded-xl border border-green-100 shadow-sm">
+          <div className="text-green-600 text-[10px] font-bold mb-1">{t.stats.paid}</div>
+          <div className="space-y-0.5">
             {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-lg font-black text-green-600 flex justify-between items-baseline">
+              <div key={cur} className="text-sm font-black text-green-600 flex justify-between items-baseline">
                 <span>{currencyStats[cur].paid.toLocaleString()}</span>
-                <span className="text-[10px] text-green-400 font-bold mr-1">{cur}</span>
+                <span className="text-[9px] text-green-400 font-bold mr-1">{cur}</span>
               </div>
-            )) : <div className="text-xl font-black text-green-200">0</div>}
+            )) : <div className="text-sm font-black text-green-200">0</div>}
           </div>
         </div>
 
-        {/* Remaining (Arrears) Card */}
-        <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 shadow-sm">
-          <div className="text-amber-700 text-xs font-bold mb-2">{t.stats.remaining}</div>
-          <div className="space-y-1">
+        <div className="bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 shadow-sm">
+          <div className="text-amber-600 text-[10px] font-bold mb-1">{t.stats.remaining}</div>
+          <div className="space-y-0.5">
             {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-lg font-black text-amber-600 flex justify-between items-baseline">
+              <div key={cur} className="text-sm font-black text-amber-600 flex justify-between items-baseline">
                 <span>{currencyStats[cur].remaining.toLocaleString()}</span>
-                <span className="text-[10px] text-amber-400 font-bold mr-1">{cur}</span>
+                <span className="text-[9px] text-amber-400 font-bold mr-1">{cur}</span>
               </div>
-            )) : <div className="text-xl font-black text-amber-200">0</div>}
+            )) : <div className="text-sm font-black text-amber-200">0</div>}
           </div>
         </div>
 
-        {/* Transaction Count Card */}
-        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="text-gray-500 text-xs font-bold mb-1">{t.stats.count}</div>
-          <div className="text-3xl font-black text-gray-600 mt-2">{filteredExpenses.length}</div>
+        <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+          <div className="text-gray-400 text-[10px] font-bold mb-1">{t.stats.count}</div>
+          <div className="text-2xl font-black text-gray-600 mt-1">{filteredExpenses.length}</div>
+          <div className="flex gap-1 mt-1">
+            <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">{paidCount} تسویه</span>
+            <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded font-bold">{pendingCount} معوق</span>
+          </div>
         </div>
       </div>
+
+      {/* Analytics Report Section */}
+      {showReport && (
+        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden animate-fade-in">
+          <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
+            <IconChart className="w-4 h-4 text-indigo-600" />
+            <span className="text-sm font-bold text-indigo-800">گزارش تحلیلی هزینه‌ها</span>
+            <span className="text-[10px] text-indigo-400 mr-auto">بر اساس فیلترهای انتخابی</span>
+          </div>
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+            {/* Status Distribution */}
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="text-xs font-bold text-gray-500 mb-3">توزیع وضعیت پرداخت</div>
+              <div className="space-y-2">
+                {[
+                  { label: t.paid, count: paidCount, color: 'bg-green-500', textColor: 'text-green-700' },
+                  { label: t.partial, count: partialCount, color: 'bg-blue-500', textColor: 'text-blue-700' },
+                  { label: t.pending, count: pendingCount, color: 'bg-amber-500', textColor: 'text-amber-700' },
+                ].map(item => (
+                  <div key={item.label}>
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className={`text-[10px] font-bold ${item.textColor}`}>{item.label}</span>
+                      <span className="text-[10px] text-gray-500 font-bold">{item.count} مورد</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${item.color} rounded-full transition-all`}
+                        style={{ width: filteredExpenses.length > 0 ? `${(item.count / filteredExpenses.length) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Pie-like donut summary */}
+              <div className="mt-3 grid grid-cols-3 gap-1 text-center">
+                {[
+                  { label: 'تسویه', pct: filteredExpenses.length > 0 ? Math.round((paidCount / filteredExpenses.length) * 100) : 0, color: 'text-green-600' },
+                  { label: 'بخشی', pct: filteredExpenses.length > 0 ? Math.round((partialCount / filteredExpenses.length) * 100) : 0, color: 'text-blue-600' },
+                  { label: 'معوق', pct: filteredExpenses.length > 0 ? Math.round((pendingCount / filteredExpenses.length) * 100) : 0, color: 'text-amber-600' },
+                ].map(item => (
+                  <div key={item.label} className="bg-white rounded-lg p-2 border border-gray-100">
+                    <div className={`text-lg font-black ${item.color}`}>{item.pct}٪</div>
+                    <div className="text-[9px] text-gray-400 font-bold">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Category Breakdown */}
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="text-xs font-bold text-gray-500 mb-3">هزینه به تفکیک دسته‌بندی</div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {categoryReport.length === 0 && <div className="text-[10px] text-gray-400 text-center py-4">داده‌ای موجود نیست</div>}
+                {categoryReport.map(([cat, data]) => (
+                  <div key={cat}>
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className="text-[10px] font-bold text-gray-600 truncate max-w-[120px]">{t.categories[cat as keyof typeof t.categories] || cat}</span>
+                      <span className="text-[9px] text-gray-400 font-mono">{data.total.toLocaleString()}</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-rose-500 rounded-full transition-all"
+                        style={{ width: `${(data.paid / data.total) * 100}%` }}
+                        title={`پرداخت شده: ${data.paid.toLocaleString()}`}
+                      />
+                      <div
+                        className="h-full bg-rose-200"
+                        style={{ width: `${((data.total - data.paid) / data.total) * 100}%` }}
+                        title={`باقیمانده: ${(data.total - data.paid).toLocaleString()}`}
+                      />
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-0.5">{data.count} مورد — پرداخت: {data.paid.toLocaleString()} | مانده: {(data.total - data.paid).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Monthly Trend */}
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="text-xs font-bold text-gray-500 mb-3">روند ماهانه هزینه‌ها</div>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {monthlyReport.length === 0 && <div className="text-[10px] text-gray-400 text-center py-4">داده‌ای موجود نیست</div>}
+                {monthlyReport.map(([month, data]) => (
+                  <div key={month}>
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span className="text-[10px] font-bold text-gray-600 dir-ltr">{month}</span>
+                      <span className="text-[9px] text-gray-400 font-mono">{data.total.toLocaleString()}</span>
+                    </div>
+                    <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full transition-all"
+                        style={{ width: `${(data.total / maxMonthTotal) * 100}%` }}
+                      />
+                    </div>
+                    <div className="text-[9px] text-indigo-400 mt-0.5">پرداخت: {data.paid.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-4 items-center">
+      <div className="bg-white px-3 py-2.5 rounded-xl border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-2 items-center">
         <div className="relative flex-grow w-full">
-          <IconSearch className="absolute right-3 top-3 w-4 h-4 text-gray-400" />
-          <input 
-            className="w-full pl-4 pr-10 py-2.5 bg-gray-50 border-none rounded-xl text-sm outline-none focus:bg-white focus:ring-2 focus:ring-rose-100" 
-            placeholder="جستجو در شرح هزینه یا گیرنده..." 
-            value={searchTerm} 
-            onChange={e => setSearchTerm(e.target.value)} 
+          <IconSearch className="absolute right-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+          <input
+            className="w-full pl-3 pr-9 py-2 bg-gray-50 border-none rounded-lg text-xs outline-none focus:bg-white focus:ring-2 focus:ring-rose-100"
+            placeholder="جستجو در شرح هزینه یا گیرنده..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
-          <select 
-            className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm border-none font-bold text-gray-600 outline-none" 
-            value={categoryFilter} 
+          <select
+            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
+            value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value as any)}
           >
             <option value="all">{t.categories.all}</option>
             {Object.keys(t.categories).filter(k => k !== 'all').map(cat => <option key={cat} value={cat}>{t.categories[cat as keyof typeof t.categories]}</option>)}
           </select>
-          
-          <select 
-            className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm border-none font-bold text-indigo-600 outline-none"
+
+          <select
+            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-indigo-600 outline-none"
             value={personnelFilter}
             onChange={e => setPersonnelFilter(e.target.value)}
           >
@@ -456,77 +604,77 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
             ))}
           </select>
 
-          <input 
-            type="month" 
-            className="px-4 py-2.5 bg-gray-50 rounded-xl text-sm border-none font-bold text-gray-600 outline-none" 
-            value={dateFilter} 
-            onChange={e => setDateFilter(e.target.value)} 
+          <input
+            type="month"
+            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
           />
         </div>
-        <button onClick={() => {setSearchTerm(''); setCategoryFilter('all'); setPersonnelFilter('all'); setDateFilter('');}} className="p-2.5 text-gray-400 hover:text-rose-600 transition-colors" title="ریست فیلترها">
-          <IconRefreshCw className="w-5 h-5" />
+        <button onClick={() => {setSearchTerm(''); setCategoryFilter('all'); setPersonnelFilter('all'); setDateFilter('');}} className="p-2 text-gray-400 hover:text-rose-600 transition-colors" title="ریست فیلترها">
+          <IconRefreshCw className="w-4 h-4" />
         </button>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm">
-            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider">
+          <table className="w-full text-right text-xs">
+            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wide border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4">{t.table.title}</th>
-                <th className="px-6 py-4">{t.table.amount}</th>
-                <th className="px-6 py-4">{t.table.cat}</th>
-                <th className="px-6 py-4">{t.table.to}</th>
-                <th className="px-6 py-4">{t.table.date}</th>
-                <th className="px-6 py-4 text-center">{t.table.status}</th>
-                <th className="px-6 py-4 text-center">عملیات</th>
+                <th className="px-3 py-2.5 text-[10px]">{t.table.title}</th>
+                <th className="px-3 py-2.5 text-[10px]">{t.table.amount}</th>
+                <th className="px-3 py-2.5 text-[10px]">{t.table.cat}</th>
+                <th className="px-3 py-2.5 text-[10px]">{t.table.to}</th>
+                <th className="px-3 py-2.5 text-[10px]">{t.table.date}</th>
+                <th className="px-3 py-2.5 text-[10px] text-center">{t.table.status}</th>
+                <th className="px-3 py-2.5 text-[10px] text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredExpenses.map(ex => (
                 <tr key={ex.id} className="hover:bg-gray-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-gray-800">{ex.title}</div>
+                  <td className="px-3 py-2">
+                    <div className="font-bold text-gray-800 text-xs">{ex.title}</div>
                     {ex.personnelId && (
-                      <div className="text-[10px] text-indigo-500 flex items-center gap-1 mt-1 font-bold">
-                        <IconUsers className="w-3 h-3" /> {getPersonnelName(ex.personnelId)}
+                      <div className="text-[9px] text-indigo-500 flex items-center gap-0.5 mt-0.5 font-bold">
+                        <IconUsers className="w-2.5 h-2.5" /> {getPersonnelName(ex.personnelId)}
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex flex-col">
-                        <span className="font-black text-rose-600">{(ex.paidAmount || 0).toLocaleString()} <span className="text-[10px] font-normal opacity-50">/ {ex.amount.toLocaleString()}</span></span>
-                        <div className="flex items-center gap-1 mt-1">
-                            <div className="w-20 bg-gray-100 h-1 rounded-full overflow-hidden">
+                        <span className="font-black text-rose-600 text-xs">{(ex.paidAmount || 0).toLocaleString()} <span className="text-[9px] font-normal opacity-50">/ {ex.amount.toLocaleString()}</span></span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                            <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden">
                                 <div className={`h-full ${ex.status === 'partial' ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, ((ex.paidAmount || 0) / ex.amount) * 100)}%` }}></div>
                             </div>
-                            <span className="text-[9px] font-bold text-gray-400 uppercase">{ex.currency}</span>
+                            <span className="text-[8px] font-bold text-gray-400 uppercase">{ex.currency}</span>
                         </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4"><span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">{t.categories[ex.category as keyof typeof t.categories]}</span></td>
-                  <td className="px-6 py-4 text-gray-600 font-medium">{ex.paidTo}</td>
-                  <td className="px-6 py-4 text-gray-400 dir-ltr font-mono text-xs">{ex.date}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold ${getStatusBadge(ex.status)}`}>
+                  <td className="px-3 py-2"><span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-bold">{t.categories[ex.category as keyof typeof t.categories]}</span></td>
+                  <td className="px-3 py-2 text-gray-600 font-medium text-xs">{ex.paidTo}</td>
+                  <td className="px-3 py-2 text-gray-400 dir-ltr font-mono text-[10px]">{ex.date}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${getStatusBadge(ex.status)}`}>
                       {getStatusLabel(ex.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex justify-center gap-1">
-                      <button onClick={() => handleOpenPayment(ex)} className="p-1.5 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-lg" title={t.payPortion}><IconMoney className="w-4 h-4" /></button>
-                      <button onClick={() => handleOpenEdit(ex)} className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>
-                      {isMaster && <button onClick={() => handleDelete(ex.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex justify-center gap-0.5">
+                      <button onClick={() => handleOpenPayment(ex)} className="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded" title={t.payPortion}><IconMoney className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleOpenEdit(ex)} className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded"><IconEdit className="w-3.5 h-3.5" /></button>
+                      {isMaster && <button onClick={() => handleDelete(ex.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"><IconTrash className="w-3.5 h-3.5" /></button>}
                     </div>
                   </td>
                 </tr>
               ))}
               {filteredExpenses.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-20 text-gray-400">
-                    <IconWallet className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-bold">{t.empty}</p>
+                  <td colSpan={7} className="text-center py-16 text-gray-400">
+                    <IconWallet className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="font-bold text-xs">{t.empty}</p>
                   </td>
                 </tr>
               )}
