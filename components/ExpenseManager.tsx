@@ -367,7 +367,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     }
   };
 
-  const [showReport, setShowReport] = useState(false);
+  const [showReport, setShowReport] = useState(true);
 
   // Category breakdown for report
   const getCategoryReport = () => {
