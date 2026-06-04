@@ -7,7 +7,7 @@ import { LoginView } from './components/LoginView';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI, NewsArticle } from './types';
-import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort } from './components/Icons';
+import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
   saveCustomerToCloud, saveCustomersBulkToCloud, updateCustomerInCloud, deleteCustomerFromCloud,
@@ -129,6 +129,7 @@ const getInitialView = (): ViewState => {
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
+  const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>(DEFAULT_SERVICES);
@@ -591,39 +592,72 @@ const App: React.FC = () => {
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
                     {lang === 'fa' ? 'خدمات تخصصی ما' : 'Our Services'}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {services.filter(s => s.isActive).map((service, i) => {
-                      const title = lang === 'en' && service.titleEn ? service.titleEn : service.title;
-                      const desc  = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
+                      const title    = lang === 'en' && service.titleEn ? service.titleEn : service.title;
+                      const desc     = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
+                      const isOpen   = expandedServiceId === service.id;
+                      const t        = (service.title + ' ' + (service.titleEn||'')).toLowerCase();
+                      const SvcIcon  =
+                        service.id === 's_other'                                          ? IconMessageSquare :
+                        t.includes('بسته‌بندی')||t.includes('packaging')                 ? IconLayout        :
+                        t.includes('گرافیک')||t.includes('graphic')||t.includes('طراحی') ? IconMagic         :
+                        t.includes('صادرات')||t.includes('export')                       ? IconTrendingUp    :
+                        t.includes('فروش')||t.includes('sales')                          ? IconTarget        :
+                        t.includes('مشاوره')||t.includes('consul')||t.includes('expert') ? IconBulb          :
+                        t.includes('نرم‌افزار')||t.includes('software')                  ? IconDatabase      :
+                        t.includes('ثبت')||t.includes('شرکت')||t.includes('register')    ? IconFileText      :
+                        t.includes('بازخورد')||t.includes('feedback')                    ? IconMessageSquare :
+                        t.includes('متاپورت')||t.includes('metaport')                    ? IconPort          :
+                        t.includes('برند')||t.includes('brand')                          ? IconAward         :
+                        t.includes('تبلیغ')||t.includes('market')                        ? IconMegaphone     :
+                        t.includes('وب')||t.includes('web')||t.includes('سایت')          ? IconGlobe         :
+                        t.includes('پروژه')||t.includes('project')                       ? IconFolder        :
+                        t.includes('ابر')||t.includes('cloud')                           ? IconCloud         :
+                        IconBriefcase;
+
                       return (
                         <div key={service.id}
-                          className="flex flex-col p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white transition-all group">
-                          {/* number + icon */}
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="text-[10px] font-mono text-gray-400">
-                              {String(i + 1).padStart(2, '0')}
-                            </span>
-                            {service.icon && (
-                              <span className="text-lg">{service.icon}</span>
-                            )}
-                          </div>
-                          {/* title */}
-                          <span className="text-sm font-semibold text-gray-800 leading-snug block mb-2">
-                            {title}
-                          </span>
-                          {/* description */}
-                          {desc && (
-                            <p className="text-xs text-gray-500 leading-relaxed flex-1 mb-4">
-                              {desc}
-                            </p>
-                          )}
-                          {/* CTA button */}
+                          className={`rounded-xl border transition-all duration-200 overflow-hidden
+                            ${isOpen ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-gray-50 hover:border-gray-300 hover:bg-white'}`}>
+
+                          {/* ── header row — always visible, click to toggle ── */}
                           <button
-                            onClick={() => openFormWithService(service.id)}
-                            className="mt-auto w-full py-2 px-3 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-black transition-colors"
+                            type="button"
+                            onClick={() => setExpandedServiceId(isOpen ? null : service.id)}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-start"
                           >
-                            {lang === 'fa' ? 'ثبت درخواست' : 'Request Service'}
+                            {/* SVG icon */}
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0
+                              ${isOpen ? 'bg-white/10' : 'bg-white border border-gray-100'}`}>
+                              <SvcIcon className={`w-4 h-4 ${isOpen ? 'text-white' : 'text-gray-500'}`} />
+                            </div>
+                            {/* title */}
+                            <span className={`flex-1 text-sm font-medium leading-snug
+                              ${isOpen ? 'text-white' : 'text-gray-800'}`}>
+                              {title}
+                            </span>
+                            {/* chevron */}
+                            <span className={`text-xs transition-transform duration-200 shrink-0
+                              ${isOpen ? 'text-gray-400 rotate-180' : 'text-gray-300'}`}>▼</span>
                           </button>
+
+                          {/* ── expandable body ── */}
+                          {isOpen && (
+                            <div className="px-4 pb-4 animate-fade-in">
+                              {desc && (
+                                <p className="text-xs text-gray-300 leading-relaxed border-t border-white/10 pt-3 mb-4">
+                                  {desc}
+                                </p>
+                              )}
+                              <button
+                                onClick={() => openFormWithService(service.id)}
+                                className="w-full py-2.5 px-4 rounded-lg bg-white text-gray-900 text-xs font-semibold hover:bg-gray-100 transition-colors"
+                              >
+                                {lang === 'fa' ? 'ثبت درخواست' : 'Request Service'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
