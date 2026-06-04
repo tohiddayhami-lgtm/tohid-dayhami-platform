@@ -769,22 +769,22 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
 
             <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های عملیاتی</div>
             {['salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission'].map((k:string)=>{
-              const v=plExp.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+              const v=byCat(k);
               if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={EXP_CAT[k]?.label||k} value={-v} indent /></React.Fragment>;
+              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
             })}
             {['operational','salary','marketing','rent','designer_commission'].map((k:string)=>{
-              const v=plExp.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+              const v=byCat(k);
               if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={EXP_CAT[k]?.label||k} value={-v} indent /></React.Fragment>;
+              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
             })}
             <PLRow label="سود عملیاتی (EBIT)" value={ebit} bold top />
 
             <div className="text-[9px] font-black text-gray-400 uppercase mt-2 mb-1">هزینه‌های غیرعملیاتی</div>
             {['tax_legal','depreciation','financial_costs','other','non_operational','tax'].map((k:string)=>{
-              const v=plExp.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+              const v=byCat(k);
               if(!v) return null;
-              return <React.Fragment key={k}><PLRow label={EXP_CAT[k]?.label||k} value={-v} indent /></React.Fragment>;
+              return <React.Fragment key={k}><PLRow label={allExpCats[k]?.label||k} value={-v} indent /></React.Fragment>;
             })}
 
             <div className="border-t-2 border-gray-400 mt-1 pt-1.5">
