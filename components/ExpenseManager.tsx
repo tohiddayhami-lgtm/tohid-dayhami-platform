@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile, SalesRecord } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconClock, IconUsers, IconRefreshCw, IconMoney, IconChart } from './Icons';
+import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconUsers, IconRefreshCw, IconMoney, IconChart } from './Icons';
 import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords } from '../services/firebaseService';
 import { Language } from '../App';
 
@@ -11,489 +11,324 @@ interface Props {
   lang: Language;
 }
 
+// ── Accounting category metadata ─────────────────────────────────────────────
+const CAT_META: Record<string, { label: string; group: string; color: string }> = {
+  cogs:             { label: 'بهای تمام‌شده خدمات / کالا',       group: 'cogs',    color: 'bg-purple-100 text-purple-700' },
+  salary_benefits:  { label: 'حقوق، دستمزد و مزایا',              group: 'opex',    color: 'bg-blue-100 text-blue-700' },
+  rent_utilities:   { label: 'اجاره، قبوض و تأسیسات',             group: 'opex',    color: 'bg-cyan-100 text-cyan-700' },
+  marketing_ads:    { label: 'بازاریابی و تبلیغات',               group: 'opex',    color: 'bg-pink-100 text-pink-700' },
+  admin_general:    { label: 'هزینه‌های اداری و عمومی',            group: 'opex',    color: 'bg-slate-100 text-slate-700' },
+  it_software:      { label: 'فناوری اطلاعات و نرم‌افزار',        group: 'opex',    color: 'bg-indigo-100 text-indigo-700' },
+  sales_commission: { label: 'کمیسیون فروش و بازاریابی',          group: 'opex',    color: 'bg-orange-100 text-orange-700' },
+  tax_legal:        { label: 'مالیات، عوارض و هزینه‌های حقوقی',  group: 'below',   color: 'bg-red-100 text-red-700' },
+  depreciation:     { label: 'استهلاک دارایی‌ها',                  group: 'below',   color: 'bg-yellow-100 text-yellow-700' },
+  financial_costs:  { label: 'هزینه‌های مالی و بانکی',            group: 'below',   color: 'bg-rose-100 text-rose-700' },
+  capex:            { label: 'سرمایه‌گذاری و خرید دارایی ثابت',  group: 'capex',   color: 'bg-teal-100 text-teal-700' },
+  other:            { label: 'سایر هزینه‌ها',                      group: 'below',   color: 'bg-gray-100 text-gray-600' },
+  // legacy
+  operational:        { label: 'هزینه عملیاتی (قدیمی)',     group: 'opex',  color: 'bg-gray-100 text-gray-600' },
+  non_operational:    { label: 'هزینه غیرعملیاتی (قدیمی)', group: 'below', color: 'bg-gray-100 text-gray-600' },
+  salary:             { label: 'حقوق و مزایا (قدیمی)',       group: 'opex',  color: 'bg-blue-100 text-blue-700' },
+  tax:                { label: 'مالیات (قدیمی)',               group: 'below', color: 'bg-red-100 text-red-700' },
+  marketing:          { label: 'تبلیغات (قدیمی)',             group: 'opex',  color: 'bg-pink-100 text-pink-700' },
+  rent:               { label: 'اجاره (قدیمی)',                group: 'opex',  color: 'bg-cyan-100 text-cyan-700' },
+  designer_commission:{ label: 'کمیسیون طراح (قدیمی)',       group: 'opex',  color: 'bg-orange-100 text-orange-700' },
+};
+
+const NEW_CATEGORIES = ['cogs','salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission','tax_legal','depreciation','financial_costs','capex','other'];
+
+const MONTH_NAMES: Record<string, string> = {
+  '01':'ژانویه','02':'فوریه','03':'مارس','04':'آوریل',
+  '05':'مه','06':'ژوئن','07':'ژوئیه','08':'اوت',
+  '09':'سپتامبر','10':'اکتبر','11':'نوامبر','12':'دسامبر'
+};
+
+const fmtMonth = (ym: string) => {
+  const [y, m] = ym.split('-');
+  return `${MONTH_NAMES[m] || m} ${y}`;
+};
+
+const fmtNum = (n: number) => n.toLocaleString();
+const fmtM   = (n: number) => {
+  if (Math.abs(n) >= 1_000_000) return `${(n/1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000)     return `${(n/1_000).toFixed(0)}K`;
+  return String(n);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }) => {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState<Expense | null>(null);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Filter States
-  const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
+  const [expenses,    setExpenses]    = useState<Expense[]>([]);
+  const [salesRecords,setSalesRecords]= useState<SalesRecord[]>([]);
+  const [showAddModal,  setShowAddModal]  = useState(false);
+  const [showPayModal,  setShowPayModal]  = useState<Expense | null>(null);
+  const [editingExpense,setEditingExpense]= useState<Expense | null>(null);
+  const [isSubmitting,  setIsSubmitting]  = useState(false);
+  const [reportPeriod,  setReportPeriod]  = useState<'month'|'year'|'all'>('month');
+
+  // Filters
+  const [categoryFilter,  setCategoryFilter]  = useState<string>('all');
   const [personnelFilter, setPersonnelFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [searchTerm,      setSearchTerm]      = useState('');
+  const [dateFilter,      setDateFilter]      = useState('');
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<Expense>>({
-    title: '',
-    amount: 0,
-    paidAmount: 0,
-    currency: 'IRR',
-    category: 'operational',
+  // Form
+  const blankForm: Partial<Expense> = {
+    title:'', amount:0, paidAmount:0, currency:'IRR',
+    category:'salary_benefits' as ExpenseCategory,
     date: new Date().toISOString().split('T')[0],
-    paidTo: '',
-    personnelId: '',
-    description: '',
-    status: 'paid',
-    files: []
-  });
-
-  const [displayAmount, setDisplayAmount] = useState('');
+    paidTo:'', personnelId:'', description:'', status:'paid', files:[]
+  };
+  const [formData, setFormData] = useState<Partial<Expense>>(blankForm);
+  const [displayAmount,     setDisplayAmount]     = useState('');
   const [displayPaidAmount, setDisplayPaidAmount] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMaster = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
 
-  useEffect(() => {
-    const unsub = subscribeToExpenses(setExpenses);
-    return () => unsub();
-  }, []);
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  const currentYear  = new Date().getFullYear().toString();
 
-  useEffect(() => {
-    const unsub = subscribeToSalesRecords(setSalesRecords);
-    return () => unsub();
-  }, []);
+  useEffect(() => { const u = subscribeToExpenses(setExpenses);    return () => u(); }, []);
+  useEffect(() => { const u = subscribeToSalesRecords(setSalesRecords); return () => u(); }, []);
 
-  const t = {
-    fa: {
-      header: 'مدیریت هزینه‌ها و واریزی‌ها',
-      sub: 'ثبت و پایش هزینه‌های عملیاتی، غیرعملیاتی و پرداختی به اشخاص',
-      add: 'ثبت هزینه جدید',
-      edit: 'ویرایش هزینه',
-      payPortion: 'ثبت پرداخت مرحله‌ای',
-      title: 'عنوان هزینه',
-      amount: 'مبلغ کل هزینه',
-      paidAmount: 'مبلغ پرداخت شده تا کنون',
-      currency: 'ارز',
-      category: 'دسته‌بندی',
-      date: 'تاریخ ثبت/پرداخت',
-      paidTo: 'پرداخت شده به (نام شخص/شرکت)',
-      linkedStaff: 'مرتبط با پرسنل',
-      desc: 'توضیحات / جزئیات',
-      status: 'وضعیت تسویه',
-      receipt: 'پیوست رسید / فاکتور',
-      save: 'ذخیره نهایی',
-      cancel: 'انصراف',
-      categories: {
-        all: 'همه دسته‌ها',
-        operational: 'هزینه عملیاتی',
-        non_operational: 'هزینه غیرعملیاتی',
-        salary: 'حقوق و مزایا',
-        sales_commission: 'کمیسیون فروش',
-        designer_commission: 'کمیسیون طراح',
-        marketing: 'تبلیغات و مارکتینگ',
-        rent: 'اجاره و قبوض',
-        tax: 'مالیات و عوارض',
-        other: 'سایر موارد'
-      },
-      table: {
-        title: 'شرح',
-        amount: 'مبلغ (پرداخت / کل)',
-        cat: 'نوع',
-        to: 'گیرنده',
-        date: 'تاریخ',
-        status: 'وضعیت'
-      },
-      stats: {
-        total: 'کل فاکتورها',
-        paid: 'مجموع پرداختی‌ها',
-        remaining: 'مانده معوقات (بدهی)',
-        count: 'تعداد تراکنش'
-      },
-      filters: {
-        allPersonnel: 'همه پرسنل',
-        staffSelect: 'فیلتر پرسنل'
-      },
-      paid: 'تسویه شده',
-      pending: 'در انتظار پرداخت',
-      partial: 'پرداخت بخشی',
-      deleteConfirm: 'آیا از حذف این رکورد هزینه اطمینان دارید؟',
-      uploading: 'در حال آپلود...',
-      empty: 'هزینه‌ای یافت نشد.',
-      noLink: 'بدون ارتباط پرسنلی (متفرقه)',
-      remained: 'باقیمانده:',
-      newPayment: 'مبلغ پرداختی جدید'
-    },
-    en: {
-      header: 'Expenses & Payments',
-      sub: 'Track operational, non-operational costs and person payments',
-      add: 'New Expense',
-      edit: 'Edit Expense',
-      payPortion: 'Record Partial Payment',
-      title: 'Title',
-      amount: 'Total Amount',
-      paidAmount: 'Amount Paid So Far',
-      currency: 'Currency',
-      category: 'Category',
-      date: 'Date',
-      paidTo: 'Paid To (Name)',
-      linkedStaff: 'Linked Personnel',
-      desc: 'Description',
-      status: 'Settlement Status',
-      receipt: 'Receipt / Attachment',
-      save: 'Save Expense',
-      cancel: 'Cancel',
-      categories: {
-        all: 'All Categories',
-        operational: 'Operational',
-        non_operational: 'Non-Operational',
-        salary: 'Salary & Benefits',
-        sales_commission: 'Sales Commission',
-        designer_commission: 'Designer Commission',
-        marketing: 'Marketing',
-        rent: 'Rent & Utilities',
-        tax: 'Tax & Fees',
-        other: 'Others'
-      },
-      table: {
-        title: 'Description',
-        amount: 'Amount (Paid / Total)',
-        cat: 'Type',
-        to: 'Receiver',
-        date: 'Date',
-        status: 'Status'
-      },
-      stats: {
-        total: 'Total Invoices',
-        paid: 'Total Disbursed',
-        remaining: 'Total Arrears',
-        count: 'Trans. Count'
-      },
-      filters: {
-        allPersonnel: 'All Staff',
-        staffSelect: 'Filter Staff'
-      },
-      paid: 'Paid',
-      pending: 'Pending',
-      partial: 'Partially Paid',
-      deleteConfirm: 'Are you sure you want to delete this expense record?',
-      uploading: 'Uploading...',
-      empty: 'No expenses found.',
-      noLink: 'No Link',
-      remained: 'Remained:',
-      newPayment: 'New Payment Amount'
-    }
-  }[lang];
+  // ── helpers ────────────────────────────────────────────────────────────────
+  const normalizeDigits = (v: string) =>
+    v.replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+     .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
 
+  const fmtInput = (v: string) => normalizeDigits(v).replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');
+
+  const catLabel = (key: string) => CAT_META[key]?.label || key;
+  const catColor = (key: string) => CAT_META[key]?.color || 'bg-gray-100 text-gray-600';
+
+  const getStatusBadge = (s: string) =>
+    s==='paid'    ? 'bg-green-100 text-green-700' :
+    s==='partial' ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' :
+                    'bg-amber-100 text-amber-700';
+  const getStatusLabel = (s: string) =>
+    s==='paid' ? 'تسویه شده' : s==='partial' ? 'پرداخت بخشی' : 'در انتظار پرداخت';
+
+  const getPersonnelName = (id?: string) => personnel.find(p => p.id === id)?.fullName;
+
+  // ── filtered table data ────────────────────────────────────────────────────
   const filteredExpenses = expenses.filter(ex => {
-    const matchesCat = categoryFilter === 'all' || ex.category === categoryFilter;
-    const matchesSearch = ex.title.toLowerCase().includes(searchTerm.toLowerCase()) || ex.paidTo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDate = !dateFilter || ex.date.startsWith(dateFilter);
-    const matchesPersonnel = personnelFilter === 'all' || ex.personnelId === personnelFilter;
-    return matchesCat && matchesSearch && matchesDate && matchesPersonnel;
+    const matchCat  = categoryFilter === 'all' || ex.category === categoryFilter;
+    const matchSrch = ex.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      ex.paidTo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchDate = !dateFilter || ex.date.startsWith(dateFilter);
+    const matchPers = personnelFilter === 'all' || ex.personnelId === personnelFilter;
+    return matchCat && matchSrch && matchDate && matchPers;
   });
 
-  // Calculate stats per currency
-  const getStatsByCurrency = () => {
-    const totals: Record<string, { total: number, paid: number, remaining: number }> = {};
-    
+  // ── summary stats (based on filtered) ─────────────────────────────────────
+  const currencyStats = (() => {
+    const t: Record<string, {total:number;paid:number;remaining:number}> = {};
     filteredExpenses.forEach(ex => {
-      const cur = ex.currency || 'IRR';
-      if (!totals[cur]) totals[cur] = { total: 0, paid: 0, remaining: 0 };
-      
-      const amt = ex.amount || 0;
-      const pd = ex.paidAmount || 0;
-      
-      totals[cur].total += amt;
-      totals[cur].paid += pd;
-      totals[cur].remaining += (amt - pd);
+      const c = ex.currency || 'IRR';
+      if (!t[c]) t[c] = {total:0,paid:0,remaining:0};
+      t[c].total     += ex.amount || 0;
+      t[c].paid      += ex.paidAmount || 0;
+      t[c].remaining += (ex.amount||0) - (ex.paidAmount||0);
     });
-
-    return totals;
-  };
-
-  const currencyStats = getStatsByCurrency();
+    return t;
+  })();
   const activeCurrencies = Object.keys(currencyStats);
 
-  const normalizeDigits = (val: string) => {
-    return val.toString()
-      .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
-      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+  const paidCount    = filteredExpenses.filter(e => e.status === 'paid').length;
+  const partialCount = filteredExpenses.filter(e => e.status === 'partial').length;
+  const pendingCount = filteredExpenses.filter(e => e.status === 'pending').length;
+
+  // ── P&L data engine ────────────────────────────────────────────────────────
+  const matchPeriod = (dateStr: string) => {
+    if (reportPeriod === 'month') return dateStr.startsWith(currentMonth);
+    if (reportPeriod === 'year')  return dateStr.startsWith(currentYear);
+    return true;
   };
 
-  const formatDisplayAmount = (val: string) => {
-    const normalized = normalizeDigits(val);
-    const clean = normalized.replace(/\D/g, "");
-    return clean.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
+  const plExpenses = expenses.filter(ex => matchPeriod(ex.date));
+  const plIncome   = salesRecords.filter(sr => matchPeriod(sr.depositDate || sr.createdAt || ''));
 
-  const handleAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
-    const formatted = formatDisplayAmount(rawValue);
-    setDisplayAmount(formatted);
-    const numericValue = parseFloat(formatted.replace(/,/g, '')) || 0;
-    setFormData(prev => ({ ...prev, amount: numericValue }));
-  };
+  const totalRevenue   = plIncome.reduce((s, sr) => s + (sr.saleAmount||0), 0);
+  const byGroup = (grp: string) =>
+    plExpenses.filter(e => (CAT_META[e.category]?.group || 'below') === grp)
+              .reduce((s, e) => s + (e.amount||0), 0);
 
-  const handlePaidAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value;
-    const formatted = formatDisplayAmount(rawValue);
-    setDisplayPaidAmount(formatted);
-    const numericValue = parseFloat(formatted.replace(/,/g, '')) || 0;
-    setFormData(prev => ({ ...prev, paidAmount: numericValue }));
-  };
+  const totalCogs       = byGroup('cogs');
+  const grossProfit     = totalRevenue - totalCogs;
+  const totalOpex       = byGroup('opex');
+  const ebit            = grossProfit - totalOpex;
+  const totalBelow      = byGroup('below');
+  const netIncome       = ebit - totalBelow;
+  const totalCapex      = byGroup('capex');
+  const totalExpenses   = plExpenses.reduce((s, e) => s + (e.amount||0), 0);
+  const totalExpPaid    = plExpenses.reduce((s, e) => s + (e.paidAmount||0), 0);
 
+  // category-level breakdown for the period
+  const catBreakdown: Record<string, number> = {};
+  plExpenses.forEach(ex => {
+    catBreakdown[ex.category] = (catBreakdown[ex.category] || 0) + (ex.amount||0);
+  });
+  const sortedCats = Object.entries(catBreakdown).sort((a,b)=>b[1]-a[1]);
+  const maxCatAmt  = Math.max(...sortedCats.map(c=>c[1]), 1);
+
+  // ── monthly trend (all time, always includes current month) ────────────────
+  const monthlyData: Record<string, {expenses:number;expPaid:number;income:number}> = {};
+  monthlyData[currentMonth] = {expenses:0, expPaid:0, income:0};
+  expenses.forEach(ex => {
+    const m = ex.date?.substring(0,7); if (!m) return;
+    if (!monthlyData[m]) monthlyData[m] = {expenses:0, expPaid:0, income:0};
+    monthlyData[m].expenses += ex.amount||0;
+    monthlyData[m].expPaid  += ex.paidAmount||0;
+  });
+  salesRecords.forEach(sr => {
+    const m = (sr.depositDate||sr.createdAt||'').substring(0,7); if (!m) return;
+    if (!monthlyData[m]) monthlyData[m] = {expenses:0, expPaid:0, income:0};
+    monthlyData[m].income += sr.saleAmount||0;
+  });
+  const monthlyReport = Object.entries(monthlyData).sort((a,b)=>a[0].localeCompare(b[0]));
+  const maxMonthVal   = Math.max(...monthlyReport.flatMap(m=>[m[1].expenses, m[1].income]), 1);
+
+  // ── form handlers ──────────────────────────────────────────────────────────
   const handleOpenAdd = () => {
     setEditingExpense(null);
-    setFormData({ title: '', amount: 0, paidAmount: 0, currency: 'IRR', category: 'operational', date: new Date().toISOString().split('T')[0], paidTo: '', personnelId: '', description: '', status: 'paid', files: [] });
-    setDisplayAmount('');
-    setDisplayPaidAmount('');
+    setFormData(blankForm);
+    setDisplayAmount(''); setDisplayPaidAmount('');
     setShowAddModal(true);
   };
-
   const handleOpenEdit = (ex: Expense) => {
     setEditingExpense(ex);
-    setFormData({ ...ex, personnelId: ex.personnelId || '' });
+    setFormData({...ex, personnelId: ex.personnelId||''});
     setDisplayAmount(ex.amount.toLocaleString());
-    setDisplayPaidAmount((ex.paidAmount || 0).toLocaleString());
+    setDisplayPaidAmount((ex.paidAmount||0).toLocaleString());
     setShowAddModal(true);
   };
-
-  const handleOpenPayment = (ex: Expense) => {
-    setShowPaymentModal(ex);
-    setFormData({ ...ex });
-    setDisplayPaidAmount(''); // New amount to add
+  const handleOpenPay = (ex: Expense) => {
+    setShowPayModal(ex);
+    setFormData({...ex});
+    setDisplayPaidAmount('');
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.amount) return;
     setIsSubmitting(true);
-    
     const amount = Number(formData.amount);
-    const paid = Number(formData.paidAmount || 0);
-    
-    let status: 'paid' | 'pending' | 'partial' = 'pending';
-    if (paid >= amount) status = 'paid';
-    else if (paid > 0) status = 'partial';
+    const paid   = Number(formData.paidAmount||0);
+    const status: 'paid'|'pending'|'partial' =
+      paid >= amount ? 'paid' : paid > 0 ? 'partial' : 'pending';
 
     const expense: Expense = {
       id: editingExpense?.id || `exp-${Date.now()}`,
       title: formData.title!,
-      amount: amount,
-      paidAmount: paid,
+      amount, paidAmount: paid,
       currency: formData.currency as Currency,
       category: formData.category as ExpenseCategory,
       date: formData.date!,
       paidTo: formData.paidTo!,
-      personnelId: formData.personnelId || undefined,
+      personnelId: formData.personnelId||undefined,
       description: formData.description,
       files: formData.files,
-      status: status,
-      createdAt: editingExpense?.createdAt || new Date().toISOString(),
-      createdBy: editingExpense?.createdBy || currentUser.fullName
+      status,
+      createdAt: editingExpense?.createdAt||new Date().toISOString(),
+      createdBy: editingExpense?.createdBy||currentUser.fullName,
     };
-
-    if (editingExpense) {
-      await updateExpense(expense.id, expense, currentUser.fullName);
-    } else {
-      await saveExpense(expense, currentUser.fullName);
-    }
-
-    setIsSubmitting(false);
-    setShowAddModal(false);
-    setEditingExpense(null);
+    if (editingExpense) await updateExpense(expense.id, expense, currentUser.fullName);
+    else                await saveExpense(expense, currentUser.fullName);
+    setIsSubmitting(false); setShowAddModal(false); setEditingExpense(null);
   };
 
-  const handleSavePayment = async () => {
-    if (!showPaymentModal) return;
+  const handleSavePay = async () => {
+    if (!showPayModal) return;
     setIsSubmitting(true);
-    
-    const newAddition = parseFloat(normalizeDigits(displayPaidAmount).replace(/,/g, '')) || 0;
-    const currentPaid = showPaymentModal.paidAmount || 0;
-    const totalPaid = currentPaid + newAddition;
-    const totalAmount = showPaymentModal.amount;
-
-    let status: 'paid' | 'pending' | 'partial' = 'pending';
-    if (totalPaid >= totalAmount) status = 'paid';
-    else if (totalPaid > 0) status = 'partial';
-
-    await updateExpense(showPaymentModal.id, {
-        paidAmount: totalPaid,
-        status: status
-    }, currentUser.fullName);
-
-    setIsSubmitting(false);
-    setShowPaymentModal(null);
+    const added  = parseFloat(normalizeDigits(displayPaidAmount).replace(/,/g,''))||0;
+    const newPaid = (showPayModal.paidAmount||0) + added;
+    const status: 'paid'|'pending'|'partial' =
+      newPaid >= showPayModal.amount ? 'paid' : newPaid > 0 ? 'partial' : 'pending';
+    await updateExpense(showPayModal.id, {paidAmount: newPaid, status}, currentUser.fullName);
+    setIsSubmitting(false); setShowPayModal(null);
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm(t.deleteConfirm)) {
+    if (window.confirm('آیا از حذف این رکورد اطمینان دارید؟'))
       await deleteExpense(id, currentUser.fullName);
-    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const newFile: AttachedFile = { name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 };
-    setFormData(prev => ({ ...prev, files: [...(prev.files || []), newFile] }));
-    
-    uploadFileWithProgress(
-      file,
-      (progress) => {
-        setFormData(prev => ({ ...prev, files: prev.files?.map(f => f.name === file.name ? { ...f, progress } : f) }));
-      },
-      (url) => {
-        setFormData(prev => ({ ...prev, files: prev.files?.map(f => f.name === file.name ? { ...f, content: url, status: 'success', progress: 100 } : f) }));
-      },
-      (err) => {
-        setFormData(prev => ({ ...prev, files: prev.files?.map(f => f.name === file.name ? { ...f, status: 'error' } : f) }));
-      },
+    const file = e.target.files?.[0]; if (!file) return;
+    const nf: AttachedFile = {name:file.name, size:file.size, type:file.type, content:'', status:'uploading', progress:0};
+    setFormData(p => ({...p, files:[...(p.files||[]), nf]}));
+    uploadFileWithProgress(file,
+      pct  => setFormData(p => ({...p, files: p.files?.map(f => f.name===file.name?{...f,progress:pct}:f)})),
+      url  => setFormData(p => ({...p, files: p.files?.map(f => f.name===file.name?{...f,content:url,status:'success',progress:100}:f)})),
+      _err => setFormData(p => ({...p, files: p.files?.map(f => f.name===file.name?{...f,status:'error'}:f)})),
       'documents'
     );
   };
 
-  const getPersonnelName = (id?: string) => {
-    if (!id) return null;
-    return personnel.find(p => p.id === id)?.fullName;
-  };
+  // ── P&L row helper ─────────────────────────────────────────────────────────
+  const PLRow = ({label, value, indent=false, bold=false, borderTop=false, positive=true}:{
+    label:string; value:number; indent?:boolean; bold?:boolean; borderTop?:boolean; positive?:boolean;
+  }) => (
+    <div className={`flex justify-between items-center py-1 ${borderTop?'border-t border-gray-300 mt-1 pt-2':''} ${indent?'pr-4':''}`}>
+      <span className={`text-xs ${bold?'font-black text-gray-800':'font-medium text-gray-600'}`}>{label}</span>
+      <span className={`text-xs font-black tabular-nums ${bold?(value>=0?'text-gray-900':'text-rose-600'):(value<0||!positive)?'text-rose-600':'text-gray-700'}`}>
+        {value < 0 ? `(${fmtNum(Math.abs(value))})` : fmtNum(value)}
+      </span>
+    </div>
+  );
 
-  const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'paid': return 'bg-green-100 text-green-700';
-      case 'partial': return 'bg-blue-100 text-blue-700 ring-1 ring-blue-200';
-      default: return 'bg-amber-100 text-amber-700';
-    }
-  };
+  const periodLabel = reportPeriod==='month' ? `${fmtMonth(currentMonth)}` : reportPeriod==='year' ? `سال ${currentYear}` : 'کل دوره';
 
-  const getStatusLabel = (status: string) => {
-    switch(status) {
-      case 'paid': return t.paid;
-      case 'partial': return t.partial;
-      default: return t.pending;
-    }
-  };
-
-  const [showReport, setShowReport] = useState(true);
-
-  // Category breakdown for report
-  const getCategoryReport = () => {
-    const cats: Record<string, { total: number; paid: number; count: number; currency: string }> = {};
-    filteredExpenses.forEach(ex => {
-      const key = ex.category;
-      const cur = ex.currency || 'IRR';
-      if (!cats[key]) cats[key] = { total: 0, paid: 0, count: 0, currency: cur };
-      cats[key].total += ex.amount || 0;
-      cats[key].paid += ex.paidAmount || 0;
-      cats[key].count += 1;
-    });
-    return Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
-  };
-
-  const currentMonth = new Date().toISOString().substring(0, 7);
-
-  const MONTH_NAMES: Record<string, string> = {
-    '01': 'ژانویه', '02': 'فوریه', '03': 'مارس', '04': 'آوریل',
-    '05': 'مه', '06': 'ژوئن', '07': 'ژوئیه', '08': 'اوت',
-    '09': 'سپتامبر', '10': 'اکتبر', '11': 'نوامبر', '12': 'دسامبر'
-  };
-
-  const formatMonthLabel = (ym: string) => {
-    const [year, month] = ym.split('-');
-    return `${MONTH_NAMES[month] || month} ${year}`;
-  };
-
-  // Monthly breakdown — always includes current month, merges expenses + income
-  const getMonthlyReport = () => {
-    const months: Record<string, { expenses: number; expPaid: number; income: number }> = {};
-
-    // Always show current month
-    months[currentMonth] = { expenses: 0, expPaid: 0, income: 0 };
-
-    // All expenses (not just filtered, to give a full monthly picture)
-    expenses.forEach(ex => {
-      const month = ex.date?.substring(0, 7);
-      if (!month) return;
-      if (!months[month]) months[month] = { expenses: 0, expPaid: 0, income: 0 };
-      months[month].expenses += ex.amount || 0;
-      months[month].expPaid += ex.paidAmount || 0;
-    });
-
-    // Income from sales records
-    salesRecords.forEach(sr => {
-      const month = (sr.depositDate || sr.createdAt || '').substring(0, 7);
-      if (!month) return;
-      if (!months[month]) months[month] = { expenses: 0, expPaid: 0, income: 0 };
-      months[month].income += sr.saleAmount || 0;
-    });
-
-    return Object.entries(months).sort((a, b) => a[0].localeCompare(b[0]));
-  };
-
-  const categoryReport = getCategoryReport();
-  const monthlyReport = getMonthlyReport();
-  const maxCatTotal = Math.max(...categoryReport.map(c => c[1].total), 1);
-  const maxMonthVal = Math.max(...monthlyReport.flatMap(m => [m[1].expenses, m[1].income]), 1);
-  const paidCount = filteredExpenses.filter(e => e.status === 'paid').length;
-  const partialCount = filteredExpenses.filter(e => e.status === 'partial').length;
-  const pendingCount = filteredExpenses.filter(e => e.status === 'pending').length;
-
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-4 animate-fade-in">
+
+      {/* ── Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-center bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm gap-3">
         <div>
           <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
             <div className="bg-rose-100 text-rose-600 p-1.5 rounded-lg"><IconWallet className="w-4 h-4" /></div>
-            {t.header}
+            هزینه‌ها و درآمدها
           </h2>
-          <p className="text-xs text-gray-400 mt-0.5">{t.sub}</p>
+          <p className="text-xs text-gray-400 mt-0.5">ثبت، پایش و گزارش‌گیری مالی شرکت</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowReport(v => !v)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all ${showReport ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}
-          >
-            <IconChart className="w-4 h-4" /> {showReport ? 'بستن گزارش' : 'گزارش تحلیلی'}
-          </button>
-          <button onClick={handleOpenAdd} className="bg-rose-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-700 flex items-center gap-1.5 shadow-md shadow-rose-200 transition-all">
-            <IconPlus className="w-4 h-4" /> {t.add}
-          </button>
-        </div>
+        <button onClick={handleOpenAdd} className="bg-rose-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-rose-700 flex items-center gap-1.5 shadow-md shadow-rose-200 transition-all">
+          <IconPlus className="w-4 h-4" /> ثبت هزینه جدید
+        </button>
       </div>
 
-      {/* Stats Cards - Compact */}
+      {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
-          <div className="text-gray-400 text-[10px] font-bold mb-1">{t.stats.total}</div>
-          <div className="space-y-0.5">
-            {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-sm font-black text-gray-800 flex justify-between items-baseline">
-                <span>{currencyStats[cur].total.toLocaleString()}</span>
-                <span className="text-[9px] text-gray-400 font-bold mr-1">{cur}</span>
-              </div>
-            )) : <div className="text-sm font-black text-gray-300">0</div>}
-          </div>
+          <div className="text-gray-400 text-[10px] font-bold mb-1">جمع هزینه‌ها (فیلترشده)</div>
+          {activeCurrencies.length > 0 ? activeCurrencies.map(c => (
+            <div key={c} className="text-sm font-black text-gray-800 flex justify-between items-baseline">
+              <span>{fmtNum(currencyStats[c].total)}</span>
+              <span className="text-[9px] text-gray-400 font-bold">{c}</span>
+            </div>
+          )) : <div className="text-sm font-black text-gray-300">0</div>}
         </div>
-
         <div className="bg-green-50 px-4 py-3 rounded-xl border border-green-100 shadow-sm">
-          <div className="text-green-600 text-[10px] font-bold mb-1">{t.stats.paid}</div>
-          <div className="space-y-0.5">
-            {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-sm font-black text-green-600 flex justify-between items-baseline">
-                <span>{currencyStats[cur].paid.toLocaleString()}</span>
-                <span className="text-[9px] text-green-400 font-bold mr-1">{cur}</span>
-              </div>
-            )) : <div className="text-sm font-black text-green-200">0</div>}
-          </div>
+          <div className="text-green-600 text-[10px] font-bold mb-1">مجموع پرداخت‌شده</div>
+          {activeCurrencies.length > 0 ? activeCurrencies.map(c => (
+            <div key={c} className="text-sm font-black text-green-600 flex justify-between items-baseline">
+              <span>{fmtNum(currencyStats[c].paid)}</span>
+              <span className="text-[9px] text-green-400 font-bold">{c}</span>
+            </div>
+          )) : <div className="text-sm font-black text-green-200">0</div>}
         </div>
-
         <div className="bg-amber-50 px-4 py-3 rounded-xl border border-amber-100 shadow-sm">
-          <div className="text-amber-600 text-[10px] font-bold mb-1">{t.stats.remaining}</div>
-          <div className="space-y-0.5">
-            {activeCurrencies.length > 0 ? activeCurrencies.map(cur => (
-              <div key={cur} className="text-sm font-black text-amber-600 flex justify-between items-baseline">
-                <span>{currencyStats[cur].remaining.toLocaleString()}</span>
-                <span className="text-[9px] text-amber-400 font-bold mr-1">{cur}</span>
-              </div>
-            )) : <div className="text-sm font-black text-amber-200">0</div>}
-          </div>
+          <div className="text-amber-600 text-[10px] font-bold mb-1">مانده معوقات</div>
+          {activeCurrencies.length > 0 ? activeCurrencies.map(c => (
+            <div key={c} className="text-sm font-black text-amber-600 flex justify-between items-baseline">
+              <span>{fmtNum(currencyStats[c].remaining)}</span>
+              <span className="text-[9px] text-amber-400 font-bold">{c}</span>
+            </div>
+          )) : <div className="text-sm font-black text-amber-200">0</div>}
         </div>
-
         <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
-          <div className="text-gray-400 text-[10px] font-bold mb-1">{t.stats.count}</div>
+          <div className="text-gray-400 text-[10px] font-bold mb-1">تعداد تراکنش</div>
           <div className="text-2xl font-black text-gray-600 mt-1">{filteredExpenses.length}</div>
           <div className="flex gap-1 mt-1">
             <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">{paidCount} تسویه</span>
@@ -502,232 +337,248 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         </div>
       </div>
 
-      {/* Analytics Report Section */}
-      {showReport && (
-        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden animate-fade-in">
-          <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
+      {/* ══ Financial Report Panel ══ */}
+      <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden">
+        {/* Report toolbar */}
+        <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
             <IconChart className="w-4 h-4 text-indigo-600" />
-            <span className="text-sm font-bold text-indigo-800">گزارش تحلیلی هزینه‌ها</span>
-            <span className="text-[10px] text-indigo-400 mr-auto">بر اساس فیلترهای انتخابی</span>
+            <span className="text-xs font-bold text-indigo-800">گزارش مالی — صورت وضعیت شرکت</span>
           </div>
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="flex gap-1 mr-auto">
+            {(['month','year','all'] as const).map(p => (
+              <button key={p} onClick={() => setReportPeriod(p)}
+                className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${reportPeriod===p?'bg-indigo-600 text-white border-indigo-600':'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>
+                {p==='month'?'ماه جاری':p==='year'?'سال جاری':'کل دوره'}
+              </button>
+            ))}
+          </div>
+        </div>
 
-            {/* Status Distribution */}
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs font-bold text-gray-500 mb-3">توزیع وضعیت پرداخت</div>
-              <div className="space-y-2">
-                {[
-                  { label: t.paid, count: paidCount, color: 'bg-green-500', textColor: 'text-green-700' },
-                  { label: t.partial, count: partialCount, color: 'bg-blue-500', textColor: 'text-blue-700' },
-                  { label: t.pending, count: pendingCount, color: 'bg-amber-500', textColor: 'text-amber-700' },
-                ].map(item => (
-                  <div key={item.label}>
-                    <div className="flex justify-between items-center mb-0.5">
-                      <span className={`text-[10px] font-bold ${item.textColor}`}>{item.label}</span>
-                      <span className="text-[10px] text-gray-500 font-bold">{item.count} مورد</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${item.color} rounded-full transition-all`}
-                        style={{ width: filteredExpenses.length > 0 ? `${(item.count / filteredExpenses.length) * 100}%` : '0%' }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {/* Pie-like donut summary */}
-              <div className="mt-3 grid grid-cols-3 gap-1 text-center">
-                {[
-                  { label: 'تسویه', pct: filteredExpenses.length > 0 ? Math.round((paidCount / filteredExpenses.length) * 100) : 0, color: 'text-green-600' },
-                  { label: 'بخشی', pct: filteredExpenses.length > 0 ? Math.round((partialCount / filteredExpenses.length) * 100) : 0, color: 'text-blue-600' },
-                  { label: 'معوق', pct: filteredExpenses.length > 0 ? Math.round((pendingCount / filteredExpenses.length) * 100) : 0, color: 'text-amber-600' },
-                ].map(item => (
-                  <div key={item.label} className="bg-white rounded-lg p-2 border border-gray-100">
-                    <div className={`text-lg font-black ${item.color}`}>{item.pct}٪</div>
-                    <div className="text-[9px] text-gray-400 font-bold">{item.label}</div>
-                  </div>
-                ))}
-              </div>
+        <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* ── Column 1: P&L Statement ── */}
+          <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+              صورت سود و زیان · {periodLabel}
             </div>
 
-            {/* Category Breakdown */}
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs font-bold text-gray-500 mb-3">هزینه به تفکیک دسته‌بندی</div>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {categoryReport.length === 0 && <div className="text-[10px] text-gray-400 text-center py-4">داده‌ای موجود نیست</div>}
-                {categoryReport.map(([cat, data]) => (
+            {/* Revenue */}
+            <div className="mb-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">درآمد</div>
+              <PLRow label="درآمد فروش و خدمات" value={totalRevenue} bold />
+            </div>
+
+            {/* COGS */}
+            <div className="mb-2 border-t border-gray-200 pt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">بهای تمام‌شده</div>
+              <PLRow label="بهای تمام‌شده خدمات" value={-totalCogs} indent />
+              <PLRow label="سود ناخالص" value={grossProfit} bold borderTop />
+            </div>
+
+            {/* OPEX */}
+            <div className="mb-2 border-t border-gray-200 pt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">هزینه‌های عملیاتی</div>
+              {['salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission'].map((k:string) => {
+                const v = plExpenses.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+                if (!v) return null;
+                return <React.Fragment key={k}><PLRow label={CAT_META[k]?.label||k} value={-v} indent /></React.Fragment>;
+              })}
+              {/* legacy opex */}
+              {['operational','salary','marketing','rent','designer_commission'].map((k:string) => {
+                const v = plExpenses.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+                if (!v) return null;
+                return <React.Fragment key={k}><PLRow label={CAT_META[k]?.label||k} value={-v} indent /></React.Fragment>;
+              })}
+              <PLRow label="سود / زیان عملیاتی (EBIT)" value={ebit} bold borderTop />
+            </div>
+
+            {/* Below the line */}
+            <div className="mb-2 border-t border-gray-200 pt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">هزینه‌های غیرعملیاتی</div>
+              {['tax_legal','depreciation','financial_costs','other','non_operational','tax'].map((k:string) => {
+                const v = plExpenses.filter(e=>e.category===k).reduce((s,e)=>s+(e.amount||0),0);
+                if (!v) return null;
+                return <React.Fragment key={k}><PLRow label={CAT_META[k]?.label||k} value={-v} indent /></React.Fragment>;
+              })}
+            </div>
+
+            {/* Net Income */}
+            <div className="border-t-2 border-gray-400 pt-2">
+              <PLRow label="سود / زیان خالص دوره" value={netIncome} bold />
+            </div>
+
+            {/* CapEx note */}
+            {totalCapex > 0 && (
+              <div className="mt-2 border-t border-dashed border-gray-200 pt-2">
+                <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">یادداشت</div>
+                <PLRow label="سرمایه‌گذاری / CapEx (خارج از P&L)" value={totalCapex} />
+              </div>
+            )}
+          </div>
+
+          {/* ── Column 2: Expense by Category ── */}
+          <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+              تفکیک هزینه بر اساس سرفصل · {periodLabel}
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {sortedCats.length === 0 && (
+                <div className="text-[10px] text-gray-400 text-center py-8">داده‌ای در این دوره ثبت نشده</div>
+              )}
+              {sortedCats.map(([cat, amt]) => {
+                const paidAmt = plExpenses.filter(e=>e.category===cat).reduce((s,e)=>s+(e.paidAmount||0),0);
+                const paidPct = amt > 0 ? (paidAmt/amt)*100 : 0;
+                const barPct  = (amt/maxCatAmt)*100;
+                return (
                   <div key={cat}>
                     <div className="flex justify-between items-center mb-0.5">
-                      <span className="text-[10px] font-bold text-gray-600 truncate max-w-[120px]">{t.categories[cat as keyof typeof t.categories] || cat}</span>
-                      <span className="text-[9px] text-gray-400 font-mono">{data.total.toLocaleString()}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${catColor(cat)}`}>
+                        {catLabel(cat)}
+                      </span>
+                      <span className="text-[9px] font-mono text-gray-500">{fmtNum(amt)}</span>
                     </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden flex">
-                      <div
-                        className="h-full bg-rose-500 rounded-full transition-all"
-                        style={{ width: `${(data.paid / data.total) * 100}%` }}
-                        title={`پرداخت شده: ${data.paid.toLocaleString()}`}
-                      />
-                      <div
-                        className="h-full bg-rose-200"
-                        style={{ width: `${((data.total - data.paid) / data.total) * 100}%` }}
-                        title={`باقیمانده: ${(data.total - data.paid).toLocaleString()}`}
-                      />
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden" style={{width:`${barPct}%`}}>
+                      <div className="h-full bg-rose-500 rounded-full" style={{width:`${paidPct}%`}} />
                     </div>
-                    <div className="text-[9px] text-gray-400 mt-0.5">{data.count} مورد — پرداخت: {data.paid.toLocaleString()} | مانده: {(data.total - data.paid).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Monthly Income vs Expense Chart */}
-            <div className="bg-gray-50 rounded-xl p-3 lg:col-span-3">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-bold text-gray-500">درآمد و هزینه ماه به ماه (میلادی)</div>
-                <div className="flex gap-3 text-[9px] font-bold">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />درآمد</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />هزینه</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-rose-200 inline-block" />پرداخت‌نشده</span>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <div className="flex gap-3 min-w-max pb-1">
-                  {monthlyReport.map(([month, data]) => {
-                    const isCurrentMonth = month === currentMonth;
-                    const net = data.income - data.expenses;
-                    return (
-                      <div
-                        key={month}
-                        className={`flex flex-col items-center gap-1 min-w-[64px] rounded-xl px-2 py-2 ${isCurrentMonth ? 'bg-indigo-50 ring-2 ring-indigo-300' : 'bg-white border border-gray-100'}`}
-                      >
-                        {/* Bar chart area */}
-                        <div className="flex items-end gap-1 h-20">
-                          {/* Income bar */}
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] text-green-600 font-bold">{data.income > 0 ? (data.income / 1000000).toFixed(1) + 'M' : ''}</span>
-                            <div className="w-5 bg-gray-200 rounded-t-sm overflow-hidden flex flex-col justify-end" style={{ height: '64px' }}>
-                              <div
-                                className="w-full bg-green-500 rounded-t-sm transition-all"
-                                style={{ height: `${(data.income / maxMonthVal) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                          {/* Expense bar (paid + unpaid stacked) */}
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[8px] text-rose-600 font-bold">{data.expenses > 0 ? (data.expenses / 1000000).toFixed(1) + 'M' : ''}</span>
-                            <div className="w-5 bg-gray-200 rounded-t-sm overflow-hidden flex flex-col justify-end" style={{ height: '64px' }}>
-                              <div className="w-full flex flex-col" style={{ height: `${(data.expenses / maxMonthVal) * 100}%` }}>
-                                <div className="bg-rose-200 flex-1" style={{ height: `${data.expenses > 0 ? ((data.expenses - data.expPaid) / data.expenses) * 100 : 0}%` }} />
-                                <div className="bg-rose-500 flex-shrink-0" style={{ height: `${data.expenses > 0 ? (data.expPaid / data.expenses) * 100 : 0}%` }} />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Month label */}
-                        <div className={`text-[9px] font-bold text-center leading-tight ${isCurrentMonth ? 'text-indigo-700' : 'text-gray-500'}`}>
-                          {formatMonthLabel(month).split(' ').map((w, i) => <div key={i}>{w}</div>)}
-                          {isCurrentMonth && <div className="text-[8px] text-indigo-400 font-bold">● جاری</div>}
-                        </div>
-                        {/* Net balance */}
-                        <div className={`text-[9px] font-black ${net >= 0 ? 'text-green-600' : 'text-rose-600'}`}>
-                          {net >= 0 ? '+' : ''}{(net / 1000000).toFixed(1)}M
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* Summary row for current month */}
-              {(() => {
-                const cm = monthlyReport.find(([m]) => m === currentMonth);
-                if (!cm) return null;
-                const [, d] = cm;
-                return (
-                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-200 pt-3">
-                    <div className="bg-green-50 rounded-lg p-2 text-center border border-green-100">
-                      <div className="text-[9px] text-green-500 font-bold mb-0.5">درآمد ماه جاری</div>
-                      <div className="text-sm font-black text-green-700">{d.income.toLocaleString()}</div>
-                    </div>
-                    <div className="bg-rose-50 rounded-lg p-2 text-center border border-rose-100">
-                      <div className="text-[9px] text-rose-500 font-bold mb-0.5">هزینه ماه جاری</div>
-                      <div className="text-sm font-black text-rose-700">{d.expenses.toLocaleString()}</div>
-                    </div>
-                    <div className={`rounded-lg p-2 text-center border ${d.income - d.expenses >= 0 ? 'bg-indigo-50 border-indigo-100' : 'bg-amber-50 border-amber-100'}`}>
-                      <div className="text-[9px] text-gray-500 font-bold mb-0.5">خالص ماه جاری</div>
-                      <div className={`text-sm font-black ${d.income - d.expenses >= 0 ? 'text-indigo-700' : 'text-amber-700'}`}>
-                        {(d.income - d.expenses) >= 0 ? '+' : ''}{(d.income - d.expenses).toLocaleString()}
-                      </div>
+                    <div className="text-[8px] text-gray-400 mt-0.5">
+                      پرداخت: {fmtNum(paidAmt)} — مانده: {fmtNum(amt-paidAmt)}
                     </div>
                   </div>
                 );
-              })()}
+              })}
             </div>
-
+            {/* Payment status summary */}
+            <div className="mt-3 pt-3 border-t border-gray-200 grid grid-cols-3 gap-1 text-center">
+              {[
+                {label:'تسویه', cnt:paidCount,    pct: filteredExpenses.length>0?Math.round(paidCount/filteredExpenses.length*100):0, color:'text-green-600', bg:'bg-green-50 border-green-100'},
+                {label:'بخشی',  cnt:partialCount, pct: filteredExpenses.length>0?Math.round(partialCount/filteredExpenses.length*100):0, color:'text-blue-600', bg:'bg-blue-50 border-blue-100'},
+                {label:'معوق',  cnt:pendingCount, pct: filteredExpenses.length>0?Math.round(pendingCount/filteredExpenses.length*100):0, color:'text-amber-600', bg:'bg-amber-50 border-amber-100'},
+              ].map(item=>(
+                <div key={item.label} className={`rounded-lg p-1.5 border ${item.bg}`}>
+                  <div className={`text-base font-black ${item.color}`}>{item.pct}٪</div>
+                  <div className="text-[8px] text-gray-400 font-bold">{item.label}</div>
+                  <div className="text-[8px] text-gray-400">{item.cnt} مورد</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Filters Bar */}
+          {/* ── Column 3: Monthly Bar Chart (full width row) ── */}
+          <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 lg:col-span-1">
+            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">
+              جریان ماهانه (کل دوره)
+            </div>
+            <div className="flex gap-2 items-end overflow-x-auto pb-1" style={{minHeight:'110px'}}>
+              {monthlyReport.map(([month, d]) => {
+                const isCur = month === currentMonth;
+                const net   = d.income - d.expenses;
+                return (
+                  <div key={month} className={`flex flex-col items-center gap-1 min-w-[52px] rounded-lg px-1 py-1 flex-shrink-0 ${isCur?'bg-indigo-50 ring-2 ring-indigo-300':'bg-white border border-gray-100'}`}>
+                    <div className="flex items-end gap-0.5 h-16">
+                      {/* income */}
+                      <div className="w-4 bg-gray-200 rounded-t-sm overflow-hidden flex flex-col justify-end" style={{height:'56px'}}>
+                        <div className="w-full bg-green-500 rounded-t-sm" style={{height:`${(d.income/maxMonthVal)*100}%`}} />
+                      </div>
+                      {/* expense stacked */}
+                      <div className="w-4 bg-gray-200 rounded-t-sm overflow-hidden flex flex-col justify-end" style={{height:'56px'}}>
+                        <div className="w-full flex flex-col justify-end" style={{height:`${(d.expenses/maxMonthVal)*100}%`}}>
+                          <div className="bg-rose-200 w-full" style={{height:`${d.expenses>0?((d.expenses-d.expPaid)/d.expenses)*100:0}%`}} />
+                          <div className="bg-rose-500 w-full" style={{height:`${d.expenses>0?(d.expPaid/d.expenses)*100:0}%`}} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`text-[8px] font-bold text-center leading-tight ${isCur?'text-indigo-700':'text-gray-500'}`}>
+                      {(MONTH_NAMES[month.split('-')[1]]||month.split('-')[1]).substring(0,3)}
+                      <div className="text-[7px] opacity-70">{month.split('-')[0]}</div>
+                      {isCur && <div className="text-[7px] text-indigo-400">●جاری</div>}
+                    </div>
+                    <div className={`text-[8px] font-black ${net>=0?'text-green-600':'text-rose-600'}`}>
+                      {net>=0?'+':''}{fmtM(net)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Legend */}
+            <div className="flex gap-3 mt-2 text-[8px] font-bold text-gray-400">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-500 inline-block"/>درآمد</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500 inline-block"/>هزینه پرداخت‌شده</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-200 inline-block"/>معوق</span>
+            </div>
+            {/* Current month summary */}
+            {(() => {
+              const cm = monthlyData[currentMonth];
+              if (!cm) return null;
+              const net = cm.income - cm.expenses;
+              return (
+                <div className="mt-3 grid grid-cols-3 gap-1 border-t border-gray-200 pt-2">
+                  {[
+                    {label:'درآمد', val:cm.income,   color:'text-green-700', bg:'bg-green-50'},
+                    {label:'هزینه', val:cm.expenses, color:'text-rose-700',  bg:'bg-rose-50'},
+                    {label:'خالص',  val:net,         color: net>=0?'text-indigo-700':'text-amber-700', bg: net>=0?'bg-indigo-50':'bg-amber-50'},
+                  ].map(item=>(
+                    <div key={item.label} className={`${item.bg} rounded-lg p-1.5 text-center`}>
+                      <div className="text-[8px] text-gray-400 font-bold">{item.label} ماه جاری</div>
+                      <div className={`text-xs font-black ${item.color}`}>{fmtM(item.val)}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── Filters Bar ── */}
       <div className="bg-white px-3 py-2.5 rounded-xl border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-2 items-center">
         <div className="relative flex-grow w-full">
           <IconSearch className="absolute right-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
           <input
             className="w-full pl-3 pr-9 py-2 bg-gray-50 border-none rounded-lg text-xs outline-none focus:bg-white focus:ring-2 focus:ring-rose-100"
             placeholder="جستجو در شرح هزینه یا گیرنده..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full lg:w-auto">
-          <select
-            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value as any)}
-          >
-            <option value="all">{t.categories.all}</option>
-            {Object.keys(t.categories).filter(k => k !== 'all').map(cat => <option key={cat} value={cat}>{t.categories[cat as keyof typeof t.categories]}</option>)}
+          <select className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
+            value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+            <option value="all">همه سرفصل‌ها</option>
+            {NEW_CATEGORIES.map(k => <option key={k} value={k}>{CAT_META[k].label}</option>)}
           </select>
-
-          <select
-            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-indigo-600 outline-none"
-            value={personnelFilter}
-            onChange={e => setPersonnelFilter(e.target.value)}
-          >
-            <option value="all">{t.filters.allPersonnel}</option>
-            {personnel.map(p => (
-              <option key={p.id} value={p.id}>{p.fullName}</option>
-            ))}
+          <select className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-indigo-600 outline-none"
+            value={personnelFilter} onChange={e => setPersonnelFilter(e.target.value)}>
+            <option value="all">همه پرسنل</option>
+            {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
           </select>
-
-          <input
-            type="month"
-            className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
-          />
+          <input type="month" className="px-3 py-2 bg-gray-50 rounded-lg text-xs border-none font-bold text-gray-600 outline-none"
+            value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
         </div>
-        <button onClick={() => {setSearchTerm(''); setCategoryFilter('all'); setPersonnelFilter('all'); setDateFilter('');}} className="p-2 text-gray-400 hover:text-rose-600 transition-colors" title="ریست فیلترها">
+        <button onClick={() => {setSearchTerm('');setCategoryFilter('all');setPersonnelFilter('all');setDateFilter('');}}
+          className="p-2 text-gray-400 hover:text-rose-600 transition-colors" title="ریست فیلترها">
           <IconRefreshCw className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wide border-b border-gray-200">
+            <thead className="bg-gray-50 text-gray-500 font-bold border-b border-gray-200">
               <tr>
-                <th className="px-3 py-2.5 text-[10px]">{t.table.title}</th>
-                <th className="px-3 py-2.5 text-[10px]">{t.table.amount}</th>
-                <th className="px-3 py-2.5 text-[10px]">{t.table.cat}</th>
-                <th className="px-3 py-2.5 text-[10px]">{t.table.to}</th>
-                <th className="px-3 py-2.5 text-[10px]">{t.table.date}</th>
-                <th className="px-3 py-2.5 text-[10px] text-center">{t.table.status}</th>
-                <th className="px-3 py-2.5 text-[10px] text-center">عملیات</th>
+                <th className="px-3 py-2 text-[10px]">شرح هزینه</th>
+                <th className="px-3 py-2 text-[10px]">مبلغ (پرداخت / کل)</th>
+                <th className="px-3 py-2 text-[10px]">سرفصل حسابداری</th>
+                <th className="px-3 py-2 text-[10px]">گیرنده</th>
+                <th className="px-3 py-2 text-[10px]">تاریخ</th>
+                <th className="px-3 py-2 text-[10px] text-center">وضعیت</th>
+                <th className="px-3 py-2 text-[10px] text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredExpenses.map(ex => (
-                <tr key={ex.id} className="hover:bg-gray-50 transition-colors group">
+                <tr key={ex.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-2">
                     <div className="font-bold text-gray-800 text-xs">{ex.title}</div>
                     {ex.personnelId && (
@@ -737,17 +588,21 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <div className="flex flex-col">
-                        <span className="font-black text-rose-600 text-xs">{(ex.paidAmount || 0).toLocaleString()} <span className="text-[9px] font-normal opacity-50">/ {ex.amount.toLocaleString()}</span></span>
-                        <div className="flex items-center gap-1 mt-0.5">
-                            <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden">
-                                <div className={`h-full ${ex.status === 'partial' ? 'bg-blue-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, ((ex.paidAmount || 0) / ex.amount) * 100)}%` }}></div>
-                            </div>
-                            <span className="text-[8px] font-bold text-gray-400 uppercase">{ex.currency}</span>
-                        </div>
+                    <span className="font-black text-rose-600 text-xs">{fmtNum(ex.paidAmount||0)}</span>
+                    <span className="text-[9px] text-gray-400"> / {fmtNum(ex.amount)}</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden">
+                        <div className={`h-full ${ex.status==='partial'?'bg-blue-500':'bg-green-500'}`}
+                          style={{width:`${Math.min(100,((ex.paidAmount||0)/ex.amount)*100)}%`}} />
+                      </div>
+                      <span className="text-[8px] font-bold text-gray-400 uppercase">{ex.currency}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2"><span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-bold">{t.categories[ex.category as keyof typeof t.categories]}</span></td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${catColor(ex.category)}`}>
+                      {catLabel(ex.category)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600 font-medium text-xs">{ex.paidTo}</td>
                   <td className="px-3 py-2 text-gray-400 dir-ltr font-mono text-[10px]">{ex.date}</td>
                   <td className="px-3 py-2 text-center">
@@ -757,9 +612,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   </td>
                   <td className="px-3 py-2 text-center">
                     <div className="flex justify-center gap-0.5">
-                      <button onClick={() => handleOpenPayment(ex)} className="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded" title={t.payPortion}><IconMoney className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleOpenEdit(ex)} className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded"><IconEdit className="w-3.5 h-3.5" /></button>
-                      {isMaster && <button onClick={() => handleDelete(ex.id)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"><IconTrash className="w-3.5 h-3.5" /></button>}
+                      <button onClick={() => handleOpenPay(ex)}  className="p-1 text-green-500 hover:bg-green-50 rounded"  title="ثبت پرداخت"><IconMoney className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleOpenEdit(ex)} className="p-1 text-blue-400 hover:bg-blue-50 rounded"><IconEdit className="w-3.5 h-3.5" /></button>
+                      {isMaster && <button onClick={() => handleDelete(ex.id)} className="p-1 text-red-400 hover:bg-red-50 rounded"><IconTrash className="w-3.5 h-3.5" /></button>}
                     </div>
                   </td>
                 </tr>
@@ -768,7 +623,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 <tr>
                   <td colSpan={7} className="text-center py-16 text-gray-400">
                     <IconWallet className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                    <p className="font-bold text-xs">{t.empty}</p>
+                    <p className="font-bold text-xs">هزینه‌ای یافت نشد.</p>
                   </td>
                 </tr>
               )}
@@ -777,35 +632,35 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         </div>
       </div>
 
-      {/* Main Add/Edit Modal */}
+      {/* ══ Add / Edit Modal ══ */}
       {showAddModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in" onClick={() => setShowAddModal(false)}>
           <div className="bg-white rounded-[2rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-gray-100 bg-rose-50 flex justify-between items-center">
-              <h3 className="font-black text-xl text-rose-900 flex items-center gap-2"><IconWallet className="w-5 h-5" />{editingExpense ? t.edit : t.add}</h3>
+            <div className="p-5 border-b border-gray-100 bg-rose-50 flex justify-between items-center">
+              <h3 className="font-black text-lg text-rose-900 flex items-center gap-2">
+                <IconWallet className="w-5 h-5" />
+                {editingExpense ? 'ویرایش هزینه' : 'ثبت هزینه جدید'}
+              </h3>
               <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-rose-100 rounded-full">✕</button>
             </div>
-            <form onSubmit={handleSave} className="p-8 overflow-y-auto space-y-6 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.title}</label>
-                  <input required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 transition-all font-bold" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="مثلاً: هزینه خرید تجهیزات..." />
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">شرح هزینه</label>
+                  <input required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-bold"
+                    value={formData.title} onChange={e => setFormData({...formData, title:e.target.value})}
+                    placeholder="مثلاً: اجاره دفتر مهر ۱۴۰۳" />
                 </div>
-                
+
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.amount}</label>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">مبلغ کل</label>
                   <div className="flex gap-2">
-                    <div className="relative flex-grow">
-                      <input 
-                        type="text" 
-                        required 
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 transition-all font-black text-rose-600 dir-ltr text-right" 
-                        value={displayAmount} 
-                        onChange={handleAmountInputChange} 
-                        placeholder="0" 
-                      />
-                    </div>
-                    <select className="w-24 px-2 border rounded-xl bg-gray-50 outline-none font-bold" value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value as any})}>
+                    <input type="text" required
+                      className="flex-1 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-black text-rose-600 dir-ltr text-right"
+                      value={displayAmount} onChange={e => { const f=fmtInput(e.target.value); setDisplayAmount(f); setFormData(p=>({...p,amount:parseFloat(f.replace(/,/g,''))||0})); }}
+                      placeholder="0" />
+                    <select className="w-24 px-2 border rounded-xl bg-gray-50 outline-none font-bold text-sm"
+                      value={formData.currency} onChange={e => setFormData({...formData, currency:e.target.value as Currency})}>
                       <option value="IRR">ریال</option>
                       <option value="USD">USD</option>
                       <option value="OMR">OMR</option>
@@ -814,126 +669,132 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.paidAmount}</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 transition-all font-black text-green-600 dir-ltr text-right" 
-                    value={displayPaidAmount} 
-                    onChange={handlePaidAmountInputChange} 
-                    placeholder="0" 
-                  />
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">مبلغ پرداخت‌شده تاکنون</label>
+                  <input type="text"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-black text-green-600 dir-ltr text-right"
+                    value={displayPaidAmount} onChange={e => { const f=fmtInput(e.target.value); setDisplayPaidAmount(f); setFormData(p=>({...p,paidAmount:parseFloat(f.replace(/,/g,''))||0})); }}
+                    placeholder="0" />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.category}</label>
-                  <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 bg-white font-bold" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as any})}>
-                    {Object.keys(t.categories).filter(k => k !== 'all').map(cat => <option key={cat} value={cat}>{t.categories[cat as keyof typeof t.categories]}</option>)}
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">سرفصل حسابداری</label>
+                  <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 bg-white font-bold text-sm"
+                    value={formData.category} onChange={e => setFormData({...formData, category:e.target.value as ExpenseCategory})}>
+                    <optgroup label="── بهای تمام‌شده ──">
+                      <option value="cogs">{CAT_META.cogs.label}</option>
+                    </optgroup>
+                    <optgroup label="── هزینه‌های عملیاتی ──">
+                      {['salary_benefits','rent_utilities','marketing_ads','admin_general','it_software','sales_commission'].map(k=>(
+                        <option key={k} value={k}>{CAT_META[k].label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="── هزینه‌های غیرعملیاتی ──">
+                      {['tax_legal','depreciation','financial_costs','other'].map(k=>(
+                        <option key={k} value={k}>{CAT_META[k].label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="── سرمایه‌گذاری ──">
+                      <option value="capex">{CAT_META.capex.label}</option>
+                    </optgroup>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.date}</label>
-                  <input type="date" required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-mono" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">تاریخ پرداخت</label>
+                  <input type="date" required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-mono"
+                    value={formData.date} onChange={e => setFormData({...formData, date:e.target.value})} />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.linkedStaff}</label>
-                  <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 bg-white font-bold text-indigo-600" value={formData.personnelId} onChange={e => setFormData({...formData, personnelId: e.target.value, paidTo: e.target.value ? (personnel.find(p=>p.id === e.target.value)?.fullName || formData.paidTo) : formData.paidTo })}>
-                    <option value="">{t.noLink}</option>
-                    {personnel.map(p => (
-                      <option key={p.id} value={p.id}>{p.fullName} ({p.roles.join(', ')})</option>
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">مرتبط با پرسنل</label>
+                  <select className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 bg-white font-bold text-indigo-600"
+                    value={formData.personnelId}
+                    onChange={e => setFormData({...formData, personnelId:e.target.value, paidTo:e.target.value?(personnel.find(p=>p.id===e.target.value)?.fullName||formData.paidTo):formData.paidTo})}>
+                    <option value="">بدون ارتباط پرسنلی (متفرقه)</option>
+                    {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName} ({p.roles.join(', ')})</option>)}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">پرداخت شده به (نام شخص / شرکت)</label>
+                  <input required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-bold"
+                    value={formData.paidTo} onChange={e => setFormData({...formData, paidTo:e.target.value})} placeholder="شخص یا شرکت" />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">توضیحات / جزئیات</label>
+                  <textarea rows={2} className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-medium"
+                    value={formData.description} onChange={e => setFormData({...formData, description:e.target.value})} />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">پیوست رسید / فاکتور</label>
+                  <div onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center cursor-pointer hover:border-rose-400 hover:bg-rose-50/30 transition-all bg-gray-50">
+                    <IconFileText className="w-7 h-7 text-gray-300 mx-auto mb-1" />
+                    <p className="text-xs text-gray-500 font-bold">برای آپلود کلیک کنید (فاکتور، فیش واریز و ...)</p>
+                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {formData.files?.map((f, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 p-2 rounded-lg text-xs shadow-sm">
+                        <IconFileText className="w-3 h-3 text-rose-500" />
+                        <span className="max-w-[150px] truncate font-bold">{f.name}</span>
+                        {f.status==='uploading' && <span className="text-[10px] text-blue-500">{Math.round(f.progress||0)}%</span>}
+                        <button type="button" onClick={() => setFormData(p=>({...p,files:p.files?.filter((_,idx)=>idx!==i)}))} className="text-red-400 hover:text-red-600">✕</button>
+                      </div>
                     ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.paidTo}</label>
-                  <input required className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-bold" value={formData.paidTo} onChange={e => setFormData({...formData, paidTo: e.target.value})} placeholder="شخص یا شرکت" />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">{t.desc}</label>
-                  <textarea rows={2} className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-medium" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                </div>
-
-                <div className="md:col-span-2">
-                   <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-widest">{t.receipt}</label>
-                   <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-rose-400 hover:bg-rose-50/30 transition-all bg-gray-50">
-                      <IconFileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-xs text-gray-500 font-bold">برای آپلود کلیک کنید (فاکتور، فیش واریز و ...)</p>
-                      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-                   </div>
-                   <div className="flex flex-wrap gap-2 mt-3">
-                     {formData.files?.map((f, i) => (
-                       <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 p-2 rounded-lg text-xs shadow-sm">
-                         <IconFileText className="w-3 h-3 text-rose-500" />
-                         <span className="max-w-[150px] truncate font-bold">{f.name}</span>
-                         {f.status === 'uploading' && <span className="text-[10px] text-blue-500">{Math.round(f.progress || 0)}%</span>}
-                         <button type="button" onClick={() => setFormData(p => ({...p, files: p.files?.filter((_, idx) => idx !== i)}))} className="text-red-400 hover:text-red-600 transition-colors">✕</button>
-                       </div>
-                     ))}
-                   </div>
+                  </div>
                 </div>
               </div>
             </form>
-            <div className="p-6 border-t border-gray-100 flex gap-3 bg-gray-50/50">
-              <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-2xl transition-all border border-transparent hover:border-gray-200 uppercase tracking-widest">{t.cancel}</button>
-              <button onClick={handleSave} disabled={isSubmitting} className="flex-1 py-3 bg-rose-600 text-white font-black rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-700 transition-all flex justify-center items-center gap-2">
-                {isSubmitting ? <IconRefreshCw className="w-5 h-5 animate-spin" /> : <><IconCheck className="w-5 h-5" /> {t.save}</>}
+            <div className="p-5 border-t border-gray-100 flex gap-3 bg-gray-50/50">
+              <button type="button" onClick={() => setShowAddModal(false)}
+                className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-2xl border border-transparent hover:border-gray-200">انصراف</button>
+              <button onClick={handleSave} disabled={isSubmitting}
+                className="flex-1 py-3 bg-rose-600 text-white font-black rounded-2xl shadow-xl shadow-rose-200 hover:bg-rose-700 flex justify-center items-center gap-2">
+                {isSubmitting ? <IconRefreshCw className="w-5 h-5 animate-spin" /> : <><IconCheck className="w-5 h-5" />ذخیره نهایی</>}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Partial Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in" onClick={() => setShowPaymentModal(null)}>
-            <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                <div className="p-6 border-b border-gray-100 bg-green-50 flex justify-between items-center">
-                    <h3 className="font-black text-lg text-green-900 flex items-center gap-2"><IconMoney className="w-5 h-5" />{t.payPortion}</h3>
-                    <button onClick={() => setShowPaymentModal(null)} className="p-2 hover:bg-green-100 rounded-full">✕</button>
-                </div>
-                <div className="p-8 space-y-6">
-                    <div>
-                        <div className="text-sm font-bold text-gray-500 mb-1">{showPaymentModal.title}</div>
-                        <div className="text-xs text-gray-400 mb-4">{showPaymentModal.paidTo}</div>
-                        
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-                            <div className="flex justify-between text-xs font-bold">
-                                <span className="text-gray-500">{t.title}:</span>
-                                <span className="text-gray-900">{showPaymentModal.amount.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between text-xs font-bold">
-                                <span className="text-gray-500">{t.paidAmount}:</span>
-                                <span className="text-green-600">{(showPaymentModal.paidAmount || 0).toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm font-black border-t border-gray-200 pt-2">
-                                <span className="text-gray-700">{t.remained}</span>
-                                <span className="text-rose-600">{(showPaymentModal.amount - (showPaymentModal.paidAmount || 0)).toLocaleString()} {showPaymentModal.currency}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-widest">{t.newPayment}</label>
-                        <input 
-                            type="text" 
-                            autoFocus
-                            className="w-full px-4 py-4 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 transition-all font-black text-2xl text-green-600 dir-ltr text-center" 
-                            value={displayPaidAmount} 
-                            onChange={(e) => setDisplayPaidAmount(formatDisplayAmount(e.target.value))}
-                            placeholder="0" 
-                        />
-                    </div>
-                </div>
-                <div className="p-6 bg-gray-50 flex gap-3">
-                    <button onClick={() => setShowPaymentModal(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-xl transition-all">انصراف</button>
-                    <button onClick={handleSavePayment} disabled={isSubmitting || !displayPaidAmount} className="flex-1 py-3 bg-green-600 text-white font-black rounded-xl shadow-lg shadow-green-200 hover:bg-green-700 transition-all flex justify-center items-center gap-2">
-                        {isSubmitting ? <IconRefreshCw className="w-5 h-5 animate-spin" /> : <><IconCheck className="w-5 h-5" /> {t.save}</>}
-                    </button>
-                </div>
+      {/* ══ Partial Payment Modal ══ */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in" onClick={() => setShowPayModal(null)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b bg-green-50 flex justify-between items-center">
+              <h3 className="font-black text-lg text-green-900 flex items-center gap-2"><IconMoney className="w-5 h-5" />ثبت پرداخت مرحله‌ای</h3>
+              <button onClick={() => setShowPayModal(null)} className="p-2 hover:bg-green-100 rounded-full">✕</button>
             </div>
+            <div className="p-7 space-y-5">
+              <div className="text-sm font-bold text-gray-700">{showPayModal.title}</div>
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2 text-xs font-bold">
+                <div className="flex justify-between"><span className="text-gray-500">مبلغ کل:</span><span>{fmtNum(showPayModal.amount)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">پرداخت‌شده:</span><span className="text-green-600">{fmtNum(showPayModal.paidAmount||0)}</span></div>
+                <div className="flex justify-between border-t border-gray-200 pt-2 text-sm">
+                  <span className="text-gray-700">باقیمانده:</span>
+                  <span className="text-rose-600">{fmtNum(showPayModal.amount-(showPayModal.paidAmount||0))} {showPayModal.currency}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">مبلغ پرداختی جدید</label>
+                <input type="text" autoFocus
+                  className="w-full px-4 py-4 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 font-black text-2xl text-green-600 dir-ltr text-center"
+                  value={displayPaidAmount}
+                  onChange={e => setDisplayPaidAmount(fmtInput(e.target.value))}
+                  placeholder="0" />
+              </div>
+            </div>
+            <div className="p-5 bg-gray-50 flex gap-3">
+              <button onClick={() => setShowPayModal(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-xl">انصراف</button>
+              <button onClick={handleSavePay} disabled={isSubmitting || !displayPaidAmount}
+                className="flex-1 py-3 bg-green-600 text-white font-black rounded-xl shadow-lg shadow-green-200 hover:bg-green-700 flex justify-center items-center gap-2">
+                {isSubmitting ? <IconRefreshCw className="w-5 h-5 animate-spin" /> : <><IconCheck className="w-5 h-5" />ثبت پرداخت</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

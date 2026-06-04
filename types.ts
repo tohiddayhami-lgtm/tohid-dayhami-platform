@@ -293,7 +293,21 @@ export interface SalesRecord {
 }
 
 // --- Expense Management Types ---
-export type ExpenseCategory = 'operational' | 'non_operational' | 'salary' | 'tax' | 'marketing' | 'rent' | 'sales_commission' | 'designer_commission' | 'other';
+export type ExpenseCategory =
+  | 'cogs'             // بهای تمام‌شده خدمات / کالا
+  | 'salary_benefits'  // حقوق، دستمزد و مزایا
+  | 'rent_utilities'   // اجاره، قبوض و تأسیسات
+  | 'marketing_ads'    // بازاریابی و تبلیغات
+  | 'admin_general'    // هزینه‌های اداری و عمومی
+  | 'it_software'      // فناوری اطلاعات و نرم‌افزار
+  | 'sales_commission' // کمیسیون فروش و بازاریابی
+  | 'tax_legal'        // مالیات، عوارض و هزینه حقوقی
+  | 'depreciation'     // استهلاک دارایی‌ها
+  | 'financial_costs'  // هزینه‌های مالی و بانکی
+  | 'capex'            // سرمایه‌گذاری و خرید دارایی ثابت
+  | 'other'            // سایر هزینه‌ها
+  // legacy keys (backward compat with existing Firebase data)
+  | 'operational' | 'non_operational' | 'salary' | 'tax' | 'marketing' | 'rent' | 'designer_commission';
 
 export interface Expense {
   id: string;

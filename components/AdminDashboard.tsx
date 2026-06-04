@@ -180,7 +180,7 @@ export const AdminDashboard: React.FC<Props> = ({
           messages: 'مکاتبات',
           projects: 'مدیریت پروژه‌ها',
           financial: 'گزارشات مالی',
-          expenses: 'هزینه‌ها و واریزی‌ها',
+          expenses: 'هزینه‌ها و درآمدها',
           customers: 'بانک مشتریان',
           services: 'خدمات و تعرفه‌ها',
           personnel: 'کاربران و پرسنل',
