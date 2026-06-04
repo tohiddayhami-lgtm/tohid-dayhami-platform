@@ -271,13 +271,25 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
               const isSelected = selectedServiceIds.includes(service.id);
               return (
                 <div key={service.id} className={`rounded-lg border transition-all ${isSelected ? 'border-gray-800 bg-gray-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
-                  <div onClick={() => toggleService(service.id)} className="cursor-pointer flex items-center gap-2.5 px-3 py-2.5">
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}>
+                  <div onClick={() => toggleService(service.id)} className="cursor-pointer flex items-start gap-2.5 px-3 py-2.5">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors mt-0.5 ${isSelected ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-300'}`}>
                       {isSelected && <IconCheck className="w-2.5 h-2.5 text-white" />}
                     </div>
-                    <span className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
-                      {lang === 'en' && service.titleEn ? service.titleEn : service.title}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm ${isSelected ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
+                        {service.icon && <span className="ml-1">{service.icon}</span>}
+                        {lang === 'en' && service.titleEn ? service.titleEn : service.title}
+                      </div>
+                      {(() => {
+                        const desc = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
+                        if (!desc || service.id === 's_other') return null;
+                        return (
+                          <p className={`text-[11px] mt-0.5 leading-relaxed ${isSelected ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {desc}
+                          </p>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   {isSelected && service.subServices && service.subServices.length > 0 && (
