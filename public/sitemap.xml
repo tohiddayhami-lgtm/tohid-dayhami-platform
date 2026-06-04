@@ -4,17 +4,17 @@
 
   <!-- صفحه اصلی / فرم مشتری -->
   <url>
-    <loc>https://tohiddayhami.com/</loc>
+    <loc>https://www.tohiddayhami.com/</loc>
     <lastmod>2026-06-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="fa" href="https://tohiddayhami.com/"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://tohiddayhami.com/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://www.tohiddayhami.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.tohiddayhami.com/?lang=en"/>
   </url>
 
   <!-- فرم درخواست مشتری -->
   <url>
-    <loc>https://tohiddayhami.com/#form</loc>
+    <loc>https://www.tohiddayhami.com/#form</loc>
     <lastmod>2026-06-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -22,7 +22,7 @@
 
   <!-- پیگیری درخواست -->
   <url>
-    <loc>https://tohiddayhami.com/#tracking</loc>
+    <loc>https://www.tohiddayhami.com/#tracking</loc>
     <lastmod>2026-06-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
