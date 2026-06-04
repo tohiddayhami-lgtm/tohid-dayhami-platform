@@ -282,13 +282,20 @@ const App: React.FC = () => {
     const unsubSettings = subscribeToSettings(
       (cfg) => {
         if (cfg) {
+          // label migrations: old stored label → new label
+          const LABEL_MIGRATIONS: Record<string, string> = {
+            'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
+            'Request Description & Product Info': 'Product Information',
+          };
           const mergedFields = (cfg.formFields || []).map(field => {
             if (!field.isSystem) return field;
             const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
             if (!def) return field;
             return {
               ...field,
-              labelEn:       field.labelEn       || def.labelEn,
+              label:         LABEL_MIGRATIONS[field.label] ?? field.label,
+              labelEn:       LABEL_MIGRATIONS[field.labelEn ?? ''] ?? (field.labelEn || def.labelEn),
+              placeholder:   field.id === 'f8' ? def.placeholder : field.placeholder,
               placeholderEn: field.placeholderEn || def.placeholderEn,
               optionsEn:     field.optionsEn     || def.optionsEn,
             };
