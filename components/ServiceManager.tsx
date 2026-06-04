@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ServiceOption, Currency, SubService } from '../types';
-import { IconPlus, IconEdit, IconTrash, IconCheck } from './Icons';
+import { IconPlus, IconEdit, IconTrash, IconCheck, IconFileText } from './Icons';
 import { Language } from '../App';
 
 interface Props {
@@ -23,12 +23,17 @@ const blankSub = () => ({ title: '', titleEn: '', amount: 0, currency: 'OMR' as 
 
 export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly = false, lang }) => {
   // which card is open
-  const [openId,    setOpenId]    = useState<string | null>(null);
+  const [openId,      setOpenId]      = useState<string | null>(null);
   // which service is in edit mode (null = add-new panel)
-  const [editingId, setEditingId] = useState<string | null | 'NEW'>(null);
-  const [form,      setForm]      = useState(blankForm());
+  const [editingId,   setEditingId]   = useState<string | null | 'NEW'>(null);
+  const [form,        setForm]        = useState(blankForm());
   // sub-service inline forms per service id
-  const [subForms,  setSubForms]  = useState<Record<string, ReturnType<typeof blankSub>>>({});
+  const [subForms,    setSubForms]    = useState<Record<string, ReturnType<typeof blankSub>>>({});
+  // import state
+  const [importStatus, setImportStatus] = useState<'idle'|'preview'|'error'>('idle');
+  const [importData,   setImportData]   = useState<ServiceOption[]>([]);
+  const [importError,  setImportError]  = useState('');
+  const importRef = useRef<HTMLInputElement>(null);
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const fmtPrice = (amt: number, cur: Currency) =>
@@ -121,6 +126,122 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
       s.id === svcId ? { ...s, subServices: s.subServices?.filter(sb => sb.id !== subId) } : s
     ));
 
+  // ── export ────────────────────────────────────────────────────────────────
+  const exportJSON = () => {
+    const payload = {
+      _meta: {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        platform: 'Tohid Dayhami Platform',
+        description: 'لیست خدمات و تعرفه‌های شرکت — قابل ویرایش توسط هوش مصنوعی',
+        aiInstructions: [
+          'این فایل JSON شامل خدمات و تعرفه‌های شرکت است.',
+          'هر آیتم در آرایه services یک خدمت اصلی است.',
+          'هر خدمت می‌تواند آرایه‌ای از subServices داشته باشد.',
+          'فیلدهای id را تغییر ندهید — برای حفظ یکپارچگی سیستم لازم است.',
+          'برای افزودن خدمت جدید، یک شیء با id منحصربه‌فرد اضافه کنید مثل: s-new1',
+          'isActive: true یعنی در فرم مشتری نمایش داده می‌شود.',
+          'currency: IRR | OMR | USD',
+        ],
+        fieldGuide: {
+          id: 'شناسه یکتا — تغییر ندهید',
+          title: 'عنوان فارسی خدمت — اجباری',
+          titleEn: 'عنوان انگلیسی خدمت',
+          description: 'توضیحات فارسی — اجباری',
+          descriptionEn: 'توضیحات انگلیسی',
+          icon: 'ایموجی آیکون',
+          'price.amount': 'مبلغ تعرفه پایه (عدد)',
+          'price.currency': 'واحد پول: IRR | OMR | USD',
+          isActive: 'نمایش در فرم مشتری: true | false',
+          subServices: 'آرایه زیرمجموعه‌ها (اختیاری)',
+        },
+      },
+      services: services.map(s => ({
+        id: s.id,
+        title: s.title,
+        titleEn: s.titleEn || '',
+        description: s.description,
+        descriptionEn: s.descriptionEn || '',
+        icon: s.icon || '',
+        price: { amount: s.price?.amount || 0, currency: s.price?.currency || 'OMR' },
+        isActive: s.isActive,
+        defaultCommission: s.defaultCommission || 0,
+        subServices: (s.subServices || []).map(sub => ({
+          id: sub.id,
+          title: sub.title,
+          titleEn: sub.titleEn || '',
+          price: { amount: sub.price?.amount || 0, currency: sub.price?.currency || 'OMR' },
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `services-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── import ─────────────────────────────────────────────────────────────────
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        // accept either { services: [...] } or a plain array
+        const arr: unknown[] = Array.isArray(raw) ? raw : (raw?.services ?? []);
+        if (!Array.isArray(arr) || arr.length === 0) throw new Error('آرایه services یافت نشد');
+        // validate minimum fields
+        const parsed: ServiceOption[] = arr.map((item: unknown, i: number) => {
+          const it = item as Record<string, unknown>;
+          if (!it.title) throw new Error(`آیتم ${i+1}: فیلد title اجباری است`);
+          return {
+            id:             String(it.id || `s-imp-${Date.now()}-${i}`),
+            title:          String(it.title),
+            titleEn:        String(it.titleEn || it.title),
+            description:    String(it.description || ''),
+            descriptionEn:  String(it.descriptionEn || it.description || ''),
+            icon:           String(it.icon || '✨'),
+            price:          it.price ? { amount: Number((it.price as Record<string,unknown>).amount||0), currency: String((it.price as Record<string,unknown>).currency||'OMR') as Currency } : { amount:0, currency:'OMR' as Currency },
+            isActive:       it.isActive !== false,
+            defaultCommission: Number(it.defaultCommission || 0),
+            subServices:    Array.isArray(it.subServices) ? (it.subServices as Record<string,unknown>[]).map((sub, j) => ({
+              id:      String(sub.id || `sub-imp-${Date.now()}-${j}`),
+              title:   String(sub.title || ''),
+              titleEn: String(sub.titleEn || sub.title || ''),
+              price:   sub.price ? { amount: Number((sub.price as Record<string,unknown>).amount||0), currency: String((sub.price as Record<string,unknown>).currency||'OMR') as Currency } : { amount:0, currency:'OMR' as Currency },
+            })) : [],
+          };
+        });
+        setImportData(parsed);
+        setImportStatus('preview');
+        setImportError('');
+      } catch (err) {
+        setImportError(err instanceof Error ? err.message : 'خطای ناشناخته');
+        setImportStatus('error');
+      }
+      // reset input so same file can be re-imported
+      if (importRef.current) importRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const confirmImport = (mode: 'replace' | 'merge') => {
+    if (mode === 'replace') {
+      onUpdate(importData);
+    } else {
+      // merge: keep existing, add/overwrite by id
+      const existing = new Map(services.map(s => [s.id, s]));
+      importData.forEach(s => existing.set(s.id, s));
+      onUpdate([...existing.values()]);
+    }
+    setImportStatus('idle');
+    setImportData([]);
+  };
+
   // ── form field component ────────────────────────────────────────────────────
   const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div>
@@ -136,21 +257,106 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
     <div className="space-y-4 animate-fade-in">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm gap-3">
         <div>
           <h2 className="text-base font-bold text-gray-800">خدمات و تعرفه‌ها</h2>
           <p className="text-xs text-gray-400 mt-0.5">{services.length} خدمت ثبت‌شده</p>
         </div>
-        {!readonly && (
+        <div className="flex gap-2 flex-wrap">
+          {/* Export */}
           <button
-            onClick={editingId === 'NEW' ? cancelEdit : openAdd}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ${editingId === 'NEW' ? 'bg-gray-200 text-gray-600' : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}
+            onClick={exportJSON}
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+            title="خروجی JSON برای ویرایش با AI"
           >
-            <IconPlus className="w-4 h-4"/>
-            {editingId === 'NEW' ? 'انصراف' : 'افزودن خدمت جدید'}
+            <IconFileText className="w-4 h-4 text-indigo-500"/> خروجی JSON
           </button>
-        )}
+          {/* Import */}
+          {!readonly && (
+            <>
+              <button
+                onClick={() => importRef.current?.click()}
+                className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all"
+                title="ورودی JSON از فایل"
+              >
+                <IconFileText className="w-4 h-4"/> ورودی JSON
+              </button>
+              <input ref={importRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile}/>
+            </>
+          )}
+          {/* Add Service */}
+          {!readonly && (
+            <button
+              onClick={editingId === 'NEW' ? cancelEdit : openAdd}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ${editingId === 'NEW' ? 'bg-gray-200 text-gray-600' : 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700'}`}
+            >
+              <IconPlus className="w-4 h-4"/>
+              {editingId === 'NEW' ? 'انصراف' : 'افزودن خدمت'}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* ── Import Error ── */}
+      {importStatus === 'error' && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="text-xs font-bold text-red-700">⚠ خطا در پردازش فایل: {importError}</div>
+          <button onClick={()=>setImportStatus('idle')} className="text-red-400 hover:text-red-600 text-xs font-bold">بستن</button>
+        </div>
+      )}
+
+      {/* ── Import Preview Modal ── */}
+      {importStatus === 'preview' && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-black text-indigo-900">پیش‌نمایش ورودی JSON</div>
+                <div className="text-xs text-indigo-500 mt-0.5">{importData.length} خدمت آماده ورود</div>
+              </div>
+              <button onClick={()=>setImportStatus('idle')} className="p-1.5 hover:bg-indigo-100 rounded-full text-indigo-400">✕</button>
+            </div>
+            {/* preview list */}
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {importData.map(s => (
+                <div key={s.id} className="flex items-start gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
+                  <span className="text-lg shrink-0">{s.icon||'✨'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-gray-800">{s.title}
+                      {s.titleEn && <span className="text-gray-400 font-normal text-xs mr-2 dir-ltr">{s.titleEn}</span>}
+                    </div>
+                    {s.description && <div className="text-xs text-gray-500 truncate">{s.description}</div>}
+                    <div className="flex gap-1.5 mt-1 flex-wrap">
+                      {s.price && s.price.amount > 0 && (
+                        <span className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold">{s.price.amount.toLocaleString()} {s.price.currency}</span>
+                      )}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${s.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{s.isActive ? 'فعال' : 'غیرفعال'}</span>
+                      {(s.subServices?.length||0) > 0 && (
+                        <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">{s.subServices!.length} زیرمجموعه</span>
+                      )}
+                      {services.find(e=>e.id===s.id) && (
+                        <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-bold">جایگزین موجود</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* action buttons */}
+            <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 space-y-2">
+              <div className="text-xs text-gray-500 mb-3">
+                <strong>جایگزینی کامل:</strong> همه خدمات فعلی پاک می‌شوند و این لیست جایگزین می‌شود.<br/>
+                <strong>ادغام:</strong> خدمات جدید اضافه و خدمات موجود (با همان ID) به‌روز می‌شوند.
+              </div>
+              <div className="flex gap-2">
+                <button onClick={()=>setImportStatus('idle')} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl">انصراف</button>
+                <button onClick={()=>confirmImport('merge')} className="flex-1 py-2.5 text-sm font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200">ادغام با موجود</button>
+                <button onClick={()=>confirmImport('replace')} className="flex-1 py-2.5 text-sm font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-md shadow-rose-200">جایگزینی کامل</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Add New Service Panel ── */}
       {editingId === 'NEW' && (

@@ -1,0 +1,113 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "exportedAt": "2026-06-05T00:00:00.000Z",
+    "platform": "Tohid Dayhami Platform",
+    "description": "لیست خدمات و تعرفه‌های شرکت — قابل ویرایش توسط هوش مصنوعی",
+    "aiInstructions": [
+      "این فایل JSON شامل خدمات و تعرفه‌های شرکت است.",
+      "هر آیتم در آرایه services یک خدمت اصلی است.",
+      "هر خدمت می‌تواند آرایه‌ای از subServices داشته باشد.",
+      "فیلدهای id را تغییر ندهید — برای حفظ یکپارچگی سیستم لازم است.",
+      "برای افزودن خدمت جدید، یک شیء با id منحصربه‌فرد اضافه کنید مثل: s-new1",
+      "isActive: true یعنی در فرم مشتری نمایش داده می‌شود.",
+      "currency: IRR | OMR | USD"
+    ],
+    "fieldGuide": {
+      "id": "شناسه یکتا — تغییر ندهید",
+      "title": "عنوان فارسی خدمت — اجباری",
+      "titleEn": "عنوان انگلیسی خدمت",
+      "description": "توضیحات فارسی — اجباری",
+      "descriptionEn": "توضیحات انگلیسی",
+      "icon": "ایموجی آیکون",
+      "price.amount": "مبلغ تعرفه پایه (عدد)",
+      "price.currency": "واحد پول: IRR | OMR | USD",
+      "isActive": "نمایش در فرم مشتری: true | false",
+      "defaultCommission": "درصد کمیسیون پیش‌فرض (عدد)",
+      "subServices": "آرایه زیرمجموعه‌ها (اختیاری)"
+    }
+  },
+  "services": [
+    {
+      "id": "s3",
+      "title": "طراحی بسته‌بندی",
+      "titleEn": "Packaging Design",
+      "description": "طراحی حرفه‌ای بسته‌بندی محصولات صادراتی و داخلی",
+      "descriptionEn": "Professional packaging design for export and domestic products",
+      "icon": "📦",
+      "price": { "amount": 0, "currency": "OMR" },
+      "isActive": true,
+      "defaultCommission": 10,
+      "subServices": [
+        {
+          "id": "sub-s3-1",
+          "title": "طراحی جعبه",
+          "titleEn": "Box Design",
+          "price": { "amount": 0, "currency": "OMR" }
+        },
+        {
+          "id": "sub-s3-2",
+          "title": "طراحی لیبل",
+          "titleEn": "Label Design",
+          "price": { "amount": 0, "currency": "OMR" }
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "title": "طراحی گرافیک",
+      "titleEn": "Graphic Design",
+      "description": "طراحی هویت بصری، لوگو، بروشور و مواد تبلیغاتی",
+      "descriptionEn": "Visual identity, logo, brochure and advertising materials design",
+      "icon": "🎨",
+      "price": { "amount": 0, "currency": "OMR" },
+      "isActive": true,
+      "defaultCommission": 10,
+      "subServices": [
+        {
+          "id": "sub-s4-1",
+          "title": "طراحی لوگو",
+          "titleEn": "Logo Design",
+          "price": { "amount": 0, "currency": "OMR" }
+        },
+        {
+          "id": "sub-s4-2",
+          "title": "طراحی بروشور",
+          "titleEn": "Brochure Design",
+          "price": { "amount": 0, "currency": "OMR" }
+        },
+        {
+          "id": "sub-s4-3",
+          "title": "طراحی کاتالوگ",
+          "titleEn": "Catalogue Design",
+          "price": { "amount": 0, "currency": "OMR" }
+        }
+      ]
+    },
+    {
+      "id": "s1",
+      "title": "مشاوره تخصصی",
+      "titleEn": "Expert Consultation",
+      "description": "مشاوره در حوزه صادرات، بازاریابی بین‌الملل و ثبت شرکت",
+      "descriptionEn": "Consultation in export, international marketing and company registration",
+      "icon": "💡",
+      "price": { "amount": 0, "currency": "OMR" },
+      "isActive": true,
+      "defaultCommission": 15,
+      "subServices": [
+        {
+          "id": "sub-s1-1",
+          "title": "مشاوره صادرات",
+          "titleEn": "Export Consulting",
+          "price": { "amount": 0, "currency": "OMR" }
+        },
+        {
+          "id": "sub-s1-2",
+          "title": "مشاوره ثبت شرکت عمان",
+          "titleEn": "Oman Company Registration Consulting",
+          "price": { "amount": 0, "currency": "OMR" }
+        }
+      ]
+    }
+  ]
+}
