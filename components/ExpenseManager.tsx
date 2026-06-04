@@ -306,40 +306,44 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     return mDate && mSrch;
   });
 
-  // ── KPI stats per currency ─────────────────────────────────────────────────
-  const expByCur: Record<string,{total:number;paid:number}> = {};
-  filteredExp.forEach(e => {
-    const c = e.currency||'IRR';
-    if (!expByCur[c]) expByCur[c] = {total:0,paid:0};
-    expByCur[c].total += e.amount||0;
-    expByCur[c].paid  += e.paidAmount||0;
-  });
-  const incByCur: Record<string,number> = {};
-  filteredInc.forEach(sr => {
-    const c = sr.currency||'IRR';
-    incByCur[c] = (incByCur[c]||0) + (sr.saleAmount||0);
-  });
-  const allCurs = [...new Set([...Object.keys(expByCur),...Object.keys(incByCur)])];
+  // ── All figures converted to OMR ──────────────────────────────────────────
+  // Helper: convert any amount+currency to OMR (defined after rates state)
+  const omr = (amt: number, cur: string) => toOMR(amt, cur);
 
-  const totalExpPaid = filteredExp.reduce((s,e) => s+(e.paidAmount||0), 0);
+  // KPI totals in OMR
+  const kpiIncOMR      = filteredInc.reduce((s,sr) => s + omr(sr.saleAmount||0, sr.currency||'IRR'), 0);
+  const kpiExpOMR      = filteredExp.reduce((s,e)  => s + omr(e.amount||0,      e.currency||'IRR'), 0);
+  const kpiExpPaidOMR  = filteredExp.reduce((s,e)  => s + omr(e.paidAmount||0,  e.currency||'IRR'), 0);
+  const kpiNetOMR      = kpiIncOMR - kpiExpOMR;
+  const kpiArrearsOMR  = kpiExpOMR - kpiExpPaidOMR;
+
+  // Income receivables in OMR
+  const kpiIncReceivedOMR = filteredInc.reduce((s,sr) => s + omr(sr.receivedAmount??sr.saleAmount, sr.currency||'IRR'), 0);
+  const kpiIncPendingOMR  = kpiIncOMR - kpiIncReceivedOMR;
 
   const paidCnt    = filteredExp.filter(e=>e.status==='paid').length;
   const partialCnt = filteredExp.filter(e=>e.status==='partial').length;
   const pendingCnt = filteredExp.filter(e=>e.status==='pending').length;
 
-  // ── P&L engine (report period + currency) ──────────────────────────────────
+  // ── P&L engine — all in OMR, all currencies ────────────────────────────────
   const inPeriod = (d: string) => {
     if (reportPeriod === 'month') return d.startsWith(currentMonth);
     if (reportPeriod === 'year')  return d.startsWith(currentYear);
     return true;
   };
-  const inCur = (c: string) => reportCurrency === 'all' || c === reportCurrency;
 
-  const plExp = expenses.filter(ex => inPeriod(ex.date) && inCur(ex.currency||'IRR'));
-  const plInc = salesRecords.filter(sr => inPeriod(sr.depositDate||sr.createdAt||'') && inCur(sr.currency||'IRR'));
+  const plExp = expenses.filter(ex => inPeriod(ex.date));
+  const plInc = salesRecords.filter(sr => inPeriod(sr.depositDate||sr.createdAt||''));
 
-  const plRevenue   = plInc.reduce((s,r) => s+(r.saleAmount||0), 0);
-  const byGroup     = (g: string) => plExp.filter(e=>(allExpCats[e.category]?.group||EXP_CAT[e.category]?.group||'below')===g).reduce((s,e)=>s+(e.amount||0),0);
+  // All P&L amounts are in OMR
+  const plRevenue   = plInc.reduce((s,r) => s + omr(r.saleAmount||0, r.currency||'IRR'), 0);
+  const byGroup     = (g: string) => plExp
+    .filter(e => (allExpCats[e.category]?.group||EXP_CAT[e.category]?.group||'below') === g)
+    .reduce((s,e) => s + omr(e.amount||0, e.currency||'IRR'), 0);
+  const byCat       = (cat: string) => plExp
+    .filter(e => e.category === cat)
+    .reduce((s,e) => s + omr(e.amount||0, e.currency||'IRR'), 0);
+
   const plCogs      = byGroup('cogs');
   const grossProfit = plRevenue - plCogs;
   const plOpex      = byGroup('opex');
@@ -348,24 +352,27 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const netIncome   = ebit - plBelow;
   const plCapex     = byGroup('capex');
 
-  const plCatBreak: Record<string,number> = {};
-  plExp.forEach(e => { plCatBreak[e.category] = (plCatBreak[e.category]||0) + (e.amount||0); });
-  const sortedCats = Object.entries(plCatBreak).sort((a,b)=>b[1]-a[1]);
-  const maxCatAmt  = Math.max(...sortedCats.map(c=>c[1]), 1);
+  // Category breakdown in OMR
+  const catKeysSet: string[] = [];
+  plExp.forEach(e => { const k = String(e.category); if (!catKeysSet.includes(k)) catKeysSet.push(k); });
+  const sortedCats = catKeysSet
+    .map(k => [k, byCat(k)] as [string, number])
+    .sort((a,b) => b[1] - a[1]);
+  const maxCatAmt = Math.max(...sortedCats.map(c=>c[1]), 1);
 
-  // ── monthly chart (filtered by reportCurrency) ─────────────────────────────
+  // ── Monthly chart — all in OMR ─────────────────────────────────────────────
   const monthlyData: Record<string,{expenses:number;expPaid:number;income:number}> = {};
   monthlyData[currentMonth] = {expenses:0, expPaid:0, income:0};
-  expenses.filter(ex => inCur(ex.currency||'IRR')).forEach(ex => {
+  expenses.forEach(ex => {
     const m = ex.date?.substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
-    monthlyData[m].expenses += ex.amount||0;
-    monthlyData[m].expPaid  += ex.paidAmount||0;
+    monthlyData[m].expenses += omr(ex.amount||0,     ex.currency||'IRR');
+    monthlyData[m].expPaid  += omr(ex.paidAmount||0, ex.currency||'IRR');
   });
-  salesRecords.filter(sr => inCur(sr.currency||'IRR')).forEach(sr => {
+  salesRecords.forEach(sr => {
     const m = (sr.depositDate||sr.createdAt||'').substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
-    monthlyData[m].income += sr.saleAmount||0;
+    monthlyData[m].income += omr(sr.saleAmount||0, sr.currency||'IRR');
   });
   const monthlyRows = Object.entries(monthlyData).sort((a,b)=>a[0].localeCompare(b[0]));
   const maxMV = Math.max(...monthlyRows.flatMap(m=>[m[1].expenses,m[1].income]), 1);
@@ -675,59 +682,54 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         )}
       </div>
 
-      {/* ── KPI Cards — per currency ── */}
-      <div className="space-y-2">
-        {allCurs.length === 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {['درآمد','هزینه','خالص','معوقات'].map(l=>(
-              <div key={l} className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
-                <div className="text-gray-400 text-[10px] font-bold mb-1">{l}</div>
-                <div className="text-sm font-black text-gray-300">—</div>
-              </div>
-            ))}
+      {/* ── KPI Cards — all in OMR ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
+          <div className="text-emerald-600 text-[10px] font-bold mb-0.5">جمع درآمد</div>
+          <div className="text-base font-black text-emerald-700">{fmtNum(+kpiIncOMR.toFixed(4))}</div>
+          <div className="text-[9px] text-emerald-400 mt-0.5 flex justify-between">
+            <span>{filteredInc.length} رکورد</span>
+            <span>دریافتی: {fmtNum(+kpiIncReceivedOMR.toFixed(4))}</span>
           </div>
-        )}
-        {allCurs.map(cur => {
-          const inc  = incByCur[cur]  || 0;
-          const exp  = expByCur[cur]?.total || 0;
-          const paid = expByCur[cur]?.paid  || 0;
-          const net  = inc - exp;
-          const arrears = exp - paid;
-          return (
-            <div key={cur} className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {/* currency label */}
-              <div className="md:col-span-4 flex items-center gap-2 pt-1">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{cur}</span>
-                <div className="flex-1 h-px bg-gray-200"/>
-              </div>
-              <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
-                <div className="text-emerald-600 text-[10px] font-bold mb-1">درآمد</div>
-                <div className="text-sm font-black text-emerald-700">{fmtNum(inc)}</div>
-                <div className="text-[9px] text-emerald-400">{filteredInc.filter(s=>(s.currency||'IRR')===cur).length} رکورد</div>
-              </div>
-              <div className="bg-rose-50 px-4 py-3 rounded-xl border border-rose-100 shadow-sm">
-                <div className="text-rose-600 text-[10px] font-bold mb-1">هزینه</div>
-                <div className="text-sm font-black text-rose-700">{fmtNum(exp)}</div>
-                <div className="text-[9px] text-rose-400">پرداخت: {fmtNum(paid)}</div>
-              </div>
-              <div className={`px-4 py-3 rounded-xl border shadow-sm ${net>=0?'bg-indigo-50 border-indigo-100':'bg-amber-50 border-amber-100'}`}>
-                <div className={`text-[10px] font-bold mb-1 ${net>=0?'text-indigo-600':'text-amber-600'}`}>خالص</div>
-                <div className={`text-sm font-black ${net>=0?'text-indigo-700':'text-amber-700'}`}>
-                  {net>=0?'+':''}{fmtNum(net)}
-                </div>
-                <div className="text-[9px] text-gray-400">{net>=0?'مثبت':'منفی'}</div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
-                <div className="text-gray-400 text-[10px] font-bold mb-1">معوقات</div>
-                <div className="text-sm font-black text-amber-600">{fmtNum(arrears)}</div>
-                <div className="flex gap-1 mt-1">
-                  <span className="text-[9px] bg-green-100 text-green-600 px-1 rounded font-bold">{paidCnt} تسویه</span>
-                  <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded font-bold">{pendingCnt} معوق</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+          {kpiIncPendingOMR > 0.0001 && (
+            <div className="text-[9px] text-amber-500 font-bold mt-0.5">مانده دریافتنی: {fmtNum(+kpiIncPendingOMR.toFixed(4))}</div>
+          )}
+        </div>
+
+        <div className="bg-rose-50 px-4 py-3 rounded-xl border border-rose-100 shadow-sm">
+          <div className="text-rose-600 text-[10px] font-bold mb-0.5">جمع هزینه</div>
+          <div className="text-base font-black text-rose-700">{fmtNum(+kpiExpOMR.toFixed(4))}</div>
+          <div className="text-[9px] text-rose-400 mt-0.5 flex justify-between">
+            <span>{filteredExp.length} رکورد</span>
+            <span>پرداخت: {fmtNum(+kpiExpPaidOMR.toFixed(4))}</span>
+          </div>
+        </div>
+
+        <div className={`px-4 py-3 rounded-xl border shadow-sm ${kpiNetOMR>=0?'bg-indigo-50 border-indigo-100':'bg-amber-50 border-amber-100'}`}>
+          <div className={`text-[10px] font-bold mb-0.5 ${kpiNetOMR>=0?'text-indigo-600':'text-amber-600'}`}>خالص جریان نقدی</div>
+          <div className={`text-base font-black ${kpiNetOMR>=0?'text-indigo-700':'text-amber-700'}`}>
+            {kpiNetOMR>=0?'+':''}{fmtNum(+kpiNetOMR.toFixed(4))}
+          </div>
+          <div className={`text-[9px] mt-0.5 font-bold ${kpiNetOMR>=0?'text-indigo-400':'text-amber-500'}`}>
+            {kpiNetOMR>=0?'سودده ▲':'زیان‌ده ▼'}
+          </div>
+        </div>
+
+        <div className="bg-gray-50 px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+          <div className="text-gray-400 text-[10px] font-bold mb-0.5">معوقات پرداختی</div>
+          <div className="text-base font-black text-amber-600">{fmtNum(+kpiArrearsOMR.toFixed(4))}</div>
+          <div className="flex gap-1 mt-1.5 flex-wrap">
+            <span className="text-[9px] bg-green-100 text-green-600 px-1.5 rounded font-bold">{paidCnt} تسویه</span>
+            <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 rounded font-bold">{partialCnt} بخشی</span>
+            <span className="text-[9px] bg-amber-100 text-amber-600 px-1.5 rounded font-bold">{pendingCnt} معوق</span>
+          </div>
+        </div>
+      </div>
+      {/* OMR label */}
+      <div className="flex items-center gap-2 -mt-1">
+        <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+          همه مبالغ به ریال عمان (OMR) تبدیل‌شده — نرخ: 1 OMR = {fmtNum(rates.OMR_IRR)} IRR
+        </span>
       </div>
 
       {/* ══ Financial Report Panel ══ */}
@@ -737,20 +739,16 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
             <IconChart className="w-4 h-4 text-indigo-600"/>
             <span className="text-xs font-bold text-indigo-800">گزارش مالی — صورت وضعیت شرکت</span>
           </div>
-          <div className="flex gap-1 mr-auto flex-wrap">
+          <div className="flex gap-1 mr-auto flex-wrap items-center">
             {(['month','year','all'] as const).map(p=>(
               <button key={p} onClick={()=>setReportPeriod(p)}
                 className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all border ${reportPeriod===p?'bg-indigo-600 text-white border-indigo-600':'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>
                 {p==='month'?'ماه جاری':p==='year'?'سال جاری':'کل دوره'}
               </button>
             ))}
-            <div className="w-px bg-indigo-200 mx-1 self-stretch"/>
-            {(['all','IRR','USD','OMR'] as const).map(c=>(
-              <button key={c} onClick={()=>setReportCurrency(c)}
-                className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all border ${reportCurrency===c?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
-                {c==='all'?'همه ارزها':c}
-              </button>
-            ))}
+            <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg mr-1">
+              OMR
+            </span>
           </div>
         </div>
 
@@ -985,17 +983,26 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                         {sr.notes && <div className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[140px]">{sr.notes}</div>}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <span className="font-black text-emerald-600 text-xs">{fmtNum(received)}</span>
-                        <span className="text-[9px] text-gray-400 opacity-60"> / {fmtNum(sr.saleAmount)}</span>
+                        {/* OMR primary */}
+                        <div className="font-black text-emerald-700 text-xs">
+                          {fmtNum(+omr(received, sr.currency||'IRR').toFixed(4))}
+                          <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
+                        </div>
+                        {/* original secondary */}
+                        {sr.currency !== 'OMR' && (
+                          <div className="text-[9px] text-gray-400 dir-ltr">
+                            {fmtNum(received)} / {fmtNum(sr.saleAmount)} {sr.currency}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1 mt-0.5">
                           <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden">
                             <div className="h-full bg-emerald-500 rounded-full" style={{width:`${pct}%`}}/>
                           </div>
-                          <span className="text-[8px] font-bold text-gray-400 uppercase">{sr.currency}</span>
+                          <span className="text-[8px] text-gray-400">{Math.round(pct)}٪</span>
                         </div>
                         {sr.saleAmount > received && (
                           <div className="text-[8px] text-amber-600 font-bold mt-0.5">
-                            مانده: {fmtNum(sr.saleAmount - received)}
+                            مانده: {fmtNum(+omr(sr.saleAmount-received,sr.currency||'IRR').toFixed(4))} OMR
                           </div>
                         )}
                       </td>
@@ -1047,8 +1054,20 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="font-black text-rose-600 text-xs">{fmtNum(ex.paidAmount||0)}</span>
-                      <span className="text-[9px] text-gray-400"> / {fmtNum(ex.amount)}</span>
+                      {/* OMR primary */}
+                      <div className="font-black text-rose-700 text-xs">
+                        {fmtNum(+omr(ex.paidAmount||0, ex.currency||'IRR').toFixed(4))}
+                        <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
+                        <span className="text-[9px] text-gray-400 font-normal opacity-70">
+                          / {fmtNum(+omr(ex.amount, ex.currency||'IRR').toFixed(4))}
+                        </span>
+                      </div>
+                      {/* original secondary */}
+                      {ex.currency !== 'OMR' && (
+                        <div className="text-[9px] text-gray-400 dir-ltr">
+                          {fmtNum(ex.paidAmount||0)} / {fmtNum(ex.amount)} {ex.currency}
+                        </div>
+                      )}
                       <div className="w-14 bg-gray-100 h-1 rounded-full overflow-hidden mt-0.5">
                         <div className={`h-full ${ex.status==='partial'?'bg-blue-500':'bg-green-500'}`}
                           style={{width:`${Math.min(100,((ex.paidAmount||0)/ex.amount)*100)}%`}}/>
