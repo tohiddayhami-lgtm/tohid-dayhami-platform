@@ -128,6 +128,7 @@ const getInitialView = (): ViewState => {
 
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
+  const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>(DEFAULT_SERVICES);
@@ -157,6 +158,11 @@ const App: React.FC = () => {
     if (hash === '#/admin') return 'admin';
     if (hash.startsWith('#/news')) return 'news';
     return null;
+  };
+
+  const openFormWithService = (serviceId: string) => {
+    setPreSelectedServiceId(serviceId);
+    setView('new-ticket');
   };
 
   const setView = (newView: ViewState, articleSlug?: string) => {
@@ -585,21 +591,42 @@ const App: React.FC = () => {
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
                     {lang === 'fa' ? 'خدمات تخصصی ما' : 'Our Services'}
                   </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {services.filter(s => s.isActive).map((service, i) => (
-                      <button
-                        key={service.id}
-                        onClick={() => setView('new-ticket')}
-                        className="text-start p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-gray-300 hover:bg-white transition-all group"
-                      >
-                        <span className="text-[10px] font-mono text-gray-400 block mb-1.5">
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <span className="text-sm font-medium text-gray-800 group-hover:text-gray-900 leading-snug block">
-                          {lang === 'en' && service.titleEn ? service.titleEn : service.title}
-                        </span>
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {services.filter(s => s.isActive).map((service, i) => {
+                      const title = lang === 'en' && service.titleEn ? service.titleEn : service.title;
+                      const desc  = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
+                      return (
+                        <div key={service.id}
+                          className="flex flex-col p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white transition-all group">
+                          {/* number + icon */}
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-[10px] font-mono text-gray-400">
+                              {String(i + 1).padStart(2, '0')}
+                            </span>
+                            {service.icon && (
+                              <span className="text-lg">{service.icon}</span>
+                            )}
+                          </div>
+                          {/* title */}
+                          <span className="text-sm font-semibold text-gray-800 leading-snug block mb-2">
+                            {title}
+                          </span>
+                          {/* description */}
+                          {desc && (
+                            <p className="text-xs text-gray-500 leading-relaxed flex-1 mb-4">
+                              {desc}
+                            </p>
+                          )}
+                          {/* CTA button */}
+                          <button
+                            onClick={() => openFormWithService(service.id)}
+                            className="mt-auto w-full py-2 px-3 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-black transition-colors"
+                          >
+                            {lang === 'fa' ? 'ثبت درخواست' : 'Request Service'}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
 
@@ -691,8 +718,9 @@ const App: React.FC = () => {
                 config={appConfig}
                 services={services.filter(s => s.isActive)}
                 onSubmit={handleNewTicket}
-                onCancel={() => setView('landing')}
+                onCancel={() => { setPreSelectedServiceId(null); setView('landing'); }}
                 onGoToTracking={() => setView('tracking')}
+                initialServiceId={preSelectedServiceId ?? undefined}
                 lang={lang}
               />
             )}

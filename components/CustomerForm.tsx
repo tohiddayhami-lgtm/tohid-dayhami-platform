@@ -12,6 +12,7 @@ interface Props {
   onSubmit: (tickets: Ticket[]) => Promise<void> | void;
   onCancel: () => void;
   onGoToTracking?: () => void;
+  initialServiceId?: string;
   lang: Language;
 }
 
@@ -91,9 +92,11 @@ const FieldItem = memo(({ field, value, onChange, lang }: FieldItemProps) => {
   );
 });
 
-export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCancel, onGoToTracking, lang }) => {
+export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCancel, onGoToTracking, initialServiceId, lang }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(
+    initialServiceId ? [initialServiceId] : []
+  );
   const [selectedSubServices, setSelectedSubServices] = useState<Record<string, string[]>>({});
   const [otherText, setOtherText] = useState('');
   const [requestDesc, setRequestDesc] = useState('');
