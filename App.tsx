@@ -132,7 +132,8 @@ const App: React.FC = () => {
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [services, setServices] = useState<ServiceOption[]>(DEFAULT_SERVICES);
+  const [services, setServices] = useState<ServiceOption[]>([]);
+  const [isServicesLoaded, setIsServicesLoaded] = useState(false);
   const [personnel, setPersonnel] = useState<Personnel[]>(DEFAULT_PERSONNEL);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [messages, setMessages] = useState<InternalMessage[]>([]);
@@ -310,7 +311,7 @@ const App: React.FC = () => {
           setAppConfig({ ...cfg, formFields: mergedFields });
         }
       },
-      (srv) => { if (srv) setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); },
+      (srv) => { if (srv) { setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); setIsServicesLoaded(true); } },
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
@@ -592,7 +593,21 @@ const App: React.FC = () => {
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-4">
                     {lang === 'fa' ? 'خدمات تخصصی ما' : 'Our Services'}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {/* skeleton while loading */}
+                  {!isServicesLoaded && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {[1,2,3,4,5,6].map(n => (
+                        <div key={n} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 flex items-center gap-3 animate-pulse">
+                          <div className="w-8 h-8 rounded-lg bg-gray-200 shrink-0"/>
+                          <div className="flex-1 space-y-1.5">
+                            <div className="h-3 bg-gray-200 rounded w-3/4"/>
+                            <div className="h-2.5 bg-gray-100 rounded w-1/2"/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 ${!isServicesLoaded ? 'hidden' : ''}`}>
                     {services.filter(s => s.isActive).map((service, i) => {
                       const title    = lang === 'en' && service.titleEn ? service.titleEn : service.title;
                       const desc     = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
