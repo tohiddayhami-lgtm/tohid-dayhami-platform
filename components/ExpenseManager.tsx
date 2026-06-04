@@ -60,6 +60,69 @@ const fmtM   = (n: number) => {
   return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 };
 
+// ── Quick Converter sub-component ────────────────────────────────────────────
+const CURRENCIES = ['IRR','USD','OMR'] as const;
+type CurKey = typeof CURRENCIES[number];
+
+const QuickConverter: React.FC<{
+  rates: {USD_IRR:number;OMR_IRR:number};
+  fmtInput: (v:string)=>string;
+  parseAmt: (v:string)=>number;
+  normalizeDigits: (v:string)=>string;
+}> = ({ rates, fmtInput, parseAmt, normalizeDigits }) => {
+  const [qAmt, setQAmt] = useState('');
+  const [qFrom, setQFrom] = useState<CurKey>('IRR');
+
+  const toIRR2 = (a:number,c:string) => c==='IRR'?a:c==='USD'?a*rates.USD_IRR:c==='OMR'?a*rates.OMR_IRR:a;
+  const toAny  = (a:number, from:string, to:string) => {
+    const irr = toIRR2(a, from);
+    if (to==='IRR') return irr;
+    if (to==='USD') return rates.USD_IRR>0 ? irr/rates.USD_IRR : 0;
+    if (to==='OMR') return rates.OMR_IRR>0 ? irr/rates.OMR_IRR : 0;
+    return irr;
+  };
+
+  const num = parseAmt(qAmt);
+  const CUR_LABEL: Record<CurKey,string> = {IRR:'ریال ایران (IRR)', USD:'دلار آمریکا (USD)', OMR:'ریال عمان (OMR)'};
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2 items-center">
+        <input
+          className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-black dir-ltr text-right outline-none focus:border-amber-400"
+          placeholder="مبلغ را وارد کنید..."
+          value={qAmt}
+          onChange={e => setQAmt(fmtInput(e.target.value))}
+        />
+        <select className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold outline-none"
+          value={qFrom} onChange={e => setQFrom(e.target.value as CurKey)}>
+          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      {num > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {CURRENCIES.map(to => {
+            const converted = toAny(num, qFrom, to);
+            const isFrom = to === qFrom;
+            return (
+              <div key={to} className={`rounded-xl p-2.5 border text-center ${isFrom ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="text-[9px] font-bold text-gray-400 mb-0.5">{CUR_LABEL[to]}</div>
+                <div className={`text-sm font-black ${isFrom ? 'text-amber-700' : 'text-gray-800'}`}>
+                  {isFrom ? qAmt : converted.toLocaleString(undefined, {maximumFractionDigits: to==='IRR'?0:6})}
+                </div>
+                {isFrom && <div className="text-[8px] text-amber-400 font-bold">← مبدأ</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!num && (
+        <div className="text-[10px] text-gray-400 text-center py-2">مبلغ را وارد کنید تا معادل سه ارز نمایش داده شود</div>
+      )}
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }) => {
   const today        = new Date();
@@ -91,6 +154,14 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [reportPeriod,  setReportPeriod]  = useState<'month'|'year'|'all'>('month');
   const [reportCurrency,setReportCurrency]= useState<'all'|'IRR'|'USD'|'OMR'>('all');
   const [tableView,     setTableView]     = useState<'all'|'expense'|'income'>('all');
+
+  // Exchange rates (persisted in localStorage)
+  const [rates, setRates] = useState<{USD_IRR:number;OMR_IRR:number}>(() => {
+    try { return JSON.parse(localStorage.getItem('fx_rates') || '{"USD_IRR":600000,"OMR_IRR":1560000}'); }
+    catch { return {USD_IRR:600000, OMR_IRR:1560000}; }
+  });
+  const [showRatesPanel, setShowRatesPanel] = useState(false);
+  const [rDraft, setRDraft] = useState({USD_IRR:'', OMR_IRR:''});
 
   // Filters — default date to current month so data shows immediately
   const [dateFilter,      setDateFilter]      = useState(currentMonth);
@@ -137,6 +208,41 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   };
 
   const parseAmt = (disp: string) => parseFloat(normalizeDigits(disp).replace(/,/g,'')) || 0;
+
+  // ── Exchange rate helpers ───────────────────────────────────────────────────
+  const toIRR = (amt: number, cur: string): number => {
+    if (!amt) return 0;
+    if (cur === 'IRR') return amt;
+    if (cur === 'USD') return amt * rates.USD_IRR;
+    if (cur === 'OMR') return amt * rates.OMR_IRR;
+    return amt;
+  };
+  const toOMR = (amt: number, cur: string) => rates.OMR_IRR > 0 ? toIRR(amt, cur) / rates.OMR_IRR : 0;
+  const toUSD = (amt: number, cur: string) => rates.USD_IRR > 0 ? toIRR(amt, cur) / rates.USD_IRR : 0;
+
+  // Returns conversion hint lines for display under amount field
+  const convHint = (amt: number, cur: string): {omr:string;usd:string;irr:string} => {
+    if (!amt || amt <= 0) return {omr:'',usd:'',irr:''};
+    const omr = toOMR(amt, cur);
+    const usd = toUSD(amt, cur);
+    const irr = toIRR(amt, cur);
+    return {
+      omr: cur !== 'OMR' ? `${omr.toLocaleString(undefined,{maximumFractionDigits:4})} OMR` : '',
+      usd: cur !== 'USD' ? `${usd.toLocaleString(undefined,{maximumFractionDigits:4})} USD` : '',
+      irr: cur !== 'IRR' ? `${Math.round(irr).toLocaleString()} IRR` : '',
+    };
+  };
+
+  const saveRates = () => {
+    const r = {
+      USD_IRR: parseAmt(rDraft.USD_IRR) || rates.USD_IRR,
+      OMR_IRR: parseAmt(rDraft.OMR_IRR) || rates.OMR_IRR,
+    };
+    setRates(r);
+    localStorage.setItem('fx_rates', JSON.stringify(r));
+    setShowRatesPanel(false);
+    setRDraft({USD_IRR:'', OMR_IRR:''});
+  };
 
   // Custom category helpers — typed
   const customExpEntries = Object.entries(customExpCats).map(([k,v]) => [k,{label:(v as {label:string;group:string}).label, group:(v as {label:string;group:string}).group, color:'bg-violet-100 text-violet-700'}] as [string, {label:string;group:string;color:string}]);
@@ -411,6 +517,100 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
             <IconPlus className="w-4 h-4"/> ثبت هزینه
           </button>
         </div>
+      </div>
+
+      {/* ── Exchange Rate Panel ── */}
+      <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+        <button
+          onClick={() => { setShowRatesPanel(v=>!v); setRDraft({USD_IRR: fmtInput(String(rates.USD_IRR)), OMR_IRR: fmtInput(String(rates.OMR_IRR))}); }}
+          className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-amber-50/50 transition-colors"
+        >
+          <span className="text-sm">💱</span>
+          <span className="text-xs font-bold text-amber-800">نرخ ارز (تبدیل)</span>
+          <div className="flex gap-4 mr-auto text-[10px] text-amber-700 font-bold">
+            <span>1 USD = {fmtNum(rates.USD_IRR)} IRR</span>
+            <span>1 OMR = {fmtNum(rates.OMR_IRR)} IRR</span>
+            <span className="text-gray-400">1 USD ≈ {rates.OMR_IRR > 0 ? (rates.USD_IRR / rates.OMR_IRR).toFixed(4) : '—'} OMR</span>
+          </div>
+          <span className="text-gray-400 text-[10px]">{showRatesPanel ? '▲' : '▼'}</span>
+        </button>
+
+        {showRatesPanel && (
+          <div className="px-4 pb-4 border-t border-amber-100 bg-amber-50/30 animate-fade-in">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+
+              {/* USD → IRR */}
+              <div>
+                <label className="block text-[10px] font-bold text-amber-700 mb-1.5 uppercase tracking-widest">نرخ دلار (USD)</label>
+                <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2.5">
+                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">1 USD =</span>
+                  <input
+                    className="flex-1 text-sm font-black text-amber-700 dir-ltr text-right outline-none bg-transparent"
+                    value={rDraft.USD_IRR}
+                    onChange={e => setRDraft(p=>({...p, USD_IRR: fmtInput(e.target.value)}))}
+                    placeholder={fmtNum(rates.USD_IRR)}
+                  />
+                  <span className="text-[10px] text-gray-400 font-bold">IRR</span>
+                </div>
+              </div>
+
+              {/* OMR → IRR */}
+              <div>
+                <label className="block text-[10px] font-bold text-amber-700 mb-1.5 uppercase tracking-widest">نرخ ریال عمان (OMR)</label>
+                <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2.5">
+                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">1 OMR =</span>
+                  <input
+                    className="flex-1 text-sm font-black text-amber-700 dir-ltr text-right outline-none bg-transparent"
+                    value={rDraft.OMR_IRR}
+                    onChange={e => setRDraft(p=>({...p, OMR_IRR: fmtInput(e.target.value)}))}
+                    placeholder={fmtNum(rates.OMR_IRR)}
+                  />
+                  <span className="text-[10px] text-gray-400 font-bold">IRR</span>
+                </div>
+              </div>
+
+              {/* Auto-calculated cross rate */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-widest">نرخ متقاطع (محاسبه خودکار)</label>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 space-y-1">
+                  {(() => {
+                    const usdIRR = parseAmt(rDraft.USD_IRR) || rates.USD_IRR;
+                    const omrIRR = parseAmt(rDraft.OMR_IRR) || rates.OMR_IRR;
+                    return (
+                      <>
+                        <div className="text-[10px] text-gray-600 font-bold flex justify-between">
+                          <span>1 USD ≈</span>
+                          <span className="text-indigo-700">{omrIRR > 0 ? (usdIRR / omrIRR).toFixed(6) : '—'} OMR</span>
+                        </div>
+                        <div className="text-[10px] text-gray-600 font-bold flex justify-between">
+                          <span>1 OMR ≈</span>
+                          <span className="text-indigo-700">{usdIRR > 0 ? (omrIRR / usdIRR).toFixed(4) : '—'} USD</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Converter */}
+            <div className="mt-4 bg-white border border-amber-200 rounded-xl p-3">
+              <div className="text-[10px] font-bold text-amber-700 mb-2">ماشین‌حساب تبدیل سریع</div>
+              <QuickConverter rates={rates} fmtInput={fmtInput} parseAmt={parseAmt} normalizeDigits={normalizeDigits} />
+            </div>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={saveRates}
+                className="px-5 py-2 bg-amber-600 text-white text-xs font-black rounded-xl hover:bg-amber-700 flex items-center gap-1.5 shadow-md shadow-amber-200">
+                <IconCheck className="w-3.5 h-3.5"/> ذخیره نرخ‌ها
+              </button>
+              <button onClick={() => { setShowRatesPanel(false); setRDraft({USD_IRR:'',OMR_IRR:''}); }}
+                className="px-4 py-2 text-gray-500 text-xs font-bold hover:bg-gray-100 rounded-xl">
+                انصراف
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── KPI Cards — per currency ── */}
@@ -859,8 +1059,14 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   <input type="text" required
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-black text-emerald-600 dir-ltr text-right"
                     value={dispIncAmt}
-                    onChange={e=>{ const f=fmtInput(e.target.value); setDispIncAmt(f); setIncForm(p=>({...p,amount:parseFloat(f.replace(/,/g,''))||0})); }}
+                    onChange={e=>{ const f=fmtInput(e.target.value); setDispIncAmt(f); setIncForm(p=>({...p,amount:parseAmt(f)})); }}
                     placeholder="0"/>
+                  {(() => { const a=parseAmt(dispIncAmt); const h=convHint(a,incForm.currency||'IRR'); if(!a)return null; return (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}
+                      {h.usd&&<span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">≈ {h.usd}</span>}
+                      {h.irr&&<span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">≈ {h.irr}</span>}
+                    </div>); })()}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">ارز</label>
@@ -921,7 +1127,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                     <input type="text" required
                       className="flex-1 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-black text-rose-600 dir-ltr text-right"
                       value={dispAmt}
-                      onChange={e=>{ const f=fmtInput(e.target.value); setDispAmt(f); setExpForm(p=>({...p,amount:parseFloat(f.replace(/,/g,''))||0})); }}
+                      onChange={e=>{ const f=fmtInput(e.target.value); setDispAmt(f); setExpForm(p=>({...p,amount:parseAmt(f)})); }}
                       placeholder="0"/>
                     <select className="w-24 px-2 border rounded-xl bg-gray-50 outline-none font-bold text-sm"
                       value={expForm.currency} onChange={e=>setExpForm({...expForm,currency:e.target.value as Currency})}>
@@ -930,14 +1136,26 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       <option value="OMR">OMR</option>
                     </select>
                   </div>
+                  {(() => { const a=parseAmt(dispAmt); const h=convHint(a,expForm.currency||'IRR'); if(!a)return null; return (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}
+                      {h.usd&&<span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">≈ {h.usd}</span>}
+                      {h.irr&&<span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">≈ {h.irr}</span>}
+                    </div>); })()}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">مبلغ پرداخت‌شده تاکنون</label>
                   <input type="text"
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-rose-500 font-black text-green-600 dir-ltr text-right"
                     value={dispPaidAmt}
-                    onChange={e=>{ const f=fmtInput(e.target.value); setDispPaidAmt(f); setExpForm(p=>({...p,paidAmount:parseFloat(f.replace(/,/g,''))||0})); }}
+                    onChange={e=>{ const f=fmtInput(e.target.value); setDispPaidAmt(f); setExpForm(p=>({...p,paidAmount:parseAmt(f)})); }}
                     placeholder="0"/>
+                  {(() => { const a=parseAmt(dispPaidAmt); const h=convHint(a,expForm.currency||'IRR'); if(!a)return null; return (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}
+                      {h.usd&&<span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold">≈ {h.usd}</span>}
+                      {h.irr&&<span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">≈ {h.irr}</span>}
+                    </div>); })()}
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-widest">سرفصل حسابداری</label>
