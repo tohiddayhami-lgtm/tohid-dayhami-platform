@@ -307,7 +307,19 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   });
 
   // ── All figures converted to OMR / IRR ───────────────────────────────────
+  // Global rates fallback (only for records with no snapshotRates)
   const omr = (amt: number, cur: string) => toOMR(amt, cur);
+
+  // Expense: use its own locked snapshotRates, fall back to current rates for old records
+  const omrExp = (amt: number, cur: string, ex: Expense): number => {
+    const r = ex.snapshotRates || rates;
+    if (!amt) return 0;
+    if (cur === 'OMR') return amt;
+    const irr = cur === 'USD' ? amt * r.USD_IRR : amt;
+    return r.OMR_IRR > 0 ? irr / r.OMR_IRR : 0;
+  };
+
+  // Income (SalesRecord): use its own locked snapshotRates
   const omrSR = (amt: number, cur: string, sr: SalesRecord): number => {
     const r = sr.snapshotRates || rates;
     if (!amt) return 0;
@@ -326,11 +338,11 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     return amt;
   };
 
-  // KPI totals — income in IRR, expenses in OMR
+  // KPI totals — income in IRR (snapshot), expenses in OMR (snapshot)
   const kpiIncIRR      = filteredInc.reduce((s,sr) => s + irrSR(sr.saleAmount||0, sr.currency||'IRR', sr), 0);
   const kpiIncOMR      = filteredInc.reduce((s,sr) => s + omrSR(sr.saleAmount||0, sr.currency||'IRR', sr), 0);
-  const kpiExpOMR      = filteredExp.reduce((s,e)  => s + omr(e.amount||0,      e.currency||'IRR'), 0);
-  const kpiExpPaidOMR  = filteredExp.reduce((s,e)  => s + omr(e.paidAmount||0,  e.currency||'IRR'), 0);
+  const kpiExpOMR      = filteredExp.reduce((s,e)  => s + omrExp(e.amount||0,      e.currency||'IRR', e), 0);
+  const kpiExpPaidOMR  = filteredExp.reduce((s,e)  => s + omrExp(e.paidAmount||0,  e.currency||'IRR', e), 0);
   const kpiNetOMR      = kpiIncOMR - kpiExpOMR;
   const kpiArrearsOMR  = kpiExpOMR - kpiExpPaidOMR;
 
@@ -362,10 +374,10 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const plRevenue   = plInc.reduce((s,r) => s + omrSR(r.saleAmount||0, r.currency||'IRR', r), 0);
   const byGroup     = (g: string) => plExp
     .filter(e => (allExpCats[e.category]?.group||EXP_CAT[e.category]?.group||'below') === g)
-    .reduce((s,e) => s + omr(e.amount||0, e.currency||'IRR'), 0);
+    .reduce((s,e) => s + omrExp(e.amount||0, e.currency||'IRR', e), 0);
   const byCat       = (cat: string) => plExp
     .filter(e => e.category === cat)
-    .reduce((s,e) => s + omr(e.amount||0, e.currency||'IRR'), 0);
+    .reduce((s,e) => s + omrExp(e.amount||0, e.currency||'IRR', e), 0);
 
   const plCogs      = byGroup('cogs');
   const grossProfit = plRevenue - plCogs;
@@ -389,8 +401,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   expenses.forEach(ex => {
     const m = ex.date?.substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
-    monthlyData[m].expenses += omr(ex.amount||0,     ex.currency||'IRR');
-    monthlyData[m].expPaid  += omr(ex.paidAmount||0, ex.currency||'IRR');
+    monthlyData[m].expenses += omrExp(ex.amount||0,     ex.currency||'IRR', ex);
+    monthlyData[m].expPaid  += omrExp(ex.paidAmount||0, ex.currency||'IRR', ex);
   });
   salesRecords.forEach(sr => {
     const m = (sr.depositDate||sr.createdAt||'').substring(0,7); if (!m) return;
@@ -428,7 +440,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       date: expForm.date!, paidTo: expForm.paidTo!,
       personnelId: expForm.personnelId||undefined,
       description: expForm.description, files: expForm.files,
-      status, createdAt: editingExp?.createdAt||new Date().toISOString(),
+      status,
+      snapshotRates: editingExp?.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
+      createdAt: editingExp?.createdAt||new Date().toISOString(),
       createdBy: editingExp?.createdBy||currentUser.fullName,
     };
     if (editingExp) await updateExpense(exp.id, exp, currentUser.fullName);
@@ -913,7 +927,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                                   </div>
                                 </div>
                                 <span className="text-[9px] font-black text-rose-600 tabular-nums mr-2 shrink-0">
-                                  ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                                  ({fmtOMR(omrExp(e.amount, e.currency||'IRR', e))})
                                 </span>
                               </div>
                             ))}
@@ -969,11 +983,11 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                             </div>
                             <div className="text-right shrink-0 mr-2">
                               <div className="text-[9px] font-black text-rose-600 tabular-nums">
-                                ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                                ({fmtOMR(omrExp(e.amount, e.currency||'IRR', e))})
                               </div>
                               {e.paidAmount !== e.amount && (
                                 <div className="text-[8px] text-emerald-600 font-bold">
-                                  پرداخت: {fmtOMR(omr(e.paidAmount||0, e.currency||'IRR'))}
+                                  پرداخت: {fmtOMR(omrExp(e.paidAmount||0, e.currency||'IRR', e))}
                                 </div>
                               )}
                             </div>
@@ -1026,7 +1040,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                                   </div>
                                 </div>
                                 <span className="text-[9px] font-black text-rose-600 tabular-nums mr-2 shrink-0">
-                                  ({fmtOMR(omr(e.amount, e.currency||'IRR'))})
+                                  ({fmtOMR(omrExp(e.amount, e.currency||'IRR', e))})
                                 </span>
                               </div>
                             ))}
@@ -1056,7 +1070,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                         </div>
                       </div>
                       <span className="text-[9px] font-black text-teal-700 tabular-nums mr-2 shrink-0">
-                        {fmtOMR(omr(e.amount, e.currency||'IRR'))}
+                        {fmtOMR(omrExp(e.amount, e.currency||'IRR', e))}
                       </span>
                     </div>
                   ))}
@@ -1329,12 +1343,12 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {/* OMR primary */}
+                      {/* OMR primary — locked at save-time rate */}
                       <div className="font-black text-rose-700 text-xs">
-                        {fmtOMR(omr(ex.paidAmount||0, ex.currency||'IRR'))}
+                        {fmtOMR(omrExp(ex.paidAmount||0, ex.currency||'IRR', ex))}
                         <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
                         <span className="text-[9px] text-gray-400 font-normal opacity-70">
-                          / {fmtOMR(omr(ex.amount, ex.currency||'IRR'))}
+                          / {fmtOMR(omrExp(ex.amount, ex.currency||'IRR', ex))}
                         </span>
                       </div>
                       {/* original secondary */}

@@ -324,15 +324,16 @@ export interface Expense {
   id: string;
   title: string;
   amount: number;
-  paidAmount?: number; // Added for partial payments
+  paidAmount?: number;
   currency: Currency;
   category: ExpenseCategory;
   date: string;
-  paidTo: string; // The person or company receiving the payment
-  personnelId?: string; // Link to a company personnel if applicable
+  paidTo: string;
+  personnelId?: string;
   description?: string;
   files?: AttachedFile[];
   status: 'paid' | 'pending' | 'partial';
+  snapshotRates?: { USD_IRR: number; OMR_IRR: number };
   createdAt: string;
   createdBy: string;
 }
