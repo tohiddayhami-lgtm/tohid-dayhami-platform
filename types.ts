@@ -490,6 +490,16 @@ export interface AssignmentConfig {
   servicePersonnelMap?: Record<string, string>;
 }
 
+export type SocialPlatform = 'instagram' | 'linkedin' | 'whatsapp' | 'facebook' | 'telegram' | 'twitter';
+
+export interface SocialLink {
+  id: string;
+  platform: SocialPlatform;
+  url: string;
+  isActive: boolean;
+  order: number;
+}
+
 export interface AppConfig {
   appTitle: string;
   appTitleEn: string;
@@ -498,6 +508,7 @@ export interface AppConfig {
   landingHeroTitle?: string;
   landingHeroSubtitle?: string;
   footerText?: string;
+  socialLinks?: SocialLink[];
   dailyTips?: string[];
   showDailyTips?: boolean;
   featuredBusinesses?: FeaturedBusiness[];

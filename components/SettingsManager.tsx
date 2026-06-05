@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode, AssignmentConfig } from '../types';
+import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode, AssignmentConfig, SocialLink, SocialPlatform } from '../types';
 import { IconSettings, IconPlus, IconTrash, IconEdit, IconCheck, IconLayout, IconInvoice, IconUpload, IconDatabase, IconShield, IconBulb, IconMagic, IconClipboard, IconFolder, IconBriefcase, IconStar, IconLink, IconCopy, IconUsers } from './Icons';
 import { compressImage, backupSystemData, clearSystemData, saveCustomFormToCloud, deleteCustomFormFromCloud, subscribeToCustomForms, updateCustomFormInCloud, firebaseConfig, subscribeToSettings } from '../services/firebaseService';
 import { generateFormFields } from '../services/geminiService';
@@ -68,6 +68,9 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
   // Assignment Config State
   const [assignmentConfig, setAssignmentConfig] = useState<AssignmentConfig>(normalizeAssignmentConfig(config.assignmentConfig));
 
+  // Social Links State
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(config.socialLinks || []);
+
   // Google Form Integration State
   const [selectedServiceForScript, setSelectedServiceForScript] = useState('');
   const [generatedScript, setGeneratedScript] = useState('');
@@ -106,6 +109,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
     setShowDailyTips(config.showDailyTips || false);
     setFeaturedBusinesses(config.featuredBusinesses || []);
     setAssignmentConfig(normalizeAssignmentConfig(config.assignmentConfig));
+    setSocialLinks(config.socialLinks || []);
     if (config.invoiceTemplate) {
         setInvoiceTemplate(config.invoiceTemplate);
     }
@@ -131,7 +135,8 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
       dailyTips: dailyTips,
       showDailyTips: showDailyTips,
       featuredBusinesses: featuredBusinesses,
-      assignmentConfig: assignmentConfig
+      assignmentConfig: assignmentConfig,
+      socialLinks: socialLinks,
     });
     
     setTimeout(() => {
@@ -553,6 +558,116 @@ function onFormSubmit(e) {
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">توضیحات زیر تیتر (Hero Subtitle)</label><textarea className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.landingHeroSubtitle} onChange={(e) => handleGeneralChange('landingHeroSubtitle', e.target.value)} rows={2} placeholder="مثال: اولین و بزرگترین پلتفرم هوشمند..." /></div>
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">متن کپی‌رایت فوتر</label><input className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.footerText} onChange={(e) => handleGeneralChange('footerText', e.target.value)} placeholder="© 1403 پلتفرم جامع..." /></div>
            </div>
+
+           {/* ── Social Links ── */}
+           {(() => {
+             const PLATFORMS: { id: SocialPlatform; label: string; placeholder: string; color: string }[] = [
+               { id: 'instagram', label: 'Instagram',    placeholder: 'https://instagram.com/username', color: '#E1306C' },
+               { id: 'linkedin',  label: 'LinkedIn',     placeholder: 'https://linkedin.com/in/...',    color: '#0A66C2' },
+               { id: 'whatsapp',  label: 'WhatsApp',     placeholder: 'https://wa.me/989...',           color: '#25D366' },
+               { id: 'facebook',  label: 'Facebook',     placeholder: 'https://facebook.com/...',       color: '#1877F2' },
+               { id: 'telegram',  label: 'Telegram',     placeholder: 'https://t.me/username',         color: '#26A5E4' },
+               { id: 'twitter',   label: 'X (Twitter)',  placeholder: 'https://x.com/username',        color: '#000000' },
+             ];
+             const ICONS: Record<SocialPlatform, React.ReactNode> = {
+               instagram: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
+               linkedin:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>,
+               whatsapp:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+               facebook:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>,
+               telegram:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/></svg>,
+               twitter:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 4l16 16M4 20 20 4"/><path d="M4 4h4l12 16h-4"/></svg>,
+             };
+
+             const addLink = (platform: SocialPlatform) => {
+               if (socialLinks.some(l => l.platform === platform)) return;
+               setSocialLinks(prev => [...prev, { id: `sl_${Date.now()}`, platform, url: '', isActive: true, order: prev.length }]);
+             };
+             const updateLink = (id: string, updates: Partial<SocialLink>) =>
+               setSocialLinks(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+             const removeLink = (id: string) =>
+               setSocialLinks(prev => prev.filter(l => l.id !== id).map((l, i) => ({ ...l, order: i })));
+             const moveLink = (id: string, dir: -1 | 1) => {
+               setSocialLinks(prev => {
+                 const sorted = [...prev].sort((a, b) => a.order - b.order);
+                 const idx = sorted.findIndex(l => l.id === id);
+                 const target = idx + dir;
+                 if (target < 0 || target >= sorted.length) return prev;
+                 [sorted[idx].order, sorted[target].order] = [sorted[target].order, sorted[idx].order];
+                 return sorted;
+               });
+             };
+
+             const sorted = [...socialLinks].sort((a, b) => a.order - b.order);
+             const usedPlatforms = new Set(socialLinks.map(l => l.platform));
+             const availablePlatforms = PLATFORMS.filter(p => !usedPlatforms.has(p.id));
+
+             return (
+               <div className="border-t border-gray-100 pt-6 mt-2 space-y-4">
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <h4 className="font-bold text-gray-800">شبکه‌های اجتماعی (فوتر)</h4>
+                     <p className="text-xs text-gray-500 mt-0.5">آیکون‌ها با قابلیت هایپرلینک در پایین صفحه نمایش داده می‌شوند</p>
+                   </div>
+                   {availablePlatforms.length > 0 && (
+                     <div className="flex flex-wrap gap-1.5">
+                       {availablePlatforms.map(p => (
+                         <button key={p.id} onClick={() => addLink(p.id)}
+                           className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                           <span style={{ color: p.color }}>{ICONS[p.id]}</span>
+                           {p.label}
+                         </button>
+                       ))}
+                     </div>
+                   )}
+                 </div>
+
+                 {sorted.length === 0 && (
+                   <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400">
+                     هنوز شبکه اجتماعی اضافه نشده — از دکمه‌های بالا اضافه کنید
+                   </div>
+                 )}
+
+                 <div className="space-y-2">
+                   {sorted.map((link, idx) => {
+                     const meta = PLATFORMS.find(p => p.id === link.platform)!;
+                     return (
+                       <div key={link.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-200">
+                         {/* Platform badge */}
+                         <div className="flex items-center gap-1.5 w-28 shrink-0">
+                           <span style={{ color: meta?.color }}>{ICONS[link.platform]}</span>
+                           <span className="text-xs font-semibold text-gray-700">{meta?.label}</span>
+                         </div>
+                         {/* URL input */}
+                         <input
+                           value={link.url}
+                           onChange={e => updateLink(link.id, { url: e.target.value })}
+                           placeholder={meta?.placeholder}
+                           className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                           dir="ltr"
+                         />
+                         {/* Active toggle */}
+                         <button onClick={() => updateLink(link.id, { isActive: !link.isActive })}
+                           className={`shrink-0 relative w-9 h-5 rounded-full transition-colors ${link.isActive ? 'bg-green-500' : 'bg-gray-300'}`}>
+                           <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${link.isActive ? 'right-0.5' : 'left-0.5'}`} />
+                         </button>
+                         {/* Move up/down */}
+                         <button onClick={() => moveLink(link.id, -1)} disabled={idx === 0}
+                           className="text-gray-400 hover:text-gray-700 disabled:opacity-30 text-xs px-1">↑</button>
+                         <button onClick={() => moveLink(link.id, 1)} disabled={idx === sorted.length - 1}
+                           className="text-gray-400 hover:text-gray-700 disabled:opacity-30 text-xs px-1">↓</button>
+                         {/* Delete */}
+                         <button onClick={() => removeLink(link.id)}
+                           className="text-red-400 hover:text-red-600 transition-colors">
+                           <IconTrash className="w-3.5 h-3.5" />
+                         </button>
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+             );
+           })()}
+
            <div className="flex items-center justify-end border-t border-gray-100 pt-6">{saveSuccess && (<span className="text-green-600 font-medium ml-4 flex items-center gap-1 animate-fade-in"><IconCheck className="w-5 h-5" />تغییرات با موفقیت ذخیره شد</span>)}<button onClick={saveSettings} disabled={isSaving} className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:scale-105 transition-all flex items-center gap-2">{isSaving ? 'در حال ذخیره...' : <><IconCheck className="w-5 h-5" />ذخیره تغییرات</>}</button></div>
         </div>
       )}
