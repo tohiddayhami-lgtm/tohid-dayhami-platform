@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Personnel, SalesRecord, ServiceOption, Currency } from '../types';
 import { IconMoney, IconPlus, IconChart, IconUsers, IconTrophy, IconPercent, IconEdit, IconCheck, IconSearch, IconBriefcase, IconCalendar, IconRefreshCw, IconTrash, IconWallet } from './Icons';
-import { saveSalesRecord, subscribeToSalesRecords, updateSalesRecord, savePersonnelToCloud, saveServicesToCloud, deleteSalesRecord } from '../services/firebaseService';
+import { saveSalesRecord, subscribeToSalesRecords, updateSalesRecord, savePersonnelToCloud, saveServicesToCloud, deleteSalesRecord, subscribeToFxRates } from '../services/firebaseService';
 import { Language } from '../App';
 
 interface Props {
@@ -17,7 +17,8 @@ interface Props {
 export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, services, onUpdatePersonnel, onUpdateServices, lang }) => {
   const [activeTab, setActiveTab] = useState<'new_sale' | 'my_sales' | 'all_sales' | 'commissions' | 'leaderboard'>('my_sales');
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
-  
+  const [currentRates, setCurrentRates] = useState<{ USD_IRR: number; OMR_IRR: number }>({ USD_IRR: 600000, OMR_IRR: 1560000 });
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const SALES_PER_PAGE = 10;
@@ -174,6 +175,11 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
       return () => unsub();
   }, []);
 
+  useEffect(() => {
+      const unsub = subscribeToFxRates(setCurrentRates);
+      return () => unsub();
+  }, []);
+
   // Reset page when tab or filters change
   useEffect(() => {
       setCurrentPage(1);
@@ -236,10 +242,11 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
           currency: newSale.currency,
           commissionRate: rate,
           commissionAmount: commission,
-          commissionPaid: false, // Default to unpaid
+          commissionPaid: false,
           depositAccount: newSale.depositAccount,
           depositDate: newSale.depositDate,
           notes: newSale.notes,
+          snapshotRates: { USD_IRR: currentRates.USD_IRR, OMR_IRR: currentRates.OMR_IRR },
           createdAt: new Date().toISOString()
       };
 
@@ -291,6 +298,16 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
       }
   };
 
+  const toOMR = (amount: number, currency: Currency, record: SalesRecord): number => {
+      const r = record.snapshotRates || currentRates;
+      let irr: number;
+      if (currency === 'OMR') return amount;
+      if (currency === 'USD') irr = amount * r.USD_IRR;
+      else irr = amount;
+      return r.OMR_IRR > 0 ? irr / r.OMR_IRR : 0;
+  };
+
+  const formatOMR = (num: number) => num.toLocaleString(undefined, { maximumFractionDigits: 3 });
   const formatNumber = (num: number) => num.toLocaleString();
 
   const handleAmountInput = (val: string) => {
@@ -326,15 +343,13 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
   const totalPages = Math.ceil(filteredSales.length / SALES_PER_PAGE);
   const displaySales = filteredSales.slice((currentPage - 1) * SALES_PER_PAGE, currentPage * SALES_PER_PAGE);
 
-  const calculateStats = (records: SalesRecord[]) => {
-      return {
-          totalSales: records.reduce((acc, r) => acc + r.saleAmount, 0),
-          totalCommission: records.reduce((acc, r) => acc + r.commissionAmount, 0),
-          paidCommission: records.filter(r => r.commissionPaid).reduce((acc, r) => acc + r.commissionAmount, 0),
-          pendingCommission: records.filter(r => !r.commissionPaid).reduce((acc, r) => acc + r.commissionAmount, 0),
-          count: records.length
-      };
-  };
+  const calculateStats = (records: SalesRecord[]) => ({
+      totalSales: records.reduce((acc, r) => acc + toOMR(r.saleAmount, r.currency, r), 0),
+      totalCommission: records.reduce((acc, r) => acc + toOMR(r.commissionAmount, r.currency, r), 0),
+      paidCommission: records.filter(r => r.commissionPaid).reduce((acc, r) => acc + toOMR(r.commissionAmount, r.currency, r), 0),
+      pendingCommission: records.filter(r => !r.commissionPaid).reduce((acc, r) => acc + toOMR(r.commissionAmount, r.currency, r), 0),
+      count: records.length
+  });
 
   const stats = calculateStats(filteredSales);
 
@@ -401,15 +416,15 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="text-gray-500 text-xs font-bold mb-1">{t.stats.totalSales}</div>
-                    <div className="text-xl font-black text-gray-800">{formatNumber(stats.totalSales)} <span className="text-xs font-normal text-gray-400">IRR</span></div>
+                    <div className="text-xl font-black text-gray-800">{formatOMR(stats.totalSales)} <span className="text-xs font-normal text-gray-400">OMR</span></div>
                 </div>
                 <div className="bg-green-50 p-5 rounded-2xl border border-green-100 shadow-sm">
                     <div className="text-green-700 text-xs font-bold mb-1">{t.stats.paidComm}</div>
-                    <div className="text-xl font-black text-green-600">{formatNumber(stats.paidCommission)} <span className="text-xs font-normal text-gray-400">IRR</span></div>
+                    <div className="text-xl font-black text-green-600">{formatOMR(stats.paidCommission)} <span className="text-xs font-normal text-gray-400">OMR</span></div>
                 </div>
                 <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 shadow-sm">
                     <div className="text-amber-700 text-xs font-bold mb-1">{t.stats.pendingComm}</div>
-                    <div className="text-xl font-black text-amber-600">{formatNumber(stats.pendingCommission)} <span className="text-xs font-normal text-gray-400">IRR</span></div>
+                    <div className="text-xl font-black text-amber-600">{formatOMR(stats.pendingCommission)} <span className="text-xs font-normal text-gray-400">OMR</span></div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="text-gray-500 text-xs font-bold mb-1">{t.stats.count}</div>
@@ -563,10 +578,13 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                                     <td className="px-6 py-4 font-bold text-gray-800 text-sm">{sale.salespersonName}</td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{sale.customerName}</td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{sale.serviceTitle}</td>
-                                    <td className="px-6 py-4 font-bold text-gray-800">{formatNumber(sale.saleAmount)} <span className="text-xs font-normal text-gray-400">{sale.currency}</span></td>
+                                    <td className="px-6 py-4 font-bold text-gray-800">
+                                        {formatOMR(toOMR(sale.saleAmount, sale.currency, sale))} <span className="text-xs font-normal text-gray-400">OMR</span>
+                                        <div className="text-[10px] text-gray-400">{formatNumber(sale.saleAmount)} {sale.currency}</div>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className="flex flex-col">
-                                            <span className={`font-bold ${sale.commissionPaid ? 'text-green-600' : 'text-amber-600'}`}>{formatNumber(sale.commissionAmount)}</span>
+                                            <span className={`font-bold ${sale.commissionPaid ? 'text-green-600' : 'text-amber-600'}`}>{formatOMR(toOMR(sale.commissionAmount, sale.currency, sale))} <span className="text-[10px] font-normal text-gray-400">OMR</span></span>
                                             <span className="text-[10px] text-gray-400">({sale.commissionRate}%)</span>
                                         </div>
                                     </td>
@@ -751,12 +769,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                             (!selectedMonth || r.depositDate.startsWith(selectedMonth))
                         );
                         
-                        // Calculate metrics:
-                        // 1. Total Sales (Gross)
-                        const totalSales = personSales.reduce((acc, r) => acc + r.saleAmount, 0);
-                        
-                        // 2. Company Profit (Gross Sale - Commission Paid)
-                        const companyProfit = personSales.reduce((acc, r) => acc + (r.saleAmount - r.commissionAmount), 0);
+                        const totalSales = personSales.reduce((acc, r) => acc + toOMR(r.saleAmount, r.currency, r), 0);
+                        const companyProfit = personSales.reduce((acc, r) => acc + toOMR(r.saleAmount - r.commissionAmount, r.currency, r), 0);
                         
                         return { ...person, totalSales, companyProfit };
                     })
@@ -775,10 +789,10 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                             </div>
                             <div className="text-right">
                                 <div className="font-mono font-bold text-xl text-green-300" title={t.leaderboard.profit}>
-                                    {formatNumber(p.companyProfit)} <span className="text-xs opacity-50">IRR</span>
+                                    {formatOMR(p.companyProfit)} <span className="text-xs opacity-50">OMR</span>
                                 </div>
                                 <div className="text-[10px] opacity-60 mt-1" title={t.leaderboard.sales}>
-                                    {t.leaderboard.sales} {formatNumber(p.totalSales)}
+                                    {t.leaderboard.sales} {formatOMR(p.totalSales)} OMR
                                 </div>
                             </div>
                         </div>

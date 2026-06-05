@@ -307,18 +307,25 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   });
 
   // ── All figures converted to OMR ──────────────────────────────────────────
-  // Helper: convert any amount+currency to OMR (defined after rates state)
+  // Uses global rates for expenses; uses each SalesRecord's snapshotRates for income
   const omr = (amt: number, cur: string) => toOMR(amt, cur);
+  const omrSR = (amt: number, cur: string, sr: SalesRecord): number => {
+    const r = sr.snapshotRates || rates;
+    if (!amt) return 0;
+    if (cur === 'OMR') return amt;
+    const irr = cur === 'USD' ? amt * r.USD_IRR : amt;
+    return r.OMR_IRR > 0 ? irr / r.OMR_IRR : 0;
+  };
 
   // KPI totals in OMR
-  const kpiIncOMR      = filteredInc.reduce((s,sr) => s + omr(sr.saleAmount||0, sr.currency||'IRR'), 0);
+  const kpiIncOMR      = filteredInc.reduce((s,sr) => s + omrSR(sr.saleAmount||0, sr.currency||'IRR', sr), 0);
   const kpiExpOMR      = filteredExp.reduce((s,e)  => s + omr(e.amount||0,      e.currency||'IRR'), 0);
   const kpiExpPaidOMR  = filteredExp.reduce((s,e)  => s + omr(e.paidAmount||0,  e.currency||'IRR'), 0);
   const kpiNetOMR      = kpiIncOMR - kpiExpOMR;
   const kpiArrearsOMR  = kpiExpOMR - kpiExpPaidOMR;
 
   // Income receivables in OMR
-  const kpiIncReceivedOMR = filteredInc.reduce((s,sr) => s + omr(sr.receivedAmount??sr.saleAmount, sr.currency||'IRR'), 0);
+  const kpiIncReceivedOMR = filteredInc.reduce((s,sr) => s + omrSR(sr.receivedAmount??sr.saleAmount, sr.currency||'IRR', sr), 0);
   const kpiIncPendingOMR  = kpiIncOMR - kpiIncReceivedOMR;
 
   const paidCnt    = filteredExp.filter(e=>e.status==='paid').length;
@@ -335,8 +342,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const plExp = expenses.filter(ex => inPeriod(ex.date));
   const plInc = salesRecords.filter(sr => inPeriod(sr.depositDate||sr.createdAt||''));
 
-  // All P&L amounts are in OMR
-  const plRevenue   = plInc.reduce((s,r) => s + omr(r.saleAmount||0, r.currency||'IRR'), 0);
+  // All P&L amounts are in OMR (income uses per-record snapshot rates)
+  const plRevenue   = plInc.reduce((s,r) => s + omrSR(r.saleAmount||0, r.currency||'IRR', r), 0);
   const byGroup     = (g: string) => plExp
     .filter(e => (allExpCats[e.category]?.group||EXP_CAT[e.category]?.group||'below') === g)
     .reduce((s,e) => s + omr(e.amount||0, e.currency||'IRR'), 0);
@@ -372,7 +379,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   salesRecords.forEach(sr => {
     const m = (sr.depositDate||sr.createdAt||'').substring(0,7); if (!m) return;
     if (!monthlyData[m]) monthlyData[m] = {expenses:0,expPaid:0,income:0};
-    monthlyData[m].income += omr(sr.saleAmount||0, sr.currency||'IRR');
+    monthlyData[m].income += omrSR(sr.saleAmount||0, sr.currency||'IRR', sr);
   });
   const monthlyRows = Object.entries(monthlyData).sort((a,b)=>a[0].localeCompare(b[0]));
   const maxMV = Math.max(...monthlyRows.flatMap(m=>[m[1].expenses,m[1].income]), 1);
@@ -487,6 +494,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       depositAccount:  incForm.account || '-',
       depositDate:     incForm.date,
       notes:           incForm.notes,
+      snapshotRates:   editingInc?.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
       createdAt:       editingInc?.createdAt || now,
       updatedAt:       editingInc ? now : undefined,
       updatedBy:       editingInc ? currentUser.fullName : undefined,
