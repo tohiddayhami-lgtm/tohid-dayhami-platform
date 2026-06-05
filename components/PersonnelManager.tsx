@@ -5,66 +5,120 @@ import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, Ico
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 
-// ── Job Description structured format ──
+// ── Job Description — bilingual structured format ──
+interface BL { fa: string; en: string; }
+interface CommissionEntry { department: BL; process: BL; percentage: number; basis: BL; }
+interface PolicyEntry { title: BL; rule: BL; }
+
 interface JobDescData {
-  position: string;
-  department: string;
-  summary: string;
-  responsibilities: string[];
-  requiredSkills: string[];
-  qualifications: string;
-  workingHours: string;
-  kpis: string[];
-  notes: string;
+  meta: { company: BL; documentType: string; version: string; lastUpdated: string; };
+  position: BL;
+  department: BL;
+  reportsTo: BL;
+  employmentType: BL;
+  summary: BL;
+  responsibilities: BL[];
+  requiredSkills: BL[];
+  qualifications: BL;
+  workingHours: BL;
+  compensation: { model: BL; baseSalary: null; commission: CommissionEntry[]; };
+  kpis: BL[];
+  companyPolicies: PolicyEntry[];
+  notes: BL;
 }
 
+const bl = (fa = '', en = ''): BL => ({ fa, en });
+
 const emptyJD = (): JobDescData => ({
-  position: '', department: '', summary: '',
-  responsibilities: [''], requiredSkills: [''],
-  qualifications: '', workingHours: '',
-  kpis: [''], notes: '',
+  meta: { company: bl('مرکز راهکارهای کسب‌وکار توحید دیهمی', 'Tohid Dayhami Business Solutions Center SPC'), documentType: 'job_description', version: '1.0', lastUpdated: new Date().toISOString().slice(0, 10) },
+  position: bl(), department: bl(), reportsTo: bl(), employmentType: bl(),
+  summary: bl(),
+  responsibilities: [bl()], requiredSkills: [bl()],
+  qualifications: bl(), workingHours: bl(),
+  compensation: { model: bl(), baseSalary: null, commission: [{ department: bl(), process: bl(), percentage: 0, basis: bl() }] },
+  kpis: [bl()],
+  companyPolicies: [{ title: bl(), rule: bl() }],
+  notes: bl(),
 });
 
 const SAMPLE_JD: JobDescData = {
-  position: 'کارشناس صادرات',
-  department: 'واحد بازرگانی',
-  summary: 'مسئولیت اجرا و پیگیری فرآیندهای صادراتی، ارتباط با مشتریان بین‌المللی و هماهنگی با تیم‌های داخلی برای تحقق اهداف صادراتی شرکت.',
+  meta: { company: bl('مرکز راهکارهای کسب‌وکار توحید دیهمی', 'Tohid Dayhami Business Solutions Center SPC'), documentType: 'job_description', version: '1.0', lastUpdated: '2026-06-05' },
+  position:       bl('کارشناس صادرات', 'Export Specialist'),
+  department:     bl('واحد بازرگانی', 'Commercial Unit'),
+  reportsTo:      bl('مدیر بازرگانی', 'Commercial Manager'),
+  employmentType: bl('پورسانتی (درصدی)', 'Commission-based'),
+  summary: bl(
+    'مسئولیت اجرا و پیگیری فرآیندهای صادراتی، ارتباط با مشتریان بین‌المللی و هماهنگی با تیم‌های داخلی برای تحقق اهداف صادراتی شرکت.',
+    "Responsible for executing export processes, liaising with international clients, and coordinating with internal teams to meet the company's export targets."
+  ),
   responsibilities: [
-    'بررسی و پردازش درخواست‌های صادراتی مشتریان',
-    'هماهنگی با شرکت‌های حمل‌ونقل بین‌المللی',
-    'تهیه و تکمیل مستندات گمرکی و صادراتی',
-    'پاسخگویی به استعلام‌های مشتریان در کمتر از ۴ ساعت',
-    'گزارش‌دهی هفتگی به مدیر بازرگانی',
+    bl('بررسی و پردازش درخواست‌های صادراتی مشتریان', "Review and process clients' export requests"),
+    bl('هماهنگی با شرکت‌های حمل‌ونقل بین‌المللی', 'Coordinate with international freight forwarders'),
+    bl('تهیه و تکمیل مستندات گمرکی و صادراتی', 'Prepare and complete customs and export documents'),
+    bl('پاسخگویی به استعلام مشتریان در کمتر از ۴ ساعت', 'Respond to client inquiries within 4 hours'),
   ],
   requiredSkills: [
-    'آشنایی کامل با قوانین گمرکی و صادراتی',
-    'تسلط به زبان انگلیسی — حداقل سطح B2',
-    'مهارت در نرم‌افزارهای آفیس (Word, Excel)',
-    'توانایی مذاکره و ارتباط با مشتریان خارجی',
-    'تسلط به اینترنت و ابزارهای آنلاین',
+    bl('آشنایی کامل با قوانین گمرکی و صادراتی', 'Thorough knowledge of customs and export regulations'),
+    bl('تسلط به انگلیسی — حداقل B2', 'English proficiency — minimum B2'),
+    bl('مهارت در Word و Excel', 'Proficiency in Word and Excel'),
   ],
-  qualifications: 'کارشناسی یا بالاتر در رشته بازرگانی، مدیریت یا اقتصاد.\nحداقل ۲ سال سابقه کار مرتبط در حوزه تجارت بین‌الملل.',
-  workingHours: 'شنبه تا چهارشنبه ۸:۰۰ الی ۱۷:۰۰',
+  qualifications: bl(
+    'کارشناسی یا بالاتر در بازرگانی، مدیریت یا اقتصاد. حداقل ۲ سال سابقه مرتبط در تجارت بین‌الملل.',
+    "Bachelor's or higher in Commerce, Management or Economics. Min. 2 years relevant experience in international trade."
+  ),
+  workingHours: bl('یکشنبه تا چهارشنبه ۹:۰۰–۱۷:۰۰ — پنجشنبه ۹:۰۰–۱۳:۰۰', 'Sunday–Wednesday 09:00–17:00 — Thursday 09:00–13:00'),
+  compensation: {
+    model: bl('پورسانتی (درصدی)', 'Commission-based'),
+    baseSalary: null,
+    commission: [
+      { department: bl('واحد بازرگانی', 'Commercial Unit'), process: bl('قرارداد صادراتی نهایی‌شده', 'Finalized export contract'), percentage: 10, basis: bl('بر مبنای حاشیه سود قرارداد', 'Based on contract profit margin') },
+      { department: bl('واحد مشاوره', 'Consulting Unit'), process: bl('جذب پروژه مشاوره صادرات', 'Acquiring an export-consulting project'), percentage: 15, basis: bl('بر مبنای ارزش قرارداد مشاوره', 'Based on consulting contract value') },
+    ],
+  },
   kpis: [
-    'تعداد پرونده‌های صادراتی ماهانه — هدف: ۲۰ پرونده',
-    'نرخ رضایت مشتریان — هدف: ۹۰٪ و بیشتر',
-    'زمان پاسخگویی به استعلام — هدف: کمتر از ۴ ساعت',
+    bl('پرونده‌های صادراتی ماهانه — هدف: ۲۰', 'Monthly export cases — target: 20'),
+    bl('رضایت مشتری — هدف: ۹۰٪+', 'Client satisfaction — target: 90%+'),
+    bl('زمان پاسخگویی — هدف: زیر ۴ ساعت', 'Response time — target: under 4h'),
   ],
-  notes: 'امکان دورکاری جزئی در روزهای مشخص پس از گذراندن دوره آزمایشی.',
+  companyPolicies: [
+    { title: bl('ساعت کاری و حضور آنلاین', 'Working Hours & Online Presence'), rule: bl('ساعت کاری رسمی یکشنبه تا چهارشنبه ۹:۰۰–۱۷:۰۰ و پنجشنبه ۹:۰۰–۱۳:۰۰ است. حضور آنلاین در تمام ساعات کاری الزامی است؛ در صورت عدم حضور، تکمیل برگه‌ی مرخصی ضروری است.', 'Official hours: Sun–Wed 09:00–17:00, Thu 09:00–13:00. Being online during all working hours is mandatory; otherwise a leave form must be completed.') },
+    { title: bl('فرهنگ نتیجه‌محور', 'Results-Oriented Culture'), rule: bl('ارزیابی عملکرد اساساً بر مبنای تحقق نتایج و KPIهاست، نه صرف حضور.', 'Performance is judged primarily on results and KPIs, not mere attendance.') },
+    { title: bl('انجام کار صرفاً در قالب رسمی شرکت', 'Work Solely Within the Company Framework'), rule: bl('تمامی کارها و تعاملات با مشتریان باید فقط در قالب رسمی شرکت انجام شود. ورود به هرگونه قرارداد فردی و مستقل با مشتریان شرکت اکیداً ممنوع است.', "All work and interactions with clients must occur solely within the official company framework. Entering into any individual or independent contract with the company's clients is strictly prohibited.") },
+  ],
+  notes: bl('امکان دورکاری جزئی در روزهای مشخص پس از گذراندن دوره آزمایشی.', 'Partial remote work on designated days is possible after probation.'),
 };
 
 const parseJD = (str: string): JobDescData => {
   if (!str) return emptyJD();
   try {
     const p = JSON.parse(str);
+    const em = emptyJD();
+    // Support new bilingual format
+    if (p.position?.fa || p.summary?.fa) {
+      return {
+        ...em, ...p,
+        responsibilities:  p.responsibilities?.length  ? p.responsibilities  : [bl()],
+        requiredSkills:    p.requiredSkills?.length     ? p.requiredSkills    : [bl()],
+        kpis:              p.kpis?.length               ? p.kpis              : [bl()],
+        companyPolicies:   p.companyPolicies?.length    ? p.companyPolicies   : [{ title: bl(), rule: bl() }],
+        compensation:      p.compensation               ? p.compensation      : em.compensation,
+      };
+    }
+    // Legacy plain-string format → migrate to bilingual
     return {
-      ...emptyJD(), ...p,
-      responsibilities: p.responsibilities?.length ? p.responsibilities : [''],
-      requiredSkills:   p.requiredSkills?.length   ? p.requiredSkills   : [''],
-      kpis:             p.kpis?.length             ? p.kpis             : [''],
+      ...em,
+      position:        bl(p.position || '', ''),
+      department:      bl(p.department || '', ''),
+      summary:         bl(p.summary || (typeof str === 'string' && !p.position ? str : ''), ''),
+      responsibilities: (p.responsibilities || ['']).map((r: string) => bl(r, '')),
+      requiredSkills:   (p.requiredSkills   || ['']).map((s: string) => bl(s, '')),
+      qualifications:  bl(p.qualifications || '', ''),
+      workingHours:    bl(p.workingHours || '', ''),
+      kpis:            (p.kpis || ['']).map((k: string) => bl(k, '')),
+      notes:           bl(p.notes || '', ''),
     };
   } catch {
-    return { ...emptyJD(), summary: str };
+    return { ...emptyJD(), summary: bl(str, '') };
   }
 };
 
@@ -113,19 +167,32 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
     reader.onload = ev => {
       try {
         const parsed = JSON.parse(ev.target?.result as string);
-        setJdDraft({ ...emptyJD(), ...parsed, responsibilities: parsed.responsibilities?.length ? parsed.responsibilities : [''], requiredSkills: parsed.requiredSkills?.length ? parsed.requiredSkills : [''], kpis: parsed.kpis?.length ? parsed.kpis : [''] });
+        setJdDraft(parseJD(JSON.stringify(parsed)));
         setShowJDModal(true);
       } catch { alert('فایل JSON نامعتبر است'); }
     };
     reader.readAsText(file); e.target.value = '';
   };
 
-  const setListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number, val: string) =>
-    setJdDraft(d => { const arr = [...d[key]]; arr[idx] = val; return { ...d, [key]: arr }; });
-  const addListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis') =>
-    setJdDraft(d => ({ ...d, [key]: [...d[key], ''] }));
-  const removeListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number) =>
-    setJdDraft(d => ({ ...d, [key]: d[key].filter((_, i) => i !== idx) }));
+  // BL list helpers (responsibilities, requiredSkills, kpis)
+  const setBLItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number, lang: 'fa'|'en', val: string) =>
+    setJdDraft(d => { const arr = [...d[key]] as BL[]; arr[idx] = { ...arr[idx], [lang]: val }; return { ...d, [key]: arr }; });
+  const addBLItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis') =>
+    setJdDraft(d => ({ ...d, [key]: [...d[key], bl()] }));
+  const removeBLItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number) =>
+    setJdDraft(d => ({ ...d, [key]: (d[key] as BL[]).filter((_, i) => i !== idx) }));
+
+  // Policy helpers
+  const addPolicy = () => setJdDraft(d => ({ ...d, companyPolicies: [...d.companyPolicies, { title: bl(), rule: bl() }] }));
+  const removePolicy = (idx: number) => setJdDraft(d => ({ ...d, companyPolicies: d.companyPolicies.filter((_, i) => i !== idx) }));
+  const setPolicy = (idx: number, field: 'title'|'rule', lang: 'fa'|'en', val: string) =>
+    setJdDraft(d => { const arr = [...d.companyPolicies]; arr[idx] = { ...arr[idx], [field]: { ...arr[idx][field], [lang]: val } }; return { ...d, companyPolicies: arr }; });
+
+  // Commission helpers
+  const addCommission = () => setJdDraft(d => ({ ...d, compensation: { ...d.compensation, commission: [...d.compensation.commission, { department: bl(), process: bl(), percentage: 0, basis: bl() }] } }));
+  const removeCommission = (idx: number) => setJdDraft(d => ({ ...d, compensation: { ...d.compensation, commission: d.compensation.commission.filter((_, i) => i !== idx) } }));
+  const setCommission = (idx: number, field: keyof CommissionEntry, lang: 'fa'|'en'|'pct', val: string) =>
+    setJdDraft(d => { const arr = [...d.compensation.commission]; if (lang === 'pct') { arr[idx] = { ...arr[idx], percentage: parseFloat(val) || 0 }; } else { arr[idx] = { ...arr[idx], [field]: { ...(arr[idx][field as 'department'] as BL), [lang]: val } }; } return { ...d, compensation: { ...d.compensation, commission: arr } }; });
 
   const availableRoles = config.personnelRoles || ['مدیر', 'کارشناس صادرات', 'طراح گرافیک/بسته بندی', 'پشتیبانی', 'کارشناس آموزش'];
 
@@ -281,7 +348,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                    </div>
                    {formData.jobDescription ? (
                      <button type="button" onClick={openJDModal} className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:border-indigo-300 transition-colors">
-                       {(() => { try { const d = JSON.parse(formData.jobDescription); return <span><span className="font-bold text-gray-800">{d.position || '—'}</span>{d.department ? ` · ${d.department}` : ''}{d.summary ? ` — ${d.summary.slice(0, 80)}${d.summary.length > 80 ? '...' : ''}` : ''}</span>; } catch { return <span>{formData.jobDescription.slice(0, 100)}</span>; } })()}
+                       {(() => { try { const d = JSON.parse(formData.jobDescription); const pos = d.position?.fa || d.position || '—'; const dept = d.department?.fa || d.department || ''; const sum = d.summary?.fa || d.summary || ''; return <span><span className="font-bold text-gray-800">{pos}</span>{dept ? ` · ${dept}` : ''}{sum ? ` — ${sum.slice(0, 80)}${sum.length > 80 ? '...' : ''}` : ''}</span>; } catch { return <span>{formData.jobDescription.slice(0, 100)}</span>; } })()}
                      </button>
                    ) : (
                      <button type="button" onClick={openJDModal} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
@@ -314,81 +381,122 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
               </div>
             </div>
 
-            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-              {/* Basic info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">عنوان شغلی</label>
-                  <input value={jdDraft.position} onChange={e => setJdDraft(d => ({...d, position: e.target.value}))} placeholder="مثال: کارشناس صادرات" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">واحد سازمانی</label>
-                  <input value={jdDraft.department} onChange={e => setJdDraft(d => ({...d, department: e.target.value}))} placeholder="مثال: واحد بازرگانی" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">ساعات کاری</label>
-                  <input value={jdDraft.workingHours} onChange={e => setJdDraft(d => ({...d, workingHours: e.target.value}))} placeholder="مثال: شنبه تا چهارشنبه ۸-۱۷" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-                </div>
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+
+              {/* Helper: bilingual row label */}
+              {/* Meta */}
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 grid grid-cols-3 gap-3 text-xs text-gray-500">
+                <div><span className="font-bold">شرکت (FA):</span> {jdDraft.meta.company.fa}</div>
+                <div><span className="font-bold">Company (EN):</span> {jdDraft.meta.company.en}</div>
+                <div><span className="font-bold">تاریخ:</span> {jdDraft.meta.lastUpdated}</div>
               </div>
+
+              {/* Helper component inline for bilingual text field */}
+              {([
+                { label: 'عنوان شغلی / Position', key: 'position' as const, ph: { fa: 'کارشناس صادرات', en: 'Export Specialist' } },
+                { label: 'واحد سازمانی / Department', key: 'department' as const, ph: { fa: 'واحد بازرگانی', en: 'Commercial Unit' } },
+                { label: 'گزارش‌دهی به / Reports To', key: 'reportsTo' as const, ph: { fa: 'مدیر بازرگانی', en: 'Commercial Manager' } },
+                { label: 'نوع استخدام / Employment Type', key: 'employmentType' as const, ph: { fa: 'پورسانتی', en: 'Commission-based' } },
+                { label: 'ساعات کاری / Working Hours', key: 'workingHours' as const, ph: { fa: 'یکشنبه-چهارشنبه ۹-۱۷', en: 'Sun–Wed 09:00–17:00' } },
+              ] as const).map(({ label, key, ph }) => (
+                <div key={key}>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">{label}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={(jdDraft[key] as BL).fa} onChange={e => setJdDraft(d => ({ ...d, [key]: { ...(d[key] as BL), fa: e.target.value } }))} placeholder={ph.fa} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                    <input value={(jdDraft[key] as BL).en} onChange={e => setJdDraft(d => ({ ...d, [key]: { ...(d[key] as BL), en: e.target.value } }))} placeholder={ph.en} className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                  </div>
+                </div>
+              ))}
 
               {/* Summary */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">خلاصه شغل</label>
-                <textarea rows={3} value={jdDraft.summary} onChange={e => setJdDraft(d => ({...d, summary: e.target.value}))} placeholder="شرح کوتاهی از هدف و ماهیت این شغل..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
-              </div>
-
-              {/* Responsibilities */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500">مسئولیت‌های اصلی</label>
-                  <button type="button" onClick={() => addListItem('responsibilities')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
-                </div>
-                <div className="space-y-1.5">
-                  {jdDraft.responsibilities.map((r, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">{i+1}</span>
-                      <input value={r} onChange={e => setListItem('responsibilities', i, e.target.value)} placeholder="مثال: بررسی درخواست‌های صادراتی" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
-                      {jdDraft.responsibilities.length > 1 && <button type="button" onClick={() => removeListItem('responsibilities', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
-                    </div>
-                  ))}
+                <label className="block text-xs font-bold text-gray-500 mb-1.5">خلاصه شغل / Summary</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <textarea rows={3} value={jdDraft.summary.fa} onChange={e => setJdDraft(d => ({...d, summary: {...d.summary, fa: e.target.value}}))} placeholder="شرح کوتاهی از هدف و ماهیت این شغل..." className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" />
+                  <textarea rows={3} value={jdDraft.summary.en} onChange={e => setJdDraft(d => ({...d, summary: {...d.summary, en: e.target.value}}))} placeholder="Brief description of the job purpose..." className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" dir="ltr" />
                 </div>
               </div>
 
-              {/* Required skills */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500">مهارت‌های مورد نیاز</label>
-                  <button type="button" onClick={() => addListItem('requiredSkills')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+              {/* Bilingual list sections */}
+              {([
+                { label: 'مسئولیت‌های اصلی / Responsibilities', key: 'responsibilities' as const, phFa: 'مثال: بررسی درخواست‌های صادراتی', phEn: "e.g. Review clients' export requests" },
+                { label: 'مهارت‌های مورد نیاز / Required Skills', key: 'requiredSkills' as const, phFa: 'مثال: تسلط به انگلیسی B2', phEn: 'e.g. English proficiency B2' },
+                { label: 'شاخص‌های عملکرد / KPIs', key: 'kpis' as const, phFa: 'مثال: پرونده ماهانه — هدف: ۲۰', phEn: 'e.g. Monthly cases — target: 20' },
+              ] as const).map(({ label, key, phFa, phEn }) => (
+                <div key={key}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-gray-500">{label}</label>
+                    <button type="button" onClick={() => addBLItem(key)} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(jdDraft[key] as BL[]).map((item, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <span className="text-gray-400 text-xs w-5 shrink-0 text-center">{i+1}</span>
+                        <input value={item.fa} onChange={e => setBLItem(key, i, 'fa', e.target.value)} placeholder={phFa} className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        <input value={item.en} onChange={e => setBLItem(key, i, 'en', e.target.value)} placeholder={phEn} className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                        {(jdDraft[key] as BL[]).length > 1 && <button type="button" onClick={() => removeBLItem(key, i)} className="text-red-400 hover:text-red-600 text-sm shrink-0">×</button>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {jdDraft.requiredSkills.map((s, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">•</span>
-                      <input value={s} onChange={e => setListItem('requiredSkills', i, e.target.value)} placeholder="مثال: تسلط به زبان انگلیسی" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
-                      {jdDraft.requiredSkills.length > 1 && <button type="button" onClick={() => removeListItem('requiredSkills', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
 
               {/* Qualifications */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">تحصیلات و تجربه لازم</label>
-                <textarea rows={2} value={jdDraft.qualifications} onChange={e => setJdDraft(d => ({...d, qualifications: e.target.value}))} placeholder="مثال: کارشناسی بازرگانی — حداقل ۲ سال سابقه مرتبط" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+                <label className="block text-xs font-bold text-gray-500 mb-1.5">تحصیلات و تجربه / Qualifications</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <textarea rows={2} value={jdDraft.qualifications.fa} onChange={e => setJdDraft(d => ({...d, qualifications: {...d.qualifications, fa: e.target.value}}))} placeholder="کارشناسی بازرگانی — ۲ سال سابقه مرتبط" className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" />
+                  <textarea rows={2} value={jdDraft.qualifications.en} onChange={e => setJdDraft(d => ({...d, qualifications: {...d.qualifications, en: e.target.value}}))} placeholder="Bachelor's in Commerce — 2 yrs experience" className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" dir="ltr" />
+                </div>
               </div>
 
-              {/* KPIs */}
+              {/* Compensation */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-500">شاخص‌های عملکرد (KPI)</label>
-                  <button type="button" onClick={() => addListItem('kpis')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                  <label className="text-xs font-bold text-gray-500">حقوق و مزایا / Compensation</label>
+                  <button type="button" onClick={addCommission} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن ردیف</button>
                 </div>
-                <div className="space-y-1.5">
-                  {jdDraft.kpis.map((k, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">📊</span>
-                      <input value={k} onChange={e => setListItem('kpis', i, e.target.value)} placeholder="مثال: تعداد پرونده ماهانه — هدف: ۲۰" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
-                      {jdDraft.kpis.length > 1 && <button type="button" onClick={() => removeListItem('kpis', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input value={jdDraft.compensation.model.fa} onChange={e => setJdDraft(d => ({...d, compensation: {...d.compensation, model: {...d.compensation.model, fa: e.target.value}}}))} placeholder="مدل: پورسانتی" className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                  <input value={jdDraft.compensation.model.en} onChange={e => setJdDraft(d => ({...d, compensation: {...d.compensation, model: {...d.compensation.model, en: e.target.value}}}))} placeholder="Model: Commission-based" className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                </div>
+                <div className="space-y-2">
+                  {jdDraft.compensation.commission.map((c, i) => (
+                    <div key={i} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100 space-y-1.5">
+                      <div className="flex items-center justify-between"><span className="text-[10px] font-bold text-gray-400">ردیف {i+1}</span>{jdDraft.compensation.commission.length > 1 && <button type="button" onClick={() => removeCommission(i)} className="text-red-400 hover:text-red-600 text-xs">× حذف</button>}</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input value={c.department.fa} onChange={e => setCommission(i, 'department', 'fa', e.target.value)} placeholder="واحد (FA)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        <input value={c.department.en} onChange={e => setCommission(i, 'department', 'en', e.target.value)} placeholder="Unit (EN)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                        <input value={c.process.fa} onChange={e => setCommission(i, 'process', 'fa', e.target.value)} placeholder="فرآیند (FA)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        <input value={c.process.en} onChange={e => setCommission(i, 'process', 'en', e.target.value)} placeholder="Process (EN)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                        <input value={c.basis.fa} onChange={e => setCommission(i, 'basis', 'fa', e.target.value)} placeholder="مبنای محاسبه (FA)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                        <input value={c.basis.en} onChange={e => setCommission(i, 'basis', 'en', e.target.value)} placeholder="Basis (EN)" className="px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                        <div className="col-span-2 flex items-center gap-2">
+                          <input type="number" min="0" max="100" value={c.percentage} onChange={e => setCommission(i, 'percentage', 'pct', e.target.value)} className="w-20 px-2 py-1 rounded border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" dir="ltr" />
+                          <span className="text-xs text-gray-500">درصد / %</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Company Policies */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-500">قوانین و سیاست‌های شرکت / Company Policies</label>
+                  <button type="button" onClick={addPolicy} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                </div>
+                <div className="space-y-3">
+                  {jdDraft.companyPolicies.map((p, i) => (
+                    <div key={i} className="bg-blue-50 rounded-xl p-3 border border-blue-100 space-y-1.5">
+                      <div className="flex items-center justify-between mb-1"><span className="text-[10px] font-bold text-blue-400">قانون {i+1}</span>{jdDraft.companyPolicies.length > 1 && <button type="button" onClick={() => removePolicy(i)} className="text-red-400 hover:text-red-600 text-xs">× حذف</button>}</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input value={p.title.fa} onChange={e => setPolicy(i, 'title', 'fa', e.target.value)} placeholder="عنوان (FA)" className="px-2 py-1 rounded border border-blue-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white" />
+                        <input value={p.title.en} onChange={e => setPolicy(i, 'title', 'en', e.target.value)} placeholder="Title (EN)" className="px-2 py-1 rounded border border-blue-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white" dir="ltr" />
+                        <textarea rows={2} value={p.rule.fa} onChange={e => setPolicy(i, 'rule', 'fa', e.target.value)} placeholder="متن قانون (FA)" className="px-2 py-1 rounded border border-blue-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white resize-none" />
+                        <textarea rows={2} value={p.rule.en} onChange={e => setPolicy(i, 'rule', 'en', e.target.value)} placeholder="Rule text (EN)" className="px-2 py-1 rounded border border-blue-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white resize-none" dir="ltr" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -396,8 +504,11 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">توضیحات تکمیلی</label>
-                <textarea rows={2} value={jdDraft.notes} onChange={e => setJdDraft(d => ({...d, notes: e.target.value}))} placeholder="هر نکته دیگری که لازم است ذکر شود..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+                <label className="block text-xs font-bold text-gray-500 mb-1.5">توضیحات تکمیلی / Notes</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <textarea rows={2} value={jdDraft.notes.fa} onChange={e => setJdDraft(d => ({...d, notes: {...d.notes, fa: e.target.value}}))} placeholder="هر نکته دیگری..." className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" />
+                  <textarea rows={2} value={jdDraft.notes.en} onChange={e => setJdDraft(d => ({...d, notes: {...d.notes, en: e.target.value}}))} placeholder="Any additional notes..." className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300 resize-none" dir="ltr" />
+                </div>
               </div>
             </div>
 
