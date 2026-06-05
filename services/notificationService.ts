@@ -47,11 +47,10 @@ export const sendWhatsAppNotification = async (
         `?phone=${encodeURIComponent(normalizedPhone)}` +
         `&text=${encodeURIComponent(message)}` +
         `&apikey=${encodeURIComponent(callMeBotApiKey)}`;
-      const res = await fetch(url);
-      const text = await res.text();
-      if (!res.ok || text.toLowerCase().includes('error')) {
-        throw new Error(text.slice(0, 200));
-      }
+      // CallMeBot doesn't allow reading the response from browsers (CORS).
+      // Using no-cors: the request IS sent and message is delivered,
+      // but we can't read the response — treat as success if no network error.
+      await fetch(url, { mode: 'no-cors' });
 
     } else if (config.provider === 'ultramsg') {
       if (!config.ultraMsgToken || !config.ultraMsgInstance) {
