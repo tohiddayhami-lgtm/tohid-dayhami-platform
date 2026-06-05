@@ -132,7 +132,12 @@ const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
-  const [customFormId, setCustomFormId] = useState<string | null>(null);
+  // Initialize synchronously from the URL so the first render shows the form immediately
+  const [customFormId, setCustomFormId] = useState<string | null>(() => {
+    const h = window.location.hash;
+    if (h.startsWith('#/f/')) return h.replace('#/f/', '').split('?')[0] || null;
+    return null;
+  });
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -233,17 +238,6 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    if (storedUser && lastActive) {
-      if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
-        handleLogout();
-      } else {
-        try {
-          setCurrentUser(JSON.parse(storedUser));
-          localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, now.toString());
-        } catch { handleLogout(); }
-      }
-    }
-
     // Hash is the single source of truth for navigation
     const initialView = (() => {
       if (hashView && hashView !== 'landing') {
@@ -252,6 +246,28 @@ const App: React.FC = () => {
       }
       return 'landing' as const;
     })();
+
+    // Only handle session expiry for admin view, never redirect away from public pages
+    if (storedUser && lastActive && initialView !== 'custom-form') {
+      if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
+        localStorage.removeItem(STORAGE_KEYS.USER);
+        localStorage.removeItem(STORAGE_KEYS.VIEW);
+        localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVE);
+        setCurrentUser(null);
+      } else {
+        try {
+          setCurrentUser(JSON.parse(storedUser));
+          localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, now.toString());
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.USER);
+          setCurrentUser(null);
+        }
+      }
+    } else if (storedUser && initialView !== 'custom-form') {
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch { localStorage.removeItem(STORAGE_KEYS.USER); }
+    }
 
     setViewState(initialView);
     if (!hashView || hashView === 'landing') history.replaceState(null, '', '#/');
@@ -794,13 +810,17 @@ const App: React.FC = () => {
               <TrackingView tickets={tickets} services={services} lang={lang} />
             )}
 
-            {view === 'custom-form' && customFormId && (
-              <PublicFormView
-                formId={customFormId}
-                lang={lang}
-                appTitle={lang === 'en' ? appConfig.appTitleEn : appConfig.appTitle}
-                onGoToTracking={() => setView('tracking')}
-              />
+            {view === 'custom-form' && (
+              customFormId
+                ? <PublicFormView
+                    formId={customFormId}
+                    lang={lang}
+                    appTitle={lang === 'en' ? appConfig.appTitleEn : appConfig.appTitle}
+                    onGoToTracking={() => setView('tracking')}
+                  />
+                : <div className="flex items-center justify-center py-24">
+                    <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+                  </div>
             )}
 
             {view === 'news' && (
