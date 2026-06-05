@@ -453,7 +453,7 @@ export interface NewsArticle {
   metaKeywords?: string;
 }
 
-export type FormFieldType = 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'select' | 'header' | 'date' | 'checkbox';
+export type FormFieldType = 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'select' | 'header' | 'date' | 'checkbox' | 'file';
 
 export interface FormField {
   id: string;

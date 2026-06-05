@@ -18,15 +18,16 @@ interface Props {
 type PanelView = 'list' | 'builder' | 'preview' | 'archive';
 
 const FIELD_TYPES: { value: FormFieldType; fa: string; en: string }[] = [
-  { value: 'text',     fa: 'متن کوتاه',     en: 'Short Text' },
-  { value: 'textarea', fa: 'متن بلند',       en: 'Long Text' },
-  { value: 'email',    fa: 'ایمیل',          en: 'Email' },
-  { value: 'tel',      fa: 'تلفن',           en: 'Phone' },
-  { value: 'number',   fa: 'عدد',            en: 'Number' },
-  { value: 'date',     fa: 'تاریخ',          en: 'Date' },
-  { value: 'select',   fa: 'لیست انتخابی',  en: 'Dropdown' },
-  { value: 'checkbox', fa: 'چک‌باکس',       en: 'Checkbox' },
-  { value: 'header',   fa: 'سرتیتر (جداکننده)', en: 'Section Header' },
+  { value: 'text',     fa: 'متن کوتاه',          en: 'Short Text' },
+  { value: 'textarea', fa: 'متن بلند',            en: 'Long Text' },
+  { value: 'email',    fa: 'ایمیل',               en: 'Email' },
+  { value: 'tel',      fa: 'تلفن',                en: 'Phone' },
+  { value: 'number',   fa: 'عدد',                 en: 'Number' },
+  { value: 'date',     fa: 'تاریخ',               en: 'Date' },
+  { value: 'select',   fa: 'لیست انتخابی',        en: 'Dropdown' },
+  { value: 'checkbox', fa: 'چک‌باکس',            en: 'Checkbox' },
+  { value: 'file',     fa: 'بارگزاری فایل / عکس', en: 'File / Image Upload' },
+  { value: 'header',   fa: 'سرتیتر (جداکننده)',   en: 'Section Header' },
 ];
 
 const genId = () => `f_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -509,10 +510,26 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                           {formFields.map(field => {
                             const val = sub.customData?.[field.key || field.id];
                             if (!val) return null;
+                            const isUrl = val.startsWith('http');
+                            const isImg = isUrl && /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(val);
                             return (
                               <div key={field.id} className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-[10px] font-semibold text-gray-400 mb-0.5">{field.label}</p>
-                                <p className="text-sm text-gray-800 break-words">{val}</p>
+                                <p className="text-[10px] font-semibold text-gray-400 mb-1">{field.label}</p>
+                                {field.type === 'file' || isUrl ? (
+                                  isImg ? (
+                                    <a href={val} target="_blank" rel="noopener noreferrer">
+                                      <img src={val} alt={field.label} className="w-full max-h-40 object-contain rounded border border-gray-200 bg-white" />
+                                      <p className="text-xs text-blue-600 mt-1 hover:underline">{lang === 'fa' ? 'مشاهده / دانلود' : 'View / Download'}</p>
+                                    </a>
+                                  ) : (
+                                    <a href={val} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                                      <IconFile className="w-4 h-4 shrink-0" />
+                                      <span className="break-all">{lang === 'fa' ? 'مشاهده / دانلود فایل' : 'View / Download File'}</span>
+                                    </a>
+                                  )
+                                ) : (
+                                  <p className="text-sm text-gray-800 break-words">{val}</p>
+                                )}
                               </div>
                             );
                           })}
@@ -616,6 +633,12 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                   {field.type === 'textarea' ? <textarea disabled rows={3} placeholder={placeholder} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 cursor-not-allowed" />
                     : field.type === 'select' ? <select disabled className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 cursor-not-allowed"><option>{previewLang === 'fa' ? 'انتخاب کنید...' : 'Select...'}</option>{options?.map((o, i) => <option key={i}>{o}</option>)}</select>
                     : field.type === 'checkbox' ? <input type="checkbox" disabled className="w-4 h-4 cursor-not-allowed" />
+                    : field.type === 'file' ? (
+                      <div className="w-full px-3 py-2.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400 flex items-center gap-2 cursor-not-allowed">
+                        <IconFile className="w-4 h-4 shrink-0" />
+                        <span>{previewLang === 'fa' ? 'انتخاب فایل یا عکس...' : 'Choose file or image...'}</span>
+                      </div>
+                    )
                     : <input disabled type={field.type} placeholder={placeholder} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 cursor-not-allowed" />}
                 </div>
               );
