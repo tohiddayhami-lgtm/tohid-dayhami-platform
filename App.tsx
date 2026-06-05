@@ -139,6 +139,7 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     const page = p.get('page');
     if (page === 'form')     return 'new-ticket';
     if (page === 'tracking') return 'tracking';
+    if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
@@ -184,11 +185,10 @@ const App: React.FC = () => {
 
   const t = DICTIONARY[lang];
 
-  // Public views use query params (survives social media sharing).
-  // Admin/news keep hash routing (not shared externally).
+  // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    admin: '#/admin', news: '#/news', 'custom-form': '?form=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=',
   };
 
   const openFormWithService = (serviceId: string) => {
@@ -196,17 +196,18 @@ const App: React.FC = () => {
     setView('new-ticket');
   };
 
-  const setView = (newView: ViewState, articleSlugOrFormId?: string) => {
+  const setView = (newView: ViewState, extra?: string) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
     let newUrl = VIEW_URL[newView];
-    if (newView === 'custom-form' && articleSlugOrFormId) newUrl = `?form=${articleSlugOrFormId}`;
-    if (newView === 'landing') newUrl = window.location.pathname;
+    if (newView === 'custom-form' && extra) newUrl = `?form=${extra}`;
+    if (newView === 'news' && extra)        newUrl = `?page=news&id=${extra}`;
+    if (newView === 'landing')              newUrl = window.location.pathname;
     const currentFull = window.location.search + window.location.hash;
     if (currentFull !== newUrl && (window.location.pathname + currentFull) !== newUrl) {
       history.pushState(null, '', newUrl);
     }
-    logPageView(newView, articleSlugOrFormId);
+    logPageView(newView, extra);
   };
 
   const toAbsoluteUrl = (url: string) => {
@@ -834,7 +835,13 @@ const App: React.FC = () => {
             )}
 
             {view === 'news' && (
-              <NewsPage articles={news} lang={lang} onBack={() => setView('landing')} isLoading={isLoadingNews} />
+              <NewsPage
+                articles={news}
+                lang={lang}
+                onBack={() => setView('landing')}
+                isLoading={isLoadingNews}
+                initialArticleId={new URLSearchParams(window.location.search).get('id') || undefined}
+              />
             )}
 
             {view === 'admin' && (

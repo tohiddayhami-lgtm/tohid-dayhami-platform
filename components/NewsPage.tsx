@@ -9,6 +9,7 @@ interface Props {
   lang: Language;
   onBack: () => void;
   isLoading?: boolean;
+  initialArticleId?: string;
 }
 
 const CATEGORIES_FA = ['همه', 'اخبار صادرات', 'بازارهای هدف', 'قوانین و مقررات', 'موفقیت‌های مشتریان', 'راهنما و آموزش', 'سایر'];
@@ -26,46 +27,48 @@ function formatDateFa(iso: string): string {
 
 const PAGE_SIZE = 9;
 
-export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = false }) => {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = false, initialArticleId }) => {
+  const [selectedId, setSelectedId] = useState<string | null>(initialArticleId ?? null);
   const [activeCategory, setActiveCategory] = useState('همه');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
-  // Read article slug from URL hash on mount + when articles load
+  // If articles arrive after mount and we have an initialArticleId pending, confirm it exists
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.startsWith('#/news/')) {
-      const slug = decodeURIComponent(hash.replace('#/news/', ''));
-      const found = articles.find(a => a.slug === slug || a.id === slug);
-      if (found) setSelectedId(found.id);
+    if (initialArticleId && articles.length > 0) {
+      const found = articles.find(a => a.id === initialArticleId);
+      // Also support legacy hash-based #/news/{slug} links
+      if (!found) {
+        const hash = window.location.hash;
+        if (hash.startsWith('#/news/')) {
+          const slug = decodeURIComponent(hash.replace('#/news/', ''));
+          const bySlug = articles.find(a => a.slug === slug || a.id === slug);
+          if (bySlug) setSelectedId(bySlug.id);
+        }
+      }
     }
-  }, [articles]);
+  }, [articles, initialArticleId]);
 
-  // Browser back/forward button
+  // Browser back/forward: read ?id= from query params
   useEffect(() => {
     const handlePop = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#/news/')) {
-        const slug = decodeURIComponent(hash.replace('#/news/', ''));
-        const found = articles.find(a => a.slug === slug || a.id === slug);
-        setSelectedId(found ? found.id : null);
-      } else {
-        setSelectedId(null);
-      }
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      setSelectedId(id || null);
     };
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
-  }, [articles]);
+  }, []);
 
-  const selectArticle = (id: string, slug: string) => {
+  // Use article ID (short) — NOT the Persian slug — to keep URLs concise & social-media safe
+  const selectArticle = (id: string) => {
     setSelectedId(id);
-    history.pushState(null, '', `#/news/${encodeURIComponent(slug)}`);
+    history.pushState(null, '', `?page=news&id=${id}`);
   };
 
   const goBackToList = () => {
     setSelectedId(null);
-    history.pushState(null, '', '#/news');
+    history.pushState(null, '', '?page=news');
   };
 
   const now = Date.now();
@@ -221,7 +224,7 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
           {paginated.map(article => (
             <button
               key={article.id}
-              onClick={() => selectArticle(article.id, article.slug)}
+              onClick={() => selectArticle(article.id)}
               className="text-start border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:shadow-sm transition-all group bg-white"
             >
               {article.coverImage ? (
