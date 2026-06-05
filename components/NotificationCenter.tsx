@@ -63,7 +63,8 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
     if (!testPhone) return;
     setTesting(true); setTestResult(null);
     const msg = `✅ تست نوتیفیکیشن\nاین پیام تأیید می‌کند که تنظیمات واتساپ شما درست است.\n🕐 ${new Date().toLocaleTimeString('fa-IR')}`;
-    const result = await sendWhatsAppNotification(testPhone, msg, nc, testApiKey || undefined);
+    // Force enabled=true for test — bypass the master toggle
+    const result = await sendWhatsAppNotification(testPhone, msg, { ...nc, enabled: true }, testApiKey || undefined);
     setTestResult({ ok: result.success, msg: result.error || 'پیام با موفقیت ارسال شد ✓' });
     await saveNotificationLog({ type: 'test', recipientId: 'test', recipientName: 'Test', phone: testPhone, message: msg, status: result.success ? 'sent' : 'failed', error: result.error, createdAt: new Date().toISOString() });
     setTesting(false);
