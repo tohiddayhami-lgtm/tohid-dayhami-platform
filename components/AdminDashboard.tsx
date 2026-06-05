@@ -1299,6 +1299,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 isAdmin={isAdmin}
                 lang={lang}
                 personnel={personnel}
+                tickets={tickets}
             />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}

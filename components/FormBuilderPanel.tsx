@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { CustomForm, FormField, FormFieldType, Personnel } from '../types';
+import { CustomForm, FormField, FormFieldType, Personnel, Ticket } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
@@ -12,9 +12,10 @@ interface Props {
   isAdmin: boolean;
   lang: Language;
   personnel?: Personnel[];
+  tickets?: Ticket[];
 }
 
-type PanelView = 'list' | 'builder' | 'preview';
+type PanelView = 'list' | 'builder' | 'preview' | 'archive';
 
 const FIELD_TYPES: { value: FormFieldType; fa: string; en: string }[] = [
   { value: 'text',     fa: 'متن کوتاه',     en: 'Short Text' },
@@ -155,7 +156,7 @@ Note: "select" fields must have both "options" (Persian) and "optionsEn" (Englis
 Each field's id and key must be unique.`}
 `;
 
-export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang, personnel = [] }) => {
+export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang, personnel = [], tickets = [] }) => {
   const [view, setView] = useState<PanelView>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FormDraft>(emptyDraft());
@@ -171,6 +172,9 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [searchQ, setSearchQ] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [archiveFormId, setArchiveFormId] = useState<string>('');
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
 
   const isEditor = isAdmin || isMaster;
 
@@ -337,7 +341,234 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     !searchQ || f.title.includes(searchQ) || (f.titleEn || '').toLowerCase().includes(searchQ.toLowerCase()) || f.category.includes(searchQ)
   );
 
+  // ── Archive helpers ──
+  const formSubmissions = useMemo(() => {
+    if (!archiveFormId) {
+      return tickets.filter(t => (t.serviceId || '').startsWith('form:'));
+    }
+    return tickets.filter(t => t.serviceId === `form:${archiveFormId}` || t.customData?.formId === archiveFormId);
+  }, [tickets, archiveFormId]);
+
+  const filteredSubmissions = useMemo(() => {
+    if (!archiveSearch.trim()) return formSubmissions;
+    const q = archiveSearch.toLowerCase();
+    return formSubmissions.filter(t =>
+      t.customerName?.toLowerCase().includes(q) ||
+      t.phoneNumber?.includes(q) ||
+      t.id?.toLowerCase().includes(q) ||
+      (t.customData?.formTitle || '').toLowerCase().includes(q)
+    );
+  }, [formSubmissions, archiveSearch]);
+
+  const exportSubmissionsCSV = () => {
+    if (filteredSubmissions.length === 0) return;
+    const selectedForm = archiveFormId ? customForms.find(f => f.id === archiveFormId) : null;
+    const fields = selectedForm ? selectedForm.fields.filter(f => f.type !== 'header') : [];
+
+    const headers = [
+      lang === 'fa' ? 'کد پیگیری' : 'Tracking ID',
+      lang === 'fa' ? 'تاریخ ثبت' : 'Date',
+      lang === 'fa' ? 'نام' : 'Name',
+      lang === 'fa' ? 'تلفن' : 'Phone',
+      lang === 'fa' ? 'فرم' : 'Form',
+      ...fields.map(f => f.label),
+      lang === 'fa' ? 'تعداد فایل' : 'Files Count',
+      lang === 'fa' ? 'لینک فایل‌ها' : 'File URLs',
+    ];
+
+    const rows = filteredSubmissions.map(t => {
+      const fileUrls = (t.files || []).map(f => f.content).filter(Boolean).join(' | ');
+      return [
+        t.id,
+        new Date(t.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US'),
+        t.customerName || '',
+        t.phoneNumber || '',
+        t.customData?.formTitle || t.serviceId || '',
+        ...fields.map(f => t.customData?.[f.key || f.id] || ''),
+        String((t.files || []).length),
+        fileUrls,
+      ];
+    });
+
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\n');
+    const bom = '﻿';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `form_submissions_${archiveFormId || 'all'}_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ────────────────────────── RENDER ──────────────────────────
+
+  // ── Archive ──
+  if (view === 'archive') {
+    const selectedForm = archiveFormId ? customForms.find(f => f.id === archiveFormId) : null;
+    const formFields = selectedForm ? selectedForm.fields.filter(f => f.type !== 'header') : [];
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Header */}
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView('list')} className="text-xs font-medium px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">
+              {lang === 'fa' ? '← بازگشت' : '← Back'}
+            </button>
+            <h2 className="text-base font-bold text-gray-800">
+              {lang === 'fa' ? '📊 بایگانی تکمیل فرم‌ها' : '📊 Form Submission Archive'}
+            </h2>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              {filteredSubmissions.length} {lang === 'fa' ? 'مورد' : 'entries'}
+            </span>
+          </div>
+          <button
+            onClick={exportSubmissionsCSV}
+            disabled={filteredSubmissions.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 disabled:opacity-40 transition-colors"
+          >
+            ⬇ {lang === 'fa' ? 'خروجی CSV' : 'Export CSV'}
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-wrap gap-3 items-center">
+          <select
+            value={archiveFormId}
+            onChange={e => { setArchiveFormId(e.target.value); setExpandedSubmissionId(null); }}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white min-w-[200px]"
+            dir={lang === 'fa' ? 'rtl' : 'ltr'}
+          >
+            <option value="">{lang === 'fa' ? 'همه فرم‌ها' : 'All Forms'}</option>
+            {customForms.map(f => (
+              <option key={f.id} value={f.id}>{f.title}</option>
+            ))}
+          </select>
+          <input
+            value={archiveSearch}
+            onChange={e => setArchiveSearch(e.target.value)}
+            placeholder={lang === 'fa' ? 'جستجو (نام، تلفن، کد)...' : 'Search (name, phone, code)...'}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 w-56"
+            dir={lang === 'fa' ? 'rtl' : 'ltr'}
+          />
+        </div>
+
+        {/* Submissions list */}
+        {filteredSubmissions.length === 0 ? (
+          <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-gray-300">
+            <IconClipboard className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">{lang === 'fa' ? 'هیچ تکمیل‌شده‌ای یافت نشد.' : 'No submissions found.'}</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredSubmissions.map(sub => {
+              const isExpanded = expandedSubmissionId === sub.id;
+              const formTitle = sub.customData?.formTitle || sub.serviceId?.replace('form:', '') || '—';
+              const fileCount = (sub.files || []).length;
+
+              return (
+                <div key={sub.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  {/* Row header */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSubmissionId(isExpanded ? null : sub.id)}
+                    className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors text-start"
+                  >
+                    <div className="shrink-0 w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-xs font-bold">
+                      {sub.customerName?.charAt(0) || '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{sub.customerName}</span>
+                        <span className="text-xs text-gray-400">{sub.phoneNumber}</span>
+                        {fileCount > 0 && (
+                          <span className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full font-medium">
+                            📎 {fileCount} {lang === 'fa' ? 'فایل' : 'file(s)'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-gray-400">{new Date(sub.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
+                        <span className="text-xs text-indigo-500">{formTitle}</span>
+                        <span className="text-[10px] font-mono text-gray-400">{sub.id}</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-gray-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4 animate-fade-in">
+                      {/* Field values */}
+                      {formFields.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {formFields.map(field => {
+                            const val = sub.customData?.[field.key || field.id];
+                            if (!val) return null;
+                            return (
+                              <div key={field.id} className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-[10px] font-semibold text-gray-400 mb-0.5">{field.label}</p>
+                                <p className="text-sm text-gray-800 break-words">{val}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Fallback: show all customData */
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {Object.entries(sub.customData || {})
+                            .filter(([k]) => !k.startsWith('__') && k !== 'formId' && k !== 'formTitle')
+                            .map(([key, val]) => (
+                              <div key={key} className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-[10px] font-semibold text-gray-400 mb-0.5">{key}</p>
+                                <p className="text-sm text-gray-800 break-words">{val}</p>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Attached files */}
+                      {fileCount > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 mb-2">
+                            {lang === 'fa' ? 'فایل‌های ضمیمه' : 'Attached Files'}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(sub.files || []).map((f, i) => (
+                              <a
+                                key={i}
+                                href={f.content}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                              >
+                                {f.type?.startsWith('image/') ? '🖼' : '📄'}
+                                <span className="max-w-[120px] truncate">{f.name}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Description fallback */}
+                      {sub.description && formFields.length === 0 && (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-[10px] font-semibold text-gray-400 mb-1">{lang === 'fa' ? 'محتوا' : 'Content'}</p>
+                          <pre className="text-xs text-gray-700 whitespace-pre-wrap">{sub.description}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── Preview ──
   if (view === 'preview' && previewForm) {
@@ -967,6 +1198,14 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             >
               <IconFile className="w-3.5 h-3.5" />
               {lang === 'fa' ? 'نمونه JSON' : 'Sample JSON'}
+            </button>
+          )}
+          {isMaster && (
+            <button
+              onClick={() => { setArchiveFormId(''); setArchiveSearch(''); setExpandedSubmissionId(null); setView('archive'); }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-lg text-xs font-semibold hover:bg-violet-700 transition-colors"
+            >
+              📊 {lang === 'fa' ? 'بایگانی' : 'Archive'}
             </button>
           )}
           {isEditor && (

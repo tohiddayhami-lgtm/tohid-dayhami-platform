@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
-import { CustomForm, Ticket, TicketStatus } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { CustomForm, Ticket, TicketStatus, AttachedFile } from '../types';
 import { Language } from '../App';
-import { getCustomFormById } from '../services/firebaseService';
-import { IconCheck, IconClipboard, IconCopy, IconSearch, IconFile } from './Icons';
+import { getCustomFormById, uploadFileWithProgress } from '../services/firebaseService';
+import { IconCheck, IconClipboard, IconCopy, IconSearch, IconFile, IconTrash, IconUpload } from './Icons';
 
 interface Props {
   formId: string;
@@ -51,6 +51,9 @@ Please keep this receipt for your records.`;
   URL.revokeObjectURL(url);
 };
 
+const MAX_FILES = 5;
+const MAX_FILE_SIZE_MB = 10;
+
 export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitle, onGoToTracking, onSubmit, trackingBaseUrl }) => {
   const [form, setForm] = useState<CustomForm | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +67,11 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
+
+  // File attachment state
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [fileError, setFileError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const trackingUrl = trackingBaseUrl || `${window.location.origin}/?page=tracking`;
 
@@ -83,6 +91,53 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     if (errors[fieldId]) setErrors(e => { const n = { ...e }; delete n[fieldId]; return n; });
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError('');
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const remaining = MAX_FILES - attachedFiles.length;
+    if (remaining <= 0) {
+      setFileError(formLang === 'fa' ? `حداکثر ${MAX_FILES} فایل مجاز است.` : `Maximum ${MAX_FILES} files allowed.`);
+      return;
+    }
+
+    const toUpload: File[] = [];
+    for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
+      const f = fileList.item(i);
+      if (f) toUpload.push(f);
+    }
+
+    for (const file of toUpload) {
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        setFileError(formLang === 'fa' ? `هر فایل حداکثر ${MAX_FILE_SIZE_MB} مگابایت.` : `Each file max ${MAX_FILE_SIZE_MB} MB.`);
+        continue;
+      }
+      const fileName = file.name;
+      const fileSize = file.size;
+      const fileType = file.type;
+      const placeholder: AttachedFile = {
+        name: fileName, size: fileSize, type: fileType,
+        content: '', status: 'uploading', progress: 0,
+      };
+      setAttachedFiles(prev => {
+        const newList = [...prev, placeholder];
+        const idx = newList.length - 1;
+        uploadFileWithProgress(
+          file,
+          (progress) => setAttachedFiles(cur => cur.map((f, i) => i === idx ? { ...f, progress } : f)),
+          (url) => setAttachedFiles(cur => cur.map((f, i) => i === idx ? { ...f, content: url, status: 'success', progress: 100 } : f)),
+          (err) => setAttachedFiles(cur => cur.map((f, i) => i === idx ? { ...f, status: 'error', errorMsg: err.message } : f)),
+          'uploads',
+        );
+        return newList;
+      });
+    }
+    e.target.value = '';
+  };
+
+  const removeFile = (idx: number) => setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, boolean> = {};
@@ -97,6 +152,12 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     }
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
+    const uploadingFiles = attachedFiles.filter(f => f.status === 'uploading');
+    if (uploadingFiles.length > 0) {
+      alert(formLang === 'fa' ? 'لطفاً منتظر اتمام آپلود فایل‌ها بمانید.' : 'Please wait for files to finish uploading.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
@@ -109,13 +170,14 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
         .map(f => `${f.label}: ${responses[f.id]}`);
       const description = `[فرم: ${form?.title || ''}]\n${descParts.join('\n')}`;
 
-      // Embed assignee config so saveNewTicketToSystem can apply it
       const customData: Record<string, string> = { formId, formTitle: form?.title || '' };
       if (form?.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form?.assigneeRole)        customData.__assigneeRole = form.assigneeRole;
       (form?.fields ?? []).forEach(f => {
         if (f.type !== 'header' && responses[f.id]) customData[f.key || f.id] = responses[f.id];
       });
+
+      const successFiles = attachedFiles.filter(f => f.status === 'success');
 
       const ticket: Ticket = {
         id: ticketId,
@@ -127,7 +189,8 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
         description,
         status: TicketStatus.SUBMITTED,
         createdAt: now,
-        timeline: [{ type: 'creation', title: 'ثبت از طریق فرم آنلاین', description: `فرم "${form?.title || ''}" توسط ${contactName.trim()} پر شد`, actorName: 'سیستم', timestamp: now, visibility: 'public' }],
+        files: successFiles.length > 0 ? successFiles : undefined,
+        timeline: [{ type: 'creation', title: 'ثبت از طریق فرم آنلاین', description: `فرم "${form?.title || ''}" توسط ${contactName.trim()} پر شد${successFiles.length > 0 ? ` — ${successFiles.length} فایل ضمیمه` : ''}`, actorName: 'سیستم', timestamp: now, visibility: 'public' }],
         customData,
       };
 
@@ -163,6 +226,11 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       copy: 'کپی', copied: 'کپی شد', download: 'دانلود رسید',
       trackBtn: 'پیگیری وضعیت', fillAnother: 'ارسال فرم جدید',
       keepCode: 'این کد را نگه دارید — برای پیگیری وضعیت درخواستتان نیاز دارید.',
+      attachFiles: 'ضمیمه فایل و عکس (اختیاری)',
+      attachHint: `حداکثر ${MAX_FILES} فایل — هر فایل تا ${MAX_FILE_SIZE_MB} مگابایت (عکس، PDF، Word ...)`,
+      selectFiles: 'انتخاب فایل‌ها',
+      uploading: 'در حال آپلود...',
+      uploadError: 'خطا در آپلود',
     },
     en: {
       loading: 'Loading form...',
@@ -178,11 +246,18 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       copy: 'Copy', copied: 'Copied', download: 'Download Receipt',
       trackBtn: 'Track Status', fillAnother: 'Submit Another',
       keepCode: 'Keep this code — you will need it to track your request status.',
+      attachFiles: 'Attach Files & Images (Optional)',
+      attachHint: `Up to ${MAX_FILES} files — max ${MAX_FILE_SIZE_MB} MB each (images, PDF, Word ...)`,
+      selectFiles: 'Select Files',
+      uploading: 'Uploading...',
+      uploadError: 'Upload failed',
     },
   }[formLang];
 
   const inputCls = (hasError: boolean) =>
     `w-full px-3 py-2.5 rounded-lg border text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 transition-colors ${hasError ? 'border-red-400 bg-red-50 focus:ring-red-200' : 'border-gray-200 bg-white focus:ring-black/10 focus:border-gray-400'}`;
+
+  const formatBytes = (b: number) => b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
 
   if (loading) return (
     <div className="flex items-center justify-center py-24">
@@ -242,7 +317,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
             {t.trackBtn}
           </button>
           <button
-            onClick={() => { setSubmitted(false); setResponses({}); setContactName(''); setContactPhone(''); setTrackingCode(''); setCopied(false); }}
+            onClick={() => { setSubmitted(false); setResponses({}); setContactName(''); setContactPhone(''); setTrackingCode(''); setCopied(false); setAttachedFiles([]); }}
             className="w-full px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             {t.fillAnother}
@@ -330,9 +405,76 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
           );
         })}
 
-        <button type="submit" disabled={submitting}
+        {/* ── File Attachment Section ── */}
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/60">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <IconUpload className="w-4 h-4 text-gray-400" />
+              {t.attachFiles}
+            </p>
+            <span className="text-xs text-gray-400">{attachedFiles.length}/{MAX_FILES}</span>
+          </div>
+          <p className="text-xs text-gray-400">{t.attachHint}</p>
+
+          {/* Uploaded files list */}
+          {attachedFiles.length > 0 && (
+            <div className="space-y-2">
+              {attachedFiles.map((file, idx) => (
+                <div key={idx} className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-3 py-2">
+                  <div className="shrink-0">
+                    {file.type.startsWith('image/') && file.status === 'success' ? (
+                      <img src={file.content} alt={file.name} className="w-8 h-8 object-cover rounded" />
+                    ) : (
+                      <IconFile className="w-5 h-5 text-gray-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-800 truncate">{file.name}</p>
+                    <p className="text-[10px] text-gray-400">{formatBytes(file.size)}</p>
+                    {file.status === 'uploading' && (
+                      <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${file.progress || 0}%` }} />
+                      </div>
+                    )}
+                    {file.status === 'error' && <p className="text-[10px] text-red-500">{t.uploadError}</p>}
+                    {file.status === 'success' && <p className="text-[10px] text-emerald-600">✓ {formLang === 'fa' ? 'آپلود شد' : 'Uploaded'}</p>}
+                  </div>
+                  {file.status !== 'uploading' && (
+                    <button type="button" onClick={() => removeFile(idx)} className="shrink-0 text-red-400 hover:text-red-600 p-1">
+                      <IconTrash className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {attachedFiles.length < MAX_FILES && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <IconUpload className="w-4 h-4" />
+                {t.selectFiles}
+              </button>
+            </>
+          )}
+          {fileError && <p className="text-xs text-red-500">{fileError}</p>}
+        </div>
+
+        <button type="submit" disabled={submitting || attachedFiles.some(f => f.status === 'uploading')}
           className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-black disabled:opacity-60 transition-colors mt-4">
-          {submitting ? t.submitting : t.submit}
+          {submitting ? t.submitting : (attachedFiles.some(f => f.status === 'uploading') ? (formLang === 'fa' ? 'در حال آپلود فایل‌ها...' : 'Uploading files...') : t.submit)}
         </button>
       </form>
     </div>
