@@ -1,0 +1,105 @@
+
+import { NotificationConfig, NotificationLog } from '../types';
+
+export const DEFAULT_TICKET_TEMPLATE =
+  'سلام {recipientName} 👋\nیک درخواست جدید به کارتابل شما ارجاع داده شد.\n\n📋 کد رهگیری: {ticketId}\n👤 متقاضی: {customerName}\n\nبرای مشاهده وارد پنل کاربری شوید.';
+
+export const DEFAULT_MESSAGE_TEMPLATE =
+  'سلام {recipientName} 👋\nیک پیام داخلی از {senderName} دریافت کردید.\n\nبرای مشاهده وارد بخش مکاتبات پنل کاربری شوید.';
+
+export const DEFAULT_STATUS_TEMPLATE =
+  'سلام {recipientName} 👋\nوضعیت پرونده شما تغییر کرد.\n\n📋 کد رهگیری: {ticketId}\n📌 وضعیت جدید: {status}';
+
+// Fill template variables: {recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle}
+export const renderTemplate = (template: string, vars: Record<string, string>): string =>
+  Object.entries(vars).reduce(
+    (t, [k, v]) => t.replace(new RegExp(`\\{${k}\\}`, 'g'), v || ''),
+    template,
+  );
+
+// Normalize to international format (handles Iranian numbers starting with 09/989/+98)
+const normalizePhone = (phone: string): string => {
+  const d = phone.replace(/\D/g, '');
+  if (d.startsWith('09'))  return `+98${d.slice(1)}`;
+  if (d.startsWith('989')) return `+${d}`;
+  if (d.startsWith('98'))  return `+${d}`;
+  if (d.startsWith('00'))  return `+${d.slice(2)}`;
+  return `+${d}`;
+};
+
+export const sendWhatsAppNotification = async (
+  phone: string,
+  message: string,
+  config: NotificationConfig,
+  callMeBotApiKey?: string,
+): Promise<{ success: boolean; error?: string }> => {
+  if (!config.enabled || !phone.trim() || !message.trim()) {
+    return { success: false, error: 'disabled or missing data' };
+  }
+
+  const normalizedPhone = normalizePhone(phone);
+
+  try {
+    if (config.provider === 'callmebot') {
+      if (!callMeBotApiKey) return { success: false, error: 'کلید CallMeBot برای این شخص تنظیم نشده' };
+      const url =
+        `https://api.callmebot.com/whatsapp.php` +
+        `?phone=${encodeURIComponent(normalizedPhone)}` +
+        `&text=${encodeURIComponent(message)}` +
+        `&apikey=${encodeURIComponent(callMeBotApiKey)}`;
+      const res = await fetch(url);
+      const text = await res.text();
+      if (!res.ok || text.toLowerCase().includes('error')) {
+        throw new Error(text.slice(0, 200));
+      }
+
+    } else if (config.provider === 'ultramsg') {
+      if (!config.ultraMsgToken || !config.ultraMsgInstance) {
+        return { success: false, error: 'UltraMsg پیکربندی نشده' };
+      }
+      const body = new URLSearchParams({
+        token: config.ultraMsgToken,
+        to: normalizedPhone,
+        body: message,
+      });
+      const res = await fetch(
+        `https://api.ultramsg.com/${config.ultraMsgInstance}/messages/chat`,
+        { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    } else if (config.provider === 'webhook') {
+      if (!config.webhookUrl) return { success: false, error: 'آدرس Webhook تنظیم نشده' };
+      await fetch(config.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalizedPhone, message }),
+      });
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'خطای ناشناخته' };
+  }
+};
+
+// Build a notification log entry (without id)
+export const buildLog = (
+  type: NotificationLog['type'],
+  recipientId: string,
+  recipientName: string,
+  phone: string,
+  message: string,
+  result: { success: boolean; error?: string },
+  ticketId?: string,
+): Omit<NotificationLog, 'id'> => ({
+  type,
+  recipientId,
+  recipientName,
+  phone,
+  message,
+  status: result.success ? 'sent' : 'failed',
+  error: result.error,
+  ticketId,
+  createdAt: new Date().toISOString(),
+});

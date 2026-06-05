@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle, AnalyticsEvent } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle, AnalyticsEvent, NotificationLog } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -16,7 +16,7 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+export const db = getFirestore(app);
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
 const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
 const STORAGE_ROOT = "tohid-dayhami-platform";
@@ -817,4 +817,20 @@ export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => voi
         (snap) => callback(snap.docs.map(d => d.data() as AnalyticsEvent)),
         () => {}
     );
+};
+
+// ── Notification Logs ──
+
+export const saveNotificationLog = async (log: Omit<NotificationLog, 'id'>): Promise<void> => {
+    try {
+        const id = `nl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        await setDoc(doc(db, 'notification_logs', id), sanitizeData({ ...log, id }));
+    } catch {}
+};
+
+export const subscribeToNotificationLogs = (callback: (logs: NotificationLog[]) => void) => {
+    const q = query(collection(db, 'notification_logs'), orderBy('createdAt', 'desc'), limit(100));
+    return onSnapshot(q, (snap) => {
+        callback(snap.docs.map(d => d.data() as NotificationLog));
+    }, () => {});
 };

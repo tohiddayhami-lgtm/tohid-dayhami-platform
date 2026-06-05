@@ -20,7 +20,9 @@ import { ReportManager } from './ReportManager';
 import { GoalTracker } from './GoalTracker';
 import { ExpenseManager } from './ExpenseManager';
 import { FormBuilderPanel } from './FormBuilderPanel';
-import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport } from '../services/firebaseService';
+import { NotificationCenter } from './NotificationCenter';
+import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
+import { sendWhatsAppNotification, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
 
 interface Props {
@@ -84,7 +86,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -952,7 +954,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 {(isAdmin || isMaster) && (<button onClick={() => setActiveTab('expenses')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'expenses' ? 'bg-rose-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconWallet className="w-5 h-5" /><span className="font-medium">{t.expenses}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'services' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBriefcase className="w-5 h-5" /><span className="font-medium">{t.services}</span></button>)}
                 {isAdmin && (<><div className="px-4 py-2 text-xs font-bold text-gray-400 mt-4 border-t border-gray-100 pt-4">Admin</div><button onClick={() => setActiveTab('personnel')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'personnel' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconShield className="w-5 h-5" /><span className="font-medium">{t.personnel}</span></button><button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconSettings className="w-5 h-5" /><span className="font-medium">{t.settings}</span></button></>)}
-                {isMaster && (<><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button><button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'analytics' ? 'bg-cyan-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconAnalytics className="w-5 h-5" /><span className="font-medium">{lang === 'fa' ? 'آمار بازدید' : 'Analytics'}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'news_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconNewspaper className="w-5 h-5" /><span className="font-medium">{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'seo' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconGlobe className="w-5 h-5" /><span className="font-medium">{t.seo}</span></button></>)}
+                {isMaster && (<><button onClick={() => setActiveTab('notifications')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'notifications' ? 'bg-green-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconWhatsapp className="w-5 h-5" /><span className="font-medium">{lang === 'fa' ? 'نوتیفیکیشن واتساپ' : 'WhatsApp Notify'}</span></button><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'logs' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconHistory className="w-5 h-5" /><span className="font-medium">{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconBarChart2 className="w-5 h-5" /><span className="font-medium">{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'kpi' ? 'bg-pink-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.kpi}</span></button><button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'analytics' ? 'bg-cyan-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconAnalytics className="w-5 h-5" /><span className="font-medium">{lang === 'fa' ? 'آمار بازدید' : 'Analytics'}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'news_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconNewspaper className="w-5 h-5" /><span className="font-medium">{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'seo' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconGlobe className="w-5 h-5" /><span className="font-medium">{t.seo}</span></button></>)}
             </div>
             <button onClick={onLogout} className="w-full text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 py-3 rounded-xl transition-colors mt-6">{t.logout}</button>
         </div>
@@ -1201,12 +1203,35 @@ export const AdminDashboard: React.FC<Props> = ({
             />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}
-        {activeTab === 'messages' && <InternalMessenger currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} />}
+        {activeTab === 'messages' && <InternalMessenger
+            currentUser={currentUser} personnel={personnel} messages={messages} lang={lang}
+            onAfterSend={async (recipientIds, senderName, subject) => {
+              const nc = config.notificationConfig;
+              if (!nc?.enabled || !nc.onNewMessage) return;
+              for (const rid of recipientIds) {
+                const phone = nc.personnelPhones[rid];
+                if (!phone) continue;
+                const recipient = personnel.find(p => p.id === rid);
+                if (!recipient) continue;
+                const msg = renderTemplate(nc.messageTemplate, {
+                  recipientName: recipient.fullName,
+                  senderName,
+                  ticketId: subject,
+                  customerName: senderName,
+                  formTitle: subject,
+                  status: '',
+                });
+                const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[rid]);
+                await saveNotificationLog(buildLog('new_message', rid, recipient.fullName, phone, msg, result));
+              }
+            }}
+          />}
         {activeTab === 'tasks' && <TaskManager currentUser={currentUser} personnel={personnel} tasks={tasks} lang={lang} />}
         {activeTab === 'meetings' && <MeetingCalendar meetings={meetings} currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} />}
         {activeTab === 'personnel' && isAdmin && <PersonnelManager personnel={personnel} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'settings' && isAdmin && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
+        {activeTab === 'notifications' && isMaster && <NotificationCenter config={config} personnel={personnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}
 

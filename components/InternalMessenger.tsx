@@ -10,9 +10,10 @@ interface Props {
   personnel: Personnel[];
   messages: InternalMessage[];
   lang: Language;
+  onAfterSend?: (recipientIds: string[], senderName: string, subject: string) => void;
 }
 
-export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang }) => {
+export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, onAfterSend }) => {
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -114,6 +115,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
               readBy: [] 
           };
           await sendInternalMessage(newMessage);
+          onAfterSend?.(recipientIds, currentUser.fullName, subject);
           setIsComposeOpen(false);
           setRecipientIds([]); setSubject(''); setBody(''); setAttachments([]);
           setActiveTab('sent');

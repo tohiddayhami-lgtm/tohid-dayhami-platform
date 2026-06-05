@@ -17,8 +17,9 @@ import {
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings,
   subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
-  subscribeToNews, logPageView, subscribeToAnalytics
+  subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
 } from './services/firebaseService';
+import { sendWhatsAppNotification, renderTemplate, buildLog } from './services/notificationService';
 
 export type Language = 'fa' | 'en';
 
@@ -507,6 +508,27 @@ const App: React.FC = () => {
     }
     await saveTicketToCloud({ ...ticket, assignedTo, timeline: initialTimeline });
     if (newCustomer) await saveCustomerToCloud(newCustomer);
+
+    // WhatsApp notification to assignee
+    const nc = appConfig.notificationConfig;
+    if (nc?.enabled && nc.onNewTicket && assignedTo) {
+      const assignee = personnel.find(p => p.id === assignedTo);
+      if (assignee) {
+        const phone = nc.personnelPhones[assignedTo];
+        if (phone) {
+          const msg = renderTemplate(nc.ticketTemplate, {
+            recipientName: assignee.fullName,
+            ticketId: ticket.id,
+            customerName: ticket.customerName,
+            formTitle: ticket.customData?.formTitle || ticket.serviceId,
+            senderName: 'سیستم',
+            status: ticket.status,
+          });
+          const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[assignedTo]);
+          await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee.fullName, phone, msg, result, ticket.id));
+        }
+      }
+    }
   };
 
   const handleNewTicket = async (ticketOrTickets: Ticket | Ticket[]) => {

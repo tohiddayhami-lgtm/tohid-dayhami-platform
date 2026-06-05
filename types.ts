@@ -492,6 +492,42 @@ export interface AssignmentConfig {
 
 export type SocialPlatform = 'instagram' | 'linkedin' | 'whatsapp' | 'facebook' | 'telegram' | 'twitter';
 
+export type NotificationProvider = 'callmebot' | 'ultramsg' | 'webhook';
+
+export interface NotificationConfig {
+  enabled: boolean;
+  provider: NotificationProvider;
+  // UltraMsg (org-level — one key for all)
+  ultraMsgToken?: string;
+  ultraMsgInstance?: string;
+  // Custom webhook
+  webhookUrl?: string;
+  // Events to trigger
+  onNewTicket: boolean;
+  onNewMessage: boolean;
+  onStatusChange: boolean;
+  // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
+  ticketTemplate: string;
+  messageTemplate: string;
+  statusTemplate: string;
+  // Per-person config (keyed by personnel ID)
+  personnelPhones: Record<string, string>;    // WhatsApp phone number
+  personnelApiKeys: Record<string, string>;   // CallMeBot API key (per person)
+}
+
+export interface NotificationLog {
+  id: string;
+  type: 'new_ticket' | 'new_message' | 'status_change' | 'test';
+  recipientId: string;
+  recipientName: string;
+  phone: string;
+  message: string;
+  status: 'sent' | 'failed';
+  error?: string;
+  ticketId?: string;
+  createdAt: string;
+}
+
 export interface SocialLink {
   id: string;
   platform: SocialPlatform;
@@ -509,6 +545,7 @@ export interface AppConfig {
   landingHeroSubtitle?: string;
   footerText?: string;
   socialLinks?: SocialLink[];
+  notificationConfig?: NotificationConfig;
   dailyTips?: string[];
   showDailyTips?: boolean;
   featuredBusinesses?: FeaturedBusiness[];
