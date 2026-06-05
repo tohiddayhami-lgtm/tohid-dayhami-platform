@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
-import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic } from './Icons';
+import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 
 interface Props {
   customForms: CustomForm[];
@@ -169,8 +169,31 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [jsonError, setJsonError] = useState('');
   const [searchQ, setSearchQ] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditor = isAdmin || isMaster;
+
+  const downloadSampleJson = () => {
+    const blob = new Blob([SAMPLE_JSON], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'form_sample.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setJsonText(text);
+      setJsonError('');
+      setJsonImportTab('import');
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const getPublicUrl = (form: CustomForm) =>
     `${window.location.origin}${window.location.pathname}#/f/${form.id}`;
@@ -572,27 +595,72 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         <div className="p-6 space-y-4">
           {jsonImportTab === 'import' ? (
             <>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                {lang === 'fa'
-                  ? 'JSON ساختار فرم را در کادر زیر جای‌گذاری کنید. می‌توانید از خروجی «Export JSON» فرم‌های دیگر یا خروجی AI استفاده کنید.'
-                  : 'Paste the form JSON below. You can use exported JSON from existing forms or AI-generated output.'}
-              </p>
-              <textarea
-                value={jsonText}
-                onChange={e => { setJsonText(e.target.value); setJsonError(''); }}
-                rows={14}
-                dir="ltr"
-                placeholder='{"title": "...", "fields": [...]}'
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-xs font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+              {/* hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileSelect}
+                className="hidden"
               />
-              {jsonError && <p className="text-xs text-red-500 font-medium">{jsonError}</p>}
-              <div className="flex gap-2 justify-end">
-                <button onClick={closeImport} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                  {lang === 'fa' ? 'لغو' : 'Cancel'}
+
+              {/* File pick zone */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-indigo-200 rounded-xl py-5 flex flex-col items-center gap-2 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors group"
+              >
+                <IconUpload className="w-7 h-7 text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                <p className="text-sm font-semibold text-indigo-600">
+                  {lang === 'fa' ? 'انتخاب فایل JSON از دیسک' : 'Choose JSON file from disk'}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {lang === 'fa' ? 'پسوند .json — فایل را کلیک کنید یا بکشید' : 'Click to browse or drag a .json file'}
+                </p>
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400">{lang === 'fa' ? 'یا' : 'or'}</span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+
+              {/* Paste textarea */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                  {lang === 'fa' ? 'پیست کردن محتوای JSON' : 'Paste JSON content'}
+                </label>
+                <textarea
+                  value={jsonText}
+                  onChange={e => { setJsonText(e.target.value); setJsonError(''); }}
+                  rows={10}
+                  dir="ltr"
+                  placeholder='{"title": "...", "fields": [...]}'
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-xs font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                />
+              </div>
+
+              {jsonError && (
+                <p className="text-xs text-red-500 font-medium bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  ⚠ {jsonError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
+                <button
+                  onClick={downloadSampleJson}
+                  className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <IconFile className="w-3.5 h-3.5" />
+                  {lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
                 </button>
-                <button onClick={handleImportJson} disabled={!jsonText.trim()} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                  {lang === 'fa' ? 'وارد کردن و ویرایش' : 'Import & Edit'}
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={closeImport} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                    {lang === 'fa' ? 'لغو' : 'Cancel'}
+                  </button>
+                  <button onClick={handleImportJson} disabled={!jsonText.trim()} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                    {lang === 'fa' ? 'وارد کردن و ویرایش' : 'Import & Edit'}
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -714,10 +782,18 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               dir={lang === 'fa' ? 'rtl' : 'ltr'}
             />
           </div>
+          <button
+            onClick={downloadSampleJson}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+            title={lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
+          >
+            <IconFile className="w-3.5 h-3.5" />
+            {lang === 'fa' ? 'نمونه JSON' : 'Sample JSON'}
+          </button>
           {isEditor && (
             <>
               <button onClick={() => setJsonImportOpen(true)} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-                <IconFile className="w-3.5 h-3.5" />
+                <IconUpload className="w-3.5 h-3.5" />
                 {lang === 'fa' ? 'ورود JSON' : 'Import JSON'}
               </button>
               <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors">
