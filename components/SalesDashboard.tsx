@@ -231,6 +231,13 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
           }
       }
 
+      const snap = { USD_IRR: currentRates.USD_IRR, OMR_IRR: currentRates.OMR_IRR };
+      const toIRR = (amt: number, cur: Currency) => {
+          if (cur === 'IRR') return amt;
+          if (cur === 'USD') return amt * snap.USD_IRR;
+          if (cur === 'OMR') return amt * snap.OMR_IRR;
+          return amt;
+      };
       const record: SalesRecord = {
           id: `sale-${Date.now()}`,
           salespersonId: newSale.salespersonId,
@@ -246,7 +253,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
           depositAccount: newSale.depositAccount,
           depositDate: newSale.depositDate,
           notes: newSale.notes,
-          snapshotRates: { USD_IRR: currentRates.USD_IRR, OMR_IRR: currentRates.OMR_IRR },
+          snapshotRates: snap,
+          saleAmountIRR: toIRR(amount, newSale.currency),
           createdAt: new Date().toISOString()
       };
 

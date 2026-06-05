@@ -297,6 +297,7 @@ export interface SalesRecord {
   depositDate: string;
   notes?: string;
   snapshotRates?: { USD_IRR: number; OMR_IRR: number };
+  saleAmountIRR?: number;
   createdAt: string;
   updatedAt?: string;
   updatedBy?: string;
