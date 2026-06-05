@@ -833,7 +833,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* ── CTA ── */}
-                <section className="py-8 mb-6">
+                <section className="py-8">
                   <div className="bg-gray-900 rounded-2xl p-8 md:p-10 text-center">
                     <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-3">
                       {lang === 'fa' ? 'شروع همکاری' : 'Get Started'}
@@ -853,6 +853,33 @@ const App: React.FC = () => {
                       {t.startBtn}
                     </button>
                   </div>
+
+                  {/* Social links — directly below CTA box */}
+                  {(() => {
+                    const active = (appConfig.socialLinks || [])
+                      .filter(l => l.isActive && l.url)
+                      .sort((a, b) => a.order - b.order);
+                    if (active.length === 0) return null;
+                    const icons: Record<string, React.ReactNode> = {
+                      instagram: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
+                      linkedin:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>,
+                      whatsapp:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+                      facebook:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>,
+                      telegram:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/></svg>,
+                      twitter:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M4 4l16 16M4 20 20 4"/><path d="M4 4h4l12 16h-4"/></svg>,
+                    };
+                    return (
+                      <div className="flex items-center justify-center gap-5 pt-6">
+                        {active.map(link => (
+                          <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer"
+                            className="text-gray-400 hover:text-gray-700 transition-colors duration-200"
+                            aria-label={link.platform}>
+                            {icons[link.platform]}
+                          </a>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </section>
 
                 {appConfig.featuredBusinesses && appConfig.featuredBusinesses.length > 0 && (
@@ -940,36 +967,8 @@ const App: React.FC = () => {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-100 py-5">
-        <div className="max-w-6xl mx-auto px-5 flex flex-col items-center gap-3">
-          {/* Social links */}
-          {(() => {
-            const active = (appConfig.socialLinks || [])
-              .filter(l => l.isActive && l.url)
-              .sort((a, b) => a.order - b.order);
-            if (active.length === 0) return null;
-            const icons: Record<string, React.ReactNode> = {
-              instagram: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
-              linkedin:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>,
-              whatsapp:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
-              facebook:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>,
-              telegram:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/></svg>,
-              twitter:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="M4 4l16 16M4 20 20 4"/><path d="M4 4h4l12 16h-4"/></svg>,
-            };
-            return (
-              <div className="flex items-center gap-4">
-                {active.map(link => (
-                  <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-gray-700 transition-colors duration-200"
-                    aria-label={link.platform}>
-                    {icons[link.platform]}
-                  </a>
-                ))}
-              </div>
-            );
-          })()}
-          <p className="text-[11px] text-gray-400">{appConfig.footerText || t.footer}</p>
-        </div>
+      <footer className="border-t border-gray-100 py-4 text-center">
+        <p className="text-[11px] text-gray-400">{appConfig.footerText || t.footer}</p>
       </footer>
 
       {/* Mobile bottom nav */}
