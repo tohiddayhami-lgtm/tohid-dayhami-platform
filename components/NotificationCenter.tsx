@@ -145,7 +145,7 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800 space-y-2">
                 <p className="font-semibold">راهنمای CallMeBot:</p>
                 <ol className="list-decimal list-inside space-y-1 text-xs text-blue-700">
-                  <li>هر پرسنل باید پیام <span className="font-mono bg-blue-100 px-1 rounded">I allow callmebot to send me messages</span> را به <span className="font-bold">+34 644 59 78 16</span> واتساپ بزند</li>
+                  <li>هر پرسنل باید پیام <span className="font-mono bg-blue-100 px-1 rounded" dir="ltr">I allow callmebot to send me messages</span> را به شماره <span className="font-bold font-mono" dir="ltr">+34 611 04 87 48</span> در واتساپ بزند</li>
                   <li>یک کد API شخصی دریافت می‌کنند</li>
                   <li>آن کد را در جدول «شماره پرسنل» وارد کنید</li>
                 </ol>
