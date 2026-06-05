@@ -728,17 +728,17 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         )}
       </div>
 
-      {/* ── KPI Cards — income in IRR, expenses in OMR ── */}
+      {/* ── KPI Cards — all in OMR (snapshot rate per record) ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-emerald-50 px-4 py-3 rounded-xl border border-emerald-100 shadow-sm">
           <div className="text-emerald-600 text-[10px] font-bold mb-0.5">جمع درآمد</div>
-          <div className="text-base font-black text-emerald-700">{fmtNum(Math.round(kpiIncIRR))} <span className="text-[9px] font-normal text-blue-500">IRR</span></div>
+          <div className="text-base font-black text-emerald-700">{fmtOMR(kpiIncOMR)} <span className="text-[9px] font-normal text-amber-500">OMR</span></div>
           <div className="text-[9px] text-emerald-400 mt-0.5 flex justify-between">
             <span>{filteredInc.length} رکورد</span>
-            <span>دریافتی: {fmtNum(Math.round(kpiIncReceivedIRR))}</span>
+            <span>دریافتی: {fmtOMR(kpiIncReceivedOMR)}</span>
           </div>
-          {kpiIncPendingIRR > 0.5 && (
-            <div className="text-[9px] text-amber-500 font-bold mt-0.5">مانده: {fmtNum(Math.round(kpiIncPendingIRR))} IRR</div>
+          {kpiIncPendingOMR > 0.0001 && (
+            <div className="text-[9px] text-amber-500 font-bold mt-0.5">مانده دریافتنی: {fmtOMR(kpiIncPendingOMR)} OMR</div>
           )}
         </div>
 
@@ -773,11 +773,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       </div>
       {/* currency note */}
       <div className="flex items-center gap-2 -mt-1 flex-wrap">
-        <span className="text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-          درآمدها به ریال ایران (IRR) — نرخ روز ثبت
-        </span>
         <span className="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-          هزینه‌ها به ریال عمان (OMR) — نرخ: 1 OMR = {fmtNum(rates.OMR_IRR)} IRR
+          همه مبالغ به ریال عمان (OMR) — نرخ تبدیل از روز ثبت هر رکورد
         </span>
       </div>
 
@@ -1269,15 +1266,15 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                         {sr.notes && <div className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[140px]">{sr.notes}</div>}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {/* IRR primary — locked at save-time rate */}
+                        {/* OMR primary — locked at save-time snapshot rate */}
                         <div className="font-black text-emerald-700 text-xs">
-                          {fmtNum(sr.saleAmountIRR ?? (sr.currency === 'IRR' ? sr.saleAmount : omrSR(sr.saleAmount, sr.currency||'IRR', sr) * (sr.snapshotRates?.OMR_IRR ?? rates.OMR_IRR)))}
-                          <span className="text-[8px] font-bold text-blue-600 mr-1">IRR</span>
+                          {fmtOMR(omrSR(sr.saleAmount, sr.currency||'IRR', sr))}
+                          <span className="text-[8px] font-bold text-amber-600 mr-1">OMR</span>
                         </div>
-                        {/* original if not already IRR */}
-                        {sr.currency !== 'IRR' && (
+                        {/* original currency secondary */}
+                        {sr.currency !== 'OMR' && (
                           <div className="text-[9px] text-gray-400 dir-ltr">
-                            {fmtNum(sr.saleAmount)} {sr.currency}
+                            {fmtNum(received)} / {fmtNum(sr.saleAmount)} {sr.currency}
                           </div>
                         )}
                         <div className="flex items-center gap-1 mt-0.5">
@@ -1287,11 +1284,11 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                           <span className="text-[8px] text-gray-400">{Math.round(pct)}٪</span>
                         </div>
                         {sr.saleAmount > received && (() => {
-                          const irrTotal = sr.saleAmountIRR ?? sr.saleAmount;
-                          const irrReceived = sr.saleAmount > 0 ? irrTotal * (received / sr.saleAmount) : 0;
+                          const omrTotal    = omrSR(sr.saleAmount, sr.currency||'IRR', sr);
+                          const omrReceived = sr.saleAmount > 0 ? omrTotal * (received / sr.saleAmount) : 0;
                           return (
                             <div className="text-[8px] text-amber-600 font-bold mt-0.5">
-                              مانده: {fmtNum(Math.round(irrTotal - irrReceived))} IRR
+                              مانده: {fmtOMR(omrTotal - omrReceived)} OMR
                             </div>
                           );
                         })()}
