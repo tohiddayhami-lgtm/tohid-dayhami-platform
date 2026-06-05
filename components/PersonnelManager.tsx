@@ -295,9 +295,18 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
 
   const handleDocFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]; if (!file) return;
-      if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
+      if (file.size > 10 * 1024 * 1024) {
+        setNewDocFile({ name: file.name, size: file.size, type: file.type, content: '', status: 'error', errorMsg: 'حداکثر حجم مجاز ۱۰ مگابایت است' });
+        return;
+      }
       setNewDocFile({ name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 });
-      uploadFileWithProgress(file, (progress) => { setNewDocFile(prev => prev ? { ...prev, progress } : null); }, (url) => { setNewDocFile(prev => prev ? { ...prev, content: url, status: 'success', progress: 100 } : null); }, (err) => { setNewDocFile(prev => prev ? { ...prev, status: 'error', errorMsg: err.message } : null); }, 'documents');
+      uploadFileWithProgress(
+        file,
+        (progress) => { setNewDocFile(prev => prev ? { ...prev, progress } : null); },
+        (url)      => { setNewDocFile(prev => prev ? { ...prev, content: url, status: 'success', progress: 100 } : null); },
+        (err)      => { setNewDocFile(prev => prev ? { ...prev, status: 'error', errorMsg: err.message } : null); },
+        'documents'
+      );
   };
 
   const handleAddDocument = () => {
@@ -359,7 +368,132 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
              </div>
           </div>
           <div className="border-t border-gray-100 pt-4"><label className="block text-sm font-bold text-gray-700 mb-3">{t.permissions}</label><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3"><label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-3 rounded-lg border border-blue-100"><input type="checkbox" className="w-4 h-4" checked={formData.canAssign} onChange={e => setFormData({...formData, canAssign: e.target.checked})}/><span className="text-xs font-bold text-blue-800">{t.permAssign}</span></label><label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-3 rounded-lg border border-purple-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllTickets} onChange={e => setFormData({...formData, canViewAllTickets: e.target.checked})}/><span className="text-xs font-bold text-purple-800">{t.permAllTickets}</span></label><label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 py-3 rounded-lg border border-green-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewCustomers} onChange={e => setFormData({...formData, canViewCustomers: e.target.checked})}/><span className="text-xs font-bold text-green-800">{t.permCustomers}</span></label><label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-3 py-3 rounded-lg border border-amber-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewTariffs} onChange={e => setFormData({...formData, canViewTariffs: e.target.checked})}/><span className="text-xs font-bold text-amber-800">{t.permTariffs}</span></label><label className="flex items-center gap-2 cursor-pointer bg-rose-50 px-3 py-3 rounded-lg border border-rose-100"><input type="checkbox" className="w-4 h-4" checked={formData.canIssueInvoices} onChange={e => setFormData({...formData, canIssueInvoices: e.target.checked})}/><span className="text-xs font-bold text-rose-800">{t.permInvoice}</span></label></div></div>
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200"><h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><IconPaperclip className="w-4 h-4 text-gray-500" />{t.docs}</h4><div className="flex gap-2 mb-4"><input className="flex-grow px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none" placeholder={t.docTitle} value={newDocTitle} onChange={e => setNewDocTitle(e.target.value)} /><button type="button" onClick={() => docInputRef.current?.click()} className="bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-2"><IconUpload className="w-4 h-4" />{newDocFile ? t.docFile : t.selectFile}</button><input type="file" ref={docInputRef} className="hidden" accept="image/*,.pdf" onChange={handleDocFileSelect} /><button type="button" onClick={handleAddDocument} disabled={!newDocFile || newDocFile.status !== 'success'} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">{t.add}</button></div><div className="space-y-2">{formData.documents.map((doc, idx) => (<div key={idx} className="flex items-center justify-between bg-white border border-gray-200 p-2 rounded-lg"><div className="flex items-center gap-3"><div className="p-1.5 bg-gray-100 rounded text-gray-500"><IconFile className="w-4 h-4" /></div><div className="flex flex-col"><span className="text-sm font-bold text-gray-800">{doc.title}</span><a href={doc.file.content} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline">View</a></div></div><button type="button" onClick={() => setFormData(p => ({...p, documents: p.documents.filter(d => d.id !== doc.id)}))} className="text-red-400 hover:bg-red-50 p-1.5 rounded"><IconTrash className="w-4 h-4" /></button></div>))}</div></div>
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+              <IconPaperclip className="w-4 h-4 text-indigo-500" />
+              {t.docs}
+              <span className="text-xs font-normal text-gray-400 mr-auto">حداکثر ۱۰ MB · PDF، Word، Excel، تصویر</span>
+            </h4>
+
+            {/* ── Add new doc ── */}
+            <div className="space-y-2 mb-4">
+              <input
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:ring-1 focus:ring-indigo-300"
+                placeholder={t.docTitle}
+                value={newDocTitle}
+                onChange={e => setNewDocTitle(e.target.value)}
+              />
+
+              {/* File drop zone / picker */}
+              {!newDocFile ? (
+                <button
+                  type="button"
+                  onClick={() => docInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-gray-300 rounded-xl py-5 text-sm text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors flex flex-col items-center gap-1.5"
+                >
+                  <IconUpload className="w-6 h-6" />
+                  <span>{t.selectFile}</span>
+                  <span className="text-[11px] text-gray-300">PDF · Word · Excel · PowerPoint · تصویر</span>
+                </button>
+              ) : (
+                <div className={`bg-white border rounded-xl p-3 transition-colors ${
+                  newDocFile.status === 'success' ? 'border-green-200' :
+                  newDocFile.status === 'error'   ? 'border-red-200'   :
+                  'border-indigo-200'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-2 rounded-lg shrink-0 ${
+                      newDocFile.status === 'success' ? 'bg-green-50 text-green-500' :
+                      newDocFile.status === 'error'   ? 'bg-red-50 text-red-400'    :
+                      'bg-indigo-50 text-indigo-400'}`}>
+                      <IconFile className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 font-medium truncate">{newDocFile.name}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {(newDocFile.size / 1024 < 1024)
+                          ? `${(newDocFile.size / 1024).toFixed(0)} KB`
+                          : `${(newDocFile.size / 1024 / 1024).toFixed(1)} MB`}
+                        {newDocFile.status === 'uploading' && ` · در حال آپلود ${newDocFile.progress || 0}%`}
+                        {newDocFile.status === 'success'   && ' · آپلود شد ✓'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setNewDocFile(null); if (docInputRef.current) docInputRef.current.value = ''; }}
+                      className="text-gray-300 hover:text-red-400 transition-colors shrink-0 text-lg leading-none px-1"
+                    >×</button>
+                  </div>
+
+                  {/* Progress bar */}
+                  {newDocFile.status === 'uploading' && (
+                    <div className="mt-2.5 w-full bg-indigo-100 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${newDocFile.progress || 0}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Error message */}
+                  {newDocFile.status === 'error' && (
+                    <p className="mt-1.5 text-xs text-red-500">{newDocFile.errorMsg}</p>
+                  )}
+                </div>
+              )}
+
+              <input
+                type="file"
+                ref={docInputRef}
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                onChange={handleDocFileSelect}
+              />
+
+              <button
+                type="button"
+                onClick={handleAddDocument}
+                disabled={!newDocTitle.trim() || !newDocFile || newDocFile.status !== 'success'}
+                className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                <IconPlus className="w-4 h-4" />
+                {t.add}
+              </button>
+            </div>
+
+            {/* ── Document list ── */}
+            {formData.documents.length > 0 && (
+              <div className="space-y-2 border-t border-gray-200 pt-3">
+                {formData.documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between bg-white border border-gray-100 p-2.5 rounded-xl hover:border-gray-200 transition-colors group">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500 shrink-0">
+                        <IconFile className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{doc.title}</p>
+                        <a
+                          href={doc.file.content}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-indigo-500 hover:underline flex items-center gap-0.5"
+                        >
+                          <IconPaperclip className="w-3 h-3" />
+                          {doc.file.name}
+                        </a>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(p => ({ ...p, documents: p.documents.filter(d => d.id !== doc.id) }))}
+                      className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <IconTrash className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200"><h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><IconShield className="w-4 h-4 text-purple-600" />{t.loginInfo}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-600 mb-1">{t.username}</label><input type="text" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none dir-ltr text-left" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})}/></div><div><label className="block text-sm font-medium text-gray-600 mb-1">{t.password}</label><input type="text" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none dir-ltr text-left" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}/></div></div></div>
           <div className="flex justify-end pt-2 gap-3">{editingId && (<button type="button" onClick={handleCancelEdit} className="px-6 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors font-medium">{t.cancel}</button>)}<button type="submit" disabled={isProcessingImage} className={`px-8 py-2 text-white rounded-lg transition-colors shadow-lg font-bold ${editingId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'} ${isProcessingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>{editingId ? t.save : t.create}</button></div>
         </form>
@@ -524,7 +658,76 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{personnel.map(person => { const manager = personnel.find(p => p.id === person.reportsTo); return (<div key={person.id} className={`bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all relative group ${editingId === person.id ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-100'}`}><div className="flex items-start gap-4"><div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0 overflow-hidden border border-gray-100 ${person.roles.includes('مدیر') ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>{person.avatar ? (<img src={person.avatar} alt={person.fullName} className="w-full h-full object-cover" />) : (person.fullName.charAt(0))}</div><div className="flex-grow"><h4 className="font-bold text-gray-900">{person.fullName}</h4><div className="flex flex-wrap gap-1.5 mt-2 mb-2">{person.roles && person.roles.map((role, rIdx) => (<span key={rIdx} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">{role}</span>))}</div>{manager && (<div className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded mb-2 inline-flex items-center gap-1"><IconLayout className="w-3 h-3" /> Report: {manager.fullName}</div>)}</div></div><div className="mt-2 text-sm space-y-2"><div className="text-gray-500 flex justify-between"><span>{t.emailLbl}</span><span>{person.email}</span></div><div className="text-gray-500 flex justify-between bg-gray-50 px-2 py-1 rounded"><span>{t.usernameLbl}</span><span className="font-mono">{person.username}</span></div>{person.documents && person.documents.length > 0 && (<div className="mt-3 pt-3 border-t border-gray-100"><span className="text-xs text-gray-500 block mb-1">{t.docsLbl}</span><div className="flex flex-wrap gap-1">{person.documents.map((d, i) => (<a key={i} href={d.file.content} target="_blank" rel="noreferrer" className="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-600 border border-gray-200 block truncate max-w-[100px]">{d.title}</a>))}</div></div>)}</div><div className="absolute top-4 rtl:left-4 ltr:right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => handleEdit(person)} className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"><IconEdit className="w-4 h-4" /></button><button onClick={() => handleRemove(person.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"><IconTrash className="w-4 h-4" /></button></div></div>)})}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {personnel.map(person => {
+          const manager = personnel.find(p => p.id === person.reportsTo);
+          return (
+            <div key={person.id} className={`bg-white p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all relative group ${editingId === person.id ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-100'}`}>
+              {/* ── Header ── */}
+              <div className="flex items-start gap-3 mb-3">
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold shrink-0 overflow-hidden border border-gray-100 ${person.roles.includes('مدیر') ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>
+                  {person.avatar ? (<img src={person.avatar} alt={person.fullName} className="w-full h-full object-cover" />) : person.fullName.charAt(0)}
+                </div>
+                <div className="flex-grow min-w-0">
+                  <h4 className="font-bold text-gray-900 truncate">{person.fullName}</h4>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(person.roles || []).map((role, rIdx) => (
+                      <span key={rIdx} className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{role}</span>
+                    ))}
+                  </div>
+                  {manager && (
+                    <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+                      <IconLayout className="w-3 h-3 text-indigo-400" />
+                      {manager.fullName}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Info ── */}
+              <div className="text-xs space-y-1.5 mb-3">
+                <div className="flex justify-between text-gray-500">
+                  <span>{t.emailLbl}</span><span className="text-gray-700">{person.email}</span>
+                </div>
+                <div className="flex justify-between bg-gray-50 px-2 py-1 rounded text-gray-500">
+                  <span>{t.usernameLbl}</span><span className="font-mono text-gray-700">{person.username}</span>
+                </div>
+              </div>
+
+              {/* ── Documents ── */}
+              {person.documents && person.documents.length > 0 && (
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-[11px] font-semibold text-gray-400 mb-2 flex items-center gap-1">
+                    <IconPaperclip className="w-3 h-3" />
+                    {t.docsLbl} {person.documents.length}
+                  </p>
+                  <div className="space-y-1.5">
+                    {person.documents.map((d, i) => (
+                      <a
+                        key={i}
+                        href={d.file.content}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 text-[11px] bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg text-indigo-600 border border-indigo-100 transition-colors"
+                      >
+                        <IconFile className="w-3 h-3 shrink-0" />
+                        <span className="truncate flex-1">{d.title}</span>
+                        <span className="text-indigo-400 shrink-0">↗</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Actions ── */}
+              <div className="absolute top-3 rtl:left-3 ltr:right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => handleEdit(person)} className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><IconEdit className="w-4 h-4" /></button>
+                <button onClick={() => handleRemove(person.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><IconTrash className="w-4 h-4" /></button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
