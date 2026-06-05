@@ -427,27 +427,67 @@ const App: React.FC = () => {
     processAssignments();
   }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, personnel]);
 
+  // Returns the master/CEO user id as final fallback for unassigned tickets
+  const getCeoFallbackId = (): string | undefined => {
+    const master = personnel.find(p => p.username === 'master' && (p.status || 'active') === 'active');
+    if (master) return master.id;
+    const ceo = personnel.find(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r.includes('مدیر')));
+    return ceo?.id;
+  };
+
   const saveNewTicketToSystem = async (ticket: Ticket) => {
     let assignedTo = ticket.assignedTo;
     let assignmentNote: TimelineEntry | null = null;
+
     if (!assignedTo) {
-      const autoAssignedId = calculateAssignee(ticket.serviceId);
-      if (autoAssignedId) {
-        assignedTo = autoAssignedId;
-        const assigneeName = personnel.find(p => p.id === autoAssignedId)?.fullName || 'Unknown';
-        assignmentNote = { type: 'assignment', title: 'ارجاع هوشمند', description: `تیکت به صورت اتوماتیک به ${assigneeName} ارجاع شد.`, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
+      // 1. For custom-form tickets: check if the form itself has an assignee config
+      if (ticket.serviceId?.startsWith('form:') && ticket.customData?.formId) {
+        // assignee info was already embedded in ticket.customData by PublicFormView
+        const directId = ticket.customData.__assigneePersonnelId;
+        const roleStr  = ticket.customData.__assigneeRole;
+        if (directId) {
+          assignedTo = directId;
+        } else if (roleStr) {
+          const normalizedRole = roleStr.trim().toLowerCase();
+          const match = personnel.find(p =>
+            (p.status || 'active') === 'active' &&
+            (p.roles || []).some(r => r.trim().toLowerCase() === normalizedRole)
+          );
+          if (match) assignedTo = match.id;
+        }
+      }
+
+      // 2. System assignment config
+      if (!assignedTo) {
+        const autoId = calculateAssignee(ticket.serviceId);
+        if (autoId) assignedTo = autoId;
+      }
+
+      // 3. CEO/master fallback — nobody left unassigned
+      if (!assignedTo) {
+        assignedTo = getCeoFallbackId();
+      }
+
+      if (assignedTo) {
+        const assigneeName = personnel.find(p => p.id === assignedTo)?.fullName || 'مدیریت';
+        assignmentNote = { type: 'assignment', title: 'ارجاع خودکار', description: `پرونده به ${assigneeName} ارجاع داده شد.`, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
       }
     }
-    const initialTimeline: TimelineEntry[] = [{ type: 'creation', title: 'ثبت درخواست', description: 'درخواست در سامانه ثبت شد', timestamp: new Date().toISOString(), actorName: 'سیستم', visibility: 'public' }, ...(ticket.timeline || [])];
+
+    const initialTimeline: TimelineEntry[] = [
+      { type: 'creation', title: 'ثبت درخواست', description: 'درخواست در سامانه ثبت شد', timestamp: new Date().toISOString(), actorName: 'سیستم', visibility: 'public' },
+      ...(ticket.timeline || []),
+    ];
     if (assignmentNote) initialTimeline.push(assignmentNote);
+
     let newCustomer: Customer | undefined;
     const existingCustomer = customers.find(c => c.phoneNumber === ticket.phoneNumber);
     if (existingCustomer) {
       newCustomer = { ...existingCustomer, fullName: ticket.customerName, companyName: ticket.companyName || existingCustomer.companyName, location: ticket.location || existingCustomer.location, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType || existingCustomer.businessType, totalTickets: existingCustomer.totalTickets + 1, source: existingCustomer.source || 'Web Form' };
     } else {
       const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const phoneSuffix = ticket.phoneNumber.substring(ticket.phoneNumber.length - 4);
-      newCustomer = { id: `C-${Date.now()}`, fullName: ticket.customerName, companyName: ticket.companyName, location: ticket.location, phoneNumber: ticket.phoneNumber, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType, firstContact: new Date().toISOString(), totalTickets: 1, source: 'Web Form', loyaltyCode: `VIP-${phoneSuffix}-${randomStr}` };
+      const phoneSuffix = (ticket.phoneNumber || '').slice(-4);
+      newCustomer = { id: `C-${Date.now()}`, fullName: ticket.customerName, companyName: ticket.companyName, location: ticket.location, phoneNumber: ticket.phoneNumber, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType, firstContact: new Date().toISOString(), totalTickets: 1, source: ticket.customData?.formTitle ? `Form: ${ticket.customData.formTitle}` : 'Web Form', loyaltyCode: `VIP-${phoneSuffix}-${randomStr}` };
     }
     await saveTicketToCloud({ ...ticket, assignedTo, timeline: initialTimeline });
     if (newCustomer) await saveCustomerToCloud(newCustomer);
@@ -828,6 +868,8 @@ const App: React.FC = () => {
                     lang={lang}
                     appTitle={lang === 'en' ? appConfig.appTitleEn : appConfig.appTitle}
                     onGoToTracking={() => setView('tracking')}
+                    onSubmit={handleNewTicket}
+                    trackingBaseUrl={`${window.location.origin}${window.location.pathname}?page=tracking`}
                   />
                 : <div className="flex items-center justify-center py-24">
                     <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />

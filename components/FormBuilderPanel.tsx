@@ -39,7 +39,7 @@ type FormDraft = Omit<CustomForm, 'id' | 'createdAt' | 'createdBy'>;
 
 const emptyDraft = (): FormDraft => ({
   title: '', titleEn: '', category: '', description: '', descriptionEn: '',
-  fields: [], allowedRoles: [], isPublic: true,
+  fields: [], allowedRoles: [], isPublic: true, assigneePersonnelId: '', assigneeRole: '',
 });
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors";
@@ -220,6 +220,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       description: form.description || '', descriptionEn: form.descriptionEn || '',
       fields: form.fields.map(f => ({ ...f, options: f.options || [], optionsEn: f.optionsEn || [] })),
       allowedRoles: form.allowedRoles, isPublic: form.isPublic ?? false,
+      assigneePersonnelId: form.assigneePersonnelId || '', assigneeRole: form.assigneeRole || '',
     });
     setView('builder');
   };
@@ -440,6 +441,35 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${draft.isPublic ? (lang === 'fa' ? 'left-0.5' : 'right-0.5') : (lang === 'fa' ? 'right-0.5' : 'left-0.5')}`} />
             </button>
+          </div>
+
+          {/* Assignment config */}
+          <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-3 space-y-3">
+            <p className="text-xs font-semibold text-orange-700">{lang === 'fa' ? 'ارجاع خودکار فرم' : 'Auto-Assignment'}</p>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'ارجاع به نقش (Role)' : 'Assign to Role'}</label>
+              <input
+                value={draft.assigneeRole || ''}
+                onChange={e => setDraft(d => ({ ...d, assigneeRole: e.target.value, assigneePersonnelId: '' }))}
+                placeholder={lang === 'fa' ? 'مثال: کارشناس صادرات' : 'e.g. Sales Expert'}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'یا ارجاع مستقیم به شناسه پرسنل' : 'Or assign directly to Personnel ID'}</label>
+              <input
+                value={draft.assigneePersonnelId || ''}
+                onChange={e => setDraft(d => ({ ...d, assigneePersonnelId: e.target.value, assigneeRole: '' }))}
+                placeholder={lang === 'fa' ? 'شناسه پرسنل (اگر خالی باشد، سیستم ارجاع می‌دهد)' : 'Personnel ID (blank = system decides)'}
+                className={inputCls}
+                dir="ltr"
+              />
+            </div>
+            <p className="text-[11px] text-orange-600">
+              {lang === 'fa'
+                ? 'اگر هیچ کدام تعریف نشود، سیستم طبق قوانین ارجاع عمل می‌کند. اگر باز هم کسی یافت نشد، به مدیرعامل ارجاع می‌شود.'
+                : 'If neither is set, system assignment rules apply. If still unassigned, it goes to the CEO/master.'}
+            </p>
           </div>
         </div>
 

@@ -119,12 +119,12 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       successTitle: 'درخواست ثبت شد',
       successSub: 'کارشناسان ما در اسرع وقت با شما تماس می‌گیرند.',
       trackingCode: 'کد رهگیری:',
-      copy: 'کپی',
-      copied: 'کپی شد',
+      copy: 'کپی', copied: 'کپی شد', download: 'دانلود رسید',
       quote: 'صادرات، نبض تپنده اقتصاد است.',
       trackBtn: 'پیگیری وضعیت',
       homeBtn: 'بازگشت',
-      friendlyNote: 'با شماره موبایل خود می‌توانید کد رهگیری را بازیابی کنید.',
+      keepCode: 'این کد را نزد خود نگه دارید — برای پیگیری وضعیت درخواست نیاز دارید.',
+      friendlyNote: 'با نام و شماره موبایل خود می‌توانید کد رهگیری را بازیابی کنید.',
       uploadError: 'خطا در آپلود',
       subServiceTitle: 'جزئیات خدمات'
     },
@@ -141,12 +141,12 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       successTitle: 'Request Submitted',
       successSub: 'Our experts will contact you as soon as possible.',
       trackingCode: 'Tracking ID:',
-      copy: 'Copy',
-      copied: 'Copied',
+      copy: 'Copy', copied: 'Copied', download: 'Download Receipt',
       quote: 'Exporting is the heartbeat of the economy.',
       trackBtn: 'Track Status',
       homeBtn: 'Go Back',
-      friendlyNote: 'You can recover your tracking code with your phone number.',
+      keepCode: 'Keep this code — you will need it to track your request status.',
+      friendlyNote: 'You can recover your tracking code with your name and phone number.',
       uploadError: 'Upload Error',
       subServiceTitle: 'Service Details'
     }
@@ -242,24 +242,48 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
         <h2 className="text-2xl font-semibold text-gray-900 mb-2">{t.successTitle}</h2>
         <p className="text-sm text-gray-500 mb-8">{t.successSub}</p>
 
-        <div className="space-y-2 mb-8 text-start">
-          <p className="text-xs font-medium text-gray-400 mb-3">{t.trackingCode}</p>
+        <div className="space-y-3 mb-6 text-start">
+          <p className="text-xs font-semibold text-gray-400">{t.trackingCode}</p>
           {successTicketIds.map((id) => (
-            <div key={id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-              <span className="font-mono text-sm font-semibold text-gray-900 tracking-wide">{id}</span>
-              <button
-                onClick={(e) => {
-                  navigator.clipboard.writeText(id);
-                  const btn = e.currentTarget;
-                  const orig = btn.textContent;
-                  btn.textContent = t.copied;
-                  setTimeout(() => { if (btn) btn.textContent = orig; }, 2000);
-                }}
-                className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
-              >{t.copy}</button>
+            <div key={id} className="space-y-2">
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-4 text-center">
+                <span className="font-mono text-xl font-bold text-gray-900 tracking-widest">{id}</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => {
+                    navigator.clipboard.writeText(id);
+                    const btn = e.currentTarget;
+                    const orig = btn.textContent;
+                    btn.textContent = t.copied;
+                    setTimeout(() => { if (btn) btn.textContent = orig; }, 2000);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  <IconSearch className="w-3.5 h-3.5 opacity-0 absolute" />
+                  {t.copy}
+                </button>
+                <button
+                  onClick={() => {
+                    const date = new Date().toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US');
+                    const trackingUrl = `${window.location.origin}/?page=tracking`;
+                    const content = lang === 'fa'
+                      ? `=====================================\n   رسید ثبت درخواست\n=====================================\nکد رهگیری: ${id}\nتاریخ ثبت: ${date}\n=====================================\nبرای پیگیری وضعیت درخواست خود به آدرس زیر مراجعه کنید:\n${trackingUrl}\n=====================================\nاین رسید را نزد خود نگه دارید.`
+                      : `=====================================\n   Request Submission Receipt\n=====================================\nTracking ID: ${id}\nDate: ${date}\n=====================================\nTrack your request status at:\n${trackingUrl}\n=====================================\nPlease keep this receipt for your records.`;
+                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = `receipt-${id}.txt`; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-gray-200 rounded-xl text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  {t.download}
+                </button>
+              </div>
             </div>
           ))}
-          <p className="text-xs text-gray-400 pt-2">{t.friendlyNote}</p>
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">⚠ {t.keepCode}</p>
+          <p className="text-xs text-gray-400">{t.friendlyNote}</p>
         </div>
 
         <div className="flex gap-3 justify-center">
