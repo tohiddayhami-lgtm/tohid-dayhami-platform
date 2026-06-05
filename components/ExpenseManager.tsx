@@ -180,7 +180,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [dispPaidAmt, setDispPaidAmt] = useState('');
 
   // Income form
-  const blankInc = { title:'', category:'service_revenue', amount:0, receivedAmount:0, currency:'IRR' as Currency, date: todayStr, account:'', notes:'' };
+  const blankInc = { title:'', category:'service_revenue', amount:0, receivedAmount:0, currency:'IRR' as Currency, date: todayStr, account:'', notes:'', snapshotRates: undefined as {USD_IRR:number;OMR_IRR:number}|undefined };
   const [incForm,         setIncForm]         = useState(blankInc);
   const [editingInc,      setEditingInc]      = useState<SalesRecord | null>(null);
   const [showIncPayModal, setShowIncPayModal] = useState<SalesRecord | null>(null);
@@ -441,7 +441,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       personnelId: expForm.personnelId||undefined,
       description: expForm.description, files: expForm.files,
       status,
-      snapshotRates: editingExp?.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
+      snapshotRates: (expForm.snapshotRates as {USD_IRR:number;OMR_IRR:number}|undefined) || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
       createdAt: editingExp?.createdAt||new Date().toISOString(),
       createdBy: editingExp?.createdBy||currentUser.fullName,
     };
@@ -485,6 +485,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       date:           sr.depositDate,
       account:        sr.depositAccount || '',
       notes:          sr.notes || '',
+      snapshotRates:  sr.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
     });
     setDispIncAmt(sr.saleAmount.toLocaleString());
     setDispIncReceived((sr.receivedAmount || 0).toLocaleString());
@@ -524,9 +525,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       depositAccount:  incForm.account || '-',
       depositDate:     incForm.date,
       notes:           incForm.notes,
-      snapshotRates:   editingInc?.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
-      saleAmountIRR:   editingInc?.saleAmountIRR ?? (() => {
-        const r = { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR };
+      snapshotRates:   incForm.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR },
+      saleAmountIRR:   (() => {
+        const r = incForm.snapshotRates || { USD_IRR: rates.USD_IRR, OMR_IRR: rates.OMR_IRR };
         if (incForm.currency === 'IRR') return total;
         if (incForm.currency === 'USD') return total * r.USD_IRR;
         if (incForm.currency === 'OMR') return total * r.OMR_IRR;
@@ -1523,6 +1524,41 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 <textarea rows={2} className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-emerald-500 font-medium"
                   value={incForm.notes} onChange={e=>setIncForm({...incForm,notes:e.target.value})}/>
               </div>
+
+              {/* ── نرخ ارز روز ثبت ── فقط موقع ادیت یا ارزهای غیر IRR */}
+              {(editingInc || incForm.currency !== 'IRR') && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                  <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <IconRefreshCw className="w-3 h-3"/> نرخ ارز این رکورد
+                    {editingInc && <span className="normal-case font-normal text-amber-500">(قابل ویرایش برای تصحیح)</span>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-amber-600 font-bold mb-1">1 USD = ... IRR</label>
+                      <input type="text" inputMode="numeric"
+                        className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white outline-none focus:border-amber-500 font-mono text-sm dir-ltr text-right"
+                        value={incForm.snapshotRates?.USD_IRR ?? rates.USD_IRR}
+                        onChange={e=>{
+                          const v = parseFloat(e.target.value.replace(/,/g,'')) || 0;
+                          setIncForm(p=>({...p, snapshotRates:{USD_IRR:v, OMR_IRR:p.snapshotRates?.OMR_IRR ?? rates.OMR_IRR}}));
+                        }}
+                        placeholder={String(rates.USD_IRR)}/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-amber-600 font-bold mb-1">1 OMR = ... IRR</label>
+                      <input type="text" inputMode="numeric"
+                        className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white outline-none focus:border-amber-500 font-mono text-sm dir-ltr text-right"
+                        value={incForm.snapshotRates?.OMR_IRR ?? rates.OMR_IRR}
+                        onChange={e=>{
+                          const v = parseFloat(e.target.value.replace(/,/g,'')) || 0;
+                          setIncForm(p=>({...p, snapshotRates:{USD_IRR:p.snapshotRates?.USD_IRR ?? rates.USD_IRR, OMR_IRR:v}}));
+                        }}
+                        placeholder={String(rates.OMR_IRR)}/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </form>
             <div className="p-5 border-t border-gray-100 flex gap-3 bg-gray-50/50">
               <button type="button" onClick={()=>setShowIncModal(false)}
@@ -1672,6 +1708,41 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   </div>
                 </div>
               </div>
+
+              {/* ── نرخ ارز روز ثبت ── فقط موقع ادیت یا ارزهای غیر IRR */}
+              {(editingExp || expForm.currency !== 'IRR') && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                  <div className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <IconRefreshCw className="w-3 h-3"/> نرخ ارز این رکورد
+                    {editingExp && <span className="normal-case font-normal text-amber-500">(قابل ویرایش برای تصحیح)</span>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-amber-600 font-bold mb-1">1 USD = ... IRR</label>
+                      <input type="text" inputMode="numeric"
+                        className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white outline-none focus:border-amber-500 font-mono text-sm dir-ltr text-right"
+                        value={(expForm as any).snapshotRates?.USD_IRR ?? rates.USD_IRR}
+                        onChange={e=>{
+                          const v = parseFloat(e.target.value.replace(/,/g,'')) || 0;
+                          setExpForm(p=>({...p, snapshotRates:{USD_IRR:v, OMR_IRR:(p as any).snapshotRates?.OMR_IRR ?? rates.OMR_IRR}}));
+                        }}
+                        placeholder={String(rates.USD_IRR)}/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-amber-600 font-bold mb-1">1 OMR = ... IRR</label>
+                      <input type="text" inputMode="numeric"
+                        className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white outline-none focus:border-amber-500 font-mono text-sm dir-ltr text-right"
+                        value={(expForm as any).snapshotRates?.OMR_IRR ?? rates.OMR_IRR}
+                        onChange={e=>{
+                          const v = parseFloat(e.target.value.replace(/,/g,'')) || 0;
+                          setExpForm(p=>({...p, snapshotRates:{USD_IRR:(p as any).snapshotRates?.USD_IRR ?? rates.USD_IRR, OMR_IRR:v}}));
+                        }}
+                        placeholder={String(rates.OMR_IRR)}/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </form>
             <div className="p-5 border-t border-gray-100 flex gap-3 bg-gray-50/50">
               <button type="button" onClick={()=>setShowExpModal(false)}
