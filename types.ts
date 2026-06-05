@@ -270,6 +270,7 @@ export interface CustomForm {
   descriptionEn?: string;
   fields: FormField[];
   allowedRoles: string[];
+  allowedPersonnelIds?: string[]; // specific people who can see this form
   isPublic?: boolean;
   assigneePersonnelId?: string;  // assign to specific person
   assigneeRole?: string;         // assign to first person with this role

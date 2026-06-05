@@ -40,7 +40,7 @@ type FormDraft = Omit<CustomForm, 'id' | 'createdAt' | 'createdBy'>;
 
 const emptyDraft = (): FormDraft => ({
   title: '', titleEn: '', category: '', description: '', descriptionEn: '',
-  fields: [], allowedRoles: [], isPublic: true, assigneePersonnelId: '', assigneeRole: '',
+  fields: [], allowedRoles: [], allowedPersonnelIds: [], isPublic: true, assigneePersonnelId: '', assigneeRole: '',
 });
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors";
@@ -231,7 +231,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       title: form.title, titleEn: form.titleEn || '', category: form.category,
       description: form.description || '', descriptionEn: form.descriptionEn || '',
       fields: form.fields.map(f => ({ ...f, options: f.options || [], optionsEn: f.optionsEn || [] })),
-      allowedRoles: form.allowedRoles, isPublic: form.isPublic ?? false,
+      allowedRoles: form.allowedRoles || [], allowedPersonnelIds: form.allowedPersonnelIds || [],
+      isPublic: form.isPublic ?? false,
       assigneePersonnelId: form.assigneePersonnelId || '', assigneeRole: form.assigneeRole || '',
     });
     setView('builder');
@@ -545,6 +546,72 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 : 'If multiple people share a role, the one with fewest active tickets gets assigned. If none found → CEO/master.'}
             </p>
           </div>
+
+          {/* Access control — master only */}
+          {isMaster && (
+            <div className="border border-violet-100 bg-violet-50/50 rounded-lg p-3 space-y-3">
+              <p className="text-xs font-semibold text-violet-700 flex items-center gap-1.5">
+                🔒 {lang === 'fa' ? 'سطح دسترسی فرم' : 'Form Access Control'}
+              </p>
+              <p className="text-[11px] text-violet-500">
+                {lang === 'fa'
+                  ? 'اگه هیچ‌کدام انتخاب نشود، همه پرسنل می‌توانند ببینند.'
+                  : 'If nothing is selected, all staff can view this form.'}
+              </p>
+
+              {/* Allowed roles */}
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'محدود به سمت‌ها' : 'Allowed Roles'}</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {uniqueRoles.map(role => {
+                    const selected = (draft.allowedRoles || []).includes(role);
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setDraft(d => ({
+                          ...d,
+                          allowedRoles: selected
+                            ? (d.allowedRoles || []).filter(r => r !== role)
+                            : [...(d.allowedRoles || []), role]
+                        }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${selected ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-300 hover:border-violet-400'}`}
+                      >
+                        {role}
+                      </button>
+                    );
+                  })}
+                  {uniqueRoles.length === 0 && <p className="text-xs text-gray-400">{lang === 'fa' ? 'سمتی تعریف نشده' : 'No roles defined'}</p>}
+                </div>
+              </div>
+
+              {/* Allowed personnel */}
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'محدود به افراد خاص' : 'Allowed Specific People'}</label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {activePersonnel.map(p => {
+                    const selected = (draft.allowedPersonnelIds || []).includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setDraft(d => ({
+                          ...d,
+                          allowedPersonnelIds: selected
+                            ? (d.allowedPersonnelIds || []).filter(id => id !== p.id)
+                            : [...(d.allowedPersonnelIds || []), p.id]
+                        }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${selected ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-600 border-gray-300 hover:border-violet-400'}`}
+                      >
+                        {p.fullName}
+                      </button>
+                    );
+                  })}
+                  {activePersonnel.length === 0 && <p className="text-xs text-gray-400">{lang === 'fa' ? 'پرسنلی وجود ندارد' : 'No personnel'}</p>}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: fields */}
@@ -689,13 +756,15 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
           >
             {lang === 'fa' ? 'وارد کردن JSON' : 'Import JSON'}
           </button>
-          <button
-            onClick={() => setJsonImportTab('ai')}
-            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${jsonImportTab === 'ai' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <IconMagic className="w-3.5 h-3.5" />
-            {lang === 'fa' ? 'ساخت با AI' : 'Build with AI'}
-          </button>
+          {isMaster && (
+            <button
+              onClick={() => setJsonImportTab('ai')}
+              className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${jsonImportTab === 'ai' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <IconMagic className="w-3.5 h-3.5" />
+              {lang === 'fa' ? 'ساخت با AI' : 'Build with AI'}
+            </button>
+          )}
         </div>
 
         <div className="p-6 space-y-4">
@@ -752,13 +821,15 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               )}
 
               <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
-                <button
-                  onClick={downloadSampleJson}
-                  className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <IconFile className="w-3.5 h-3.5" />
-                  {lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
-                </button>
+                {isMaster && (
+                  <button
+                    onClick={downloadSampleJson}
+                    className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <IconFile className="w-3.5 h-3.5" />
+                    {lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
+                  </button>
+                )}
                 <div className="flex gap-2">
                   <button onClick={closeImport} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                     {lang === 'fa' ? 'لغو' : 'Cancel'}
@@ -888,14 +959,16 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               dir={lang === 'fa' ? 'rtl' : 'ltr'}
             />
           </div>
-          <button
-            onClick={downloadSampleJson}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-            title={lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
-          >
-            <IconFile className="w-3.5 h-3.5" />
-            {lang === 'fa' ? 'نمونه JSON' : 'Sample JSON'}
-          </button>
+          {isMaster && (
+            <button
+              onClick={downloadSampleJson}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+              title={lang === 'fa' ? 'دانلود نمونه JSON' : 'Download sample JSON'}
+            >
+              <IconFile className="w-3.5 h-3.5" />
+              {lang === 'fa' ? 'نمونه JSON' : 'Sample JSON'}
+            </button>
+          )}
           {isEditor && (
             <>
               <button onClick={() => setJsonImportOpen(true)} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
@@ -931,10 +1004,15 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                   <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
                     <IconFolder className="w-5 h-5" />
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {form.isPublic && (
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                         {lang === 'fa' ? 'عمومی' : 'Public'}
+                      </span>
+                    )}
+                    {((form.allowedRoles?.length ?? 0) > 0 || (form.allowedPersonnelIds?.length ?? 0) > 0) && (
+                      <span className="text-[10px] font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
+                        🔒 {lang === 'fa' ? 'محدود' : 'Restricted'}
                       </span>
                     )}
                     <span className="text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded">

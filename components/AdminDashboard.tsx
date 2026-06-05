@@ -466,6 +466,8 @@ export const AdminDashboard: React.FC<Props> = ({
       }
   }[lang];
 
+  const [showJobDescModal, setShowJobDescModal] = useState(false);
+
   const selectedTicket = selectedTicketId ? tickets.find(t => t.id === selectedTicketId) || null : null;
   const directManager = currentUser?.reportsTo ? personnel.find(p => p.id === currentUser.reportsTo) : null;
   const unreadMessagesCount = messages.filter(m => m.recipientIds.includes(currentUser.id) && !m.readBy.includes(currentUser.id)).length;
@@ -510,7 +512,14 @@ export const AdminDashboard: React.FC<Props> = ({
   useEffect(() => {
       if (activeTab === 'forms') {
           const unsubForms = subscribeToCustomForms((forms) => {
-              const allowedForms = forms.filter(f => f.allowedRoles.length === 0 || currentUser.roles.some(r => f.allowedRoles.includes(r)) || isMaster);
+              const allowedForms = forms.filter(f => {
+                if (isMaster) return true;
+                const noRestriction = (f.allowedRoles?.length ?? 0) === 0 && (f.allowedPersonnelIds?.length ?? 0) === 0;
+                if (noRestriction) return true;
+                const roleMatch = (f.allowedRoles?.length ?? 0) > 0 && currentUser.roles.some(r => f.allowedRoles.includes(r));
+                const personnelMatch = (f.allowedPersonnelIds?.length ?? 0) > 0 && f.allowedPersonnelIds!.includes(currentUser.id);
+                return roleMatch || personnelMatch;
+              });
               setCustomForms(allowedForms);
           });
           return () => unsubForms();
@@ -926,8 +935,93 @@ export const AdminDashboard: React.FC<Props> = ({
     );
   };
 
+  // ── Job Description read-only modal ──
+  const parseJDForView = (str?: string) => {
+    if (!str) return null;
+    try { return JSON.parse(str); } catch { return { summary: { fa: str, en: '' } }; }
+  };
+  const jdView = parseJDForView(currentUser.jobDescription);
+
   return (
     <div className="flex flex-col md:flex-row gap-6 min-h-[calc(100vh-100px)]">
+      {showJobDescModal && jdView && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setShowJobDescModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-4 animate-fade-in" dir="rtl" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <span className="w-7 h-7 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-sm">📋</span>
+                {lang === 'fa' ? 'شرح شغل من' : 'My Job Description'}
+              </h3>
+              <button onClick={() => setShowJobDescModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {jdView.position?.fa && (
+                <div className="flex items-center gap-3 bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+                  <div>
+                    <p className="text-xs text-indigo-500 font-semibold">{lang === 'fa' ? 'سمت / عنوان شغلی' : 'Position'}</p>
+                    <p className="text-sm font-bold text-indigo-900">{lang === 'fa' ? jdView.position.fa : (jdView.position.en || jdView.position.fa)}</p>
+                  </div>
+                </div>
+              )}
+              {jdView.department?.fa && (
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'واحد سازمانی' : 'Department'}</p>
+                  <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.department.fa : (jdView.department.en || jdView.department.fa)}</p>
+                </div>
+              )}
+              {jdView.summary?.fa && (
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <p className="text-xs text-gray-400 font-semibold mb-1">{lang === 'fa' ? 'خلاصه شغل' : 'Summary'}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{lang === 'fa' ? jdView.summary.fa : (jdView.summary.en || jdView.summary.fa)}</p>
+                </div>
+              )}
+              {jdView.responsibilities?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold mb-2">{lang === 'fa' ? 'مسئولیت‌های اصلی' : 'Responsibilities'}</p>
+                  <ul className="space-y-1.5">
+                    {jdView.responsibilities.map((r: any, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full mt-1.5 shrink-0" />
+                        {lang === 'fa' ? (r.fa || r) : (r.en || r.fa || r)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {jdView.kpis?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 font-semibold mb-2">{lang === 'fa' ? 'شاخص‌های عملکرد (KPIs)' : 'KPIs'}</p>
+                  <ul className="space-y-1.5">
+                    {jdView.kpis.map((k: any, i: number) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <span className="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 shrink-0" />
+                        {lang === 'fa' ? (k.fa || k) : (k.en || k.fa || k)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {jdView.compensation?.model?.fa && (
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'مدل جبران خدمات' : 'Compensation'}</p>
+                  <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.compensation.model.fa : (jdView.compensation.model.en || jdView.compensation.model.fa)}</p>
+                </div>
+              )}
+              {jdView.workingHours?.fa && (
+                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                  <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'ساعات کاری' : 'Working Hours'}</p>
+                  <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.workingHours.fa : (jdView.workingHours.en || jdView.workingHours.fa)}</p>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setShowJobDescModal(false)} className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
+                {lang === 'fa' ? 'بستن' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showInvoiceModal && selectedTicket && (
           <InvoiceModal customer={{ id: selectedTicket.customerName, fullName: selectedTicket.customerName, companyName: selectedTicket.companyName, location: selectedTicket.location, phoneNumber: selectedTicket.phoneNumber, whatsappNumber: selectedTicket.whatsappNumber, firstContact: '', totalTickets: 0 }} template={config.invoiceTemplate || { companyName: config.appTitle, address: '', phone: '', footerText: '', termsConditions: '', defaultTaxRate: 0, colorTheme: '#4f46e5' }} initialData={editingInvoice} onSave={handleSaveInvoice} onClose={() => setShowInvoiceModal(false)} />
       )}
@@ -939,7 +1033,12 @@ export const AdminDashboard: React.FC<Props> = ({
          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center text-center sticky top-24">
             <div className="relative w-24 h-24 mb-4"><div className="w-full h-full rounded-full overflow-hidden border-2 border-indigo-100 shadow-md">{currentUser.avatar ? (<img src={currentUser.avatar} alt={currentUser.fullName} className="w-full h-full object-cover" />) : (<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-2xl font-bold">{currentUser.fullName.charAt(0)}</div>)}</div><div className="absolute bottom-0 right-0 bg-green-500 w-4 h-4 rounded-full border-2 border-white"></div></div>
             <h3 className="font-bold text-gray-900 text-lg">{currentUser.fullName}</h3>
-            <div className="flex flex-wrap justify-center gap-1 mt-1 mb-2">{(currentUser.roles || []).map((r, i) => (<span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{r}</span>))}</div>
+            <div className="flex flex-wrap justify-center gap-1 mt-1 mb-1">{(currentUser.roles || []).map((r, i) => (<span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{r}</span>))}</div>
+            {currentUser.jobDescription && (
+              <button onClick={() => setShowJobDescModal(true)} className="text-xs text-indigo-500 hover:text-indigo-700 underline underline-offset-2 mb-2 mt-0.5">
+                {lang === 'fa' ? '📋 شرح شغل من' : '📋 My Job Description'}
+              </button>
+            )}
             {directManager && (<div className="text-xs text-gray-500 mb-4 bg-gray-50 px-2 py-1 rounded inline-flex items-center gap-1"><IconLayout className="w-3 h-3" /> {t.manager}: {directManager.fullName}</div>)}
             <div className="w-full space-y-2">
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconActivity className="w-5 h-5" /><span className="font-medium">{t.overview}</span></button>
