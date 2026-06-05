@@ -41,7 +41,8 @@ type FormDraft = Omit<CustomForm, 'id' | 'createdAt' | 'createdBy'>;
 
 const emptyDraft = (): FormDraft => ({
   title: '', titleEn: '', category: '', description: '', descriptionEn: '',
-  fields: [], allowedRoles: [], allowedPersonnelIds: [], isPublic: true, assigneePersonnelId: '', assigneeRole: '',
+  fields: [], allowedRoles: [], allowedPersonnelIds: [], allowAttachments: false,
+  isPublic: true, assigneePersonnelId: '', assigneeRole: '',
 });
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors";
@@ -236,6 +237,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       description: form.description || '', descriptionEn: form.descriptionEn || '',
       fields: form.fields.map(f => ({ ...f, options: f.options || [], optionsEn: f.optionsEn || [] })),
       allowedRoles: form.allowedRoles || [], allowedPersonnelIds: form.allowedPersonnelIds || [],
+      allowAttachments: form.allowAttachments ?? false,
       isPublic: form.isPublic ?? false,
       assigneePersonnelId: form.assigneePersonnelId || '', assigneeRole: form.assigneeRole || '',
     });
@@ -684,6 +686,19 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               className={`relative w-11 h-6 rounded-full transition-colors ${draft.isPublic ? 'bg-indigo-600' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${draft.isPublic ? (lang === 'fa' ? 'left-0.5' : 'right-0.5') : (lang === 'fa' ? 'right-0.5' : 'left-0.5')}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <p className="text-sm font-medium text-gray-700">{lang === 'fa' ? 'امکان ضمیمه فایل' : 'Allow File Attachments'}</p>
+              <p className="text-xs text-gray-400">{lang === 'fa' ? 'پرکننده فرم می‌تواند عکس و فایل ضمیمه کند' : 'Submitter can attach images and files'}</p>
+            </div>
+            <button
+              onClick={() => setDraft(d => ({ ...d, allowAttachments: !d.allowAttachments }))}
+              className={`relative w-11 h-6 rounded-full transition-colors ${draft.allowAttachments ? 'bg-emerald-500' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${draft.allowAttachments ? (lang === 'fa' ? 'left-0.5' : 'right-0.5') : (lang === 'fa' ? 'right-0.5' : 'left-0.5')}`} />
             </button>
           </div>
 
@@ -1262,8 +1277,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 <h3 className="text-sm font-bold text-gray-900 mb-0.5 leading-snug">{form.title}</h3>
                 {form.titleEn && <p className="text-xs text-gray-400 mb-1.5" dir="ltr">{form.titleEn}</p>}
                 {form.description && <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{form.description}</p>}
-                <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                   <span>{form.fields.length} {lang === 'fa' ? 'فیلد' : 'fields'}</span>
+                  {form.allowAttachments && (
+                    <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+                      📎 {lang === 'fa' ? 'ضمیمه فعال' : 'Attachments ON'}
+                    </span>
+                  )}
                 </div>
               </div>
 

@@ -271,6 +271,7 @@ export interface CustomForm {
   fields: FormField[];
   allowedRoles: string[];
   allowedPersonnelIds?: string[]; // specific people who can see this form
+  allowAttachments?: boolean;     // whether submitters can attach files
   isPublic?: boolean;
   assigneePersonnelId?: string;  // assign to specific person
   assigneeRole?: string;         // assign to first person with this role

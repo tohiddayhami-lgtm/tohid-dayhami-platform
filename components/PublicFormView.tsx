@@ -405,8 +405,8 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
           );
         })}
 
-        {/* ── File Attachment Section ── */}
-        <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/60">
+        {/* ── File Attachment Section — only if enabled on this form ── */}
+        {form?.allowAttachments && <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/60">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <IconUpload className="w-4 h-4 text-gray-400" />
@@ -470,7 +470,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
             </>
           )}
           {fileError && <p className="text-xs text-red-500">{fileError}</p>}
-        </div>
+        </div>}
 
         <button type="submit" disabled={submitting || attachedFiles.some(f => f.status === 'uploading')}
           className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold text-sm hover:bg-black disabled:opacity-60 transition-colors mt-4">
