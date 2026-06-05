@@ -195,8 +195,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     e.target.value = '';
   };
 
+  // Use ?form= query param — survives Instagram/WhatsApp/Telegram link sharing
+  // (hash fragments are often stripped by social media in-app browsers)
   const getPublicUrl = (form: CustomForm) =>
-    `${window.location.origin}${window.location.pathname}#/f/${form.id}`;
+    `${window.location.origin}${window.location.pathname}?form=${form.id}`;
 
   const copyLink = (form: CustomForm) => {
     navigator.clipboard.writeText(getPublicUrl(form)).then(() => {

@@ -32,6 +32,10 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       else setNotFound(true);
       setLoading(false);
     });
+    // Clean up ?form= query param from the URL bar (looks nicer, no side effects)
+    if (window.location.search.includes('form=')) {
+      history.replaceState(null, '', `${window.location.pathname}#/f/${formId}`);
+    }
   }, [formId]);
 
   const handleResponse = (fieldId: string, value: string) => {

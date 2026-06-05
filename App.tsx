@@ -120,7 +120,20 @@ const writeCache = (key: string, data: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 };
 
+// Extracts form ID from ?form=... (social media safe) or #/f/... (internal nav)
+const extractFormId = (): string | null => {
+  try {
+    const qp = new URLSearchParams(window.location.search).get('form');
+    if (qp) return qp;
+  } catch {}
+  const h = window.location.hash;
+  if (h.startsWith('#/f/')) return h.replace('#/f/', '').split('?')[0] || null;
+  return null;
+};
+
 const getInitialView = (): ViewState => {
+  // ?form= query param takes priority — survives Instagram/WhatsApp link sharing
+  if (new URLSearchParams(window.location.search).get('form')) return 'custom-form';
   const hash = window.location.hash;
   if (!hash || hash === '#' || hash === '#/') return 'landing';
   if (hash === '#/form' || hash === '#form') return 'new-ticket';
@@ -140,12 +153,8 @@ const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
-  // Initialize synchronously from the URL so the first render shows the form immediately
-  const [customFormId, setCustomFormId] = useState<string | null>(() => {
-    const h = window.location.hash;
-    if (h.startsWith('#/f/')) return h.replace('#/f/', '').split('?')[0] || null;
-    return null;
-  });
+  // Reads from ?form= (social media links) OR #/f/ (internal nav), synchronously on first render
+  const [customFormId, setCustomFormId] = useState<string | null>(extractFormId);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>(() => readCache<ServiceOption[]>(CACHE_KEYS.SERVICES) ?? []);
@@ -235,11 +244,9 @@ const App: React.FC = () => {
     // Normalize legacy #form link
     if (hash === '#form') history.replaceState(null, '', '#/form');
 
-    // Extract custom form ID from #/f/{id}
-    if (hash.startsWith('#/f/')) {
-      const fid = hash.replace('#/f/', '').split('?')[0];
-      if (fid) setCustomFormId(fid);
-    }
+    // Extract form ID from ?form= or #/f/
+    const fid = extractFormId();
+    if (fid) setCustomFormId(fid);
 
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
     const storedView = localStorage.getItem(STORAGE_KEYS.VIEW) as ViewState | null;
