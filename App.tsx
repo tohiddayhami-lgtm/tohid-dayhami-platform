@@ -446,14 +446,30 @@ const App: React.FC = () => {
         const directId = ticket.customData.__assigneePersonnelId;
         const roleStr  = ticket.customData.__assigneeRole;
         if (directId) {
+          // Direct person assignment
           assignedTo = directId;
         } else if (roleStr) {
+          // Role-based → load-balance among eligible staff
           const normalizedRole = roleStr.trim().toLowerCase();
-          const match = personnel.find(p =>
+          const eligible = personnel.filter(p =>
             (p.status || 'active') === 'active' &&
             (p.roles || []).some(r => r.trim().toLowerCase() === normalizedRole)
           );
-          if (match) assignedTo = match.id;
+          if (eligible.length === 1) {
+            assignedTo = eligible[0].id;
+          } else if (eligible.length > 1) {
+            // Pick person with fewest active tickets
+            const workload = eligible.map(p => ({
+              id: p.id,
+              count: tickets.filter(t =>
+                t.assignedTo === p.id &&
+                t.status !== TicketStatus.COMPLETED &&
+                t.status !== TicketStatus.CANCELLED
+              ).length,
+            }));
+            workload.sort((a, b) => a.count - b.count);
+            assignedTo = workload[0].id;
+          }
         }
       }
 

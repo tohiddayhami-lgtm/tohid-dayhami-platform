@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
@@ -11,6 +11,7 @@ interface Props {
   isMaster: boolean;
   isAdmin: boolean;
   lang: Language;
+  personnel?: Personnel[];
 }
 
 type PanelView = 'list' | 'builder' | 'preview';
@@ -154,7 +155,7 @@ Note: "select" fields must have both "options" (Persian) and "optionsEn" (Englis
 Each field's id and key must be unique.`}
 `;
 
-export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang }) => {
+export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang, personnel = [] }) => {
   const [view, setView] = useState<PanelView>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FormDraft>(emptyDraft());
@@ -172,6 +173,17 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditor = isAdmin || isMaster;
+
+  // Derive unique roles and active personnel for assignment dropdowns
+  const activePersonnel = useMemo(() =>
+    personnel.filter(p => (p.status || 'active') === 'active'),
+    [personnel]
+  );
+  const uniqueRoles = useMemo(() => {
+    const roles = new Set<string>();
+    activePersonnel.forEach(p => (p.roles || []).forEach(r => { if (r.trim()) roles.add(r.trim()); }));
+    return Array.from(roles).sort();
+  }, [activePersonnel]);
 
   const downloadSampleJson = () => {
     const blob = new Blob([SAMPLE_JSON], { type: 'application/json' });
@@ -445,30 +457,92 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
 
           {/* Assignment config */}
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-3 space-y-3">
-            <p className="text-xs font-semibold text-orange-700">{lang === 'fa' ? 'ارجاع خودکار فرم' : 'Auto-Assignment'}</p>
-            <div>
-              <label className={labelCls}>{lang === 'fa' ? 'ارجاع به نقش (Role)' : 'Assign to Role'}</label>
-              <input
-                value={draft.assigneeRole || ''}
-                onChange={e => setDraft(d => ({ ...d, assigneeRole: e.target.value, assigneePersonnelId: '' }))}
-                placeholder={lang === 'fa' ? 'مثال: کارشناس صادرات' : 'e.g. Sales Expert'}
-                className={inputCls}
-              />
+            <p className="text-xs font-semibold text-orange-700">
+              {lang === 'fa' ? 'ارجاع خودکار فرم' : 'Auto-Assignment'}
+            </p>
+
+            {/* Assignment type selector */}
+            <div className="flex rounded-lg overflow-hidden border border-orange-200 text-xs font-medium">
+              {([
+                { key: 'none',      fa: 'بدون ارجاع اختصاصی', en: 'System default' },
+                { key: 'role',      fa: 'ارجاع به سمت',        en: 'By Role' },
+                { key: 'personnel', fa: 'ارجاع به فرد',         en: 'To Person' },
+              ] as const).map(opt => {
+                const active = opt.key === 'none'
+                  ? (!draft.assigneeRole && !draft.assigneePersonnelId)
+                  : opt.key === 'role'
+                  ? !!draft.assigneeRole
+                  : !!draft.assigneePersonnelId;
+                return (
+                  <button key={opt.key} type="button"
+                    onClick={() => {
+                      if (opt.key === 'none')      setDraft(d => ({ ...d, assigneeRole: '', assigneePersonnelId: '' }));
+                      else if (opt.key === 'role') setDraft(d => ({ ...d, assigneeRole: uniqueRoles[0] || '', assigneePersonnelId: '' }));
+                      else                         setDraft(d => ({ ...d, assigneePersonnelId: activePersonnel[0]?.id || '', assigneeRole: '' }));
+                    }}
+                    className={`flex-1 py-1.5 px-2 text-center transition-colors ${active ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 hover:bg-orange-50'}`}
+                  >
+                    {lang === 'fa' ? opt.fa : opt.en}
+                  </button>
+                );
+              })}
             </div>
-            <div>
-              <label className={labelCls}>{lang === 'fa' ? 'یا ارجاع مستقیم به شناسه پرسنل' : 'Or assign directly to Personnel ID'}</label>
-              <input
-                value={draft.assigneePersonnelId || ''}
-                onChange={e => setDraft(d => ({ ...d, assigneePersonnelId: e.target.value, assigneeRole: '' }))}
-                placeholder={lang === 'fa' ? 'شناسه پرسنل (اگر خالی باشد، سیستم ارجاع می‌دهد)' : 'Personnel ID (blank = system decides)'}
-                className={inputCls}
-                dir="ltr"
-              />
-            </div>
+
+            {/* Role dropdown */}
+            {draft.assigneeRole !== undefined && !draft.assigneePersonnelId && draft.assigneeRole !== '' && (
+              <div>
+                <label className={labelCls}>
+                  {lang === 'fa' ? 'سمت / نقش' : 'Role'}
+                  {(() => {
+                    const count = activePersonnel.filter(p => (p.roles || []).some(r => r.trim() === draft.assigneeRole)).length;
+                    return count > 0 ? (
+                      <span className="mr-2 text-[10px] text-orange-600 font-normal">
+                        ({count} {lang === 'fa' ? 'نفر — ارجاع با توجه به حجم کارتابل' : 'people — load-balanced'})
+                      </span>
+                    ) : null;
+                  })()}
+                </label>
+                <select
+                  value={draft.assigneeRole}
+                  onChange={e => setDraft(d => ({ ...d, assigneeRole: e.target.value }))}
+                  className={inputCls}
+                >
+                  {uniqueRoles.map(role => {
+                    const cnt = activePersonnel.filter(p => (p.roles || []).some(r => r.trim() === role)).length;
+                    return <option key={role} value={role}>{role} ({cnt} {lang === 'fa' ? 'نفر' : 'people'})</option>;
+                  })}
+                  {uniqueRoles.length === 0 && (
+                    <option value="">{lang === 'fa' ? '— هنوز پرسنلی تعریف نشده —' : '— No personnel defined yet —'}</option>
+                  )}
+                </select>
+              </div>
+            )}
+
+            {/* Personnel dropdown */}
+            {!!draft.assigneePersonnelId && (
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'انتخاب فرد' : 'Select Person'}</label>
+                <select
+                  value={draft.assigneePersonnelId}
+                  onChange={e => setDraft(d => ({ ...d, assigneePersonnelId: e.target.value }))}
+                  className={inputCls}
+                >
+                  {activePersonnel.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.fullName} — {(p.roles || []).join('، ')}
+                    </option>
+                  ))}
+                  {activePersonnel.length === 0 && (
+                    <option value="">{lang === 'fa' ? '— پرسنلی وجود ندارد —' : '— No active personnel —'}</option>
+                  )}
+                </select>
+              </div>
+            )}
+
             <p className="text-[11px] text-orange-600">
               {lang === 'fa'
-                ? 'اگر هیچ کدام تعریف نشود، سیستم طبق قوانین ارجاع عمل می‌کند. اگر باز هم کسی یافت نشد، به مدیرعامل ارجاع می‌شود.'
-                : 'If neither is set, system assignment rules apply. If still unassigned, it goes to the CEO/master.'}
+                ? 'اگه چند نفر یک سمت داشته باشند، به کسی که کارتابل کم‌ترِ باری داره ارجاع می‌شه. اگه کسی پیدا نشد → مدیرعامل.'
+                : 'If multiple people share a role, the one with fewest active tickets gets assigned. If none found → CEO/master.'}
             </p>
           </div>
         </div>
