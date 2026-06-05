@@ -90,6 +90,21 @@ export const subscribeToUserGoals = (userId: string, period: GoalPeriod, callbac
     });
 };
 
+// --- FX Rates Functions ---
+
+export const saveFxRates = async (rates: { USD_IRR: number; OMR_IRR: number }) => {
+    await setDoc(doc(db, "app_settings", "fx_rates"), { ...rates, updatedAt: new Date().toISOString() });
+};
+
+export const subscribeToFxRates = (callback: (rates: { USD_IRR: number; OMR_IRR: number }) => void) => {
+    return onSnapshot(doc(db, "app_settings", "fx_rates"), (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            callback({ USD_IRR: data.USD_IRR, OMR_IRR: data.OMR_IRR });
+        }
+    });
+};
+
 // --- Expenses Functions ---
 
 export const saveExpense = async (expense: Expense, actorName: string) => {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile, SalesRecord } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconUsers, IconRefreshCw, IconMoney, IconChart, IconTrendingUp } from './Icons';
-import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords, saveSalesRecord, updateSalesRecord, deleteSalesRecord } from '../services/firebaseService';
+import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords, saveSalesRecord, updateSalesRecord, deleteSalesRecord, saveFxRates, subscribeToFxRates } from '../services/firebaseService';
 import { Language } from '../App';
 
 interface Props {
@@ -158,11 +158,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [showPLDetails, setShowPLDetails] = useState(false);
   const [openCats,      setOpenCats]      = useState<Record<string,boolean>>({});
 
-  // Exchange rates (persisted in localStorage)
-  const [rates, setRates] = useState<{USD_IRR:number;OMR_IRR:number}>(() => {
-    try { return JSON.parse(localStorage.getItem('fx_rates') || '{"USD_IRR":600000,"OMR_IRR":1560000}'); }
-    catch { return {USD_IRR:600000, OMR_IRR:1560000}; }
-  });
+  // Exchange rates (synced via Firestore for cross-device consistency)
+  const [rates, setRates] = useState<{USD_IRR:number;OMR_IRR:number}>({USD_IRR:600000, OMR_IRR:1560000});
   const [showRatesPanel, setShowRatesPanel] = useState(false);
   const [rDraft, setRDraft] = useState({USD_IRR:'', OMR_IRR:''});
 
@@ -196,6 +193,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
 
   useEffect(() => { const u = subscribeToExpenses(setExpenses);       return () => u(); }, []);
   useEffect(() => { const u = subscribeToSalesRecords(setSalesRecords); return () => u(); }, []);
+  useEffect(() => { const u = subscribeToFxRates(setRates);            return () => u(); }, []);
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const normalizeDigits = (v: string) =>
@@ -245,8 +243,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       USD_IRR: parseAmt(rDraft.USD_IRR) || rates.USD_IRR,
       OMR_IRR: parseAmt(rDraft.OMR_IRR) || rates.OMR_IRR,
     };
-    setRates(r);
-    localStorage.setItem('fx_rates', JSON.stringify(r));
+    saveFxRates(r);
     setShowRatesPanel(false);
     setRDraft({USD_IRR:'', OMR_IRR:''});
   };
