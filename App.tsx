@@ -131,20 +131,30 @@ const extractFormId = (): string | null => {
   return null;
 };
 
-const getInitialView = (): ViewState => {
-  // ?form= query param takes priority — survives Instagram/WhatsApp link sharing
-  if (new URLSearchParams(window.location.search).get('form')) return 'custom-form';
-  const hash = window.location.hash;
+// Parses current URL into a ViewState, checking query params first (social-media-safe),
+// then hash fragments (internal navigation). Query params survive Instagram/WhatsApp/Telegram.
+const parseUrl = (search: string, hash: string): ViewState | null => {
+  try {
+    const p = new URLSearchParams(search);
+    const page = p.get('page');
+    if (page === 'form')     return 'new-ticket';
+    if (page === 'tracking') return 'tracking';
+    if (p.get('form'))       return 'custom-form';
+  } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
-  if (hash === '#/form' || hash === '#form') return 'new-ticket';
-  if (hash === '#/tracking') return 'tracking';
-  if (hash.startsWith('#/news')) return 'news';
-  if (hash.startsWith('#/f/')) return 'custom-form';
-  if (hash === '#/admin') {
-    try {
-      const u = localStorage.getItem('crm_session_user');
-      if (u) return 'admin';
-    } catch {}
+  if (hash === '#/form' || hash === '#form')  return 'new-ticket';
+  if (hash === '#/tracking')                  return 'tracking';
+  if (hash.startsWith('#/news'))              return 'news';
+  if (hash.startsWith('#/f/'))                return 'custom-form';
+  if (hash === '#/admin')                     return 'admin';
+  return null;
+};
+
+const getInitialView = (): ViewState => {
+  const v = parseUrl(window.location.search, window.location.hash);
+  if (v && v !== 'admin') return v;
+  if (v === 'admin') {
+    try { if (localStorage.getItem('crm_session_user')) return 'admin'; } catch {}
   }
   return 'landing';
 };
@@ -174,18 +184,11 @@ const App: React.FC = () => {
 
   const t = DICTIONARY[lang];
 
-  const VIEW_HASH: Record<ViewState, string> = {
-    landing: '#/', 'new-ticket': '#/form', tracking: '#/tracking', admin: '#/admin', news: '#/news', 'custom-form': '#/f/',
-  };
-
-  const parseViewFromHash = (hash: string): ViewState | null => {
-    if (!hash || hash === '#' || hash === '#/') return 'landing';
-    if (hash === '#/form' || hash === '#form') return 'new-ticket';
-    if (hash === '#/tracking') return 'tracking';
-    if (hash === '#/admin') return 'admin';
-    if (hash.startsWith('#/news')) return 'news';
-    if (hash.startsWith('#/f/')) return 'custom-form';
-    return null;
+  // Public views use query params (survives social media sharing).
+  // Admin/news keep hash routing (not shared externally).
+  const VIEW_URL: Record<ViewState, string> = {
+    landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
+    admin: '#/admin', news: '#/news', 'custom-form': '?form=',
   };
 
   const openFormWithService = (serviceId: string) => {
@@ -196,9 +199,13 @@ const App: React.FC = () => {
   const setView = (newView: ViewState, articleSlugOrFormId?: string) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
-    let newHash = VIEW_HASH[newView];
-    if (newView === 'custom-form' && articleSlugOrFormId) newHash = `#/f/${articleSlugOrFormId}`;
-    if (window.location.hash !== newHash) history.pushState(null, '', newHash);
+    let newUrl = VIEW_URL[newView];
+    if (newView === 'custom-form' && articleSlugOrFormId) newUrl = `?form=${articleSlugOrFormId}`;
+    if (newView === 'landing') newUrl = window.location.pathname;
+    const currentFull = window.location.search + window.location.hash;
+    if (currentFull !== newUrl && (window.location.pathname + currentFull) !== newUrl) {
+      history.pushState(null, '', newUrl);
+    }
     logPageView(newView, articleSlugOrFormId);
   };
 
@@ -238,32 +245,20 @@ const App: React.FC = () => {
   }, [appConfig]);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    const hashView = parseViewFromHash(hash);
+    // Determine view from current URL (query params take priority over hash)
+    const initialView = getInitialView();
 
-    // Normalize legacy #form link
-    if (hash === '#form') history.replaceState(null, '', '#/form');
-
-    // Extract form ID from ?form= or #/f/
+    // Extract form ID synchronously
     const fid = extractFormId();
     if (fid) setCustomFormId(fid);
 
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
-    const storedView = localStorage.getItem(STORAGE_KEYS.VIEW) as ViewState | null;
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    // Hash is the single source of truth for navigation
-    const initialView = (() => {
-      if (hashView && hashView !== 'landing') {
-        if (hashView === 'admin' && !storedUser) return 'landing' as const;
-        return hashView;
-      }
-      return 'landing' as const;
-    })();
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form';
 
-    // Only handle session expiry for admin view, never redirect away from public pages
-    if (storedUser && lastActive && initialView !== 'custom-form') {
+    if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
         localStorage.removeItem(STORAGE_KEYS.USER);
         localStorage.removeItem(STORAGE_KEYS.VIEW);
@@ -273,38 +268,30 @@ const App: React.FC = () => {
         try {
           setCurrentUser(JSON.parse(storedUser));
           localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, now.toString());
-        } catch {
-          localStorage.removeItem(STORAGE_KEYS.USER);
-          setCurrentUser(null);
-        }
+        } catch { localStorage.removeItem(STORAGE_KEYS.USER); setCurrentUser(null); }
       }
-    } else if (storedUser && initialView !== 'custom-form') {
-      try {
-        setCurrentUser(JSON.parse(storedUser));
-      } catch { localStorage.removeItem(STORAGE_KEYS.USER); }
+    } else if (storedUser && !isPublicView) {
+      try { setCurrentUser(JSON.parse(storedUser)); } catch { localStorage.removeItem(STORAGE_KEYS.USER); }
     }
 
     setViewState(initialView);
-    if (!hashView || hashView === 'landing') history.replaceState(null, '', '#/');
+    // Only reset to root for true landing (don't overwrite public ?page= URLs)
+    if (initialView === 'landing' && !window.location.search && !window.location.hash.startsWith('#/')) {
+      history.replaceState(null, '', '/');
+    }
     logPageView(initialView);
   }, []);
 
   useEffect(() => {
     const handleNav = () => {
-      const hash = window.location.hash;
-      const v = parseViewFromHash(hash);
-      if (v) {
-        if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
-        if (v === 'custom-form' && hash.startsWith('#/f/')) {
-          const fid = hash.replace('#/f/', '').split('?')[0];
-          if (fid) setCustomFormId(fid);
-        }
-        setViewState(v);
-        localStorage.setItem(STORAGE_KEYS.VIEW, v);
-      }
+      const v = parseUrl(window.location.search, window.location.hash);
+      if (!v) return;
+      if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
+      const fid = extractFormId();
+      if (v === 'custom-form' && fid) setCustomFormId(fid);
+      setViewState(v);
+      localStorage.setItem(STORAGE_KEYS.VIEW, v);
     };
-    // popstate: browser back/forward on desktop
-    // hashchange: some mobile browsers fire this instead of popstate
     window.addEventListener('popstate', handleNav);
     window.addEventListener('hashchange', handleNav);
     return () => {
