@@ -1,7 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
-import { initializeFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle, AnalyticsEvent, NotificationLog } from '../types';
 
@@ -15,18 +15,8 @@ export const firebaseConfig = {
   measurementId: "G-N426FMEKMR"
 };
 
-// Proxy domain for Iran accessibility — set VITE_FIREBASE_PROXY in .env
-// e.g. VITE_FIREBASE_PROXY=firebase-proxy.yourdomain.com
-const PROXY_HOST: string = process.env.VITE_FIREBASE_PROXY || '';
-
 const app = initializeApp(firebaseConfig);
-
-// Use HTTP long-polling (not gRPC/WebSocket) so traffic routes cleanly through Cloudflare proxy.
-// When PROXY_HOST is set, all Firestore calls go through your Cloudflare Worker.
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  ...(PROXY_HOST ? { host: `${PROXY_HOST}/firestore`, ssl: true } : {}),
-} as any);
+export const db = getFirestore(app);
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
 const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
 const STORAGE_ROOT = "tohid-dayhami-platform";
