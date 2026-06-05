@@ -356,7 +356,21 @@ const App: React.FC = () => {
           writeCache(CACHE_KEYS.SERVICES, normalized);
         }
       },
-      (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
+      (ppl) => {
+        if (ppl) {
+          const normalized = ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }));
+          setPersonnel(normalized);
+          setCurrentUser(prev => {
+            if (!prev) return prev;
+            const updated = normalized.find((p: Personnel) => p.id === prev.id);
+            if (updated) {
+              try { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(sanitizeData(updated))); } catch {}
+              return updated;
+            }
+            return prev;
+          });
+        }
+      }
     );
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
