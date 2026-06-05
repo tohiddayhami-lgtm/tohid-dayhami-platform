@@ -428,12 +428,34 @@ const App: React.FC = () => {
     processAssignments();
   }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, personnel]);
 
-  // Returns the master/CEO user id as final fallback for unassigned tickets
+  // Returns the best fallback assignee: prefers managers who have WhatsApp notification set up
   const getCeoFallbackId = (): string | undefined => {
-    const master = personnel.find(p => p.username === 'master' && (p.status || 'active') === 'active');
+    const nc = appConfig.notificationConfig;
+    const phones  = nc?.personnelPhones  || {};
+    const apiKeys = nc?.personnelApiKeys || {};
+    const isCallMeBot = nc?.provider === 'callmebot';
+
+    // A person is "notification-ready" if they have a phone (and API key for callmebot)
+    const notifReady = (id: string) =>
+      !!phones[id] && (!isCallMeBot || !!apiKeys[id]);
+
+    const active = (p: Personnel) => (p.status || 'active') === 'active';
+    const isManager = (p: Personnel) => (p.roles || []).some(r => r.includes('مدیر'));
+
+    // 1. Master account with notification set up
+    const masterWithNotif = personnel.find(p => p.username === 'master' && active(p) && notifReady(p.id));
+    if (masterWithNotif) return masterWithNotif.id;
+
+    // 2. Any active manager with notification set up
+    const managerWithNotif = personnel.find(p => active(p) && isManager(p) && notifReady(p.id));
+    if (managerWithNotif) return managerWithNotif.id;
+
+    // 3. Master account even without notification (assignment still works)
+    const master = personnel.find(p => p.username === 'master' && active(p));
     if (master) return master.id;
-    const ceo = personnel.find(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r.includes('مدیر')));
-    return ceo?.id;
+
+    // 4. Any active manager
+    return personnel.find(p => active(p) && isManager(p))?.id;
   };
 
   const saveNewTicketToSystem = async (ticket: Ticket) => {
