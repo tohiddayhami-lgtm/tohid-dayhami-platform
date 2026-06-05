@@ -697,6 +697,14 @@ export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) 
     }, (e) => {});
 };
 
+export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
+    try {
+        const docSnap = await getDoc(doc(db, "custom_forms", id));
+        if (docSnap.exists()) return docSnap.data() as CustomForm;
+        return null;
+    } catch { return null; }
+};
+
 export const saveAppConfigToCloud = async (config: AppConfig) => {
     await setDoc(doc(db, "settings", "appConfig"), sanitizeData(config));
     logSystemAction('UPDATE', 'System', `تنظیمات سیستم تغییر کرد`, 'Admin');

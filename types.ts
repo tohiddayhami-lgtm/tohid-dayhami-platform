@@ -264,10 +264,13 @@ export interface KPI {
 export interface CustomForm {
   id: string;
   title: string;
+  titleEn?: string;
   category: string;
   description?: string;
+  descriptionEn?: string;
   fields: FormField[];
   allowedRoles: string[];
+  isPublic?: boolean;
   createdAt: string;
   createdBy: string;
 }
@@ -423,7 +426,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form';
 
 export interface NewsArticle {
   id: string;
@@ -446,7 +449,7 @@ export interface NewsArticle {
   metaKeywords?: string;
 }
 
-export type FormFieldType = 'text' | 'textarea' | 'email' | 'tel' | 'select' | 'header' | 'date' | 'checkbox';
+export type FormFieldType = 'text' | 'textarea' | 'email' | 'tel' | 'number' | 'select' | 'header' | 'date' | 'checkbox';
 
 export interface FormField {
   id: string;

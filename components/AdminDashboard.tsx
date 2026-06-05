@@ -19,6 +19,7 @@ import { SalesDashboard } from './SalesDashboard';
 import { ReportManager } from './ReportManager';
 import { GoalTracker } from './GoalTracker';
 import { ExpenseManager } from './ExpenseManager';
+import { FormBuilderPanel } from './FormBuilderPanel';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport } from '../services/firebaseService';
 import { Language } from '../App';
 
@@ -1190,81 +1191,13 @@ export const AdminDashboard: React.FC<Props> = ({
             </div>
         )}
         {activeTab === 'forms' && (
-            <div className="space-y-6 animate-fade-in">
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><IconClipboard className="w-6 h-6" /></div>
-                        {t.formsTitle}
-                    </h2>
-                </div>
-                {selectedCustomForm ? (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                            <div>
-                                <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-1 rounded border border-indigo-100">{selectedCustomForm.category}</span>
-                                <h3 className="text-xl font-bold text-gray-900 mt-2">{selectedCustomForm.title}</h3>
-                                {selectedCustomForm.description && <p className="text-sm text-gray-500 mt-1">{selectedCustomForm.description}</p>}
-                            </div>
-                            <button onClick={() => setSelectedCustomForm(null)} className="text-gray-500 hover:text-gray-700 bg-white px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">بازگشت</button>
-                        </div>
-                        <div className="p-8 max-w-3xl mx-auto space-y-6">
-                            {selectedCustomForm.fields.map(field => (
-                                <div key={field.id} className="space-y-2">
-                                    {field.type === 'header' ? (
-                                        <h4 className="font-bold text-lg text-gray-800 border-b border-gray-200 pb-2 mt-6">{field.label}</h4>
-                                    ) : (
-                                        <>
-                                            <label className="block text-sm font-bold text-gray-700">
-                                                {field.label} {field.required && <span className="text-red-500">*</span>}
-                                            </label>
-                                            {field.type === 'textarea' ? (
-                                                <textarea className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" rows={4} placeholder={field.placeholder} />
-                                            ) : field.type === 'select' ? (
-                                                <select className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                                                    <option value="">-</option>
-                                                    {field.options?.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                                                </select>
-                                            ) : field.type === 'checkbox' ? (
-                                                <input type="checkbox" className="w-5 h-5 text-indigo-600 rounded" />
-                                            ) : (
-                                                <input type={field.type} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-indigo-500" placeholder={field.placeholder} />
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                            <div className="pt-6 border-t border-gray-100 flex justify-end">
-                                <button className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700">ثبت فرم</button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {customForms.length > 0 ? customForms.map(form => (
-                            <div key={form.id} onClick={() => setSelectedCustomForm(form)} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg hover:border-indigo-300 transition-all cursor-pointer group">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                        <IconFolder className="w-6 h-6" />
-                                    </div>
-                                    <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded">{form.category}</span>
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{form.title}</h3>
-                                <p className="text-sm text-gray-500 line-clamp-2 h-10">{form.description || 'بدون توضیحات'}</p>
-                                <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center text-xs text-gray-400">
-                                    <span>{form.fields.length} فیلد</span>
-                                    <span className="text-indigo-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">{t.selectForm} →</span>
-                                </div>
-                            </div>
-                        )) : (
-                            <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-dashed border-gray-300">
-                                <IconClipboard className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                                <p className="text-gray-500 font-bold">هیچ فرمی برای نمایش وجود ندارد.</p>
-                                <p className="text-xs text-gray-400 mt-1">فرم‌های جدید را می‌توانید از بخش تنظیمات ایجاد کنید.</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+            <FormBuilderPanel
+                customForms={customForms}
+                currentUser={currentUser}
+                isMaster={isMaster}
+                isAdmin={isAdmin}
+                lang={lang}
+            />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}
         {activeTab === 'messages' && <InternalMessenger currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} />}

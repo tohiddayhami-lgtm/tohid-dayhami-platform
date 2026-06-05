@@ -6,6 +6,7 @@ import { TrackingView } from './components/TrackingView';
 import { LoginView } from './components/LoginView';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
+import { PublicFormView } from './components/PublicFormView';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI, NewsArticle } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
@@ -117,6 +118,7 @@ const getInitialView = (): ViewState => {
   if (hash === '#/form' || hash === '#form') return 'new-ticket';
   if (hash === '#/tracking') return 'tracking';
   if (hash.startsWith('#/news')) return 'news';
+  if (hash.startsWith('#/f/')) return 'custom-form';
   if (hash === '#/admin') {
     try {
       const u = localStorage.getItem('crm_session_user');
@@ -130,6 +132,7 @@ const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
+  const [customFormId, setCustomFormId] = useState<string | null>(null);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -150,7 +153,7 @@ const App: React.FC = () => {
   const t = DICTIONARY[lang];
 
   const VIEW_HASH: Record<ViewState, string> = {
-    landing: '#/', 'new-ticket': '#/form', tracking: '#/tracking', admin: '#/admin', news: '#/news',
+    landing: '#/', 'new-ticket': '#/form', tracking: '#/tracking', admin: '#/admin', news: '#/news', 'custom-form': '#/f/',
   };
 
   const parseViewFromHash = (hash: string): ViewState | null => {
@@ -159,6 +162,7 @@ const App: React.FC = () => {
     if (hash === '#/tracking') return 'tracking';
     if (hash === '#/admin') return 'admin';
     if (hash.startsWith('#/news')) return 'news';
+    if (hash.startsWith('#/f/')) return 'custom-form';
     return null;
   };
 
@@ -167,12 +171,13 @@ const App: React.FC = () => {
     setView('new-ticket');
   };
 
-  const setView = (newView: ViewState, articleSlug?: string) => {
+  const setView = (newView: ViewState, articleSlugOrFormId?: string) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
-    const newHash = VIEW_HASH[newView];
+    let newHash = VIEW_HASH[newView];
+    if (newView === 'custom-form' && articleSlugOrFormId) newHash = `#/f/${articleSlugOrFormId}`;
     if (window.location.hash !== newHash) history.pushState(null, '', newHash);
-    logPageView(newView, articleSlug);
+    logPageView(newView, articleSlugOrFormId);
   };
 
   const toAbsoluteUrl = (url: string) => {
@@ -217,6 +222,12 @@ const App: React.FC = () => {
     // Normalize legacy #form link
     if (hash === '#form') history.replaceState(null, '', '#/form');
 
+    // Extract custom form ID from #/f/{id}
+    if (hash.startsWith('#/f/')) {
+      const fid = hash.replace('#/f/', '').split('?')[0];
+      if (fid) setCustomFormId(fid);
+    }
+
     const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
     const storedView = localStorage.getItem(STORAGE_KEYS.VIEW) as ViewState | null;
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
@@ -249,9 +260,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleNav = () => {
-      const v = parseViewFromHash(window.location.hash);
+      const hash = window.location.hash;
+      const v = parseViewFromHash(hash);
       if (v) {
         if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
+        if (v === 'custom-form' && hash.startsWith('#/f/')) {
+          const fid = hash.replace('#/f/', '').split('?')[0];
+          if (fid) setCustomFormId(fid);
+        }
         setViewState(v);
         localStorage.setItem(STORAGE_KEYS.VIEW, v);
       }
@@ -776,6 +792,15 @@ const App: React.FC = () => {
 
             {view === 'tracking' && (
               <TrackingView tickets={tickets} services={services} lang={lang} />
+            )}
+
+            {view === 'custom-form' && customFormId && (
+              <PublicFormView
+                formId={customFormId}
+                lang={lang}
+                appTitle={lang === 'en' ? appConfig.appTitleEn : appConfig.appTitle}
+                onGoToTracking={() => setView('tracking')}
+              />
             )}
 
             {view === 'news' && (
