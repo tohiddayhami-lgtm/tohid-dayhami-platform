@@ -110,7 +110,15 @@ const INITIAL_CONFIG: AppConfig = {
 };
 
 const STORAGE_KEYS = { USER: 'crm_session_user', VIEW: 'crm_last_view', LAST_ACTIVE: 'crm_last_active' };
+const CACHE_KEYS = { SERVICES: 'crm_cache_services', CONFIG: 'crm_cache_config' };
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+
+const readCache = <T,>(key: string): T | null => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : null; } catch { return null; }
+};
+const writeCache = (key: string, data: unknown) => {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+};
 
 const getInitialView = (): ViewState => {
   const hash = window.location.hash;
@@ -140,8 +148,8 @@ const App: React.FC = () => {
   });
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [services, setServices] = useState<ServiceOption[]>([]);
-  const [isServicesLoaded, setIsServicesLoaded] = useState(false);
+  const [services, setServices] = useState<ServiceOption[]>(() => readCache<ServiceOption[]>(CACHE_KEYS.SERVICES) ?? []);
+  const [isServicesLoaded, setIsServicesLoaded] = useState<boolean>(() => !!readCache(CACHE_KEYS.SERVICES));
   const [personnel, setPersonnel] = useState<Personnel[]>(DEFAULT_PERSONNEL);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [messages, setMessages] = useState<InternalMessage[]>([]);
@@ -152,7 +160,7 @@ const App: React.FC = () => {
   const [isLoadingNews, setIsLoadingNews] = useState(true);
   const [analyticsEvents, setAnalyticsEvents] = useState<import('./types').AnalyticsEvent[]>([]);
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
-  const [appConfig, setAppConfig] = useState<AppConfig>(INITIAL_CONFIG);
+  const [appConfig, setAppConfig] = useState<AppConfig>(() => readCache<AppConfig>(CACHE_KEYS.CONFIG) ?? INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   const t = DICTIONARY[lang];
@@ -322,7 +330,6 @@ const App: React.FC = () => {
     const unsubSettings = subscribeToSettings(
       (cfg) => {
         if (cfg) {
-          // label migrations: old stored label → new label
           const LABEL_MIGRATIONS: Record<string, string> = {
             'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
             'Request Description & Product Info': 'Product Information',
@@ -340,10 +347,19 @@ const App: React.FC = () => {
               optionsEn:     field.optionsEn     || def.optionsEn,
             };
           });
-          setAppConfig({ ...cfg, formFields: mergedFields });
+          const merged = { ...cfg, formFields: mergedFields };
+          setAppConfig(merged);
+          writeCache(CACHE_KEYS.CONFIG, merged);
         }
       },
-      (srv) => { if (srv) { setServices(srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }))); setIsServicesLoaded(true); } },
+      (srv) => {
+        if (srv) {
+          const normalized = srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }));
+          setServices(normalized);
+          setIsServicesLoaded(true);
+          writeCache(CACHE_KEYS.SERVICES, normalized);
+        }
+      },
       (ppl) => { if (ppl) setPersonnel(ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }))); }
     );
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
