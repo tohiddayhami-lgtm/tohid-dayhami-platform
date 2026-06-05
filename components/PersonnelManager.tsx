@@ -1,9 +1,72 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Personnel, AppConfig, PersonnelDocument, AttachedFile } from '../types';
 import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, IconUsers, IconMoney, IconBriefcase, IconUpload, IconFile, IconPaperclip, IconLayout, IconInvoice } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
+
+// ── Job Description structured format ──
+interface JobDescData {
+  position: string;
+  department: string;
+  summary: string;
+  responsibilities: string[];
+  requiredSkills: string[];
+  qualifications: string;
+  workingHours: string;
+  kpis: string[];
+  notes: string;
+}
+
+const emptyJD = (): JobDescData => ({
+  position: '', department: '', summary: '',
+  responsibilities: [''], requiredSkills: [''],
+  qualifications: '', workingHours: '',
+  kpis: [''], notes: '',
+});
+
+const SAMPLE_JD: JobDescData = {
+  position: 'کارشناس صادرات',
+  department: 'واحد بازرگانی',
+  summary: 'مسئولیت اجرا و پیگیری فرآیندهای صادراتی، ارتباط با مشتریان بین‌المللی و هماهنگی با تیم‌های داخلی برای تحقق اهداف صادراتی شرکت.',
+  responsibilities: [
+    'بررسی و پردازش درخواست‌های صادراتی مشتریان',
+    'هماهنگی با شرکت‌های حمل‌ونقل بین‌المللی',
+    'تهیه و تکمیل مستندات گمرکی و صادراتی',
+    'پاسخگویی به استعلام‌های مشتریان در کمتر از ۴ ساعت',
+    'گزارش‌دهی هفتگی به مدیر بازرگانی',
+  ],
+  requiredSkills: [
+    'آشنایی کامل با قوانین گمرکی و صادراتی',
+    'تسلط به زبان انگلیسی — حداقل سطح B2',
+    'مهارت در نرم‌افزارهای آفیس (Word, Excel)',
+    'توانایی مذاکره و ارتباط با مشتریان خارجی',
+    'تسلط به اینترنت و ابزارهای آنلاین',
+  ],
+  qualifications: 'کارشناسی یا بالاتر در رشته بازرگانی، مدیریت یا اقتصاد.\nحداقل ۲ سال سابقه کار مرتبط در حوزه تجارت بین‌الملل.',
+  workingHours: 'شنبه تا چهارشنبه ۸:۰۰ الی ۱۷:۰۰',
+  kpis: [
+    'تعداد پرونده‌های صادراتی ماهانه — هدف: ۲۰ پرونده',
+    'نرخ رضایت مشتریان — هدف: ۹۰٪ و بیشتر',
+    'زمان پاسخگویی به استعلام — هدف: کمتر از ۴ ساعت',
+  ],
+  notes: 'امکان دورکاری جزئی در روزهای مشخص پس از گذراندن دوره آزمایشی.',
+};
+
+const parseJD = (str: string): JobDescData => {
+  if (!str) return emptyJD();
+  try {
+    const p = JSON.parse(str);
+    return {
+      ...emptyJD(), ...p,
+      responsibilities: p.responsibilities?.length ? p.responsibilities : [''],
+      requiredSkills:   p.requiredSkills?.length   ? p.requiredSkills   : [''],
+      kpis:             p.kpis?.length             ? p.kpis             : [''],
+    };
+  } catch {
+    return { ...emptyJD(), summary: str };
+  }
+};
 
 interface Props {
   personnel: Personnel[];
@@ -27,7 +90,42 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [newDocFile, setNewDocFile] = useState<AttachedFile | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const jobDescImportRef = useRef<HTMLInputElement>(null);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+
+  // Job Description modal state
+  const [showJDModal, setShowJDModal] = useState(false);
+  const [jdDraft, setJdDraft] = useState<JobDescData>(emptyJD());
+
+  const openJDModal = () => { setJdDraft(parseJD(formData.jobDescription)); setShowJDModal(true); };
+  const saveJD = () => { setFormData(f => ({ ...f, jobDescription: JSON.stringify(jdDraft, null, 2) })); setShowJDModal(false); };
+
+  const downloadJDSample = () => {
+    const blob = new Blob([JSON.stringify(SAMPLE_JD, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'job_description_sample.json'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleJDImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        setJdDraft({ ...emptyJD(), ...parsed, responsibilities: parsed.responsibilities?.length ? parsed.responsibilities : [''], requiredSkills: parsed.requiredSkills?.length ? parsed.requiredSkills : [''], kpis: parsed.kpis?.length ? parsed.kpis : [''] });
+        setShowJDModal(true);
+      } catch { alert('فایل JSON نامعتبر است'); }
+    };
+    reader.readAsText(file); e.target.value = '';
+  };
+
+  const setListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number, val: string) =>
+    setJdDraft(d => { const arr = [...d[key]]; arr[idx] = val; return { ...d, [key]: arr }; });
+  const addListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis') =>
+    setJdDraft(d => ({ ...d, [key]: [...d[key], ''] }));
+  const removeListItem = (key: 'responsibilities' | 'requiredSkills' | 'kpis', idx: number) =>
+    setJdDraft(d => ({ ...d, [key]: d[key].filter((_, i) => i !== idx) }));
 
   const availableRoles = config.personnelRoles || ['مدیر', 'کارشناس صادرات', 'طراح گرافیک/بسته بندی', 'پشتیبانی', 'کارشناس آموزش'];
 
@@ -171,7 +269,26 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.name}</label><input type="text" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})}/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.email}</label><input type="email" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/></div></div>
                  <div><label className="block text-sm font-medium text-gray-700 mb-2">{t.roles}</label><div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl bg-gray-50 max-h-32 overflow-y-auto">{availableRoles.map((role) => (<button type="button" key={role} onClick={() => toggleRole(role)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${formData.roles.includes(role) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300'}`}>{role} {formData.roles.includes(role) && '✓'}</button>))}</div></div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.manager}</label><select className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none bg-white" value={formData.reportsTo} onChange={e => setFormData({...formData, reportsTo: e.target.value})}><option value="">-</option>{personnel.filter(p => p.id !== editingId).map(p => (<option key={p.id} value={p.id}>{p.fullName} ({p.roles.join(', ')})</option>))}</select></div></div>
-                 <div><label className="block text-sm font-medium text-gray-700 mb-1">{t.jobDesc}</label><textarea rows={2} className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.jobDescription} onChange={e => setFormData({...formData, jobDescription: e.target.value})}/></div>
+                 <div>
+                   <input type="file" ref={jobDescImportRef} className="hidden" accept=".json,application/json" onChange={handleJDImport} />
+                   <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                     <label className="text-sm font-medium text-gray-700">{t.jobDesc}</label>
+                     <div className="flex gap-1.5">
+                       <button type="button" onClick={downloadJDSample} className="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 flex items-center gap-1">⬇ نمونه JSON</button>
+                       <button type="button" onClick={() => jobDescImportRef.current?.click()} className="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 flex items-center gap-1">📂 وارد کردن</button>
+                       <button type="button" onClick={openJDModal} className="text-xs text-indigo-600 border border-indigo-200 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 flex items-center gap-1">✏ ویرایش</button>
+                     </div>
+                   </div>
+                   {formData.jobDescription ? (
+                     <button type="button" onClick={openJDModal} className="w-full text-right bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:border-indigo-300 transition-colors">
+                       {(() => { try { const d = JSON.parse(formData.jobDescription); return <span><span className="font-bold text-gray-800">{d.position || '—'}</span>{d.department ? ` · ${d.department}` : ''}{d.summary ? ` — ${d.summary.slice(0, 80)}${d.summary.length > 80 ? '...' : ''}` : ''}</span>; } catch { return <span>{formData.jobDescription.slice(0, 100)}</span>; } })()}
+                     </button>
+                   ) : (
+                     <button type="button" onClick={openJDModal} className="w-full py-3 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                       + کلیک کنید تا شرح شغل تعریف کنید
+                     </button>
+                   )}
+                 </div>
              </div>
           </div>
           <div className="border-t border-gray-100 pt-4"><label className="block text-sm font-bold text-gray-700 mb-3">{t.permissions}</label><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3"><label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-3 rounded-lg border border-blue-100"><input type="checkbox" className="w-4 h-4" checked={formData.canAssign} onChange={e => setFormData({...formData, canAssign: e.target.checked})}/><span className="text-xs font-bold text-blue-800">{t.permAssign}</span></label><label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-3 rounded-lg border border-purple-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllTickets} onChange={e => setFormData({...formData, canViewAllTickets: e.target.checked})}/><span className="text-xs font-bold text-purple-800">{t.permAllTickets}</span></label><label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 py-3 rounded-lg border border-green-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewCustomers} onChange={e => setFormData({...formData, canViewCustomers: e.target.checked})}/><span className="text-xs font-bold text-green-800">{t.permCustomers}</span></label><label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-3 py-3 rounded-lg border border-amber-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewTariffs} onChange={e => setFormData({...formData, canViewTariffs: e.target.checked})}/><span className="text-xs font-bold text-amber-800">{t.permTariffs}</span></label><label className="flex items-center gap-2 cursor-pointer bg-rose-50 px-3 py-3 rounded-lg border border-rose-100"><input type="checkbox" className="w-4 h-4" checked={formData.canIssueInvoices} onChange={e => setFormData({...formData, canIssueInvoices: e.target.checked})}/><span className="text-xs font-bold text-rose-800">{t.permInvoice}</span></label></div></div>
@@ -180,6 +297,122 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           <div className="flex justify-end pt-2 gap-3">{editingId && (<button type="button" onClick={handleCancelEdit} className="px-6 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors font-medium">{t.cancel}</button>)}<button type="submit" disabled={isProcessingImage} className={`px-8 py-2 text-white rounded-lg transition-colors shadow-lg font-bold ${editingId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'} ${isProcessingImage ? 'opacity-50 cursor-not-allowed' : ''}`}>{editingId ? t.save : t.create}</button></div>
         </form>
       </div>
+      {/* ── Job Description Modal ── */}
+      {showJDModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-4 animate-fade-in" dir="rtl">
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-sm">📋</span>
+                شرح شغل استاندارد
+              </h3>
+              <div className="flex gap-2">
+                <button type="button" onClick={downloadJDSample} className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">⬇ نمونه JSON</button>
+                <button type="button" onClick={() => jobDescImportRef.current?.click()} className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">📂 وارد کردن JSON</button>
+                <button type="button" onClick={() => setShowJDModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Basic info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">عنوان شغلی</label>
+                  <input value={jdDraft.position} onChange={e => setJdDraft(d => ({...d, position: e.target.value}))} placeholder="مثال: کارشناس صادرات" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">واحد سازمانی</label>
+                  <input value={jdDraft.department} onChange={e => setJdDraft(d => ({...d, department: e.target.value}))} placeholder="مثال: واحد بازرگانی" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">ساعات کاری</label>
+                  <input value={jdDraft.workingHours} onChange={e => setJdDraft(d => ({...d, workingHours: e.target.value}))} placeholder="مثال: شنبه تا چهارشنبه ۸-۱۷" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">خلاصه شغل</label>
+                <textarea rows={3} value={jdDraft.summary} onChange={e => setJdDraft(d => ({...d, summary: e.target.value}))} placeholder="شرح کوتاهی از هدف و ماهیت این شغل..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+              </div>
+
+              {/* Responsibilities */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-500">مسئولیت‌های اصلی</label>
+                  <button type="button" onClick={() => addListItem('responsibilities')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                </div>
+                <div className="space-y-1.5">
+                  {jdDraft.responsibilities.map((r, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">{i+1}</span>
+                      <input value={r} onChange={e => setListItem('responsibilities', i, e.target.value)} placeholder="مثال: بررسی درخواست‌های صادراتی" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                      {jdDraft.responsibilities.length > 1 && <button type="button" onClick={() => removeListItem('responsibilities', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Required skills */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-500">مهارت‌های مورد نیاز</label>
+                  <button type="button" onClick={() => addListItem('requiredSkills')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                </div>
+                <div className="space-y-1.5">
+                  {jdDraft.requiredSkills.map((s, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">•</span>
+                      <input value={s} onChange={e => setListItem('requiredSkills', i, e.target.value)} placeholder="مثال: تسلط به زبان انگلیسی" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                      {jdDraft.requiredSkills.length > 1 && <button type="button" onClick={() => removeListItem('requiredSkills', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Qualifications */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">تحصیلات و تجربه لازم</label>
+                <textarea rows={2} value={jdDraft.qualifications} onChange={e => setJdDraft(d => ({...d, qualifications: e.target.value}))} placeholder="مثال: کارشناسی بازرگانی — حداقل ۲ سال سابقه مرتبط" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+              </div>
+
+              {/* KPIs */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-gray-500">شاخص‌های عملکرد (KPI)</label>
+                  <button type="button" onClick={() => addListItem('kpis')} className="text-xs text-indigo-600 hover:text-indigo-800">+ افزودن</button>
+                </div>
+                <div className="space-y-1.5">
+                  {jdDraft.kpis.map((k, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <span className="text-gray-400 text-xs w-5 text-center shrink-0">📊</span>
+                      <input value={k} onChange={e => setListItem('kpis', i, e.target.value)} placeholder="مثال: تعداد پرونده ماهانه — هدف: ۲۰" className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                      {jdDraft.kpis.length > 1 && <button type="button" onClick={() => removeListItem('kpis', i)} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">توضیحات تکمیلی</label>
+                <textarea rows={2} value={jdDraft.notes} onChange={e => setJdDraft(d => ({...d, notes: e.target.value}))} placeholder="هر نکته دیگری که لازم است ذکر شود..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none" />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between items-center">
+              <button type="button" onClick={() => { if (window.confirm('پاک کردن همه اطلاعات؟')) setJdDraft(emptyJD()); }} className="text-xs text-red-400 hover:text-red-600">پاک کردن</button>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowJDModal(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">انصراف</button>
+                <button type="button" onClick={saveJD} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700">ذخیره شرح شغل</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{personnel.map(person => { const manager = personnel.find(p => p.id === person.reportsTo); return (<div key={person.id} className={`bg-white p-6 rounded-2xl border shadow-sm hover:shadow-md transition-all relative group ${editingId === person.id ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-100'}`}><div className="flex items-start gap-4"><div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0 overflow-hidden border border-gray-100 ${person.roles.includes('مدیر') ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'}`}>{person.avatar ? (<img src={person.avatar} alt={person.fullName} className="w-full h-full object-cover" />) : (person.fullName.charAt(0))}</div><div className="flex-grow"><h4 className="font-bold text-gray-900">{person.fullName}</h4><div className="flex flex-wrap gap-1.5 mt-2 mb-2">{person.roles && person.roles.map((role, rIdx) => (<span key={rIdx} className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">{role}</span>))}</div>{manager && (<div className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded mb-2 inline-flex items-center gap-1"><IconLayout className="w-3 h-3" /> Report: {manager.fullName}</div>)}</div></div><div className="mt-2 text-sm space-y-2"><div className="text-gray-500 flex justify-between"><span>{t.emailLbl}</span><span>{person.email}</span></div><div className="text-gray-500 flex justify-between bg-gray-50 px-2 py-1 rounded"><span>{t.usernameLbl}</span><span className="font-mono">{person.username}</span></div>{person.documents && person.documents.length > 0 && (<div className="mt-3 pt-3 border-t border-gray-100"><span className="text-xs text-gray-500 block mb-1">{t.docsLbl}</span><div className="flex flex-wrap gap-1">{person.documents.map((d, i) => (<a key={i} href={d.file.content} target="_blank" rel="noreferrer" className="text-[10px] bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded text-gray-600 border border-gray-200 block truncate max-w-[100px]">{d.title}</a>))}</div></div>)}</div><div className="absolute top-4 rtl:left-4 ltr:right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => handleEdit(person)} className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"><IconEdit className="w-4 h-4" /></button><button onClick={() => handleRemove(person.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"><IconTrash className="w-4 h-4" /></button></div></div>)})}</div>
     </div>
   );
