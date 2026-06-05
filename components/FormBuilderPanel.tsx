@@ -1,9 +1,9 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
-import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile } from './Icons';
+import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic } from './Icons';
 
 interface Props {
   customForms: CustomForm[];
@@ -45,6 +45,115 @@ const emptyDraft = (): FormDraft => ({
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors";
 const labelCls = "block text-xs font-semibold text-gray-500 mb-1";
 
+const SAMPLE_JSON = `{
+  "title": "فرم درخواست خدمت",
+  "titleEn": "Service Request Form",
+  "category": "خدمات",
+  "description": "فرم ثبت درخواست خدمات عمومی",
+  "descriptionEn": "General service request form",
+  "isPublic": true,
+  "allowedRoles": [],
+  "fields": [
+    {
+      "id": "f1",
+      "key": "contact_section",
+      "label": "اطلاعات کسب‌وکار",
+      "labelEn": "Business Information",
+      "type": "header",
+      "required": false,
+      "placeholder": "",
+      "placeholderEn": "",
+      "options": [],
+      "optionsEn": [],
+      "order": 0
+    },
+    {
+      "id": "f2",
+      "key": "company_name",
+      "label": "نام شرکت / برند",
+      "labelEn": "Company / Brand Name",
+      "type": "text",
+      "required": true,
+      "placeholder": "مثال: بازرگانی پارس",
+      "placeholderEn": "e.g. Pars Trading Co.",
+      "options": [],
+      "optionsEn": [],
+      "order": 1
+    },
+    {
+      "id": "f3",
+      "key": "business_type",
+      "label": "نوع کسب‌وکار",
+      "labelEn": "Business Type",
+      "type": "select",
+      "required": true,
+      "placeholder": "",
+      "placeholderEn": "",
+      "options": ["تولیدی", "بازرگانی", "خدماتی", "سایر"],
+      "optionsEn": ["Manufacturing", "Trading", "Services", "Other"],
+      "order": 2
+    },
+    {
+      "id": "f4",
+      "key": "request_section",
+      "label": "جزئیات درخواست",
+      "labelEn": "Request Details",
+      "type": "header",
+      "required": false,
+      "placeholder": "",
+      "placeholderEn": "",
+      "options": [],
+      "optionsEn": [],
+      "order": 3
+    },
+    {
+      "id": "f5",
+      "key": "request_desc",
+      "label": "شرح درخواست",
+      "labelEn": "Request Description",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "نیاز یا درخواست خود را توضیح دهید...",
+      "placeholderEn": "Describe your request or need...",
+      "options": [],
+      "optionsEn": [],
+      "order": 4
+    },
+    {
+      "id": "f6",
+      "key": "urgent",
+      "label": "درخواست فوری است؟",
+      "labelEn": "Is this urgent?",
+      "type": "checkbox",
+      "required": false,
+      "placeholder": "بله، فوری است",
+      "placeholderEn": "Yes, this is urgent",
+      "options": [],
+      "optionsEn": [],
+      "order": 5
+    }
+  ]
+}`;
+
+const buildAiPrompt = (lang: 'fa' | 'en') => `${lang === 'fa'
+  ? `می‌خوام یک فرم برای [موضوع فرم را اینجا بنویس] بسازم.
+لطفاً یک JSON با فرمت دقیق زیر برام تولید کن — فقط JSON خالص بده بدون توضیح اضافه.`
+  : `I want to create a form for [describe your form topic here].
+Please generate a JSON in the exact format below — output only the raw JSON with no extra explanation.`}
+
+${SAMPLE_JSON}
+
+${lang === 'fa'
+  ? `انواع "type" مجاز: "text" | "textarea" | "email" | "tel" | "number" | "date" | "select" | "checkbox" | "header"
+نکته: "header" برای جداکردن بخش‌ها استفاده می‌شود.
+نکته: فیلدهای "select" باید "options" (فارسی) و "optionsEn" (انگلیسی) داشته باشند.
+id و key هر فیلد باید منحصر به‌فرد باشد.`
+  : `Allowed "type" values: "text" | "textarea" | "email" | "tel" | "number" | "date" | "select" | "checkbox" | "header"
+Note: "header" is used as a section divider.
+Note: "select" fields must have both "options" (Persian) and "optionsEn" (English) arrays.
+Each field's id and key must be unique.`}
+`;
+
 export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang }) => {
   const [view, setView] = useState<PanelView>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,9 +164,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const [jsonImportTab, setJsonImportTab] = useState<'import' | 'ai'>('import');
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState('');
   const [searchQ, setSearchQ] = useState('');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const isEditor = isAdmin || isMaster;
 
@@ -427,34 +538,139 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   );
 
   // ── JSON Import Modal ──
+  const closeImport = () => { setJsonImportOpen(false); setJsonText(''); setJsonError(''); setJsonImportTab('import'); };
+
   const JsonImportModal = jsonImportOpen && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'وارد کردن فرم از JSON' : 'Import Form from JSON'}</h3>
-          <button onClick={() => { setJsonImportOpen(false); setJsonText(''); setJsonError(''); }} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+            <IconFile className="w-4 h-4 text-indigo-500" />
+            {lang === 'fa' ? 'ورود / ساخت فرم با JSON' : 'Import / Build Form via JSON'}
+          </h3>
+          <button onClick={closeImport} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
-        <p className="text-xs text-gray-500">
-          {lang === 'fa'
-            ? 'JSON ساختار فرم را در کادر زیر جای‌گذاری کنید. می‌توانید از خروجی JSON فرم‌های دیگر استفاده کنید.'
-            : 'Paste the form JSON below. You can use exported JSON from existing forms.'}
-        </p>
-        <textarea
-          value={jsonText}
-          onChange={e => { setJsonText(e.target.value); setJsonError(''); }}
-          rows={10}
-          dir="ltr"
-          placeholder='{"title": "...", "fields": [...]}'
-          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
-        />
-        {jsonError && <p className="text-xs text-red-500">{jsonError}</p>}
-        <div className="flex gap-2 justify-end">
-          <button onClick={() => { setJsonImportOpen(false); setJsonText(''); setJsonError(''); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-            {lang === 'fa' ? 'لغو' : 'Cancel'}
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 px-6">
+          <button
+            onClick={() => setJsonImportTab('import')}
+            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors mr-6 ${jsonImportTab === 'import' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            {lang === 'fa' ? 'وارد کردن JSON' : 'Import JSON'}
           </button>
-          <button onClick={handleImportJson} disabled={!jsonText.trim()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-            {lang === 'fa' ? 'وارد کردن' : 'Import'}
+          <button
+            onClick={() => setJsonImportTab('ai')}
+            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${jsonImportTab === 'ai' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <IconMagic className="w-3.5 h-3.5" />
+            {lang === 'fa' ? 'ساخت با AI' : 'Build with AI'}
           </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {jsonImportTab === 'import' ? (
+            <>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {lang === 'fa'
+                  ? 'JSON ساختار فرم را در کادر زیر جای‌گذاری کنید. می‌توانید از خروجی «Export JSON» فرم‌های دیگر یا خروجی AI استفاده کنید.'
+                  : 'Paste the form JSON below. You can use exported JSON from existing forms or AI-generated output.'}
+              </p>
+              <textarea
+                value={jsonText}
+                onChange={e => { setJsonText(e.target.value); setJsonError(''); }}
+                rows={14}
+                dir="ltr"
+                placeholder='{"title": "...", "fields": [...]}'
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-xs font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+              />
+              {jsonError && <p className="text-xs text-red-500 font-medium">{jsonError}</p>}
+              <div className="flex gap-2 justify-end">
+                <button onClick={closeImport} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                  {lang === 'fa' ? 'لغو' : 'Cancel'}
+                </button>
+                <button onClick={handleImportJson} disabled={!jsonText.trim()} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                  {lang === 'fa' ? 'وارد کردن و ویرایش' : 'Import & Edit'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* AI workflow steps */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-bold text-indigo-700">
+                  {lang === 'fa' ? 'چطور با AI فرم بسازم؟' : 'How to build a form with AI?'}
+                </p>
+                <ol className={`text-xs text-indigo-600 space-y-1 ${lang === 'fa' ? 'pr-4' : 'pl-4'} list-decimal`}>
+                  {lang === 'fa' ? (
+                    <>
+                      <li>Prompt زیر را کپی کن و در ChatGPT یا Claude پیست کن</li>
+                      <li>بنویس «می‌خوام فرم [موضوع فرم] بسازم» و ارسال کن</li>
+                      <li>خروجی JSON را کپی کن</li>
+                      <li>به تب «وارد کردن JSON» برگرد و پیست کن</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>Copy the prompt below and paste it in ChatGPT or Claude</li>
+                      <li>Tell it what form you want to create and send</li>
+                      <li>Copy the JSON output</li>
+                      <li>Go to the "Import JSON" tab and paste it</li>
+                    </>
+                  )}
+                </ol>
+              </div>
+
+              {/* Prompt box */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {lang === 'fa' ? 'Prompt آماده برای AI' : 'Ready-to-use AI Prompt'}
+                  </label>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(buildAiPrompt(lang)).then(() => {
+                        setCopiedPrompt(true);
+                        setTimeout(() => setCopiedPrompt(false), 2500);
+                      });
+                    }}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${copiedPrompt ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                  >
+                    {copiedPrompt
+                      ? <><IconCheck className="w-3.5 h-3.5" />{lang === 'fa' ? 'کپی شد!' : 'Copied!'}</>
+                      : <><IconCopy className="w-3.5 h-3.5" />{lang === 'fa' ? 'کپی Prompt' : 'Copy Prompt'}</>
+                    }
+                  </button>
+                </div>
+                <pre
+                  dir="ltr"
+                  className="w-full px-3 py-3 rounded-lg border border-gray-200 text-[11px] font-mono bg-gray-50 overflow-auto max-h-72 whitespace-pre-wrap text-gray-600 select-all"
+                >
+                  {buildAiPrompt(lang)}
+                </pre>
+              </div>
+
+              {/* Sample JSON reference */}
+              <details className="group">
+                <summary className="text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-700 flex items-center gap-1.5 select-none">
+                  <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
+                  {lang === 'fa' ? 'نمونه JSON کامل (مرجع)' : 'Full JSON sample (reference)'}
+                </summary>
+                <pre dir="ltr" className="mt-2 w-full px-3 py-3 rounded-lg border border-gray-100 text-[10px] font-mono bg-gray-50 overflow-auto max-h-64 whitespace-pre text-gray-500 select-all">
+                  {SAMPLE_JSON}
+                </pre>
+              </details>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setJsonImportTab('import')}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700"
+                >
+                  {lang === 'fa' ? 'رفتن به وارد کردن JSON ←' : 'Go to Import JSON →'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
