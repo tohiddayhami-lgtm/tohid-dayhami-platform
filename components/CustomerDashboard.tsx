@@ -174,13 +174,14 @@ export const CustomerDashboard: React.FC<Props> = ({
                       ))}
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input
-                      className="flex-grow px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800 focus:bg-white transition-colors"
-                      placeholder={lang === 'fa' ? 'پیام خود را بنویسید...' : 'Write your message...'}
+                  <div className="flex gap-2 items-end">
+                    <textarea
+                      rows={2}
+                      className="flex-grow px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800 focus:bg-white transition-colors resize-none"
+                      placeholder={lang === 'fa' ? 'پیام خود را بنویسید... (Ctrl+Enter برای ارسال)' : 'Write your message... (Ctrl+Enter to send)'}
                       value={comment}
                       onChange={e => setComment(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                      onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleSend(); } }}
                     />
                     <button onClick={() => fileInputRef.current?.click()} disabled={uploading} title="ضمیمه فایل"
                       className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 shrink-0">
