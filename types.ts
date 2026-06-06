@@ -513,6 +513,8 @@ export interface NotificationConfig {
   onStatusChange: boolean;
   // Meeting notifications (optional — may not exist in older Firestore configs)
   onMeetingCreated?: boolean;
+  onMeetingUpdated?: boolean;
+  onMeetingDeleted?: boolean;
   onMeetingReminder?: boolean;
   onDailySummary?: boolean;
   // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
@@ -521,6 +523,8 @@ export interface NotificationConfig {
   statusTemplate: string;
   // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation}, {organizerName})
   meetingCreatedTemplate?: string;
+  meetingUpdatedTemplate?: string;
+  meetingDeletedTemplate?: string;
   meetingReminderTemplate?: string;
   // Daily summary template ({recipientName}, {tomorrowDate}, {meetingsList})
   dailySummaryTemplate?: string;
@@ -531,7 +535,7 @@ export interface NotificationConfig {
 
 export interface NotificationLog {
   id: string;
-  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_created' | 'meeting_reminder' | 'daily_summary';
+  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_created' | 'meeting_updated' | 'meeting_deleted' | 'meeting_reminder' | 'daily_summary';
   recipientId: string;
   recipientName: string;
   phone: string;

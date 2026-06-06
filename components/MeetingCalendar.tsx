@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Meeting, Personnel, NotificationConfig } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog } from '../services/firebaseService';
-import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE } from '../services/notificationService';
+import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { Language } from '../App';
 
 interface Props {
@@ -118,14 +118,84 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     }
   };
 
+  const sendMeetingUpdatedNotifications = async (oldMeeting: Meeting, newMeeting: Meeting) => {
+    const nc = notificationConfig;
+    if (!nc?.enabled || nc.onMeetingUpdated === false) return;
+
+    // Build Persian change summary
+    const changes: string[] = [];
+    if (oldMeeting.date !== newMeeting.date)
+      changes.push(`• تاریخ: ${oldMeeting.date} ← ${newMeeting.date}`);
+    if (oldMeeting.startTime !== newMeeting.startTime || oldMeeting.endTime !== newMeeting.endTime)
+      changes.push(`• ساعت: ${oldMeeting.startTime}–${oldMeeting.endTime} ← ${newMeeting.startTime}–${newMeeting.endTime}`);
+    if (oldMeeting.location !== newMeeting.location)
+      changes.push(`• مکان: ${newMeeting.location || 'نامشخص'}`);
+    if (oldMeeting.title !== newMeeting.title)
+      changes.push(`• موضوع: ${newMeeting.title}`);
+    const changesText = changes.length > 0 ? changes.join('\n') : 'اطلاعات جلسه به‌روزرسانی شد';
+
+    // Notify everyone in old OR new attendee list
+    const allPersonIds = [...new Set([...(oldMeeting.attendeeIds || []), ...(newMeeting.attendeeIds || [])])];
+    for (const pid of allPersonIds) {
+      const person = personnel.find(p => p.id === pid);
+      if (!person) continue;
+      const phone = nc.personnelPhones?.[pid];
+      if (!phone) continue;
+      const apiKey = nc.personnelApiKeys?.[pid];
+      if (nc.provider === 'callmebot' && !apiKey) continue;
+
+      const msg = renderTemplate(nc.meetingUpdatedTemplate || DEFAULT_MEETING_UPDATED_TEMPLATE, {
+        recipientName:   person.fullName,
+        meetingTitle:    newMeeting.title,
+        meetingDate:     newMeeting.date,
+        meetingTime:     newMeeting.startTime,
+        meetingEndTime:  newMeeting.endTime,
+        meetingLocation: newMeeting.location || 'نامشخص',
+        organizerName:   newMeeting.organizerName,
+        changes:         changesText,
+      });
+
+      const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
+      await saveNotificationLog(buildLog('meeting_updated', pid, person.fullName, phone, msg, result, undefined, newMeeting.id));
+    }
+  };
+
+  const sendMeetingDeletedNotifications = async (meeting: Meeting) => {
+    const nc = notificationConfig;
+    if (!nc?.enabled || nc.onMeetingDeleted === false) return;
+
+    const allPersonIds = [...new Set(meeting.attendeeIds || [])];
+    for (const pid of allPersonIds) {
+      const person = personnel.find(p => p.id === pid);
+      if (!person) continue;
+      const phone = nc.personnelPhones?.[pid];
+      if (!phone) continue;
+      const apiKey = nc.personnelApiKeys?.[pid];
+      if (nc.provider === 'callmebot' && !apiKey) continue;
+
+      const msg = renderTemplate(nc.meetingDeletedTemplate || DEFAULT_MEETING_DELETED_TEMPLATE, {
+        recipientName:   person.fullName,
+        meetingTitle:    meeting.title,
+        meetingDate:     meeting.date,
+        meetingTime:     meeting.startTime,
+        meetingEndTime:  meeting.endTime,
+        meetingLocation: meeting.location || 'نامشخص',
+        organizerName:   meeting.organizerName,
+      });
+
+      const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
+      await saveNotificationLog(buildLog('meeting_deleted', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.title) return;
       if (editingMeetingId) {
+          const oldMeeting = meetings.find(m => m.id === editingMeetingId);
           await updateMeetingInCloud(editingMeetingId, { title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, attendeeIds: formData.attendeeIds, description: formData.description }, currentUser.fullName);
-          // Notify on update too (attendees may have changed)
           const updatedMeeting: Meeting = { id: editingMeetingId, title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, organizerId: currentUser.id, organizerName: currentUser.fullName, attendeeIds: formData.attendeeIds, description: formData.description };
-          sendMeetingCreatedNotifications(updatedMeeting);
+          if (oldMeeting) sendMeetingUpdatedNotifications(oldMeeting, updatedMeeting);
       } else {
           const meeting: Meeting = { id: `meet-${Date.now()}`, title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, organizerId: currentUser.id, organizerName: currentUser.fullName, attendeeIds: formData.attendeeIds, description: formData.description };
           await saveMeetingToCloud(meeting);
@@ -134,7 +204,13 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       setShowModal(false);
   };
 
-  const handleDelete = async (id: string) => { if (window.confirm(t.deleteConfirm)) { await deleteMeetingFromCloud(id); } };
+  const handleDelete = async (id: string) => {
+    if (window.confirm(t.deleteConfirm)) {
+      const meeting = meetings.find(m => m.id === id);
+      await deleteMeetingFromCloud(id);
+      if (meeting) sendMeetingDeletedNotifications(meeting);
+    }
+  };
   const getMeetingsForHour = (hour: number) => { return meetings.filter(m => { if (m.date !== selectedDate) return false; const startH = parseInt(m.startTime.split(':')[0]); return startH === hour; }); };
   const changeDate = (days: number) => { const date = new Date(selectedDate); date.setDate(date.getDate() + days); setSelectedDate(date.toISOString().split('T')[0]); };
   const toggleAttendee = (id: string) => { setFormData(prev => { const exists = prev.attendeeIds.includes(id); return { ...prev, attendeeIds: exists ? prev.attendeeIds.filter(pid => pid !== id) : [...prev.attendeeIds, id] }; }); };

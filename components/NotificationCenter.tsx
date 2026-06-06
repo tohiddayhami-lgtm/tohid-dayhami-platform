@@ -6,7 +6,8 @@ import { subscribeToNotificationLogs, saveNotificationLog, saveAppConfigToCloud 
 import {
   sendWhatsAppNotification, renderTemplate,
   DEFAULT_TICKET_TEMPLATE, DEFAULT_MESSAGE_TEMPLATE, DEFAULT_STATUS_TEMPLATE,
-  DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE,
+  DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE,
+  DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE,
 } from '../services/notificationService';
 import { IconCheck, IconSettings, IconWhatsapp, IconActivity, IconTrash } from './Icons';
 
@@ -24,12 +25,16 @@ const DEFAULT_CONFIG: NotificationConfig = {
   onNewMessage: true,
   onStatusChange: false,
   onMeetingCreated: true,
+  onMeetingUpdated: true,
+  onMeetingDeleted: true,
   onMeetingReminder: true,
   onDailySummary: true,
   ticketTemplate: DEFAULT_TICKET_TEMPLATE,
   messageTemplate: DEFAULT_MESSAGE_TEMPLATE,
   statusTemplate: DEFAULT_STATUS_TEMPLATE,
   meetingCreatedTemplate: DEFAULT_MEETING_CREATED_TEMPLATE,
+  meetingUpdatedTemplate: DEFAULT_MEETING_UPDATED_TEMPLATE,
+  meetingDeletedTemplate: DEFAULT_MEETING_DELETED_TEMPLATE,
   meetingReminderTemplate: DEFAULT_MEETING_REMINDER_TEMPLATE,
   dailySummaryTemplate: DEFAULT_DAILY_SUMMARY_TEMPLATE,
   personnelPhones: {},
@@ -204,8 +209,10 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
             {/* Meeting notifications separator */}
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-2 pb-1 border-t border-gray-100">نوتیفیکیشن‌های تقویم جلسات</p>
             {([
-              { key: 'onMeetingCreated',  label: 'اطلاع‌رسانی فوری ثبت جلسه',   desc: 'همان لحظه که جلسه ثبت یا ویرایش می‌شود، به تمام شرکت‌کنندگان پیام می‌رود' },
-              { key: 'onMeetingReminder', label: 'یادآوری جلسه (یک ساعت قبل)', desc: 'ارسال پیام به تمام شرکت‌کنندگان ۶۰ دقیقه پیش از شروع جلسه' },
+              { key: 'onMeetingCreated',  label: 'اطلاع‌رسانی فوری ثبت جلسه',     desc: 'همان لحظه که جلسه جدید ثبت می‌شود، به تمام شرکت‌کنندگان پیام می‌رود' },
+              { key: 'onMeetingUpdated',  label: 'اطلاع‌رسانی تغییر جلسه',        desc: 'اگر ساعت، تاریخ، مکان یا شرکت‌کنندگان عوض شوند، همه آگاه می‌شوند' },
+              { key: 'onMeetingDeleted',  label: 'اطلاع‌رسانی لغو جلسه',          desc: 'وقتی جلسه‌ای حذف می‌شود، به تمام شرکت‌کنندگان پیام لغو می‌رود' },
+              { key: 'onMeetingReminder', label: 'یادآوری جلسه (یک ساعت قبل)',   desc: 'ارسال پیام به تمام شرکت‌کنندگان ۶۰ دقیقه پیش از شروع جلسه' },
               { key: 'onDailySummary',    label: 'خلاصه روزانه جلسات (ساعت ۱۷)', desc: 'هر روز ساعت ۵ عصر، لیست جلسات فردا برای نفرات درگیر ارسال می‌شود' },
             ] as const).map(ev => (
               <div key={ev.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
@@ -353,7 +360,9 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
             <code className="bg-blue-100 px-1 rounded">{'{organizerName}'}</code> تنظیم‌کننده
           </div>
           {([
-            { key: 'meetingCreatedTemplate',  label: 'قالب اطلاع‌رسانی فوری ثبت جلسه',   def: DEFAULT_MEETING_CREATED_TEMPLATE },
+            { key: 'meetingCreatedTemplate',  label: 'قالب اطلاع‌رسانی ثبت جلسه جدید',  def: DEFAULT_MEETING_CREATED_TEMPLATE },
+            { key: 'meetingUpdatedTemplate',  label: 'قالب اطلاع‌رسانی تغییر جلسه',      def: DEFAULT_MEETING_UPDATED_TEMPLATE },
+            { key: 'meetingDeletedTemplate',  label: 'قالب اطلاع‌رسانی لغو جلسه',        def: DEFAULT_MEETING_DELETED_TEMPLATE },
             { key: 'meetingReminderTemplate', label: 'قالب یادآوری جلسه (یک ساعت قبل)', def: DEFAULT_MEETING_REMINDER_TEMPLATE },
           ] as const).map(t => (
             <div key={t.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
@@ -424,7 +433,7 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
                       {log.status === 'sent' ? 'ارسال شد' : 'خطا'}
                     </span>
                     <span className="text-[10px] text-gray-300">
-                      {log.type === 'new_ticket' ? 'درخواست جدید' : log.type === 'new_message' ? 'پیام' : log.type === 'status_change' ? 'تغییر وضعیت' : log.type === 'meeting_created' ? '📅 ثبت جلسه' : log.type === 'meeting_reminder' ? '⏰ یادآوری جلسه' : log.type === 'daily_summary' ? '📋 خلاصه روزانه' : 'تست'}
+                      {log.type === 'new_ticket' ? 'درخواست جدید' : log.type === 'new_message' ? 'پیام' : log.type === 'status_change' ? 'تغییر وضعیت' : log.type === 'meeting_created' ? '📅 ثبت جلسه' : log.type === 'meeting_updated' ? '✏️ تغییر جلسه' : log.type === 'meeting_deleted' ? '❌ لغو جلسه' : log.type === 'meeting_reminder' ? '⏰ یادآوری جلسه' : log.type === 'daily_summary' ? '📋 خلاصه روزانه' : 'تست'}
                     </span>
                   </div>
                   {log.ticketId && <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{log.ticketId}</p>}

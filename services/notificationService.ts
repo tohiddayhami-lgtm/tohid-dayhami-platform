@@ -13,6 +13,12 @@ export const DEFAULT_STATUS_TEMPLATE =
 export const DEFAULT_MEETING_CREATED_TEMPLATE =
   'سلام {recipientName} 👋\n📅 یک جلسه جدید برای شما ثبت شد.\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime} تا {meetingEndTime}\n📍 مکان: {meetingLocation}\n👤 تنظیم‌کننده: {organizerName}\n\nلطفاً در تقویم خود ثبت کنید ✅';
 
+export const DEFAULT_MEETING_UPDATED_TEMPLATE =
+  'سلام {recipientName} 👋\n✏️ جلسه زیر تغییر کرده است:\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime} تا {meetingEndTime}\n📍 مکان: {meetingLocation}\n\n🔄 تغییرات:\n{changes}';
+
+export const DEFAULT_MEETING_DELETED_TEMPLATE =
+  'سلام {recipientName} 👋\n❌ جلسه زیر لغو شد:\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime}\n\nاین جلسه دیگر برگزار نمی‌شود.';
+
 export const DEFAULT_MEETING_REMINDER_TEMPLATE =
   'سلام {recipientName} 👋\n⏰ یادآوری جلسه\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime}\n📍 مکان: {meetingLocation}\n\nیک ساعت دیگر شروع می‌شود ⏱';
 
