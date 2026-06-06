@@ -97,6 +97,7 @@ export interface TimelineEntry {
   actorName: string; 
   timestamp: string;
   visibility?: 'public' | 'internal';
+  files?: AttachedFile[];
 }
 
 export interface Payment {
@@ -563,4 +564,16 @@ export interface AnalyticsEvent {
   device: 'mobile' | 'tablet' | 'desktop';
   sessionId: string;
   referrer?: string;
+}
+
+export interface CustomerAccount {
+  id: string;
+  fullName: string;
+  username: string;
+  password: string;
+  ticketIds: string[];
+  isActive: boolean;
+  note?: string;
+  createdAt: string;
+  createdBy: string;
 }

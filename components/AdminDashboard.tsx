@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -20,6 +20,7 @@ import { ReportManager } from './ReportManager';
 import { ExpenseManager } from './ExpenseManager';
 import { FormBuilderPanel } from './FormBuilderPanel';
 import { NotificationCenter } from './NotificationCenter';
+import { CustomerAccountManager } from './CustomerAccountManager';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -48,6 +49,9 @@ interface Props {
   onUpdateConfig: (config: AppConfig) => void;
   onLogout: () => void;
   lang: Language;
+  customerAccounts?: CustomerAccount[];
+  onSaveCustomerAccount?: (account: CustomerAccount) => Promise<void>;
+  onDeleteCustomerAccount?: (id: string) => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -73,7 +77,10 @@ export const AdminDashboard: React.FC<Props> = ({
   onDeleteCustomer,
   onUpdateConfig,
   onLogout,
-  lang
+  lang,
+  customerAccounts = [],
+  onSaveCustomerAccount,
+  onDeleteCustomerAccount,
 }) => {
   const safeRoles = currentUser?.roles || [];
   const isAdmin = safeRoles.includes('مدیر');
@@ -85,7 +92,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -330,7 +337,8 @@ export const AdminDashboard: React.FC<Props> = ({
           ogDesc: 'توضیحات اشتراک (OG Description)',
           ogImage: 'تصویر اشتراک (OG Image URL)',
           favicon: 'فاوآیکون سایت',
-          saveSeo: 'ذخیره تنظیمات سئو'
+          saveSeo: 'ذخیره تنظیمات سئو',
+          customer_accounts: 'پنل مشتریان',
       },
       en: {
           overview: 'Overview & Dashboard',
@@ -1063,7 +1071,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 {(isAdmin || isMaster) && (<button onClick={() => setActiveTab('expenses')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'expenses' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconWallet className="w-4 h-4 shrink-0" /><span>{t.expenses}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'services' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBriefcase className="w-4 h-4 shrink-0" /><span>{t.services}</span></button>)}
                 {(isAdmin || isMaster) && (<><div className="px-3 pt-3 pb-1 text-[10px] font-semibold text-gray-300 uppercase tracking-wider mt-1 border-t border-gray-100">Admin</div><button onClick={() => setActiveTab('personnel')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'personnel' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconShield className="w-4 h-4 shrink-0" /><span>{t.personnel}</span></button><button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'settings' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconSettings className="w-4 h-4 shrink-0" /><span>{t.settings}</span></button></>)}
-                {isMaster && (<><button onClick={() => setActiveTab('notifications')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'notifications' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconWhatsapp className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'نوتیفیکیشن' : 'WhatsApp'}</span></button><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'logs' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconHistory className="w-4 h-4 shrink-0" /><span>{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBarChart2 className="w-4 h-4 shrink-0" /><span>{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'kpi' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTarget className="w-4 h-4 shrink-0" /><span>{t.kpi}</span></button><button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'analytics' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconAnalytics className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'آمار بازدید' : 'Analytics'}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'news_mgmt' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconNewspaper className="w-4 h-4 shrink-0" /><span>{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'seo' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconGlobe className="w-4 h-4 shrink-0" /><span>{t.seo}</span></button></>)}
+                {isMaster && (<><button onClick={() => setActiveTab('notifications')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'notifications' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconWhatsapp className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'نوتیفیکیشن' : 'WhatsApp'}</span></button><button onClick={() => setActiveTab('logs')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'logs' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconHistory className="w-4 h-4 shrink-0" /><span>{t.logs}</span></button><button onClick={() => setActiveTab('reports')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBarChart2 className="w-4 h-4 shrink-0" /><span>{t.reports}</span></button><button onClick={() => setActiveTab('kpi')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'kpi' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTarget className="w-4 h-4 shrink-0" /><span>{t.kpi}</span></button><button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'analytics' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconAnalytics className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'آمار بازدید' : 'Analytics'}</span></button><button onClick={() => setActiveTab('news_mgmt')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'news_mgmt' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconNewspaper className="w-4 h-4 shrink-0" /><span>{t.news_mgmt}</span></button><button onClick={() => setActiveTab('seo')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'seo' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconGlobe className="w-4 h-4 shrink-0" /><span>{t.seo}</span></button><button onClick={() => setActiveTab('customer_accounts')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_accounts' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>پنل مشتریان</span></button></>)}
             </div>
             <button onClick={onLogout} className="w-full text-xs font-medium text-gray-400 hover:text-gray-700 border border-gray-100 hover:border-gray-300 py-2 rounded-lg transition-colors mt-4">{t.logout}</button>
         </div>
@@ -1809,6 +1817,17 @@ export const AdminDashboard: React.FC<Props> = ({
         })()}
       </div>
       {selectedTicket && renderTicketModal()}
+      {activeTab === 'customer_accounts' && isMaster && onSaveCustomerAccount && onDeleteCustomerAccount && (
+        <CustomerAccountManager
+          customerAccounts={customerAccounts}
+          tickets={tickets}
+          services={services}
+          currentUserName={currentUser.fullName}
+          onSave={onSaveCustomerAccount}
+          onDelete={onDeleteCustomerAccount}
+          lang={lang}
+        />
+      )}
     </div>
   );
 };

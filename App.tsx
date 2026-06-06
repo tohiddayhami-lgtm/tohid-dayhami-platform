@@ -4,10 +4,11 @@ import { CustomerForm } from './components/CustomerForm';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TrackingView } from './components/TrackingView';
 import { LoginView } from './components/LoginView';
+import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, InternalMessage, Task, Meeting, KPI, NewsArticle } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -18,6 +19,7 @@ import {
   subscribeToTickets, subscribeToCustomers, subscribeToSettings,
   subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
+  subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
 } from './services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
@@ -183,6 +185,8 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>(() => readCache<AppConfig>(CACHE_KEYS.CONFIG) ?? INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [customerAccounts, setCustomerAccounts] = useState<CustomerAccount[]>([]);
+  const [currentCustomerUser, setCurrentCustomerUser] = useState<CustomerAccount | null>(null);
 
   const t = DICTIONARY[lang];
 
@@ -374,7 +378,8 @@ const App: React.FC = () => {
     );
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); };
+    const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -762,6 +767,34 @@ const App: React.FC = () => {
     localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVE);
   };
 
+  const handleCustomerLogin = async (username: string, password: string): Promise<boolean> => {
+    const account = customerAccounts.find(a => a.username === username && a.password === password && a.isActive);
+    if (account) {
+      setCurrentCustomerUser(account);
+      return true;
+    }
+    return false;
+  };
+
+  const handleCustomerLogout = () => {
+    setCurrentCustomerUser(null);
+  };
+
+  const handleCustomerAddComment = async (ticketId: string, commentText: string, files?: AttachedFile[]) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket || !currentCustomerUser) return;
+    const newEntry: TimelineEntry = {
+      type: 'comment',
+      title: 'پیام مشتری',
+      description: commentText,
+      actorName: currentCustomerUser.fullName,
+      timestamp: new Date().toISOString(),
+      visibility: 'public',
+      ...(files && files.length > 0 && { files }),
+    };
+    await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
 
@@ -1134,8 +1167,17 @@ const App: React.FC = () => {
 
             {view === 'admin' && (
               <>
-                {!currentUser ? (
-                  <LoginView onLogin={handleLogin} onBack={() => setView('landing')} />
+                {currentCustomerUser ? (
+                  <CustomerDashboard
+                    customerUser={currentCustomerUser}
+                    tickets={tickets.filter(t => currentCustomerUser.ticketIds.includes(t.id))}
+                    personnel={personnel}
+                    onAddComment={handleCustomerAddComment}
+                    onLogout={handleCustomerLogout}
+                    lang={lang}
+                  />
+                ) : !currentUser ? (
+                  <LoginView onLogin={handleLogin} onCustomerLogin={handleCustomerLogin} onBack={() => setView('landing')} />
                 ) : (
                   <AdminDashboard
                     lang={lang}
@@ -1161,6 +1203,9 @@ const App: React.FC = () => {
                     onDeleteCustomer={handleDeleteCustomer}
                     onUpdateConfig={handleUpdateConfig}
                     onLogout={handleLogout}
+                    customerAccounts={customerAccounts}
+                    onSaveCustomerAccount={async (acc) => { await saveCustomerAccount(acc); }}
+                    onDeleteCustomerAccount={async (id) => { await deleteCustomerAccount(id); }}
                   />
                 )}
               </>

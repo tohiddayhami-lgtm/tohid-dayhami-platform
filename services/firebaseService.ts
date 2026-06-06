@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -965,4 +965,20 @@ export const subscribeToNotificationLogs = (callback: (logs: NotificationLog[]) 
     return onSnapshot(q, (snap) => {
         callback(snap.docs.map(d => d.data() as NotificationLog));
     }, () => {});
+};
+
+// ── Customer Accounts ──────────────────────────────────────────────────────
+export const saveCustomerAccount = async (account: CustomerAccount) => {
+  await setDoc(doc(db, 'customerAccounts', account.id), sanitizeData(account));
+};
+
+export const deleteCustomerAccount = async (id: string) => {
+  await deleteDoc(doc(db, 'customerAccounts', id));
+};
+
+export const subscribeToCustomerAccounts = (callback: (accounts: CustomerAccount[]) => void) => {
+  const q = query(collection(db, 'customerAccounts'), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, snapshot => {
+    callback(snapshot.docs.map(d => d.data() as CustomerAccount));
+  });
 };
