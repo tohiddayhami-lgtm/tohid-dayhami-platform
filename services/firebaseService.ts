@@ -17,6 +17,85 @@ export const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// ── Iran Proxy ─────────────────────────────────────────────────────────────
+// Firebase (Google) is blocked in Iran. On first use we test connectivity;
+// if blocked we route public read/write through /api/fb (Vercel serverless).
+
+const _PROXY_SESSION_KEY = '_iran_proxy';
+let _proxyMode: boolean | null = (() => {
+  try {
+    const v = sessionStorage.getItem(_PROXY_SESSION_KEY);
+    return v === null ? null : v === '1';
+  } catch { return null; }
+})();
+let _proxyWaiters: Array<(v: boolean) => void> = [];
+let _proxyChecking = false;
+
+const checkProxyMode = (): Promise<boolean> => {
+  if (_proxyMode !== null) return Promise.resolve(_proxyMode);
+  if (_proxyChecking) return new Promise(r => _proxyWaiters.push(r));
+  _proxyChecking = true;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+
+  return fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/appConfig?key=${firebaseConfig.apiKey}`,
+    { signal: controller.signal }
+  )
+    .then(() => { clearTimeout(timer); _proxyMode = false; })
+    .catch(() => { _proxyMode = true; })
+    .then(() => {
+      try { sessionStorage.setItem(_PROXY_SESSION_KEY, _proxyMode ? '1' : '0'); } catch {}
+      _proxyWaiters.forEach(r => r(_proxyMode!));
+      _proxyWaiters = [];
+      return _proxyMode!;
+    });
+};
+
+const _fb = '/api/fb';
+
+const proxyGet = async <T>(col: string, opts: { doc?: string; orderField?: string; dir?: 'asc' | 'desc' } = {}): Promise<T> => {
+  const p = new URLSearchParams({ col });
+  if (opts.doc) p.set('doc', opts.doc);
+  if (opts.orderField) p.set('orderField', opts.orderField);
+  if (opts.dir) p.set('dir', opts.dir);
+  const r = await fetch(`${_fb}?${p}`);
+  if (!r.ok) throw new Error(`Proxy ${r.status}`);
+  return r.json() as Promise<T>;
+};
+
+const proxyWrite = async (col: string, docId: string, data: unknown): Promise<void> => {
+  const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(docId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error(`Proxy write ${r.status}`);
+};
+
+const proxyPoll = <T>(
+  col: string,
+  callback: (data: T[]) => void,
+  opts: { orderField?: string; dir?: 'asc' | 'desc'; intervalMs?: number } = {}
+): (() => void) => {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout>;
+
+  const run = async () => {
+    if (stopped) return;
+    try {
+      const data = await proxyGet<T[]>(col, { orderField: opts.orderField, dir: opts.dir });
+      if (!stopped && Array.isArray(data)) callback(data);
+    } catch {}
+    if (!stopped) timer = setTimeout(run, opts.intervalMs ?? 10_000);
+  };
+
+  run();
+  return () => { stopped = true; clearTimeout(timer); };
+};
+// ── End Iran Proxy ──────────────────────────────────────────────────────────
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
 const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
 const STORAGE_ROOT = "tohid-dayhami-platform";
@@ -489,11 +568,13 @@ export const subscribeToSalesRecords = (callback: (sales: SalesRecord[]) => void
 
 export const saveTicketToCloud = async (ticket: Ticket) => {
   try {
-    const ticketToSave = { 
-        ...ticket, 
-        files: cleanFilesForDB(ticket.files)
-    };
-    await setDoc(doc(db, "tickets", ticket.id), sanitizeData(ticketToSave));
+    const ticketToSave = { ...ticket, files: cleanFilesForDB(ticket.files) };
+    const proxy = await checkProxyMode();
+    if (proxy) {
+      await proxyWrite('tickets', ticket.id, sanitizeData(ticketToSave));
+    } else {
+      await setDoc(doc(db, "tickets", ticket.id), sanitizeData(ticketToSave));
+    }
     logSystemAction('CREATE', 'Ticket', `تیکت جدید با عنوان ${ticket.serviceId} برای ${ticket.customerName} ایجاد شد`, 'سیستم/مشتری', ticket.id);
     return ticket.id;
   } catch (e) {
@@ -527,16 +608,36 @@ export const deleteTicketFromCloud = async (id: string) => {
 };
 
 export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) => {
-  const q = query(collection(db, "tickets"));
-  return onSnapshot(q, (querySnapshot) => {
-    const tickets = querySnapshot.docs.map(doc => doc.data() as Ticket);
-    tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    callback(tickets);
-  }, (error) => {});
+  let inner: (() => void) | null = null;
+  let gone = false;
+
+  checkProxyMode().then(proxy => {
+    if (gone) return;
+    if (proxy) {
+      inner = proxyPoll<Ticket>('tickets', list => {
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(list);
+      });
+    } else {
+      const q = query(collection(db, "tickets"));
+      inner = onSnapshot(q, snap => {
+        const tickets = snap.docs.map(d => d.data() as Ticket);
+        tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(tickets);
+      }, () => {});
+    }
+  });
+
+  return () => { gone = true; inner?.(); };
 };
 
 export const saveCustomerToCloud = async (customer: Customer) => {
-  await setDoc(doc(db, "customers", customer.id), sanitizeData(customer));
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    await proxyWrite('customers', customer.id, sanitizeData(customer));
+  } else {
+    await setDoc(doc(db, "customers", customer.id), sanitizeData(customer));
+  }
 };
 
 export const updateCustomerInCloud = async (id: string, updates: Partial<Customer>) => {
@@ -713,11 +814,15 @@ export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) 
 };
 
 export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
-    try {
-        const docSnap = await getDoc(doc(db, "custom_forms", id));
-        if (docSnap.exists()) return docSnap.data() as CustomForm;
-        return null;
-    } catch { return null; }
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) {
+      return await proxyGet<CustomForm>('custom_forms', { doc: id });
+    }
+    const docSnap = await getDoc(doc(db, "custom_forms", id));
+    if (docSnap.exists()) return docSnap.data() as CustomForm;
+    return null;
+  } catch { return null; }
 };
 
 export const saveAppConfigToCloud = async (config: AppConfig) => {
@@ -747,13 +852,31 @@ export const subscribeToSettings = (
     onServices: (s: ServiceOption[]) => void,
     onPersonnel: (p: Personnel[]) => void
 ) => {
-    return onSnapshot(collection(db, "settings"), (snap) => {
-        snap.docs.forEach(doc => {
-            if (doc.id === 'appConfig') onConfig(doc.data() as AppConfig);
-            if (doc.id === 'services') onServices(doc.data().list);
-            if (doc.id === 'personnel') onPersonnel(doc.data().list);
+  let inner: (() => void) | null = null;
+  let gone = false;
+
+  checkProxyMode().then(proxy => {
+    if (gone) return;
+    if (proxy) {
+      inner = proxyPoll<any>('settings', docs => {
+        docs.forEach((d: any) => {
+          if (d.id === 'appConfig') onConfig(d as AppConfig);
+          if (d.id === 'services' && d.list) onServices(d.list as ServiceOption[]);
+          if (d.id === 'personnel' && d.list) onPersonnel(d.list as Personnel[]);
         });
-    }, (error) => {});
+      });
+    } else {
+      inner = onSnapshot(collection(db, "settings"), snap => {
+        snap.docs.forEach(d => {
+          if (d.id === 'appConfig') onConfig(d.data() as AppConfig);
+          if (d.id === 'services') onServices(d.data().list);
+          if (d.id === 'personnel') onPersonnel(d.data().list);
+        });
+      }, () => {});
+    }
+  });
+
+  return () => { gone = true; inner?.(); };
 };
 
 export const saveNewsArticleToCloud = async (article: NewsArticle): Promise<void> => {
@@ -767,11 +890,26 @@ export const deleteNewsArticleFromCloud = async (id: string): Promise<void> => {
 };
 
 export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) => {
-    return onSnapshot(
+  let inner: (() => void) | null = null;
+  let gone = false;
+
+  checkProxyMode().then(proxy => {
+    if (gone) return;
+    if (proxy) {
+      inner = proxyPoll<NewsArticle>('news', list => {
+        list.sort((a, b) => new Date((b as any).publishedAt).getTime() - new Date((a as any).publishedAt).getTime());
+        callback(list);
+      }, { orderField: 'publishedAt', dir: 'desc' });
+    } else {
+      inner = onSnapshot(
         query(collection(db, 'news'), orderBy('publishedAt', 'desc')),
-        (snap) => callback(snap.docs.map(d => d.data() as NewsArticle)),
+        snap => callback(snap.docs.map(d => d.data() as NewsArticle)),
         () => {}
-    );
+      );
+    }
+  });
+
+  return () => { gone = true; inner?.(); };
 };
 
 // ── Analytics ──────────────────────────────────────────────────────────────
@@ -807,7 +945,7 @@ const getDevice = (): 'mobile' | 'tablet' | 'desktop' => {
 };
 
 export const logPageView = async (view: string, articleSlug?: string) => {
-    if (view === 'admin') return; // don't track admin sessions
+    if (view === 'admin') return;
     try {
         const geo = await getCountryInfo();
         const event: AnalyticsEvent = {
@@ -822,7 +960,12 @@ export const logPageView = async (view: string, articleSlug?: string) => {
             sessionId: getSessionId(),
             referrer: document.referrer ? new URL(document.referrer).hostname : 'direct',
         };
-        await setDoc(doc(db, 'analytics', event.id), sanitizeData(event));
+        const proxy = await checkProxyMode();
+        if (proxy) {
+            await proxyWrite('analytics', event.id, sanitizeData(event));
+        } else {
+            await setDoc(doc(db, 'analytics', event.id), sanitizeData(event));
+        }
     } catch {}
 };
 
