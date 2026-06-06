@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { CustomerAccount, Ticket, Personnel, AttachedFile } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
-import { IconPaperclip, IconFile, IconTrash, IconUsers } from './Icons';
+import { IconPaperclip, IconFile, IconTrash, IconUsers, IconEdit } from './Icons';
 
 interface Props {
   customerUser: CustomerAccount;
@@ -13,6 +13,15 @@ interface Props {
   lang: Language;
 }
 
+interface FileRow {
+  key: string; // content URL used as unique key
+  name: string;
+  size: number;
+  content: string;
+  actor: string;
+  timestamp: string;
+}
+
 export const CustomerDashboard: React.FC<Props> = ({
   customerUser, tickets, personnel, onAddComment, onLogout, lang
 }) => {
@@ -21,10 +30,25 @@ export const CustomerDashboard: React.FC<Props> = ({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [fileLabels, setFileLabels] = useState<Record<string, string>>({});
+  const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
+  const [editingLabelValue, setEditingLabelValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedTicket = tickets.find(t => t.id === selectedTicketId);
   const publicTimeline = (selectedTicket?.timeline || []).filter(e => e.visibility !== 'internal');
+
+  // Collect all files from public timeline
+  const allFiles: FileRow[] = publicTimeline.flatMap(entry =>
+    ((entry as any).files as AttachedFile[] | undefined || []).map(f => ({
+      key: f.content || `${f.name}-${entry.timestamp}`,
+      name: f.name,
+      size: f.size,
+      content: f.content,
+      actor: entry.actorName,
+      timestamp: entry.timestamp,
+    }))
+  );
 
   const statusBadge = (status: string) => {
     if (status === 'تکمیل شده') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
@@ -57,6 +81,18 @@ export const CustomerDashboard: React.FC<Props> = ({
       setComment('');
       setAttachedFiles([]);
     } finally { setIsSending(false); }
+  };
+
+  const startRename = (row: FileRow) => {
+    setEditingLabelKey(row.key);
+    setEditingLabelValue(fileLabels[row.key] || row.name);
+  };
+
+  const commitRename = () => {
+    if (editingLabelKey && editingLabelValue.trim()) {
+      setFileLabels(prev => ({ ...prev, [editingLabelKey]: editingLabelValue.trim() }));
+    }
+    setEditingLabelKey(null);
   };
 
   return (
@@ -118,81 +154,143 @@ export const CustomerDashboard: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Conversation */}
-              <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {lang === 'fa' ? 'گفتگو و مکاتبات' : 'Conversation'}
-                  </h4>
-                  <span className="text-[10px] text-gray-400">{publicTimeline.length} پیام</span>
+              {/* Main: file table (left) + conversation (right) */}
+              <div className="flex gap-4 items-start">
+
+                {/* Left: File table */}
+                <div className="w-64 shrink-0 bg-white border border-gray-100 rounded-xl overflow-hidden self-stretch flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      {lang === 'fa' ? 'فایل‌های مبادله شده' : 'Shared Files'}
+                    </h4>
+                    <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded-full">{allFiles.length}</span>
+                  </div>
+                  <div className="flex-grow overflow-y-auto">
+                    {allFiles.length === 0 ? (
+                      <div className="p-6 text-center text-gray-300 text-xs">هیچ فایلی رد و بدل نشده</div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {allFiles.map((row) => (
+                          <div key={row.key} className="p-3 hover:bg-gray-50 transition-colors group">
+                            {/* File name row with rename */}
+                            <div className="flex items-start gap-1.5 mb-1">
+                              <IconFile className="w-3.5 h-3.5 text-gray-300 shrink-0 mt-0.5" />
+                              {editingLabelKey === row.key ? (
+                                <input
+                                  autoFocus
+                                  className="flex-grow text-xs border border-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-gray-800"
+                                  value={editingLabelValue}
+                                  onChange={e => setEditingLabelValue(e.target.value)}
+                                  onBlur={commitRename}
+                                  onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingLabelKey(null); }}
+                                />
+                              ) : (
+                                <div className="flex-grow flex items-center gap-1 min-w-0">
+                                  <a href={row.content} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs text-gray-700 hover:text-gray-900 truncate underline underline-offset-2 max-w-[120px]"
+                                    title={fileLabels[row.key] || row.name}>
+                                    {fileLabels[row.key] || row.name}
+                                  </a>
+                                  <button onClick={() => startRename(row)}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition-all shrink-0">
+                                    <IconEdit className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            {/* Meta */}
+                            <div className="text-[10px] text-gray-400 space-y-0.5 pr-5">
+                              <div>{row.actor}</div>
+                              <div>{new Date(row.timestamp).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                              <div className="text-gray-300">{(row.size / 1024).toFixed(0)} KB</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Messages */}
-                <div className="p-5 space-y-3 max-h-[400px] overflow-y-auto">
-                  {publicTimeline.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-8">هنوز پیامی رد و بدل نشده است</p>
-                  )}
-                  {publicTimeline.map((entry, idx) => {
-                    const isMe = entry.actorName === customerUser.fullName;
-                    const entryFiles = (entry as any).files as AttachedFile[] | undefined;
-                    return (
-                      <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[75%] px-4 py-3 rounded-xl text-sm ${isMe ? 'bg-gray-900 text-white rounded-br-sm' : 'bg-gray-50 text-gray-800 border border-gray-100 rounded-bl-sm'}`}>
-                          {!isMe && <div className="text-[10px] font-semibold mb-1 text-gray-400">{entry.actorName}</div>}
-                          {entry.description && <div className="text-xs leading-relaxed whitespace-pre-wrap">{entry.description}</div>}
-                          {entryFiles && entryFiles.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {entryFiles.map((f, fi) => (
-                                <a key={fi} href={f.content} target="_blank" rel="noopener noreferrer"
-                                  className={`flex items-center gap-1.5 text-[10px] underline underline-offset-2 ${isMe ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-800'}`}>
-                                  <IconFile className="w-3 h-3 shrink-0" /> {f.name}
-                                </a>
-                              ))}
+                {/* Right: Conversation */}
+                <div className="flex-grow bg-white border border-gray-100 rounded-xl overflow-hidden min-w-0">
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      {lang === 'fa' ? 'گفتگو و مکاتبات' : 'Conversation'}
+                    </h4>
+                    <span className="text-[10px] text-gray-400">{publicTimeline.length} پیام</span>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="p-5 space-y-3 max-h-[400px] overflow-y-auto">
+                    {publicTimeline.length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-8">هنوز پیامی رد و بدل نشده است</p>
+                    )}
+                    {publicTimeline.map((entry, idx) => {
+                      const isMe = entry.actorName === customerUser.fullName;
+                      const entryFiles = (entry as any).files as AttachedFile[] | undefined;
+                      return (
+                        <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[75%] px-4 py-3 rounded-xl text-sm ${isMe ? 'bg-gray-900 text-white rounded-br-sm' : 'bg-gray-50 text-gray-800 border border-gray-100 rounded-bl-sm'}`}>
+                            {!isMe && <div className="text-[10px] font-semibold mb-1 text-gray-400">{entry.actorName}</div>}
+                            {entry.description && <div className="text-xs leading-relaxed whitespace-pre-wrap">{entry.description}</div>}
+                            {entryFiles && entryFiles.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {entryFiles.map((f, fi) => {
+                                  const fKey = f.content || `${f.name}-${entry.timestamp}`;
+                                  return (
+                                    <a key={fi} href={f.content} target="_blank" rel="noopener noreferrer"
+                                      className={`flex items-center gap-1.5 text-[10px] underline underline-offset-2 ${isMe ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-800'}`}>
+                                      <IconFile className="w-3 h-3 shrink-0" />
+                                      {fileLabels[fKey] || f.name}
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div className={`text-[9px] mt-1.5 ${isMe ? 'text-gray-400 text-left' : 'text-gray-300'}`}>
+                              {new Date(entry.timestamp).toLocaleString('fa-IR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                             </div>
-                          )}
-                          <div className={`text-[9px] mt-1.5 ${isMe ? 'text-gray-400 text-left' : 'text-gray-300'}`}>
-                            {new Date(entry.timestamp).toLocaleString('fa-IR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Input */}
-                <div className="border-t border-gray-100 p-4 space-y-2">
-                  {attachedFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {attachedFiles.map((f, i) => (
-                        <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg text-xs text-gray-600">
-                          <IconFile className="w-3 h-3 shrink-0 text-gray-400" />
-                          <span className="max-w-[120px] truncate">{f.name}</span>
-                          <button onClick={() => setAttachedFiles(p => p.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400 ml-1 transition-colors">
-                            <IconTrash className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-2 items-end">
-                    <textarea
-                      rows={2}
-                      className="flex-grow px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800 focus:bg-white transition-colors resize-none"
-                      placeholder={lang === 'fa' ? 'پیام خود را بنویسید... (Ctrl+Enter برای ارسال)' : 'Write your message... (Ctrl+Enter to send)'}
-                      value={comment}
-                      onChange={e => setComment(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleSend(); } }}
-                    />
-                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading} title="ضمیمه فایل"
-                      className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 shrink-0">
-                      <IconPaperclip className="w-4 h-4" />
-                    </button>
-                    <button onClick={handleSend} disabled={isSending || uploading || (!comment.trim() && attachedFiles.length === 0)}
-                      className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors disabled:opacity-40 shrink-0">
-                      {isSending ? '...' : (lang === 'fa' ? 'ارسال' : 'Send')}
-                    </button>
+                      );
+                    })}
                   </div>
-                  <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+
+                  {/* Input */}
+                  <div className="border-t border-gray-100 p-4 space-y-2">
+                    {attachedFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {attachedFiles.map((f, i) => (
+                          <div key={i} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg text-xs text-gray-600">
+                            <IconFile className="w-3 h-3 shrink-0 text-gray-400" />
+                            <span className="max-w-[120px] truncate">{f.name}</span>
+                            <button onClick={() => setAttachedFiles(p => p.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400 ml-1 transition-colors">
+                              <IconTrash className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2 items-end">
+                      <textarea
+                        rows={2}
+                        className="flex-grow px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800 focus:bg-white transition-colors resize-none"
+                        placeholder={lang === 'fa' ? 'پیام خود را بنویسید... (Ctrl+Enter برای ارسال)' : 'Write your message... (Ctrl+Enter to send)'}
+                        value={comment}
+                        onChange={e => setComment(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleSend(); } }}
+                      />
+                      <button onClick={() => fileInputRef.current?.click()} disabled={uploading} title="ضمیمه فایل"
+                        className="p-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 shrink-0">
+                        <IconPaperclip className="w-4 h-4" />
+                      </button>
+                      <button onClick={handleSend} disabled={isSending || uploading || (!comment.trim() && attachedFiles.length === 0)}
+                        className="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors disabled:opacity-40 shrink-0">
+                        {isSending ? '...' : (lang === 'fa' ? 'ارسال' : 'Send')}
+                      </button>
+                    </div>
+                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+                  </div>
                 </div>
               </div>
             </>

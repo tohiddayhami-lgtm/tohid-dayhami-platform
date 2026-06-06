@@ -113,6 +113,9 @@ export const AdminDashboard: React.FC<Props> = ({
   const [commentFiles, setCommentFiles] = useState<AttachedFile[]>([]);
   const [commentVisibility, setCommentVisibility] = useState<'public' | 'internal'>('public');
   const [showMentionList, setShowMentionList] = useState(false);
+  const [ticketFileLabels, setTicketFileLabels] = useState<Record<string, string>>({});
+  const [editingFileLabelKey, setEditingFileLabelKey] = useState<string | null>(null);
+  const [editingFileLabelValue, setEditingFileLabelValue] = useState('');
   
   const [isEditingTicket, setIsEditingTicket] = useState(false);
   const [editingTicketData, setEditingTicketData] = useState<Partial<Ticket>>({});
@@ -842,7 +845,81 @@ export const AdminDashboard: React.FC<Props> = ({
                                     )}
                                 </div>
                                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><IconActivity className="w-5 h-5 text-indigo-500" /> {t.events}</h3>
+                                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><IconActivity className="w-5 h-5 text-indigo-500" /> {t.events}</h3>
+                                    {/* File table */}
+                                    {(() => {
+                                      const allTicketFiles = (selectedTicket.timeline || []).flatMap(entry =>
+                                        ((entry as any).files as AttachedFile[] | undefined || []).map((f: AttachedFile) => ({
+                                          key: f.content || `${f.name}-${entry.timestamp}`,
+                                          name: f.name,
+                                          size: f.size,
+                                          content: f.content,
+                                          actor: entry.actorName,
+                                          timestamp: entry.timestamp,
+                                        }))
+                                      );
+                                      if (allTicketFiles.length === 0) return null;
+                                      return (
+                                        <div className="mb-5 border border-gray-100 rounded-xl overflow-hidden">
+                                          <div className="bg-gray-50 px-4 py-2 flex items-center justify-between border-b border-gray-100">
+                                            <span className="text-xs font-semibold text-gray-500">📎 فایل‌های مبادله شده</span>
+                                            <span className="text-[10px] text-gray-400 bg-white border border-gray-100 px-1.5 py-0.5 rounded-full">{allTicketFiles.length} فایل</span>
+                                          </div>
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full text-xs">
+                                              <thead>
+                                                <tr className="border-b border-gray-50 text-gray-400 text-[10px]">
+                                                  <th className="px-4 py-2 text-right font-medium">نام فایل</th>
+                                                  <th className="px-4 py-2 text-right font-medium">فرستنده</th>
+                                                  <th className="px-4 py-2 text-right font-medium">تاریخ</th>
+                                                  <th className="px-4 py-2 text-right font-medium">حجم</th>
+                                                  <th className="px-4 py-2 text-right font-medium">عملیات</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-50">
+                                                {allTicketFiles.map((row) => (
+                                                  <tr key={row.key} className="hover:bg-gray-50 transition-colors group">
+                                                    <td className="px-4 py-2.5 max-w-[180px]">
+                                                      {editingFileLabelKey === row.key ? (
+                                                        <input
+                                                          autoFocus
+                                                          className="w-full text-xs border border-gray-300 rounded px-2 py-0.5 outline-none focus:border-gray-800"
+                                                          value={editingFileLabelValue}
+                                                          onChange={e => setEditingFileLabelValue(e.target.value)}
+                                                          onBlur={() => { if (editingFileLabelValue.trim()) setTicketFileLabels(p => ({ ...p, [row.key]: editingFileLabelValue.trim() })); setEditingFileLabelKey(null); }}
+                                                          onKeyDown={e => { if (e.key === 'Enter') { if (editingFileLabelValue.trim()) setTicketFileLabels(p => ({ ...p, [row.key]: editingFileLabelValue.trim() })); setEditingFileLabelKey(null); } if (e.key === 'Escape') setEditingFileLabelKey(null); }}
+                                                        />
+                                                      ) : (
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                          <a href={row.content} target="_blank" rel="noopener noreferrer"
+                                                            className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2 truncate max-w-[140px]"
+                                                            title={ticketFileLabels[row.key] || row.name}>
+                                                            {ticketFileLabels[row.key] || row.name}
+                                                          </a>
+                                                          <button onClick={() => { setEditingFileLabelKey(row.key); setEditingFileLabelValue(ticketFileLabels[row.key] || row.name); }}
+                                                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition-all shrink-0">
+                                                            <IconEdit className="w-3 h-3" />
+                                                          </button>
+                                                        </div>
+                                                      )}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{row.actor}</td>
+                                                    <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap dir-ltr text-left">{new Date(row.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                                                    <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{(row.size / 1024).toFixed(0)} KB</td>
+                                                    <td className="px-4 py-2.5">
+                                                      <a href={row.content} target="_blank" rel="noopener noreferrer"
+                                                        className="text-gray-400 hover:text-gray-700 transition-colors text-[10px] border border-gray-200 hover:border-gray-400 px-2 py-0.5 rounded">
+                                                        دانلود
+                                                      </a>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                     <div className="space-y-6 max-h-[400px] overflow-y-auto mb-6 pr-2 custom-scrollbar">
                                         {(selectedTicket.timeline || []).map((entry, idx) => (
                                             <div key={idx} className={`flex gap-4 ${entry.visibility === 'internal' ? 'bg-amber-50/50 p-2 rounded-lg -mx-2' : ''}`}>
