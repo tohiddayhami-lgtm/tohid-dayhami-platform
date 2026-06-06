@@ -33,6 +33,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   const [form, setForm]           = useState<CustomForm | null>(null);
   const [loading, setLoading]     = useState(true);
   const [notFound, setNotFound]   = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [formLang, setFormLang]   = useState<Language>(appLang);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [contactName, setContactName]   = useState('');
@@ -56,13 +57,36 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   const trackingUrl = trackingBaseUrl || `${window.location.origin}/?page=tracking`;
 
   useEffect(() => {
-    getCustomFormById(formId).then(f => {
-      if (f && f.isPublic) setForm(f);
-      else setNotFound(true);
-      setLoading(false);
-    });
-    // Keep ?form= query param in URL — do NOT replace with #/f/ hash.
-    // Hash-based URLs get stripped by Instagram, WhatsApp, and Telegram in-app browsers.
+    let cancelled = false;
+
+    const loadForm = async (attempt = 1) => {
+      try {
+        const f = await getCustomFormById(formId);
+        if (cancelled) return;
+        if (f && f.isPublic === false) {
+          // Explicitly marked private
+          setNotFound(true);
+        } else if (f) {
+          // isPublic === true OR undefined (older forms without the field) → show it
+          setForm(f);
+        } else if (attempt < 3) {
+          // null = network/Firebase error → retry up to 2 more times
+          await new Promise(r => setTimeout(r, 1200 * attempt));
+          if (!cancelled) loadForm(attempt + 1);
+          return;
+        } else {
+          setLoadError(true);
+        }
+      } catch {
+        if (!cancelled) setLoadError(true);
+      }
+      if (!cancelled) setLoading(false);
+    };
+
+    loadForm();
+    return () => { cancelled = true; };
+    // Keep ?form= query param — do NOT replace with #/f/ hash.
+    // Hash fragments are stripped by Instagram/WhatsApp/Telegram in-app browsers.
   }, [formId]);
 
   const handleResponse = (fieldId: string, value: string) => {
@@ -289,6 +313,24 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
         <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
         <span className="text-sm">{t.loading}</span>
       </div>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="max-w-lg mx-auto py-24 text-center">
+      <div className="text-4xl mb-4">🌐</div>
+      <p className="text-gray-700 font-semibold text-base mb-2">
+        {formLang === 'fa' ? 'خطا در بارگذاری فرم' : 'Could not load form'}
+      </p>
+      <p className="text-gray-400 text-sm mb-6">
+        {formLang === 'fa' ? 'اتصال اینترنت را بررسی کنید و دوباره امتحان کنید.' : 'Please check your connection and try again.'}
+      </p>
+      <button
+        onClick={() => { setLoadError(false); setLoading(true); getCustomFormById(formId).then(f => { if (f && f.isPublic !== false && f) setForm(f); else setNotFound(true); setLoading(false); }); }}
+        className="bg-gray-800 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-colors"
+      >
+        {formLang === 'fa' ? 'تلاش مجدد' : 'Try Again'}
+      </button>
     </div>
   );
 
