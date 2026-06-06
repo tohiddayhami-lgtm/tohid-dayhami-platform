@@ -113,7 +113,6 @@ export const AdminDashboard: React.FC<Props> = ({
   const [commentFiles, setCommentFiles] = useState<AttachedFile[]>([]);
   const [commentVisibility, setCommentVisibility] = useState<'public' | 'internal'>('public');
   const [showMentionList, setShowMentionList] = useState(false);
-  const [ticketFileLabels, setTicketFileLabels] = useState<Record<string, string>>({});
   const [editingFileLabelKey, setEditingFileLabelKey] = useState<string | null>(null);
   const [editingFileLabelValue, setEditingFileLabelValue] = useState('');
   
@@ -725,6 +724,15 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleAddRisk = () => { if(!newRiskTitle.trim()) return; const risk: ProjectRisk = { id: `rsk-${Date.now()}`, title: newRiskTitle, impact: newRiskImpact }; setProjectForm(prev => ({ ...prev, risks: [...(prev.risks || []), risk] })); setNewRiskTitle(''); };
   const handleAddTeamMember = async () => { if (!newTeamMemberId || !newTeamMemberResp.trim() || !selectedTicket) return; if (projectForm.teamMemberIds.includes(newTeamMemberId)) return; const newTask: Task = { id: `task-${Date.now()}`, title: `Project Join: ${selectedTicket.customerName}`, description: `Role: "${newTeamMemberRole}", Resp: ${newTeamMemberResp}`, creatorId: currentUser.id, creatorName: currentUser.fullName, assigneeIds: [newTeamMemberId], isCompleted: false, priority: 'High', createdAt: new Date().toISOString(), comments: [] }; await saveTaskToCloud(newTask); const newMember: ProjectTeamMember = { userId: newTeamMemberId, role: newTeamMemberRole || 'Member', responsibility: newTeamMemberResp, joinedAt: new Date().toISOString() }; setProjectForm(prev => ({ ...prev, teamMemberIds: [...prev.teamMemberIds, newTeamMemberId], teamMembers: [...(prev.teamMembers || []), newMember] })); setNewTeamMemberId(''); setNewTeamMemberRole(''); setNewTeamMemberResp(''); };
   const handleRemoveTeamMember = (userId: string) => { if (window.confirm('Remove member?')) { setProjectForm(prev => ({ ...prev, teamMemberIds: prev.teamMemberIds.filter(id => id !== userId), teamMembers: (prev.teamMembers || []).filter(m => m.userId !== userId) })); } };
+  const handleRenameTicketFile = (fileContentUrl: string, newName: string) => {
+    if (!selectedTicket || !newName.trim()) return;
+    const newTimeline = (selectedTicket.timeline || []).map(entry => {
+      if (!entry.files?.some(f => f.content === fileContentUrl)) return entry;
+      return { ...entry, files: entry.files.map(f => f.content === fileContentUrl ? { ...f, name: newName.trim() } : f) };
+    });
+    onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName);
+  };
+
   const formatNumberInput = (val: string) => val.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const handleRestore = async (log: SystemLog) => { if (window.confirm('Restore?')) { const success = await restoreEntityFromLog(log); alert(success ? 'Restored.' : 'Failed.'); } };
   const calculateFinancials = () => { const totalContract = projectForm.tariff?.amount || 0; const totalInvoiced = (projectForm.invoices || []).reduce((acc, inv) => acc + inv.total, 0); const totalPaid = projectForm.payments.reduce((acc, p) => acc + p.amount, 0); const balance = totalContract - totalPaid; return { totalContract, totalInvoiced, totalPaid, balance }; };
@@ -886,17 +894,17 @@ export const AdminDashboard: React.FC<Props> = ({
                                                           className="w-full text-xs border border-gray-300 rounded px-2 py-0.5 outline-none focus:border-gray-800"
                                                           value={editingFileLabelValue}
                                                           onChange={e => setEditingFileLabelValue(e.target.value)}
-                                                          onBlur={() => { if (editingFileLabelValue.trim()) setTicketFileLabels(p => ({ ...p, [row.key]: editingFileLabelValue.trim() })); setEditingFileLabelKey(null); }}
-                                                          onKeyDown={e => { if (e.key === 'Enter') { if (editingFileLabelValue.trim()) setTicketFileLabels(p => ({ ...p, [row.key]: editingFileLabelValue.trim() })); setEditingFileLabelKey(null); } if (e.key === 'Escape') setEditingFileLabelKey(null); }}
+                                                          onBlur={() => { handleRenameTicketFile(row.content, editingFileLabelValue); setEditingFileLabelKey(null); }}
+                                                          onKeyDown={e => { if (e.key === 'Enter') { handleRenameTicketFile(row.content, editingFileLabelValue); setEditingFileLabelKey(null); } if (e.key === 'Escape') setEditingFileLabelKey(null); }}
                                                         />
                                                       ) : (
                                                         <div className="flex items-center gap-1.5 min-w-0">
                                                           <a href={row.content} target="_blank" rel="noopener noreferrer"
                                                             className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2 truncate max-w-[140px]"
-                                                            title={ticketFileLabels[row.key] || row.name}>
-                                                            {ticketFileLabels[row.key] || row.name}
+                                                            title={row.name}>
+                                                            {row.name}
                                                           </a>
-                                                          <button onClick={() => { setEditingFileLabelKey(row.key); setEditingFileLabelValue(ticketFileLabels[row.key] || row.name); }}
+                                                          <button onClick={() => { setEditingFileLabelKey(row.key); setEditingFileLabelValue(row.name); }}
                                                             className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition-all shrink-0">
                                                             <IconEdit className="w-3 h-3" />
                                                           </button>

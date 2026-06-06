@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { CustomerAccount, Ticket, Personnel, AttachedFile } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
-import { IconPaperclip, IconFile, IconTrash, IconUsers, IconEdit } from './Icons';
+import { IconPaperclip, IconFile, IconTrash, IconUsers } from './Icons';
 
 interface Props {
   customerUser: CustomerAccount;
@@ -14,7 +14,7 @@ interface Props {
 }
 
 interface FileRow {
-  key: string; // content URL used as unique key
+  key: string;
   name: string;
   size: number;
   content: string;
@@ -30,9 +30,6 @@ export const CustomerDashboard: React.FC<Props> = ({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [fileLabels, setFileLabels] = useState<Record<string, string>>({});
-  const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null);
-  const [editingLabelValue, setEditingLabelValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedTicket = tickets.find(t => t.id === selectedTicketId);
@@ -81,18 +78,6 @@ export const CustomerDashboard: React.FC<Props> = ({
       setComment('');
       setAttachedFiles([]);
     } finally { setIsSending(false); }
-  };
-
-  const startRename = (row: FileRow) => {
-    setEditingLabelKey(row.key);
-    setEditingLabelValue(fileLabels[row.key] || row.name);
-  };
-
-  const commitRename = () => {
-    if (editingLabelKey && editingLabelValue.trim()) {
-      setFileLabels(prev => ({ ...prev, [editingLabelKey]: editingLabelValue.trim() }));
-    }
-    setEditingLabelKey(null);
   };
 
   return (
@@ -157,7 +142,7 @@ export const CustomerDashboard: React.FC<Props> = ({
               {/* Main: file table (left) + conversation (right) */}
               <div className="flex gap-4 items-start">
 
-                {/* Left: File table */}
+                {/* Left: File table — read-only for customer */}
                 <div className="w-64 shrink-0 bg-white border border-gray-100 rounded-xl overflow-hidden self-stretch flex flex-col">
                   <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -171,34 +156,15 @@ export const CustomerDashboard: React.FC<Props> = ({
                     ) : (
                       <div className="divide-y divide-gray-50">
                         {allFiles.map((row) => (
-                          <div key={row.key} className="p-3 hover:bg-gray-50 transition-colors group">
-                            {/* File name row with rename */}
+                          <div key={row.key} className="p-3 hover:bg-gray-50 transition-colors">
                             <div className="flex items-start gap-1.5 mb-1">
                               <IconFile className="w-3.5 h-3.5 text-gray-300 shrink-0 mt-0.5" />
-                              {editingLabelKey === row.key ? (
-                                <input
-                                  autoFocus
-                                  className="flex-grow text-xs border border-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-gray-800"
-                                  value={editingLabelValue}
-                                  onChange={e => setEditingLabelValue(e.target.value)}
-                                  onBlur={commitRename}
-                                  onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditingLabelKey(null); }}
-                                />
-                              ) : (
-                                <div className="flex-grow flex items-center gap-1 min-w-0">
-                                  <a href={row.content} target="_blank" rel="noopener noreferrer"
-                                    className="text-xs text-gray-700 hover:text-gray-900 truncate underline underline-offset-2 max-w-[120px]"
-                                    title={fileLabels[row.key] || row.name}>
-                                    {fileLabels[row.key] || row.name}
-                                  </a>
-                                  <button onClick={() => startRename(row)}
-                                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition-all shrink-0">
-                                    <IconEdit className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              )}
+                              <a href={row.content} target="_blank" rel="noopener noreferrer"
+                                className="text-xs text-gray-700 hover:text-gray-900 truncate underline underline-offset-2 max-w-[160px]"
+                                title={row.name}>
+                                {row.name}
+                              </a>
                             </div>
-                            {/* Meta */}
                             <div className="text-[10px] text-gray-400 space-y-0.5 pr-5">
                               <div>{row.actor}</div>
                               <div>{new Date(row.timestamp).toLocaleDateString('fa-IR', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
@@ -235,16 +201,13 @@ export const CustomerDashboard: React.FC<Props> = ({
                             {entry.description && <div className="text-xs leading-relaxed whitespace-pre-wrap">{entry.description}</div>}
                             {entryFiles && entryFiles.length > 0 && (
                               <div className="mt-2 space-y-1">
-                                {entryFiles.map((f, fi) => {
-                                  const fKey = f.content || `${f.name}-${entry.timestamp}`;
-                                  return (
-                                    <a key={fi} href={f.content} target="_blank" rel="noopener noreferrer"
-                                      className={`flex items-center gap-1.5 text-[10px] underline underline-offset-2 ${isMe ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-800'}`}>
-                                      <IconFile className="w-3 h-3 shrink-0" />
-                                      {fileLabels[fKey] || f.name}
-                                    </a>
-                                  );
-                                })}
+                                {entryFiles.map((f, fi) => (
+                                  <a key={fi} href={f.content} target="_blank" rel="noopener noreferrer"
+                                    className={`flex items-center gap-1.5 text-[10px] underline underline-offset-2 ${isMe ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-800'}`}>
+                                    <IconFile className="w-3 h-3 shrink-0" />
+                                    {f.name}
+                                  </a>
+                                ))}
                               </div>
                             )}
                             <div className={`text-[9px] mt-1.5 ${isMe ? 'text-gray-400 text-left' : 'text-gray-300'}`}>
