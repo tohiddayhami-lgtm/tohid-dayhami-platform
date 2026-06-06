@@ -99,7 +99,7 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
           </div>
           <div>
             <h2 className="text-base font-bold text-gray-900">مرکز نوتیفیکیشن واتساپ</h2>
-            <p className="text-xs text-gray-400">ارسال اعلان خودکار به پرسنل هنگام دریافت درخواست یا پیام</p>
+            <p className="text-xs text-gray-400">ارسال اعلان خودکار به پرسنل — کارتابل، پیام و تقویم جلسات</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
