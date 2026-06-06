@@ -10,6 +10,12 @@ export const DEFAULT_MESSAGE_TEMPLATE =
 export const DEFAULT_STATUS_TEMPLATE =
   'سلام {recipientName} 👋\nوضعیت پرونده شما تغییر کرد.\n\n📋 کد رهگیری: {ticketId}\n📌 وضعیت جدید: {status}';
 
+export const DEFAULT_MEETING_REMINDER_TEMPLATE =
+  'سلام {recipientName} 👋\n⏰ یادآوری جلسه\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime}\n📍 مکان: {meetingLocation}\n\nیک ساعت دیگر شروع می‌شود ⏱';
+
+export const DEFAULT_DAILY_SUMMARY_TEMPLATE =
+  'سلام {recipientName} 👋\n📋 جلسات شما برای فردا ({tomorrowDate}):\n\n{meetingsList}\n\nموفق باشید! 🌟';
+
 // Fill template variables: {recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle}
 export const renderTemplate = (template: string, vars: Record<string, string>): string =>
   Object.entries(vars).reduce(
@@ -91,6 +97,7 @@ export const buildLog = (
   message: string,
   result: { success: boolean; error?: string },
   ticketId?: string,
+  meetingId?: string,
 ): Omit<NotificationLog, 'id'> => ({
   type,
   recipientId,
@@ -100,5 +107,6 @@ export const buildLog = (
   status: result.success ? 'sent' : 'failed',
   error: result.error,
   ticketId,
+  meetingId,
   createdAt: new Date().toISOString(),
 });

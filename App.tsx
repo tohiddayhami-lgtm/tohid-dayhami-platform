@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CustomerForm } from './components/CustomerForm';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TrackingView } from './components/TrackingView';
@@ -19,7 +19,7 @@ import {
   subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
 } from './services/firebaseService';
-import { sendWhatsAppNotification, renderTemplate, buildLog } from './services/notificationService';
+import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
 export type Language = 'fa' | 'en';
 
@@ -376,6 +376,151 @@ const App: React.FC = () => {
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
     return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); };
   }, []);
+
+  // ── Client-side meeting reminder timers ─────────────────────────────────────
+  // Sends WhatsApp 1 hour before each upcoming meeting when browser is open.
+  // Server-side cron (api/meeting-reminder.js) handles the offline case.
+  const meetingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    meetingTimersRef.current.forEach(clearTimeout);
+    meetingTimersRef.current = [];
+
+    const nc = appConfig.notificationConfig;
+    if (!nc?.enabled || !nc.onMeetingReminder) return;
+
+    const SENT_KEY = 'meeting_reminder_sent_v1';
+    let sent: Record<string, boolean> = {};
+    try { sent = JSON.parse(localStorage.getItem(SENT_KEY) || '{}'); } catch {}
+
+    const now = Date.now();
+
+    for (const meeting of meetings) {
+      const meetingMs = new Date(`${meeting.date}T${meeting.startTime}:00`).getTime();
+      const reminderMs = meetingMs - 60 * 60 * 1000; // 1 hour before
+      const delay = reminderMs - now;
+
+      // Skip if already past reminder time or more than 24 h away
+      if (delay < 0 || delay > 24 * 60 * 60 * 1000) continue;
+
+      const reminderKey = `${meeting.id}_1hr`;
+      if (sent[reminderKey]) continue;
+
+      const timer = setTimeout(async () => {
+        const currentNc = appConfig.notificationConfig;
+        if (!currentNc?.enabled || !currentNc.onMeetingReminder) return;
+
+        const allPersonIds = [...new Set([meeting.organizerId, ...(meeting.attendeeIds || [])])];
+        for (const pid of allPersonIds) {
+          const person = personnel.find(p => p.id === pid);
+          if (!person) continue;
+          const phone = currentNc.personnelPhones?.[pid];
+          if (!phone) continue;
+          const apiKey = currentNc.personnelApiKeys?.[pid];
+          if (currentNc.provider === 'callmebot' && !apiKey) continue;
+
+          const msg = renderTemplate(currentNc.meetingReminderTemplate || DEFAULT_MEETING_REMINDER_TEMPLATE, {
+            recipientName:   person.fullName,
+            meetingTitle:    meeting.title,
+            meetingDate:     meeting.date,
+            meetingTime:     meeting.startTime,
+            meetingLocation: meeting.location || 'نامشخص',
+            organizerName:   meeting.organizerName,
+          });
+
+          const result = await sendWhatsAppNotification(phone, msg, currentNc, apiKey);
+          await saveNotificationLog(buildLog('meeting_reminder', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+        }
+
+        // Mark sent in localStorage to avoid resend on re-render
+        try {
+          const updated = JSON.parse(localStorage.getItem(SENT_KEY) || '{}');
+          updated[reminderKey] = true;
+          localStorage.setItem(SENT_KEY, JSON.stringify(updated));
+        } catch {}
+      }, delay);
+
+      meetingTimersRef.current.push(timer);
+    }
+
+    return () => { meetingTimersRef.current.forEach(clearTimeout); };
+  }, [meetings, appConfig.notificationConfig, personnel]);
+
+  // ── Client-side daily summary at 17:00 Tehran time ──────────────────────────
+  const dailySummaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (dailySummaryTimerRef.current) clearTimeout(dailySummaryTimerRef.current);
+
+    const nc = appConfig.notificationConfig;
+    if (!nc?.enabled || !nc.onDailySummary) return;
+
+    const now = new Date();
+    // 17:00 Tehran = local 17:00 (assuming client runs in Tehran timezone)
+    const todayAt5PM = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0, 0, 0);
+    const delay = todayAt5PM.getTime() - now.getTime();
+    if (delay < 0) return; // Already past 5 PM today
+
+    const DAILY_SENT_KEY = 'daily_summary_sent_v1';
+    const todayStr = now.toISOString().split('T')[0];
+    let sentDays: Record<string, boolean> = {};
+    try { sentDays = JSON.parse(localStorage.getItem(DAILY_SENT_KEY) || '{}'); } catch {}
+    if (sentDays[todayStr]) return; // Already sent today
+
+    dailySummaryTimerRef.current = setTimeout(async () => {
+      const currentNc = appConfig.notificationConfig;
+      if (!currentNc?.enabled || !currentNc.onDailySummary) return;
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+      const tomorrowMeetings = meetings.filter(m => m.date === tomorrowStr);
+      if (tomorrowMeetings.length === 0) return;
+
+      // Group meetings by person
+      const personMeetingsMap: Record<string, Meeting[]> = {};
+      for (const meeting of tomorrowMeetings) {
+        const pids = [...new Set([meeting.organizerId, ...(meeting.attendeeIds || [])])];
+        for (const pid of pids) {
+          if (!personMeetingsMap[pid]) personMeetingsMap[pid] = [];
+          personMeetingsMap[pid].push(meeting);
+        }
+      }
+
+      for (const [pid, pMeetings] of Object.entries(personMeetingsMap)) {
+        const person = personnel.find(p => p.id === pid);
+        if (!person) continue;
+        const phone = currentNc.personnelPhones?.[pid];
+        if (!phone) continue;
+        const apiKey = currentNc.personnelApiKeys?.[pid];
+        if (currentNc.provider === 'callmebot' && !apiKey) continue;
+
+        const sortedMeetings = [...pMeetings].sort((a, b) => a.startTime.localeCompare(b.startTime));
+        const meetingsList = sortedMeetings
+          .map(m => `• ${m.title} — ${m.startTime} تا ${m.endTime}${m.location ? ` — ${m.location}` : ''}`)
+          .join('\n');
+
+        const msg = renderTemplate(currentNc.dailySummaryTemplate || DEFAULT_DAILY_SUMMARY_TEMPLATE, {
+          recipientName: person.fullName,
+          tomorrowDate:  tomorrowStr,
+          meetingsList,
+        });
+
+        const result = await sendWhatsAppNotification(phone, msg, currentNc, apiKey);
+        await saveNotificationLog(buildLog('daily_summary', pid, person.fullName, phone, msg, result));
+      }
+
+      // Mark today's summary as sent
+      try {
+        const updated = JSON.parse(localStorage.getItem(DAILY_SENT_KEY) || '{}');
+        updated[todayStr] = true;
+        localStorage.setItem(DAILY_SENT_KEY, JSON.stringify(updated));
+      } catch {}
+    }, delay);
+
+    return () => { if (dailySummaryTimerRef.current) clearTimeout(dailySummaryTimerRef.current); };
+  }, [meetings, appConfig.notificationConfig, personnel]);
 
   const normalizeRoleName = (role?: string) => (role || '')
     .trim()

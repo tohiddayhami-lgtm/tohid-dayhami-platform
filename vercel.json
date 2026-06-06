@@ -16,5 +16,15 @@
     { "source": "/sitemap.xml",           "destination": "/sitemap.xml" },
     { "source": "/robots.txt",            "destination": "/robots.txt"  },
     { "source": "/((?!api/).*)",          "destination": "/index.html"  }
+  ],
+  "crons": [
+    {
+      "path": "/api/meeting-reminder",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/daily-summary",
+      "schedule": "30 13 * * *"
+    }
   ]
 }

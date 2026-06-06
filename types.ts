@@ -511,10 +511,17 @@ export interface NotificationConfig {
   onNewTicket: boolean;
   onNewMessage: boolean;
   onStatusChange: boolean;
+  // Meeting notifications
+  onMeetingReminder: boolean;
+  onDailySummary: boolean;
   // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
   ticketTemplate: string;
   messageTemplate: string;
   statusTemplate: string;
+  // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation})
+  meetingReminderTemplate: string;
+  // Daily summary template ({recipientName}, {tomorrowDate}, {meetingsList})
+  dailySummaryTemplate: string;
   // Per-person config (keyed by personnel ID)
   personnelPhones: Record<string, string>;    // WhatsApp phone number
   personnelApiKeys: Record<string, string>;   // CallMeBot API key (per person)
@@ -522,7 +529,7 @@ export interface NotificationConfig {
 
 export interface NotificationLog {
   id: string;
-  type: 'new_ticket' | 'new_message' | 'status_change' | 'test';
+  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_reminder' | 'daily_summary';
   recipientId: string;
   recipientName: string;
   phone: string;
@@ -530,6 +537,7 @@ export interface NotificationLog {
   status: 'sent' | 'failed';
   error?: string;
   ticketId?: string;
+  meetingId?: string;
   createdAt: string;
 }
 

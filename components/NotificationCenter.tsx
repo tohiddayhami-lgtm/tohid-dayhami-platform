@@ -6,6 +6,7 @@ import { subscribeToNotificationLogs, saveNotificationLog, saveAppConfigToCloud 
 import {
   sendWhatsAppNotification, renderTemplate,
   DEFAULT_TICKET_TEMPLATE, DEFAULT_MESSAGE_TEMPLATE, DEFAULT_STATUS_TEMPLATE,
+  DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE,
 } from '../services/notificationService';
 import { IconCheck, IconSettings, IconWhatsapp, IconActivity, IconTrash } from './Icons';
 
@@ -22,9 +23,13 @@ const DEFAULT_CONFIG: NotificationConfig = {
   onNewTicket: true,
   onNewMessage: true,
   onStatusChange: false,
+  onMeetingReminder: true,
+  onDailySummary: true,
   ticketTemplate: DEFAULT_TICKET_TEMPLATE,
   messageTemplate: DEFAULT_MESSAGE_TEMPLATE,
   statusTemplate: DEFAULT_STATUS_TEMPLATE,
+  meetingReminderTemplate: DEFAULT_MEETING_REMINDER_TEMPLATE,
+  dailySummaryTemplate: DEFAULT_DAILY_SUMMARY_TEMPLATE,
   personnelPhones: {},
   personnelApiKeys: {},
 };
@@ -179,9 +184,26 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100">رویدادهای نوتیفیکیشن</p>
             {([
-              { key: 'onNewTicket',    label: 'درخواست جدید در کارتابل',    desc: 'وقتی پرونده‌ای به کارشناس ارجاع می‌شود' },
-              { key: 'onNewMessage',   label: 'پیام داخلی جدید',            desc: 'وقتی مکاتبه‌ای در سازمان دریافت می‌شود' },
-              { key: 'onStatusChange', label: 'تغییر وضعیت پرونده',         desc: 'وقتی وضعیت تیکت تغییر می‌کند' },
+              { key: 'onNewTicket',       label: 'درخواست جدید در کارتابل',    desc: 'وقتی پرونده‌ای به کارشناس ارجاع می‌شود' },
+              { key: 'onNewMessage',      label: 'پیام داخلی جدید',            desc: 'وقتی مکاتبه‌ای در سازمان دریافت می‌شود' },
+              { key: 'onStatusChange',    label: 'تغییر وضعیت پرونده',         desc: 'وقتی وضعیت تیکت تغییر می‌کند' },
+            ] as const).map(ev => (
+              <div key={ev.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{ev.label}</p>
+                  <p className="text-xs text-gray-400">{ev.desc}</p>
+                </div>
+                <button onClick={() => setNc(n => ({ ...n, [ev.key]: !n[ev.key] }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${nc[ev.key] ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${nc[ev.key] ? 'right-0.5' : 'left-0.5'}`} />
+                </button>
+              </div>
+            ))}
+            {/* Meeting notifications separator */}
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-2 pb-1 border-t border-gray-100">نوتیفیکیشن‌های تقویم جلسات</p>
+            {([
+              { key: 'onMeetingReminder', label: 'یادآوری جلسه (یک ساعت قبل)', desc: 'ارسال پیام به تمام شرکت‌کنندگان ۶۰ دقیقه پیش از شروع جلسه' },
+              { key: 'onDailySummary',    label: 'خلاصه روزانه جلسات (ساعت ۱۷)', desc: 'هر روز ساعت ۵ عصر، لیست جلسات فردا برای نفرات درگیر ارسال می‌شود' },
             ] as const).map(ev => (
               <div key={ev.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <div>
@@ -290,7 +312,7 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
       {activeSection === 'templates' && (
         <div className="space-y-4">
           <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
-            <span className="font-bold">متغیرهای قابل استفاده: </span>
+            <span className="font-bold">متغیرهای کارتابل: </span>
             <code className="bg-amber-100 px-1 rounded">{'{recipientName}'}</code> نام گیرنده ·
             <code className="bg-amber-100 px-1 rounded mx-1">{'{ticketId}'}</code> کد رهگیری ·
             <code className="bg-amber-100 px-1 rounded">{'{customerName}'}</code> نام مشتری ·
@@ -315,6 +337,56 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
               />
             </div>
           ))}
+
+          {/* Meeting templates */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-800 leading-relaxed">
+            <span className="font-bold">متغیرهای یادآوری جلسه: </span>
+            <code className="bg-blue-100 px-1 rounded">{'{recipientName}'}</code> نام گیرنده ·
+            <code className="bg-blue-100 px-1 rounded mx-1">{'{meetingTitle}'}</code> موضوع ·
+            <code className="bg-blue-100 px-1 rounded">{'{meetingDate}'}</code> تاریخ ·
+            <code className="bg-blue-100 px-1 rounded mx-1">{'{meetingTime}'}</code> ساعت ·
+            <code className="bg-blue-100 px-1 rounded">{'{meetingLocation}'}</code> مکان
+          </div>
+          {([
+            { key: 'meetingReminderTemplate', label: 'قالب یادآوری جلسه (یک ساعت قبل)', def: DEFAULT_MEETING_REMINDER_TEMPLATE },
+          ] as const).map(t => (
+            <div key={t.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-700">{t.label}</label>
+                <button onClick={() => setNc(n => ({ ...n, [t.key]: t.def }))} className="text-xs text-indigo-500 hover:text-indigo-700">بازنشانی</button>
+              </div>
+              <textarea
+                rows={6}
+                value={nc[t.key] || t.def}
+                onChange={e => setNc(n => ({ ...n, [t.key]: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none font-mono"
+              />
+            </div>
+          ))}
+
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-800 leading-relaxed">
+            <span className="font-bold">متغیرهای خلاصه روزانه: </span>
+            <code className="bg-blue-100 px-1 rounded">{'{recipientName}'}</code> نام گیرنده ·
+            <code className="bg-blue-100 px-1 rounded mx-1">{'{tomorrowDate}'}</code> تاریخ فردا ·
+            <code className="bg-blue-100 px-1 rounded">{'{meetingsList}'}</code> لیست جلسات
+          </div>
+          {([
+            { key: 'dailySummaryTemplate', label: 'قالب خلاصه روزانه جلسات (ساعت ۱۷)', def: DEFAULT_DAILY_SUMMARY_TEMPLATE },
+          ] as const).map(t => (
+            <div key={t.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-700">{t.label}</label>
+                <button onClick={() => setNc(n => ({ ...n, [t.key]: t.def }))} className="text-xs text-indigo-500 hover:text-indigo-700">بازنشانی</button>
+              </div>
+              <textarea
+                rows={5}
+                value={nc[t.key] || t.def}
+                onChange={e => setNc(n => ({ ...n, [t.key]: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-300 resize-none font-mono"
+              />
+            </div>
+          ))}
+
           <div className="flex justify-end">
             <button onClick={handleSave} disabled={saving}
               className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-60">
@@ -346,10 +418,11 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
                       {log.status === 'sent' ? 'ارسال شد' : 'خطا'}
                     </span>
                     <span className="text-[10px] text-gray-300">
-                      {log.type === 'new_ticket' ? 'درخواست جدید' : log.type === 'new_message' ? 'پیام' : log.type === 'status_change' ? 'تغییر وضعیت' : 'تست'}
+                      {log.type === 'new_ticket' ? 'درخواست جدید' : log.type === 'new_message' ? 'پیام' : log.type === 'status_change' ? 'تغییر وضعیت' : log.type === 'meeting_reminder' ? '⏰ یادآوری جلسه' : log.type === 'daily_summary' ? '📋 خلاصه روزانه' : 'تست'}
                     </span>
                   </div>
                   {log.ticketId && <p className="text-[10px] text-gray-400 font-mono mt-0.5">#{log.ticketId}</p>}
+                  {log.meetingId && <p className="text-[10px] text-gray-400 font-mono mt-0.5">جلسه: {log.meetingId}</p>}
                   {log.error && <p className="text-[10px] text-red-500 mt-0.5 truncate">{log.error}</p>}
                   <p className="text-[10px] text-gray-400 mt-0.5 dir-ltr">{new Date(log.createdAt).toLocaleString('fa-IR')}</p>
                 </div>
