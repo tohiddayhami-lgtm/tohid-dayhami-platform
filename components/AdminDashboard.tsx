@@ -39,7 +39,7 @@ interface Props {
   analyticsEvents?: AnalyticsEvent[];
   config: AppConfig;
   onCreateTicket: (ticket: Ticket) => Promise<void>;
-  onUpdateTicket: (ticketId: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility?: 'public' | 'internal') => void;
+  onUpdateTicket: (ticketId: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility?: 'public' | 'internal', files?: AttachedFile[]) => void;
   onDeleteTicket: (ticketId: string) => Promise<void>;
   onUpdateServices: (services: ServiceOption[]) => void;
   onUpdatePersonnel: (personnel: Personnel[]) => void;
@@ -110,8 +110,9 @@ export const AdminDashboard: React.FC<Props> = ({
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [activeModalTab, setActiveModalTab] = useState<'info' | 'project'>('info');
   const [newComment, setNewComment] = useState('');
-  const [commentVisibility, setCommentVisibility] = useState<'public' | 'internal'>('public'); 
-  const [showMentionList, setShowMentionList] = useState(false); 
+  const [commentFiles, setCommentFiles] = useState<AttachedFile[]>([]);
+  const [commentVisibility, setCommentVisibility] = useState<'public' | 'internal'>('public');
+  const [showMentionList, setShowMentionList] = useState(false);
   
   const [isEditingTicket, setIsEditingTicket] = useState(false);
   const [editingTicketData, setEditingTicketData] = useState<Partial<Ticket>>({});
@@ -192,6 +193,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const commentsEndRef = useRef<HTMLDivElement>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
+  const commentFileInputRef = useRef<HTMLInputElement>(null);
 
   const userKPIs = kpis.filter(k => (k.assignedUserId === currentUser.id) || (k.assignedRole && currentUser.roles.includes(k.assignedRole)));
 
@@ -646,13 +648,32 @@ export const AdminDashboard: React.FC<Props> = ({
   };
 
   const handleAddComment = async () => {
-    if (!selectedTicket || !newComment.trim()) return;
+    if (!selectedTicket || (!newComment.trim() && commentFiles.length === 0)) return;
+    if (commentFiles.some(f => f.status === 'uploading')) { alert(lang === 'fa' ? 'صبر کنید تا آپلود تمام شود...' : 'Wait for upload...'); return; }
     await processMentions(newComment, `Ticket ${selectedTicket.id}`, selectedTicket.id);
-    onUpdateTicket(selectedTicket.id, {}, currentUser.fullName, newComment, commentVisibility);
+    onUpdateTicket(selectedTicket.id, {}, currentUser.fullName, newComment || '📎 فایل ضمیمه', commentVisibility, commentFiles.length > 0 ? commentFiles : undefined);
     logSystemAction('UPDATE', 'Ticket', `Comment added to ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id);
     setNewComment('');
+    setCommentFiles([]);
     setShowMentionList(false);
     setCommentVisibility('public');
+  };
+
+  const handleCommentFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    Array.from(e.target.files).forEach(file => {
+      if (file.size > 50 * 1024 * 1024) { alert(`${file.name}: حداکثر ۵۰ مگابایت`); return; }
+      const placeholder: AttachedFile = { name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 };
+      setCommentFiles(prev => [...prev, placeholder]);
+      uploadFileWithProgress(
+        file,
+        (progress) => setCommentFiles(prev => prev.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, progress } : f)),
+        (url) => setCommentFiles(prev => prev.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, content: url, status: 'success', progress: 100 } : f)),
+        (err) => setCommentFiles(prev => prev.map(f => f.name === file.name ? { ...f, status: 'error', errorMsg: err.message } : f)),
+        'uploads'
+      );
+    });
+    e.target.value = '';
   };
 
   const handleQuickReportAdd = () => {
@@ -846,12 +867,34 @@ export const AdminDashboard: React.FC<Props> = ({
                                                             )}
                                                         </div>
                                                     )}
+                                                    {entry.files && entry.files.length > 0 && (
+                                                      <div className="mt-2 space-y-1">
+                                                        {entry.files.map((f, fi) => (
+                                                          <a key={fi} href={f.content} target="_blank" rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 underline underline-offset-2">
+                                                            📎 {f.name} <span className="text-gray-400 no-underline text-[10px]">({(f.size / 1024 / 1024).toFixed(1)} MB)</span>
+                                                          </a>
+                                                        ))}
+                                                      </div>
+                                                    )}
                                                     {entry.visibility === 'internal' && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 rounded mt-1 inline-block">Internal</span>}
                                                 </div>
                                             </div>
                                         ))}
                                         <div ref={commentsEndRef}></div>
                                     </div>
+                                    {commentFiles.length > 0 && (
+                                      <div className="flex flex-wrap gap-2 mb-2">
+                                        {commentFiles.map((f, i) => (
+                                          <div key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs border ${f.status === 'error' ? 'bg-red-50 border-red-200 text-red-600' : f.status === 'uploading' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                                            <span className="max-w-[120px] truncate">{f.name}</span>
+                                            {f.status === 'uploading' && <span>{f.progress}%</span>}
+                                            {f.status === 'error' && <span title={f.errorMsg}>⚠</span>}
+                                            <button onClick={() => setCommentFiles(p => p.filter((_, idx) => idx !== i))} className="text-gray-300 hover:text-red-400 transition-colors">✕</button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                     <div className="relative">
                                         <textarea className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none pr-12" rows={2} placeholder={t.writeMsg} value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleAddComment())} />
                                         <div className="absolute bottom-3 right-3 flex gap-2"><button onClick={() => setShowMentionList(!showMentionList)} className="text-gray-400 hover:text-indigo-600 transition-colors">@</button></div>
@@ -867,11 +910,13 @@ export const AdminDashboard: React.FC<Props> = ({
                                         )}
                                     </div>
                                     <div className="flex justify-between items-center mt-2">
-                                        <div className="flex gap-2">
+                                        <div className="flex items-center gap-2">
                                             <button onClick={() => setCommentVisibility('public')} className={`text-xs px-2 py-1 rounded transition-colors ${commentVisibility === 'public' ? 'bg-green-100 text-green-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>{t.publicReport}</button>
                                             <button onClick={() => setCommentVisibility('internal')} className={`text-xs px-2 py-1 rounded transition-colors ${commentVisibility === 'internal' ? 'bg-amber-100 text-amber-700 font-bold' : 'text-gray-500 hover:bg-gray-100'}`}>{t.internalNote}</button>
+                                            <button onClick={() => commentFileInputRef.current?.click()} title="ضمیمه فایل (حداکثر ۵۰ مگابایت)" className="text-xs px-2 py-1 rounded text-gray-500 hover:bg-gray-100 transition-colors">📎</button>
+                                            <input ref={commentFileInputRef} type="file" multiple className="hidden" onChange={handleCommentFileSelect} />
                                         </div>
-                                        <button onClick={handleAddComment} disabled={!newComment.trim()} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">{t.send}</button>
+                                        <button onClick={handleAddComment} disabled={!newComment.trim() && commentFiles.length === 0} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">{t.send}</button>
                                     </div>
                                 </div>
                             </div>
