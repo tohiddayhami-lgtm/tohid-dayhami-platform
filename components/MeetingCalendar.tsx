@@ -32,7 +32,11 @@ function getWeekDays(ws: Date): Date[] {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0];
+  // Use local date parts — toISOString() shifts to UTC and causes off-by-one in UTC+3:30
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function timeToMinutes(t: string): number {
