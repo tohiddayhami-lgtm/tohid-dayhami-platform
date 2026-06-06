@@ -10,6 +10,9 @@ export const DEFAULT_MESSAGE_TEMPLATE =
 export const DEFAULT_STATUS_TEMPLATE =
   'سلام {recipientName} 👋\nوضعیت پرونده شما تغییر کرد.\n\n📋 کد رهگیری: {ticketId}\n📌 وضعیت جدید: {status}';
 
+export const DEFAULT_MEETING_CREATED_TEMPLATE =
+  'سلام {recipientName} 👋\n📅 یک جلسه جدید برای شما ثبت شد.\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime} تا {meetingEndTime}\n📍 مکان: {meetingLocation}\n👤 تنظیم‌کننده: {organizerName}\n\nلطفاً در تقویم خود ثبت کنید ✅';
+
 export const DEFAULT_MEETING_REMINDER_TEMPLATE =
   'سلام {recipientName} 👋\n⏰ یادآوری جلسه\n\n📌 موضوع: {meetingTitle}\n📅 تاریخ: {meetingDate}\n🕐 ساعت: {meetingTime}\n📍 مکان: {meetingLocation}\n\nیک ساعت دیگر شروع می‌شود ⏱';
 

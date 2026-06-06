@@ -512,13 +512,15 @@ export interface NotificationConfig {
   onNewMessage: boolean;
   onStatusChange: boolean;
   // Meeting notifications
+  onMeetingCreated: boolean;
   onMeetingReminder: boolean;
   onDailySummary: boolean;
   // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
   ticketTemplate: string;
   messageTemplate: string;
   statusTemplate: string;
-  // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation})
+  // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation}, {organizerName})
+  meetingCreatedTemplate: string;
   meetingReminderTemplate: string;
   // Daily summary template ({recipientName}, {tomorrowDate}, {meetingsList})
   dailySummaryTemplate: string;
@@ -529,7 +531,7 @@ export interface NotificationConfig {
 
 export interface NotificationLog {
   id: string;
-  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_reminder' | 'daily_summary';
+  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_created' | 'meeting_reminder' | 'daily_summary';
   recipientId: string;
   recipientName: string;
   phone: string;

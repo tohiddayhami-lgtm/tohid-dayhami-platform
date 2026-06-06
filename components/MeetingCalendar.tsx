@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Meeting, Personnel } from '../types';
+import { Meeting, Personnel, NotificationConfig } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit } from './Icons';
-import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud } from '../services/firebaseService';
+import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog } from '../services/firebaseService';
+import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE } from '../services/notificationService';
 import { Language } from '../App';
 
 interface Props {
@@ -10,9 +11,10 @@ interface Props {
   currentUser: Personnel;
   personnel: Personnel[];
   lang: Language;
+  notificationConfig?: NotificationConfig;
 }
 
-export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang }) => {
+export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang, notificationConfig }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showModal, setShowModal] = useState(false);
   const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
@@ -85,14 +87,48 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       setShowModal(true);
   };
 
+  const sendMeetingCreatedNotifications = async (meeting: Meeting) => {
+    const nc = notificationConfig;
+    if (!nc?.enabled || !nc.onMeetingCreated) return;
+
+    // Notify all attendees (exclude the organizer who created it)
+    const recipientIds = [...new Set(meeting.attendeeIds || [])];
+
+    for (const pid of recipientIds) {
+      const person = personnel.find(p => p.id === pid);
+      if (!person) continue;
+      const phone = nc.personnelPhones?.[pid];
+      if (!phone) continue;
+      const apiKey = nc.personnelApiKeys?.[pid];
+      if (nc.provider === 'callmebot' && !apiKey) continue;
+
+      const msg = renderTemplate(nc.meetingCreatedTemplate || DEFAULT_MEETING_CREATED_TEMPLATE, {
+        recipientName:   person.fullName,
+        meetingTitle:    meeting.title,
+        meetingDate:     meeting.date,
+        meetingTime:     meeting.startTime,
+        meetingEndTime:  meeting.endTime,
+        meetingLocation: meeting.location || 'نامشخص',
+        organizerName:   meeting.organizerName,
+      });
+
+      const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
+      await saveNotificationLog(buildLog('meeting_created', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.title) return;
       if (editingMeetingId) {
           await updateMeetingInCloud(editingMeetingId, { title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, attendeeIds: formData.attendeeIds, description: formData.description }, currentUser.fullName);
+          // Notify on update too (attendees may have changed)
+          const updatedMeeting: Meeting = { id: editingMeetingId, title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, organizerId: currentUser.id, organizerName: currentUser.fullName, attendeeIds: formData.attendeeIds, description: formData.description };
+          sendMeetingCreatedNotifications(updatedMeeting);
       } else {
           const meeting: Meeting = { id: `meet-${Date.now()}`, title: formData.title, date: selectedDate, startTime: formData.startTime, endTime: formData.endTime, location: formData.location, organizerId: currentUser.id, organizerName: currentUser.fullName, attendeeIds: formData.attendeeIds, description: formData.description };
           await saveMeetingToCloud(meeting);
+          sendMeetingCreatedNotifications(meeting);
       }
       setShowModal(false);
   };
