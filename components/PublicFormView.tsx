@@ -61,9 +61,8 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       else setNotFound(true);
       setLoading(false);
     });
-    if (window.location.search.includes('form=')) {
-      history.replaceState(null, '', `${window.location.pathname}#/f/${formId}`);
-    }
+    // Keep ?form= query param in URL — do NOT replace with #/f/ hash.
+    // Hash-based URLs get stripped by Instagram, WhatsApp, and Telegram in-app browsers.
   }, [formId]);
 
   const handleResponse = (fieldId: string, value: string) => {
