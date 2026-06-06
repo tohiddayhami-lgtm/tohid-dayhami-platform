@@ -119,6 +119,17 @@ export const AdminDashboard: React.FC<Props> = ({
   const [isSavingQuickReport, setIsSavingQuickReport] = useState(false);
   const [formLinkCopied, setFormLinkCopied] = useState(false);
 
+  // ── Logs filters ──
+  const [logSearch, setLogSearch] = useState('');
+  const [logActionFilter, setLogActionFilter] = useState('all');
+  const [logEntityFilter, setLogEntityFilter] = useState('all');
+  const [logActorFilter, setLogActorFilter] = useState('all');
+  const [logDateFrom, setLogDateFrom] = useState('');
+  const [logDateTo, setLogDateTo] = useState('');
+  const [logView, setLogView] = useState<'table' | 'report'>('table');
+  const [logPage, setLogPage] = useState(1);
+  const LOG_PAGE_SIZE = 20;
+
   const [projectForm, setProjectForm] = useState<ProjectDetails>({
       isActive: false,
       tariff: { amount: 0, currency: 'IRR' },
@@ -1525,11 +1536,274 @@ export const AdminDashboard: React.FC<Props> = ({
           </div>
         )}
 
-        {activeTab === 'logs' && isMaster && (
+        {activeTab === 'logs' && isMaster && (() => {
+          // ── computed filters ──
+          const allActors = [...new Set(systemLogs.map(l => l.actorName))].sort();
+          const allEntities = [...new Set(systemLogs.map(l => l.entity))].sort();
+
+          const filteredLogs = systemLogs.filter(log => {
+            if (logActionFilter !== 'all' && log.actionType !== logActionFilter) return false;
+            if (logEntityFilter !== 'all' && log.entity !== logEntityFilter) return false;
+            if (logActorFilter !== 'all' && log.actorName !== logActorFilter) return false;
+            if (logDateFrom && log.timestamp < logDateFrom) return false;
+            if (logDateTo && log.timestamp > logDateTo + 'T23:59:59') return false;
+            if (logSearch) {
+              const q = logSearch.toLowerCase();
+              if (
+                !log.actorName.toLowerCase().includes(q) &&
+                !log.entity.toLowerCase().includes(q) &&
+                !log.details.toLowerCase().includes(q) &&
+                !(log.entityId || '').toLowerCase().includes(q)
+              ) return false;
+            }
+            return true;
+          });
+
+          const totalPages = Math.ceil(filteredLogs.length / LOG_PAGE_SIZE);
+          const pagedLogs = filteredLogs.slice((logPage - 1) * LOG_PAGE_SIZE, logPage * LOG_PAGE_SIZE);
+
+          // ── report stats ──
+          const totalCreate = systemLogs.filter(l => l.actionType === 'CREATE').length;
+          const totalUpdate = systemLogs.filter(l => l.actionType === 'UPDATE').length;
+          const totalDelete = systemLogs.filter(l => l.actionType === 'DELETE').length;
+          const totalLogin  = systemLogs.filter(l => l.actionType === 'LOGIN').length;
+
+          const actorStats = allActors.map(actor => {
+            const actorLogs = systemLogs.filter(l => l.actorName === actor);
+            return {
+              name: actor,
+              total: actorLogs.length,
+              create: actorLogs.filter(l => l.actionType === 'CREATE').length,
+              update: actorLogs.filter(l => l.actionType === 'UPDATE').length,
+              delete: actorLogs.filter(l => l.actionType === 'DELETE').length,
+              login:  actorLogs.filter(l => l.actionType === 'LOGIN').length,
+              lastSeen: actorLogs.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0]?.timestamp || '',
+            };
+          }).sort((a, b) => b.total - a.total);
+
+          const entityStats = allEntities.map(entity => ({
+            entity,
+            count: systemLogs.filter(l => l.entity === entity).length,
+          })).sort((a, b) => b.count - a.count);
+
+          // last 7 days activity
+          const last7 = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(); d.setDate(d.getDate() - (6 - i));
+            const dateStr = d.toISOString().split('T')[0];
+            return { date: dateStr, count: systemLogs.filter(l => l.timestamp.startsWith(dateStr)).length };
+          });
+          const maxDay = Math.max(1, ...last7.map(d => d.count));
+
+          const actionBadge = (type: string) => {
+            if (type === 'DELETE') return 'bg-red-50 text-red-600 border border-red-100';
+            if (type === 'CREATE') return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+            if (type === 'UPDATE') return 'bg-gray-100 text-gray-600 border border-gray-200';
+            if (type === 'LOGIN')  return 'bg-gray-900 text-white';
+            return 'bg-gray-50 text-gray-500 border border-gray-100';
+          };
+
+          return (
             <div className="space-y-4 animate-fade-in">
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><IconHistory className="w-6 h-6" /> {t.auditLogs}</h2></div>
-                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden"><table className="w-full text-start text-sm"><thead className="bg-gray-50 text-gray-500"><tr><th className="px-4 py-3">{t.time}</th><th className="px-4 py-3">{t.user}</th><th className="px-4 py-3">{t.operation}</th><th className="px-4 py-3">{t.entity}</th><th className="px-4 py-3">{t.details}</th><th className="px-4 py-3">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{systemLogs.map(log => (<tr key={log.id} className="hover:bg-gray-50"><td className="px-4 py-3 text-gray-500 dir-ltr text-right">{new Date(log.timestamp).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</td><td className="px-4 py-3 font-bold text-gray-700">{log.actorName}</td><td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-bold ${log.actionType === 'DELETE' ? 'bg-red-100 text-red-700' : (log.actionType === 'CREATE' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}`}>{log.actionType}</span></td><td className="px-4 py-3">{log.entity}</td><td className="px-4 py-3 text-gray-600 truncate max-w-xs" title={log.details}>{log.details}</td><td className="px-4 py-3">{log.actionType === 'DELETE' && log.backupData && (<button onClick={() => handleRestore(log)} className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded flex items-center gap-1 font-bold text-xs"><IconRefreshCw className="w-3 h-3" /> {t.restore}</button>)}</td></tr>))}</tbody></table></div></div>
-        )}
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <IconHistory className="w-4 h-4 text-gray-500" /> {t.auditLogs}
+                  <span className="text-xs font-normal text-gray-400 mr-1">({systemLogs.length} رویداد)</span>
+                </h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setLogView('table')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${logView === 'table' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    جدول لاگ‌ها
+                  </button>
+                  <button onClick={() => setLogView('report')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${logView === 'report' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    گزارش تحلیلی
+                  </button>
+                </div>
+              </div>
+
+              {logView === 'report' ? (
+                <div className="space-y-4">
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'ایجاد شده', value: totalCreate, color: 'text-emerald-700' },
+                      { label: 'ویرایش شده', value: totalUpdate, color: 'text-gray-700' },
+                      { label: 'حذف شده',   value: totalDelete, color: 'text-red-600' },
+                      { label: 'ورود به سیستم', value: totalLogin, color: 'text-gray-900' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-4">
+                        <div className="text-xs text-gray-400 mb-1">{s.label}</div>
+                        <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Last 7 days bar chart */}
+                  <div className="bg-white border border-gray-100 rounded-xl p-5">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">فعالیت ۷ روز گذشته</p>
+                    <div className="flex items-end gap-2 h-24">
+                      {last7.map(d => (
+                        <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-[9px] text-gray-400">{d.count || ''}</span>
+                          <div className="w-full bg-gray-100 rounded-sm overflow-hidden" style={{ height: '60px' }}>
+                            <div className="w-full bg-gray-800 rounded-sm transition-all" style={{ height: `${(d.count / maxDay) * 60}px`, marginTop: `${60 - (d.count / maxDay) * 60}px` }} />
+                          </div>
+                          <span className="text-[9px] text-gray-400 dir-ltr">{d.date.slice(5)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Activity per person */}
+                    <div className="bg-white border border-gray-100 rounded-xl p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">فعالیت پرسنل</p>
+                      <div className="space-y-3">
+                        {actorStats.map(a => (
+                          <div key={a.name}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm font-medium text-gray-800">{a.name}</span>
+                              <span className="text-xs text-gray-400">{a.total} رویداد</span>
+                            </div>
+                            <div className="flex gap-1 text-[10px]">
+                              {a.create > 0 && <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded">+{a.create}</span>}
+                              {a.update > 0 && <span className="bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5 rounded">✎{a.update}</span>}
+                              {a.delete > 0 && <span className="bg-red-50 text-red-600 border border-red-100 px-1.5 py-0.5 rounded">✕{a.delete}</span>}
+                              {a.login  > 0 && <span className="bg-gray-900 text-white px-1.5 py-0.5 rounded">↩{a.login}</span>}
+                            </div>
+                            <div className="mt-1.5 w-full bg-gray-100 rounded-full h-1">
+                              <div className="bg-gray-800 h-full rounded-full" style={{ width: `${(a.total / (actorStats[0]?.total || 1)) * 100}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Activity per entity */}
+                    <div className="bg-white border border-gray-100 rounded-xl p-5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">فعالیت به تفکیک موجودیت</p>
+                      <div className="space-y-2">
+                        {entityStats.map(e => (
+                          <div key={e.entity} className="flex items-center gap-3">
+                            <span className="text-sm text-gray-700 w-28 shrink-0">{e.entity}</span>
+                            <div className="flex-1 bg-gray-100 rounded-full h-2">
+                              <div className="bg-gray-700 h-full rounded-full" style={{ width: `${(e.count / (entityStats[0]?.count || 1)) * 100}%` }} />
+                            </div>
+                            <span className="text-xs text-gray-400 w-8 text-start">{e.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Filters */}
+                  <div className="bg-white border border-gray-100 rounded-xl p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+                      {/* Search */}
+                      <div className="relative lg:col-span-1">
+                        <IconSearch className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-2.5" />
+                        <input
+                          className="w-full pr-9 pl-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800 transition-colors"
+                          placeholder="جستجو در لاگ‌ها (نام، موجودیت، جزئیات)..."
+                          value={logSearch}
+                          onChange={e => { setLogSearch(e.target.value); setLogPage(1); }}
+                        />
+                      </div>
+                      {/* Actor */}
+                      <select className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800" value={logActorFilter} onChange={e => { setLogActorFilter(e.target.value); setLogPage(1); }}>
+                        <option value="all">همه کاربران</option>
+                        {allActors.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      {/* Entity */}
+                      <select className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-800" value={logEntityFilter} onChange={e => { setLogEntityFilter(e.target.value); setLogPage(1); }}>
+                        <option value="all">همه موجودیت‌ها</option>
+                        {allEntities.map(e => <option key={e} value={e}>{e}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {/* Action type pills */}
+                      <div className="flex gap-1">
+                        {['all', 'CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'OTHER'].map(a => (
+                          <button key={a} onClick={() => { setLogActionFilter(a); setLogPage(1); }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${logActionFilter === a ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                            {a === 'all' ? 'همه' : a}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Date range */}
+                      <div className="flex items-center gap-2 mr-auto">
+                        <span className="text-xs text-gray-400">از:</span>
+                        <input type="date" className="px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-gray-800" value={logDateFrom} onChange={e => { setLogDateFrom(e.target.value); setLogPage(1); }} />
+                        <span className="text-xs text-gray-400">تا:</span>
+                        <input type="date" className="px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs outline-none focus:border-gray-800" value={logDateTo} onChange={e => { setLogDateTo(e.target.value); setLogPage(1); }} />
+                        {(logSearch || logActionFilter !== 'all' || logEntityFilter !== 'all' || logActorFilter !== 'all' || logDateFrom || logDateTo) && (
+                          <button onClick={() => { setLogSearch(''); setLogActionFilter('all'); setLogEntityFilter('all'); setLogActorFilter('all'); setLogDateFrom(''); setLogDateTo(''); setLogPage(1); }}
+                            className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 border border-gray-200 rounded-lg">
+                            پاک کردن فیلترها
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {filteredLogs.length !== systemLogs.length && (
+                      <p className="text-[11px] text-gray-400 mt-2">{filteredLogs.length} نتیجه از {systemLogs.length} رویداد</p>
+                    )}
+                  </div>
+
+                  {/* Table */}
+                  <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-start text-sm">
+                        <thead className="bg-gray-50 text-gray-500 text-xs">
+                          <tr>
+                            <th className="px-4 py-3 font-medium">{t.time}</th>
+                            <th className="px-4 py-3 font-medium">{t.user}</th>
+                            <th className="px-4 py-3 font-medium">{t.operation}</th>
+                            <th className="px-4 py-3 font-medium">{t.entity}</th>
+                            <th className="px-4 py-3 font-medium">{t.details}</th>
+                            <th className="px-4 py-3 font-medium text-center">{t.action}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {pagedLogs.map(log => (
+                            <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-gray-400 text-xs dir-ltr whitespace-nowrap">
+                                {new Date(log.timestamp).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </td>
+                              <td className="px-4 py-3 font-medium text-gray-800 text-xs whitespace-nowrap">{log.actorName}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${actionBadge(log.actionType)}`}>{log.actionType}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{log.entity}</td>
+                              <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate" title={log.details}>{log.details}</td>
+                              <td className="px-4 py-3 text-center">
+                                {log.actionType === 'DELETE' && log.backupData && (
+                                  <button onClick={() => handleRestore(log)} className="text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg flex items-center gap-1 text-xs font-medium mx-auto transition-colors">
+                                    <IconRefreshCw className="w-3 h-3" /> {t.restore}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {pagedLogs.length === 0 && (
+                            <tr><td colSpan={6} className="py-16 text-center text-gray-400 text-sm">موردی یافت نشد</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex justify-center items-center gap-3 p-4 border-t border-gray-100">
+                        <button onClick={() => setLogPage(p => Math.max(1, p - 1))} disabled={logPage === 1} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-200">قبلی</button>
+                        <span className="text-xs text-gray-500">{logPage} / {totalPages}</span>
+                        <button onClick={() => setLogPage(p => Math.min(totalPages, p + 1))} disabled={logPage === totalPages} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-200">بعدی</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
       {selectedTicket && renderTicketModal()}
     </div>
