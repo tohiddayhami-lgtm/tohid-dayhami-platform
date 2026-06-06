@@ -4,65 +4,40 @@ import { NewsArticle } from '../types';
 import { IconPlus, IconEdit, IconTrash, IconCheck, IconNewspaper, IconImage, IconUpload } from './Icons';
 import { saveNewsArticleToCloud, deleteNewsArticleFromCloud } from '../services/firebaseService';
 
-const SAMPLE_FA: NewsArticle[] = [
+const SAMPLE_BILINGUAL: NewsArticle[] = [
   {
-    id: 'news_fa_001', slug: 'راهنمای-صادرات-به-عمان',
+    id: 'news_001',
+    slug: 'راهنمای-صادرات-به-عمان',
     title: 'راهنمای کامل صادرات به کشور عمان در سال ۱۴۰۳',
     titleEn: 'Complete Guide to Exporting to Oman in 2024',
     summary: 'در این مقاله با مراحل کامل صادرات کالا به کشور عمان، مدارک لازم، مقررات گمرکی و فرصت‌های تجاری آشنا می‌شوید.',
-    summaryEn: 'This article covers the full process of exporting goods to Oman.',
-    content: 'عمان یکی از مهم‌ترین بازارهای هدف برای صادرکنندگان است...\n\nمراحل صادرات:\n۱. دریافت کارت بازرگانی\n۲. ثبت سفارش صادراتی\n۳. تهیه مدارک گمرکی\n\nمدارک لازم:\n- فاکتور تجاری (Commercial Invoice)\n- بارنامه (Bill of Lading)\n- گواهی مبدأ (Certificate of Origin)',
-    contentEn: '', category: 'راهنما و آموزش',
-    tags: ['عمان', 'صادرات', 'گمرک'], author: 'تیم توحید دیهمی',
+    summaryEn: 'This article covers the full process of exporting goods to Oman, including required documents, customs regulations, and trade opportunities.',
+    content: 'عمان یکی از مهم‌ترین بازارهای هدف برای صادرکنندگان است...\n\nمراحل صادرات:\n۱. دریافت کارت بازرگانی\n۲. ثبت سفارش صادراتی\n۳. تهیه مدارک گمرکی\n\nمدارک لازم:\n- فاکتور تجاری (Commercial Invoice)\n- بارنامه (Bill of Lading)\n- گواهی مبدأ (Certificate of Origin)\n\nفرصت‌های تجاری:\nبازار عمان ظرفیت بالایی برای محصولات غذایی، مواد ساختمانی و کالاهای مصرفی دارد.',
+    contentEn: 'Oman is one of the most strategic trade destinations in the Gulf region...\n\nKey Steps:\n1. Obtain an export license\n2. Register your export order\n3. Prepare customs documentation\n\nRequired Documents:\n- Commercial Invoice\n- Bill of Lading\n- Certificate of Origin\n- Packing List\n\nTrade Opportunities:\nOman\'s market has strong demand for food products, construction materials, and consumer goods.',
+    category: 'راهنما و آموزش',
+    tags: ['عمان', 'صادرات', 'گمرک', 'oman', 'export', 'customs'],
+    author: 'تیم توحید دیهمی / Tohid Dayhami Team',
     publishedAt: '2024-03-15T10:00:00.000Z', isPublished: true,
     coverImage: '', viewCount: 0,
-    metaDescription: 'راهنمای جامع صادرات به عمان - مراحل، مدارک و مقررات گمرکی',
-    metaKeywords: 'صادرات به عمان، گمرک عمان'
+    metaDescription: 'راهنمای جامع صادرات به عمان - مراحل، مدارک و مقررات گمرکی | Step-by-step guide for exporting to Oman',
+    metaKeywords: 'صادرات به عمان، گمرک عمان، export to Oman, Oman customs'
   },
   {
-    id: 'news_fa_002', slug: 'استانداردهای-بسته-بندی-صادراتی',
+    id: 'news_002',
+    slug: 'استانداردهای-بسته-بندی-صادراتی',
     title: 'استانداردهای بسته‌بندی برای ورود به بازارهای اروپایی',
-    titleEn: 'Packaging Standards for European Market Entry',
-    summary: 'بسته‌بندی مناسب یکی از کلیدی‌ترین عوامل موفقیت در صادرات است.',
-    summaryEn: 'Proper packaging is one of the key success factors in exports.',
-    content: 'بازارهای اروپایی دارای استانداردهای سختگیرانه‌ای هستند...\n\nالزامات اصلی:\n- برچسب‌گذاری به زبان کشور مقصد\n- درج تاریخ انقضا و کد تولید\n- رعایت استانداردهای زیست‌محیطی\n\nگواهینامه‌های مورد نیاز:\n- CE Marking\n- ISO 22000 برای مواد غذایی',
-    contentEn: '', category: 'قوانین و مقررات',
-    tags: ['بسته‌بندی', 'اروپا', 'استاندارد'], author: 'تیم توحید دیهمی',
+    titleEn: 'EU Packaging Standards Every Exporter Must Know',
+    summary: 'بسته‌بندی مناسب یکی از کلیدی‌ترین عوامل موفقیت در صادرات است. در این مقاله استانداردهای لازم را مرور می‌کنیم.',
+    summaryEn: 'Entering European markets requires strict packaging compliance. This article outlines the key standards and certifications required.',
+    content: 'بازارهای اروپایی دارای استانداردهای سختگیرانه‌ای برای بسته‌بندی هستند...\n\nالزامات اصلی:\n- برچسب‌گذاری به زبان کشور مقصد\n- درج تاریخ انقضا و کد تولید\n- رعایت استانداردهای زیست‌محیطی\n\nگواهینامه‌های مورد نیاز:\n- CE Marking\n- ISO 22000 برای مواد غذایی\n- REACH برای محصولات شیمیایی\n\nنکات مهم:\nبا یک طراح بسته‌بندی معتبر آشنا با استانداردهای اروپایی همکاری کنید.',
+    contentEn: 'The European Union enforces some of the world\'s most rigorous packaging standards...\n\nCore Requirements:\n- Labeling in the destination country\'s language\n- Expiry date and production batch codes\n- Compliance with environmental directives\n\nRequired Certifications:\n- CE Marking\n- ISO 22000 for food products\n- REACH compliance for chemical products\n\nTips for Exporters:\nWork with a certified packaging designer familiar with EU norms to avoid costly rejections at customs.',
+    category: 'قوانین و مقررات',
+    tags: ['بسته‌بندی', 'اروپا', 'استاندارد', 'packaging', 'EU', 'standards'],
+    author: 'تیم توحید دیهمی / Tohid Dayhami Team',
     publishedAt: '2024-03-20T08:00:00.000Z', isPublished: true,
     coverImage: '', viewCount: 0,
-    metaDescription: 'استانداردهای بسته‌بندی صادراتی برای بازارهای اروپایی',
-    metaKeywords: 'بسته‌بندی صادراتی، استاندارد اروپا'
-  }
-];
-
-const SAMPLE_EN: NewsArticle[] = [
-  {
-    id: 'news_en_001', slug: 'oman-export-guide-2024',
-    title: 'Complete Guide to Exporting to Oman in 2024',
-    titleEn: 'Complete Guide to Exporting to Oman in 2024',
-    summary: 'A step-by-step guide covering everything you need to know about exporting goods to Oman.',
-    summaryEn: 'A step-by-step guide covering everything you need to know about exporting goods to Oman.',
-    content: 'Oman is one of the most strategic trade destinations in the Gulf region...\n\nKey Steps:\n1. Obtain an export license\n2. Register your export order\n3. Prepare customs documentation\n\nRequired Documents:\n- Commercial Invoice\n- Bill of Lading\n- Certificate of Origin\n- Packing List',
-    contentEn: 'Oman is one of the most strategic trade destinations in the Gulf region...\n\nKey Steps:\n1. Obtain an export license\n2. Register your export order\n3. Prepare customs documentation\n\nRequired Documents:\n- Commercial Invoice\n- Bill of Lading\n- Certificate of Origin\n- Packing List',
-    category: 'راهنما و آموزش', tags: ['oman', 'export', 'customs'],
-    author: 'Tohid Dayhami Team', publishedAt: '2024-03-15T10:00:00.000Z',
-    isPublished: true, coverImage: '', viewCount: 0,
-    metaDescription: 'Step-by-step guide for exporting to Oman — documents, customs and trade opportunities.',
-    metaKeywords: 'export to Oman, Oman customs, Gulf trade'
-  },
-  {
-    id: 'news_en_002', slug: 'eu-packaging-standards-exporters',
-    title: 'EU Packaging Standards Every Exporter Must Know',
-    titleEn: 'EU Packaging Standards Every Exporter Must Know',
-    summary: 'Entering European markets requires strict packaging compliance. This article outlines the key standards.',
-    summaryEn: 'Entering European markets requires strict packaging compliance. This article outlines the key standards.',
-    content: 'The European Union enforces some of the world\'s most rigorous packaging standards...\n\nCore Requirements:\n- Labeling in the destination country\'s language\n- Expiry date and production batch codes\n- Environmental compliance\n\nRequired Certifications:\n- CE Marking\n- ISO 22000 for food products\n- REACH for chemicals',
-    contentEn: 'The European Union enforces some of the world\'s most rigorous packaging standards...\n\nCore Requirements:\n- Labeling in the destination country\'s language\n- Expiry date and production batch codes\n- Environmental compliance\n\nRequired Certifications:\n- CE Marking\n- ISO 22000 for food products\n- REACH for chemicals',
-    category: 'قوانین و مقررات', tags: ['packaging', 'EU', 'standards'],
-    author: 'Tohid Dayhami Team', publishedAt: '2024-03-20T08:00:00.000Z',
-    isPublished: true, coverImage: '', viewCount: 0,
-    metaDescription: 'EU packaging standards for exporters — CE marking, ISO 22000, and labeling requirements.',
-    metaKeywords: 'EU packaging standards, CE marking, export compliance'
+    metaDescription: 'استانداردهای بسته‌بندی صادراتی برای بازارهای اروپایی | EU packaging standards for exporters',
+    metaKeywords: 'بسته‌بندی صادراتی، استاندارد اروپا، EU packaging standards, CE marking'
   }
 ];
 
@@ -226,16 +201,10 @@ export const NewsManager: React.FC<Props> = ({ articles }) => {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
-            onClick={() => downloadJson(SAMPLE_FA, 'news-sample-fa.json')}
+            onClick={() => downloadJson(SAMPLE_BILINGUAL, 'news-bilingual-sample.json')}
             className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 text-gray-500 text-xs rounded-lg hover:bg-gray-50 transition-colors"
           >
-            ↓ سمپل فارسی
-          </button>
-          <button
-            onClick={() => downloadJson(SAMPLE_EN, 'news-sample-en.json')}
-            className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-gray-300 text-gray-500 text-xs rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            ↓ Sample EN
+            ↓ سمپل دوزبانه / Bilingual Sample
           </button>
           <button
             onClick={() => importInputRef.current?.click()}
