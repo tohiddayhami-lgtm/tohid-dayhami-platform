@@ -124,7 +124,10 @@ export const AdminDashboard: React.FC<Props> = ({
   const [logActionFilter, setLogActionFilter] = useState('all');
   const [logEntityFilter, setLogEntityFilter] = useState('all');
   const [logActorFilter, setLogActorFilter] = useState('all');
-  const [logDateFrom, setLogDateFrom] = useState('');
+  const [logDateFrom, setLogDateFrom] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  });
   const [logDateTo, setLogDateTo] = useState('');
   const [logView, setLogView] = useState<'table' | 'report'>('table');
   const [logPage, setLogPage] = useState(1);
