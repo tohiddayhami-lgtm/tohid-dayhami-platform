@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, UserGoals, StrategicObjective, GoalPeriod, Expense, NewsArticle, AnalyticsEvent, NotificationLog } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -140,32 +140,6 @@ export const subscribeToObjectives = (callback: (objs: StrategicObjective[]) => 
     return onSnapshot(q, (snapshot) => {
         const list = snapshot.docs.map(d => d.data() as StrategicObjective);
         callback(list);
-    });
-};
-
-// --- Goal Tracker Functions ---
-
-export const saveUserGoals = async (goals: UserGoals) => {
-    const docId = `${goals.userId}_${goals.period}`;
-    await setDoc(doc(db, "user_goals", docId), sanitizeData(goals));
-};
-
-export const subscribeToAllUserGoalsByPeriod = (period: GoalPeriod, callback: (goals: UserGoals[]) => void) => {
-    const q = query(collection(db, "user_goals"), where("period", "==", period));
-    return onSnapshot(q, (snapshot) => {
-        const list = snapshot.docs.map(d => d.data() as UserGoals);
-        callback(list);
-    });
-};
-
-export const subscribeToUserGoals = (userId: string, period: GoalPeriod, callback: (goals: UserGoals | null) => void) => {
-    const docId = `${userId}_${period}`;
-    return onSnapshot(doc(db, "user_goals", docId), (snap) => {
-        if (snap.exists()) {
-            callback(snap.data() as UserGoals);
-        } else {
-            callback(null);
-        }
     });
 };
 

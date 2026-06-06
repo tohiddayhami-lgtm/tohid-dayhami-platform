@@ -354,38 +354,6 @@ export interface PerformanceReport {
   updatedAt: string;
 }
 
-// --- Goal Tracker Types ---
-export interface GoalSubTask {
-  id: string;
-  text: string;
-  isCompleted: boolean;
-}
-
-export interface GoalTask {
-  id: string;
-  text: string;
-  isCompleted: boolean;
-  subTasks?: GoalSubTask[]; // New: Sub-steps for break-down
-}
-
-export interface GoalCategory {
-  id: string;
-  title: string;
-  color: string; 
-  tasks: GoalTask[];
-  type: 'personal' | 'business';
-}
-
-export type GoalPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'five_year';
-
-export interface UserGoals {
-  id: string; // docId: userId_period
-  userId: string;
-  userName: string;
-  period: GoalPeriod;
-  lastUpdated: string;
-  categories: GoalCategory[];
-}
 
 export interface StrategicObjective {
   id: string;

@@ -17,7 +17,6 @@ import { PerformanceReports } from './PerformanceReports';
 import { KPIManager } from './KPIManager';
 import { SalesDashboard } from './SalesDashboard';
 import { ReportManager } from './ReportManager';
-import { GoalTracker } from './GoalTracker';
 import { ExpenseManager } from './ExpenseManager';
 import { FormBuilderPanel } from './FormBuilderPanel';
 import { NotificationCenter } from './NotificationCenter';
@@ -86,7 +85,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'goals' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -194,7 +193,6 @@ export const AdminDashboard: React.FC<Props> = ({
           forms: 'فرم‌ها و استانداردها',
           sales: 'مدیریت فروش',
           staff_reports: 'گزارش‌های پرسنلی',
-          goals: 'ردیاب اهداف (Goals)',
           logout: 'خروج از سیستم',
           myTasks: 'کارهای من',
           allRequests: 'کل درخواست‌های باز',
@@ -338,7 +336,6 @@ export const AdminDashboard: React.FC<Props> = ({
           forms: 'Forms & Standards',
           sales: 'Sales Dashboard',
           staff_reports: 'Staff Reports',
-          goals: 'SMART Goals Tracker',
           logout: 'Logout',
           myTasks: 'My Tasks',
           allRequests: 'All Open Requests',
@@ -1044,7 +1041,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconActivity className="w-5 h-5" /><span className="font-medium">{t.overview}</span></button>
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative ${activeTab === 'tasks' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconList className="w-5 h-5" /><span className="font-medium">{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-4 ltr:right-4 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
                 <button onClick={() => setActiveTab('staff_reports')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'staff_reports' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconClipboard className="w-5 h-5" /><span className="font-medium">{t.staff_reports}</span></button>
-                <button onClick={() => setActiveTab('goals')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'goals' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconTarget className="w-5 h-5" /><span className="font-medium">{t.goals}</span></button>
+
                 <button onClick={() => setActiveTab('meetings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'meetings' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconCalendarClock className="w-5 h-5" /><span className="font-medium">{t.meetings}</span></button>
                 <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative ${activeTab === 'messages' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconMail className="w-5 h-5" /><span className="font-medium">{t.messages}</span>{unreadMessagesCount > 0 && <span className="absolute rtl:left-4 ltr:right-4 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{unreadMessagesCount}</span>}</button>
                 <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'projects' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'}`}><IconProject className="w-5 h-5" /><span className="font-medium">{t.projects}</span></button>
@@ -1062,7 +1059,6 @@ export const AdminDashboard: React.FC<Props> = ({
       <div className="flex-grow">
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
-        {activeTab === 'goals' && <GoalTracker currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
 
