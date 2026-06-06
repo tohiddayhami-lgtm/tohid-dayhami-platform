@@ -511,19 +511,19 @@ export interface NotificationConfig {
   onNewTicket: boolean;
   onNewMessage: boolean;
   onStatusChange: boolean;
-  // Meeting notifications
-  onMeetingCreated: boolean;
-  onMeetingReminder: boolean;
-  onDailySummary: boolean;
+  // Meeting notifications (optional — may not exist in older Firestore configs)
+  onMeetingCreated?: boolean;
+  onMeetingReminder?: boolean;
+  onDailySummary?: boolean;
   // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
   ticketTemplate: string;
   messageTemplate: string;
   statusTemplate: string;
   // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation}, {organizerName})
-  meetingCreatedTemplate: string;
-  meetingReminderTemplate: string;
+  meetingCreatedTemplate?: string;
+  meetingReminderTemplate?: string;
   // Daily summary template ({recipientName}, {tomorrowDate}, {meetingsList})
-  dailySummaryTemplate: string;
+  dailySummaryTemplate?: string;
   // Per-person config (keyed by personnel ID)
   personnelPhones: Record<string, string>;    // WhatsApp phone number
   personnelApiKeys: Record<string, string>;   // CallMeBot API key (per person)

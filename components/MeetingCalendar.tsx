@@ -89,7 +89,8 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
 
   const sendMeetingCreatedNotifications = async (meeting: Meeting) => {
     const nc = notificationConfig;
-    if (!nc?.enabled || !nc.onMeetingCreated) return;
+    // onMeetingCreated defaults to true when field is missing from Firestore
+    if (!nc?.enabled || nc.onMeetingCreated === false) return;
 
     // Notify all attendees (exclude the organizer who created it)
     const recipientIds = [...new Set(meeting.attendeeIds || [])];

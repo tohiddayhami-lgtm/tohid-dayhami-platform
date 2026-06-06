@@ -387,7 +387,7 @@ const App: React.FC = () => {
     meetingTimersRef.current = [];
 
     const nc = appConfig.notificationConfig;
-    if (!nc?.enabled || !nc.onMeetingReminder) return;
+    if (!nc?.enabled || nc.onMeetingReminder === false) return;
 
     const SENT_KEY = 'meeting_reminder_sent_v1';
     let sent: Record<string, boolean> = {};
@@ -408,7 +408,7 @@ const App: React.FC = () => {
 
       const timer = setTimeout(async () => {
         const currentNc = appConfig.notificationConfig;
-        if (!currentNc?.enabled || !currentNc.onMeetingReminder) return;
+        if (!currentNc?.enabled || currentNc.onMeetingReminder === false) return;
 
         const allPersonIds = [...new Set([meeting.organizerId, ...(meeting.attendeeIds || [])])];
         for (const pid of allPersonIds) {
@@ -453,7 +453,7 @@ const App: React.FC = () => {
     if (dailySummaryTimerRef.current) clearTimeout(dailySummaryTimerRef.current);
 
     const nc = appConfig.notificationConfig;
-    if (!nc?.enabled || !nc.onDailySummary) return;
+    if (!nc?.enabled || nc.onDailySummary === false) return;
 
     const now = new Date();
     // 17:00 Tehran = local 17:00 (assuming client runs in Tehran timezone)
@@ -469,7 +469,7 @@ const App: React.FC = () => {
 
     dailySummaryTimerRef.current = setTimeout(async () => {
       const currentNc = appConfig.notificationConfig;
-      if (!currentNc?.enabled || !currentNc.onDailySummary) return;
+      if (!currentNc?.enabled || currentNc.onDailySummary === false) return;
 
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
