@@ -780,6 +780,25 @@ const App: React.FC = () => {
     setCurrentCustomerUser(null);
   };
 
+  const handleCustomerUploadSubmit = async (ticketId: string, message: string, files: AttachedFile[]) => {
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+    const now = new Date().toISOString();
+    const newEntry: TimelineEntry = {
+      type: 'customer_upload',
+      title: 'مدرک / اطلاعات از مشتری',
+      description: message || undefined,
+      actorName: ticket.customerName,
+      timestamp: now,
+      visibility: 'public',
+      ...(files.length > 0 && { files }),
+    };
+    await updateTicketInCloud(ticketId, {
+      timeline: [...(ticket.timeline || []), newEntry],
+      customerUploadWindow: { ...(ticket.customerUploadWindow as any), isOpen: false },
+    });
+  };
+
   const handleCustomerAddComment = async (ticketId: string, commentText: string, files?: AttachedFile[]) => {
     const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket || !currentCustomerUser) return;
@@ -1137,7 +1156,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} lang={lang} />
+              <TrackingView tickets={tickets} services={services} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} />
             )}
 
             {view === 'custom-form' && (

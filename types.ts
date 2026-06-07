@@ -91,13 +91,22 @@ export interface Customer {
 }
 
 export interface TimelineEntry {
-  type: 'status_change' | 'comment' | 'assignment' | 'creation' | 'update' | 'project_update' | 'invoice_created';
+  type: 'status_change' | 'comment' | 'assignment' | 'creation' | 'update' | 'project_update' | 'invoice_created' | 'customer_upload';
   title: string;
-  description?: string; 
-  actorName: string; 
+  description?: string;
+  actorName: string;
   timestamp: string;
   visibility?: 'public' | 'internal';
   files?: AttachedFile[];
+}
+
+export interface CustomerUploadWindow {
+  isOpen: boolean;
+  openedBy: string;
+  openedAt: string;
+  expiresAt: string;
+  prompt: string;
+  promptEn?: string;
 }
 
 export interface Payment {
@@ -199,12 +208,12 @@ export interface ProjectDetails {
 
 export interface Ticket {
   id: string;
-  customerName: string; 
-  companyName?: string; 
-  location: string; 
+  customerName: string;
+  companyName?: string;
+  location: string;
   phoneNumber: string;
-  whatsappNumber: string; 
-  businessType?: string; 
+  whatsappNumber: string;
+  businessType?: string;
   serviceId: string;
   selectedSubServices?: string[];
   description: string;
@@ -214,10 +223,11 @@ export interface Ticket {
   aiAnalysis?: string;
   priority?: 'Low' | 'Medium' | 'High';
   assignedTo?: string;
-  timeline: TimelineEntry[]; 
-  customData?: Record<string, string>; 
+  timeline: TimelineEntry[];
+  customData?: Record<string, string>;
   projectData?: ProjectDetails;
   discountApplied?: boolean;
+  customerUploadWindow?: CustomerUploadWindow;
 }
 
 export interface InternalMessage {

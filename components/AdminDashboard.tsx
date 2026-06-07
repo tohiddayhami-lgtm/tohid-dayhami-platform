@@ -172,6 +172,11 @@ export const AdminDashboard: React.FC<Props> = ({
   const [defUploading, setDefUploading] = useState(false);
   const [pendingDefFile, setPendingDefFile] = useState<{ url: string; name: string } | null>(null);
   const defFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Customer upload window
+  const [showUploadWindowForm, setShowUploadWindowForm] = useState(false);
+  const [uploadWindowPrompt, setUploadWindowPrompt] = useState('');
+  const [uploadWindowDuration, setUploadWindowDuration] = useState(48);
   
   const [newPayment, setNewPayment] = useState<Partial<Payment>>({
       amount: 0,
@@ -782,6 +787,25 @@ export const AdminDashboard: React.FC<Props> = ({
       alert(lang === 'fa' ? 'گزارش روزانه با موفقیت ثبت شد.' : 'Daily report submitted.');
   };
 
+  const handleOpenUploadWindow = () => {
+    if (!selectedTicket || !uploadWindowPrompt.trim()) return;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + uploadWindowDuration * 3_600_000).toISOString();
+    onUpdateTicket(selectedTicket.id, {
+      customerUploadWindow: { isOpen: true, openedBy: currentUser.fullName, openedAt: now.toISOString(), expiresAt, prompt: uploadWindowPrompt.trim() },
+      timeline: [...(selectedTicket.timeline || []), { type: 'update', title: lang === 'fa' ? 'پنجره آپلود مشتری باز شد' : 'Customer upload window opened', description: uploadWindowPrompt.trim(), actorName: currentUser.fullName, timestamp: now.toISOString(), visibility: 'internal' }],
+    }, currentUser.fullName);
+    setShowUploadWindowForm(false);
+    setUploadWindowPrompt('');
+  };
+
+  const handleCloseUploadWindow = () => {
+    if (!selectedTicket) return;
+    onUpdateTicket(selectedTicket.id, {
+      customerUploadWindow: { ...(selectedTicket.customerUploadWindow as any), isOpen: false },
+    }, currentUser.fullName);
+  };
+
   const handleInsertMention = (username: string) => { setNewComment(prev => prev + `@${username} `); setShowMentionList(false); };
   const handleStartEdit = () => { if (!selectedTicket) return; setEditingTicketData({ customerName: selectedTicket.customerName, companyName: selectedTicket.companyName, phoneNumber: selectedTicket.phoneNumber, whatsappNumber: selectedTicket.whatsappNumber, location: selectedTicket.location, businessType: selectedTicket.businessType, description: selectedTicket.description, serviceId: selectedTicket.serviceId }); setIsEditingTicket(true); };
   const handleSaveEdit = () => { if (!selectedTicket) return; onUpdateTicket(selectedTicket.id, editingTicketData, currentUser.fullName, 'Edit Basic Info'); logSystemAction('UPDATE', 'Ticket', `Edited ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); setIsEditingTicket(false); };
@@ -1173,6 +1197,60 @@ export const AdminDashboard: React.FC<Props> = ({
                                         <button onClick={handleAssignTicket} disabled={!canAssign || tempAssignedTo === selectedTicket.assignedTo} className="bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:bg-gray-300">{t.assign}</button>
                                     </div>
                                 </div>
+                                {/* Customer upload window card */}
+                                {(() => {
+                                  const win = selectedTicket.customerUploadWindow;
+                                  const winOpen = win?.isOpen && new Date(win.expiresAt).getTime() > Date.now();
+                                  const winExpired = win && !win.isOpen === false && !winOpen;
+                                  const hoursLeft = winOpen ? Math.max(0, Math.round((new Date(win!.expiresAt).getTime() - Date.now()) / 3_600_000)) : 0;
+                                  return (
+                                    <div className={`p-4 rounded-2xl border ${winOpen ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'} shadow-sm`}>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <IconUpload className="w-4 h-4 text-amber-500" />
+                                        <span className="text-xs font-bold text-gray-600">{lang === 'fa' ? 'پنجره آپلود مشتری' : 'Customer Upload Window'}</span>
+                                        {winOpen && <span className="mr-auto text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">{lang === 'fa' ? `باز — ${hoursLeft} ساعت مانده` : `Open — ${hoursLeft}h left`}</span>}
+                                        {win && !winOpen && <span className="mr-auto text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{lang === 'fa' ? 'بسته' : 'Closed'}</span>}
+                                      </div>
+                                      {winOpen ? (
+                                        <div className="space-y-2">
+                                          <p className="text-xs text-gray-600 bg-amber-100/60 rounded-lg px-3 py-2 leading-relaxed">{win!.prompt}</p>
+                                          <button onClick={handleCloseUploadWindow} className="w-full text-xs text-red-600 border border-red-200 py-1.5 rounded-lg hover:bg-red-50 transition-colors font-medium">
+                                            {lang === 'fa' ? '✕ بستن پنجره' : '✕ Close Window'}
+                                          </button>
+                                        </div>
+                                      ) : showUploadWindowForm ? (
+                                        <div className="space-y-2">
+                                          <textarea
+                                            value={uploadWindowPrompt}
+                                            onChange={e => setUploadWindowPrompt(e.target.value)}
+                                            rows={3}
+                                            placeholder={lang === 'fa' ? 'پیام به مشتری — چه مدرک یا اطلاعاتی نیاز دارید؟' : 'Message to customer — what document/info do you need?'}
+                                            className="w-full border border-gray-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-amber-400 outline-none resize-none"
+                                          />
+                                          <div className="flex gap-1.5">
+                                            {[24, 48, 72, 168].map(h => (
+                                              <button key={h} type="button"
+                                                onClick={() => setUploadWindowDuration(h)}
+                                                className={`flex-1 text-[10px] py-1 rounded border transition-colors ${uploadWindowDuration === h ? 'bg-amber-500 text-white border-amber-500' : 'border-gray-200 text-gray-500 hover:border-amber-300'}`}>
+                                                {h === 168 ? (lang === 'fa' ? '۷ روز' : '7d') : (lang === 'fa' ? `${h}ساعت` : `${h}h`)}
+                                              </button>
+                                            ))}
+                                          </div>
+                                          <div className="flex gap-2">
+                                            <button onClick={() => { setShowUploadWindowForm(false); setUploadWindowPrompt(''); }} className="flex-1 text-xs py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">{lang === 'fa' ? 'انصراف' : 'Cancel'}</button>
+                                            <button onClick={handleOpenUploadWindow} disabled={!uploadWindowPrompt.trim()} className="flex-1 text-xs py-1.5 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 disabled:opacity-50">{lang === 'fa' ? 'باز کردن' : 'Open'}</button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button onClick={() => setShowUploadWindowForm(true)}
+                                          className="w-full text-xs text-amber-700 border border-amber-200 py-1.5 rounded-lg hover:bg-amber-50 transition-colors font-medium flex items-center justify-center gap-1.5">
+                                          <IconUpload className="w-3.5 h-3.5" />
+                                          {lang === 'fa' ? 'باز کردن پنجره آپلود' : 'Open Upload Window'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 {(isAdmin || isMaster) && (
                                     <div className="bg-red-50 p-4 rounded-2xl border border-red-100">
                                         <button onClick={() => handleDelete(selectedTicket.id)} className="w-full text-red-600 text-sm font-bold flex items-center justify-center gap-2 hover:bg-red-100 p-2 rounded-lg transition-colors"><IconTrash className="w-4 h-4" /> {t.delete}</button>
