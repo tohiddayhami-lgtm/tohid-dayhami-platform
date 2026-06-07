@@ -655,6 +655,8 @@ export interface ProcessNode {
   isCollapsed: boolean;
 }
 
+export type MindMapLayout = 'tree-right' | 'tree-top' | 'flowchart';
+
 export interface CompanyProcess {
   id: string;
   title: string;
@@ -667,4 +669,5 @@ export interface CompanyProcess {
   rootNodeId: string;
   lastUpdated?: string;
   updatedBy?: string;
+  layoutType?: MindMapLayout;
 }

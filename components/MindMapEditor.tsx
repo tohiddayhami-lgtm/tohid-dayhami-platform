@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { CompanyProcess, ProcessNode, ProcessNodeFile } from '../types';
+import { CompanyProcess, ProcessNode, ProcessNodeFile, MindMapLayout } from '../types';
 import { Personnel } from '../types';
 import { uploadFile } from '../services/firebaseService';
-import { IconPlus, IconTrash, IconEdit, IconCheck, IconFolder, IconPaperclip2, IconNote, IconZoomIn, IconZoomOut, IconFitScreen } from './Icons';
+import { IconPlus, IconTrash, IconLayout, IconCheck, IconFolder, IconZoomIn, IconZoomOut, IconFitScreen } from './Icons';
 
 interface Props {
   process: CompanyProcess;
@@ -16,11 +16,15 @@ const NODE_W = 164;
 const NODE_H = 44;
 const H_STEP = 280;
 const V_GAP = 18;
+const V_STEP = 130;
+const H_GAP_TOP = 28;
 
 const BRANCH_COLORS = [
   '#2563EB', '#059669', '#D97706', '#7C3AED',
   '#DC2626', '#0891B2', '#EA580C', '#DB2777',
 ];
+
+// ─── Right-tree layout ────────────────────────────────────────────────────────
 
 function getSubtreeHeight(nodeId: string, nodeMap: Map<string, ProcessNode>): number {
   const node = nodeMap.get(nodeId);
@@ -34,28 +38,19 @@ function getSubtreeHeight(nodeId: string, nodeMap: Map<string, ProcessNode>): nu
 }
 
 function assignPositions(
-  nodeId: string,
-  depth: number,
-  top: number,
-  nodeMap: Map<string, ProcessNode>,
-  positions: Record<string, { x: number; y: number }>
+  nodeId: string, depth: number, top: number,
+  nodeMap: Map<string, ProcessNode>, positions: Record<string, { x: number; y: number }>
 ): void {
   const node = nodeMap.get(nodeId);
   if (!node) return;
   const visible = node.isCollapsed ? [] : node.childIds.filter(id => nodeMap.has(id));
-
-  if (visible.length === 0) {
-    positions[nodeId] = { x: depth * H_STEP, y: top };
-    return;
-  }
-
+  if (visible.length === 0) { positions[nodeId] = { x: depth * H_STEP, y: top }; return; }
   let childTop = top;
   for (const childId of visible) {
     const h = getSubtreeHeight(childId, nodeMap);
     assignPositions(childId, depth + 1, childTop, nodeMap, positions);
     childTop += h + V_GAP;
   }
-
   const firstY = positions[visible[0]]?.y ?? top;
   const lastY = positions[visible[visible.length - 1]]?.y ?? top;
   positions[nodeId] = { x: depth * H_STEP, y: (firstY + lastY) / 2 };
@@ -68,9 +63,54 @@ function computePositions(rootId: string, nodes: ProcessNode[]): Record<string, 
   return positions;
 }
 
+// ─── Top-down layout ──────────────────────────────────────────────────────────
+
+function getSubtreeWidth(nodeId: string, nodeMap: Map<string, ProcessNode>): number {
+  const node = nodeMap.get(nodeId);
+  if (!node) return NODE_W;
+  if (node.isCollapsed || node.childIds.length === 0) return NODE_W;
+  const visible = node.childIds.filter(id => nodeMap.has(id));
+  if (visible.length === 0) return NODE_W;
+  let total = 0;
+  visible.forEach((id, i) => { total += getSubtreeWidth(id, nodeMap) + (i > 0 ? H_GAP_TOP : 0); });
+  return Math.max(NODE_W, total);
+}
+
+function assignPositionsTopDown(
+  nodeId: string, depth: number, left: number,
+  nodeMap: Map<string, ProcessNode>, positions: Record<string, { x: number; y: number }>
+): void {
+  const node = nodeMap.get(nodeId);
+  if (!node) return;
+  const visible = node.isCollapsed ? [] : node.childIds.filter(id => nodeMap.has(id));
+  const subtreeW = getSubtreeWidth(nodeId, nodeMap);
+  positions[nodeId] = { x: left + (subtreeW - NODE_W) / 2, y: depth * V_STEP };
+  if (visible.length === 0) return;
+  let childLeft = left;
+  for (const childId of visible) {
+    const w = getSubtreeWidth(childId, nodeMap);
+    assignPositionsTopDown(childId, depth + 1, childLeft, nodeMap, positions);
+    childLeft += w + H_GAP_TOP;
+  }
+}
+
+function computePositionsTopDown(rootId: string, nodes: ProcessNode[]): Record<string, { x: number; y: number }> {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const positions: Record<string, { x: number; y: number }> = {};
+  assignPositionsTopDown(rootId, 0, 0, nodeMap, positions);
+  return positions;
+}
+
+// ─── Path helpers ─────────────────────────────────────────────────────────────
+
 function getBezierPath(x1: number, y1: number, x2: number, y2: number): string {
   const midX = (x1 + x2) / 2;
   return `M ${x1} ${y1} C ${midX} ${y1} ${midX} ${y2} ${x2} ${y2}`;
+}
+
+function getBezierPathVertical(x1: number, y1: number, x2: number, y2: number): string {
+  const midY = (y1 + y2) / 2;
+  return `M ${x1} ${y1} C ${x1} ${midY} ${x2} ${midY} ${x2} ${y2}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -79,8 +119,19 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ─── Layout labels ─────────────────────────────────────────────────────────────
+
+const LAYOUT_OPTIONS: { value: MindMapLayout; label: string }[] = [
+  { value: 'tree-right', label: 'درخت →' },
+  { value: 'tree-top', label: 'سازمانی ↓' },
+  { value: 'flowchart', label: 'فلوچارت ↓' },
+];
+
+// ─── Component ─────────────────────────────────────────────────────────────────
+
 export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, onBack }) => {
   const [nodes, setNodes] = useState<ProcessNode[]>(process.nodes);
+  const [layoutType, setLayoutType] = useState<MindMapLayout>(process.layoutType ?? 'tree-right');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scale, setScale] = useState(0.85);
   const [pan, setPan] = useState({ x: 60, y: 60 });
@@ -94,14 +145,22 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [inlineEditing, setInlineEditing] = useState<string | null>(null);
   const [inlineText, setInlineText] = useState('');
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
+  const isVertical = layoutType !== 'tree-right';
+
   const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
-  const positions = useMemo(() => computePositions(process.rootNodeId, nodes), [nodes, process.rootNodeId]);
+  const positions = useMemo(
+    () => isVertical
+      ? computePositionsTopDown(process.rootNodeId, nodes)
+      : computePositions(process.rootNodeId, nodes),
+    [nodes, process.rootNodeId, isVertical]
+  );
   const selectedNode = selectedId ? nodeMap.get(selectedId) ?? null : null;
 
   useEffect(() => {
@@ -119,26 +178,74 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     }
   }, [inlineEditing]);
 
-  // Auto-fit on first render so the map is centered in the viewport
   useEffect(() => {
     const t = setTimeout(() => fitToScreen(), 120);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const triggerSave = useCallback((updatedNodes: ProcessNode[]) => {
+  // Re-fit when layout changes
+  useEffect(() => {
+    const t = setTimeout(() => fitToScreen(), 80);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutType]);
+
+  const triggerSave = useCallback((updatedNodes: ProcessNode[], lt?: MindMapLayout) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setIsSaving(true);
     saveTimerRef.current = setTimeout(() => {
       onSave({
         ...process,
         nodes: updatedNodes,
+        layoutType: lt ?? layoutType,
         lastUpdated: new Date().toISOString(),
         updatedBy: currentUser.fullName,
       });
       setIsSaving(false);
     }, 700);
-  }, [process, currentUser, onSave]);
+  }, [process, currentUser, onSave, layoutType]);
+
+  const handleLayoutChange = (lt: MindMapLayout) => {
+    setLayoutType(lt);
+    setShowLayoutMenu(false);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setIsSaving(true);
+    onSave({
+      ...process,
+      nodes,
+      layoutType: lt,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: currentUser.fullName,
+    });
+    setIsSaving(false);
+  };
+
+  const handleJsonExport = () => {
+    const exportData = {
+      title: process.title,
+      description: process.description,
+      layoutType,
+      rootNodeId: process.rootNodeId,
+      nodes: nodes.map(n => ({
+        id: n.id,
+        label: n.label,
+        parentId: n.parentId,
+        childIds: n.childIds,
+        notes: n.notes,
+        color: n.color,
+        isCollapsed: n.isCollapsed,
+      })),
+    };
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${process.title.replace(/[/\\?%*:|"<>]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const updateNode = useCallback((id: string, updates: Partial<ProcessNode>) => {
     setNodes(prev => {
@@ -163,16 +270,9 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
       : (parent.color || BRANCH_COLORS[0]);
 
     const newNode: ProcessNode = {
-      id: newId,
-      label: 'دسته‌بندی جدید',
-      parentId,
-      childIds: [],
-      notes: '',
-      files: [],
-      color,
-      isCollapsed: false,
+      id: newId, label: 'دسته‌بندی جدید', parentId, childIds: [],
+      notes: '', files: [], color, isCollapsed: false,
     };
-
     setNodes(prev => {
       const next = [
         ...prev.map(n => n.id === parentId ? { ...n, childIds: [...n.childIds, newId] } : n),
@@ -182,11 +282,7 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
       return next;
     });
     setSelectedId(newId);
-    // Start inline editing for new node
-    setTimeout(() => {
-      setInlineEditing(newId);
-      setInlineText('دسته‌بندی جدید');
-    }, 50);
+    setTimeout(() => { setInlineEditing(newId); setInlineText('دسته‌بندی جدید'); }, 50);
   }, [nodeMap, nodes, triggerSave]);
 
   const deleteNodeRecursive = useCallback((id: string) => {
@@ -218,16 +314,10 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     try {
       const { url } = await uploadFile(file, 'documents', (p) => setUploadProgress(p));
       const newFile: ProcessNodeFile = {
-        id: `file-${Date.now()}`,
-        name: file.name,
-        url,
-        type: file.type,
-        size: file.size,
+        id: `file-${Date.now()}`, name: file.name, url, type: file.type, size: file.size,
       };
-      updateNode(selectedId, {
-        files: [...(nodeMap.get(selectedId)?.files ?? []), newFile],
-      });
-    } catch (e) {
+      updateNode(selectedId, { files: [...(nodeMap.get(selectedId)?.files ?? []), newFile] });
+    } catch {
       alert('خطا در آپلود فایل. لطفاً دوباره تلاش کنید.');
     } finally {
       setUploading(false);
@@ -273,14 +363,12 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     setIsPanning(true);
     setPanStart({ mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y });
     setSelectedId(null);
+    setShowLayoutMenu(false);
   }, [pan]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isPanning) return;
-    setPan({
-      x: panStart.px + (e.clientX - panStart.mx),
-      y: panStart.py + (e.clientY - panStart.my),
-    });
+    setPan({ x: panStart.px + (e.clientX - panStart.mx), y: panStart.py + (e.clientY - panStart.my) });
   }, [isPanning, panStart]);
 
   const handleMouseUp = useCallback(() => setIsPanning(false), []);
@@ -299,21 +387,16 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
       const p = positions[node.parentId];
       const c = positions[node.id];
       if (!p || !c) return;
-      const x1 = p.x + NODE_W;
-      const y1 = p.y + NODE_H / 2;
-      const x2 = c.x;
-      const y2 = c.y + NODE_H / 2;
+      let d: string;
+      if (isVertical) {
+        d = getBezierPathVertical(p.x + NODE_W / 2, p.y + NODE_H, c.x + NODE_W / 2, c.y);
+      } else {
+        d = getBezierPath(p.x + NODE_W, p.y + NODE_H / 2, c.x, c.y + NODE_H / 2);
+      }
       const color = node.color || '#6B7280';
       paths.push(
-        <path
-          key={`conn-${node.id}`}
-          d={getBezierPath(x1, y1, x2, y2)}
-          stroke={color}
-          strokeWidth="2"
-          strokeOpacity="0.6"
-          fill="none"
-          strokeLinecap="round"
-        />
+        <path key={`conn-${node.id}`} d={d} stroke={color} strokeWidth="2"
+          strokeOpacity="0.6" fill="none" strokeLinecap="round" />
       );
     });
     return paths;
@@ -333,27 +416,16 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
         <div
           key={node.id}
           data-node="true"
-          style={{
-            position: 'absolute',
-            left: pos.x,
-            top: pos.y,
-            width: NODE_W,
-            height: NODE_H,
-            zIndex: isSelected ? 10 : 5,
-          }}
+          style={{ position: 'absolute', left: pos.x, top: pos.y, width: NODE_W, height: NODE_H, zIndex: isSelected ? 10 : 5 }}
         >
-          {/* Main node box */}
+          {/* Main node */}
           <div
             className="flex items-center gap-1.5 rounded-lg cursor-pointer select-none transition-all duration-100"
             style={{
-              width: NODE_W,
-              height: NODE_H,
-              backgroundColor: bgColor,
-              boxShadow: isSelected
-                ? `0 0 0 3px white, 0 0 0 5px ${bgColor}`
-                : '0 2px 6px rgba(0,0,0,0.18)',
+              width: NODE_W, height: NODE_H, backgroundColor: bgColor,
+              boxShadow: isSelected ? `0 0 0 3px white, 0 0 0 5px ${bgColor}` : '0 2px 6px rgba(0,0,0,0.18)',
               paddingLeft: 10,
-              paddingRight: hasChildren ? 28 : 10,
+              paddingRight: (!isVertical && hasChildren) ? 28 : 10,
             }}
             onClick={() => { if (!isInlineEdit) setSelectedId(node.id); }}
             onDoubleClick={() => {
@@ -377,21 +449,16 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span
-                className="text-white text-xs font-medium truncate flex-1"
-                style={{ direction: 'rtl', textAlign: 'right' }}
-              >
+              <span className="text-white text-xs font-medium truncate flex-1"
+                style={{ direction: 'rtl', textAlign: 'right' }}>
                 {node.label}
               </span>
             )}
-
-            {/* Note indicator */}
             {node.notes && !isInlineEdit && (
               <span className="text-white/60 shrink-0" title="دارای یادداشت">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
               </span>
             )}
-            {/* File indicator */}
             {node.files.length > 0 && !isInlineEdit && (
               <span className="text-white/60 shrink-0 text-[9px] font-bold" title={`${node.files.length} فایل`}>
                 {node.files.length}📎
@@ -405,29 +472,35 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
               data-node="true"
               onClick={e => { e.stopPropagation(); updateNode(node.id, { isCollapsed: !node.isCollapsed }); }}
               className="absolute flex items-center justify-center rounded-full bg-white border-2 text-[10px] font-bold transition-colors hover:bg-gray-100"
-              style={{
-                width: 18,
-                height: 18,
+              style={isVertical ? {
+                width: 18, height: 18,
+                left: (NODE_W - 18) / 2,
+                bottom: -9,
+                borderColor: bgColor, color: bgColor, zIndex: 20,
+              } : {
+                width: 18, height: 18,
                 top: (NODE_H - 18) / 2,
                 right: -9,
-                borderColor: bgColor,
-                color: bgColor,
-                zIndex: 20,
+                borderColor: bgColor, color: bgColor, zIndex: 20,
               }}
             >
               {node.isCollapsed ? '+' : '−'}
             </button>
           )}
 
-          {/* Add child button (shown on hover when not root-collapsed) */}
+          {/* Add child button */}
           {!node.isCollapsed && (
             <button
               data-node="true"
               onClick={e => { e.stopPropagation(); addChildNode(node.id); }}
-              className="absolute flex items-center justify-center rounded-full bg-gray-900 text-white opacity-0 hover:opacity-100 group-hover:opacity-100 transition-opacity"
-              style={{
-                width: 20,
-                height: 20,
+              className="absolute flex items-center justify-center rounded-full bg-gray-900 text-white opacity-0 hover:opacity-100 transition-opacity"
+              style={isVertical ? {
+                width: 20, height: 20,
+                left: (NODE_W - 20) / 2,
+                bottom: hasChildren ? -28 : -10,
+                zIndex: 20,
+              } : {
+                width: 20, height: 20,
                 top: (NODE_H - 20) / 2,
                 right: hasChildren ? -28 : -10,
                 zIndex: 20,
@@ -444,7 +517,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
 
   const editPanel = selectedNode && (
     <div className="w-60 shrink-0 bg-white border-s border-gray-100 flex flex-col overflow-hidden" dir="rtl">
-      {/* Panel header */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h3 className="font-medium text-gray-800 text-xs truncate flex-1 leading-relaxed">{selectedNode.label}</h3>
         <button
@@ -456,7 +528,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Label */}
         <div>
           <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">عنوان</label>
           <input
@@ -468,27 +539,19 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
           />
         </div>
 
-        {/* Color */}
         {selectedNode.parentId !== null && (
           <div>
             <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2 block">رنگ</label>
             <div className="flex flex-wrap gap-2">
               {BRANCH_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => updateNode(selectedNode.id, { color: c })}
+                <button key={c} onClick={() => updateNode(selectedNode.id, { color: c })}
                   className="w-5 h-5 rounded-full transition-all hover:scale-110"
-                  style={{
-                    backgroundColor: c,
-                    boxShadow: selectedNode.color === c ? `0 0 0 2px white, 0 0 0 3.5px ${c}` : 'none',
-                  }}
-                />
+                  style={{ backgroundColor: c, boxShadow: selectedNode.color === c ? `0 0 0 2px white, 0 0 0 3.5px ${c}` : 'none' }} />
               ))}
             </div>
           </div>
         )}
 
-        {/* Notes */}
         <div>
           <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">یادداشت</label>
           <textarea
@@ -501,7 +564,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
           />
         </div>
 
-        {/* Files */}
         <div>
           <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">
             فایل‌ها {selectedNode.files.length > 0 && <span className="normal-case font-normal">({selectedNode.files.length})</span>}
@@ -538,18 +600,15 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
               <IconFolder className="w-3.5 h-3.5" /> افزودن فایل
             </button>
           )}
-          <input ref={fileInputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }} />
+          <input ref={fileInputRef} type="file" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }} />
         </div>
 
-        {/* Add child */}
-        <button
-          onClick={() => addChildNode(selectedNode.id)}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-medium transition-colors"
-        >
+        <button onClick={() => addChildNode(selectedNode.id)}
+          className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-medium transition-colors">
           <IconPlus className="w-3.5 h-3.5" /> افزودن زیرشاخه
         </button>
 
-        {/* Delete node */}
         {selectedNode.parentId !== null && (
           showDeleteConfirm ? (
             <div className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-2">
@@ -557,25 +616,19 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
                 {selectedNode.childIds.length > 0 ? 'این شاخه و زیرشاخه‌هایش حذف می‌شوند.' : 'این شاخه حذف می‌شود.'}
               </p>
               <div className="flex gap-1.5">
-                <button
-                  onClick={() => deleteNodeRecursive(selectedNode.id)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1.5 rounded-lg text-xs font-medium transition-colors"
-                >
+                <button onClick={() => deleteNodeRecursive(selectedNode.id)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1.5 rounded-lg text-xs font-medium transition-colors">
                   حذف
                 </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 bg-white border border-gray-200 text-gray-600 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors"
-                >
+                <button onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 bg-white border border-gray-200 text-gray-600 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors">
                   انصراف
                 </button>
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs transition-colors"
-            >
+            <button onClick={() => setShowDeleteConfirm(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs transition-colors">
               <IconTrash className="w-3.5 h-3.5" /> حذف شاخه
             </button>
           )
@@ -584,10 +637,10 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     </div>
   );
 
-  // Calculate canvas bounds for SVG
   const posVals = Object.values(positions) as { x: number; y: number }[];
   const canvasW = posVals.length ? Math.max(...posVals.map(p => p.x)) + NODE_W + 200 : 1200;
   const canvasH = posVals.length ? Math.max(...posVals.map(p => p.y)) + NODE_H + 200 : 800;
+  const currentLayoutLabel = LAYOUT_OPTIONS.find(l => l.value === layoutType)?.label ?? 'چیدمان';
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -603,29 +656,58 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
         <div className="w-px h-4 bg-gray-200 shrink-0" />
         <h2 className="font-semibold text-gray-900 text-sm flex-1 truncate" dir="rtl">{process.title}</h2>
 
+        {/* Layout toggle */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setShowLayoutMenu(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-medium transition-colors"
+            title="تغییر چیدمان"
+            dir="rtl"
+          >
+            <IconLayout className="w-3.5 h-3.5" />
+            <span>{currentLayoutLabel}</span>
+          </button>
+          {showLayoutMenu && (
+            <div className="absolute top-full mt-1 right-0 bg-white border border-gray-100 rounded-xl shadow-lg py-1 z-50 min-w-[140px]" dir="rtl">
+              {LAYOUT_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => handleLayoutChange(opt.value)}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 transition-colors ${layoutType === opt.value ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}
+                >
+                  <span>{opt.label}</span>
+                  {layoutType === opt.value && <IconCheck className="w-3 h-3" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* JSON Export */}
+        <button
+          onClick={handleJsonExport}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-medium transition-colors shrink-0"
+          title="خروجی JSON"
+          dir="rtl"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          JSON
+        </button>
+
         {/* Zoom pill */}
         <div className="flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
-          <button
-            onClick={() => setScale(s => Math.max(0.25, s * 0.83))}
-            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
-            title="کوچک‌نمایی"
-          >
+          <button onClick={() => setScale(s => Math.max(0.25, s * 0.83))}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all" title="کوچک‌نمایی">
             <IconZoomOut className="w-3.5 h-3.5" />
           </button>
           <span className="text-xs text-gray-500 w-10 text-center tabular-nums select-none">{Math.round(scale * 100)}%</span>
-          <button
-            onClick={() => setScale(s => Math.min(2.5, s * 1.2))}
-            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
-            title="بزرگ‌نمایی"
-          >
+          <button onClick={() => setScale(s => Math.min(2.5, s * 1.2))}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all" title="بزرگ‌نمایی">
             <IconZoomIn className="w-3.5 h-3.5" />
           </button>
           <div className="w-px h-3.5 bg-gray-300 mx-0.5" />
-          <button
-            onClick={fitToScreen}
-            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
-            title="تنظیم به صفحه"
-          >
+          <button onClick={fitToScreen}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all" title="تنظیم به صفحه">
             <IconFitScreen className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -645,7 +727,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
 
       {/* Canvas + Edit Panel */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Canvas */}
         <div
           ref={containerRef}
           className="flex-1 relative overflow-hidden bg-[#FAFAFA]"
@@ -656,7 +737,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          {/* Dot grid */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.5 }}>
             <defs>
               <pattern id="grid-dot" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -666,7 +746,6 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
             <rect width="100%" height="100%" fill="url(#grid-dot)" />
           </svg>
 
-          {/* Transform container */}
           <div
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
@@ -676,21 +755,14 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
               height: canvasH,
             }}
           >
-            {/* SVG connections */}
-            <svg
-              width={canvasW}
-              height={canvasH}
-              className="absolute inset-0 pointer-events-none overflow-visible"
-            >
+            <svg width={canvasW} height={canvasH}
+              className="absolute inset-0 pointer-events-none overflow-visible">
               {renderConnections()}
             </svg>
-
-            {/* Nodes */}
             {renderNodes()}
           </div>
         </div>
 
-        {/* Edit Panel */}
         {editPanel}
       </div>
     </div>
