@@ -21,6 +21,7 @@ import {
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
+  getTicketById,
 } from './services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
@@ -795,8 +796,12 @@ const App: React.FC = () => {
   };
 
   const handleCustomerUploadSubmit = async (ticketId: string, message: string, files: AttachedFile[]) => {
-    const ticket = tickets.find(t => t.id === ticketId);
-    if (!ticket) return;
+    let ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) {
+      // Ticket may have been found via direct Firestore lookup in TrackingView but not yet in local subscription
+      ticket = await getTicketById(ticketId) ?? undefined;
+    }
+    if (!ticket) throw new Error('پرونده یافت نشد');
     const now = new Date().toISOString();
     const newEntry: TimelineEntry = {
       type: 'customer_upload',
