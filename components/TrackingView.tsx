@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 import { Ticket, TicketStatus, ServiceOption, AttachedFile } from '../types';
 import { IconSearch, IconCheck, IconFile, IconActivity, IconCopy, IconUpload, IconTrash, IconSend, IconClock } from './Icons';
 import { Language } from '../App';
-import { uploadFileWithProgress } from '../services/firebaseService';
+import { uploadFileWithProgress, getTicketById } from '../services/firebaseService';
 
 interface Props {
   tickets: Ticket[];
@@ -17,6 +17,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
   const [searchId, setSearchId] = useState('');
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
   const [trackError, setTrackError] = useState('');
+  const [trackLoading, setTrackLoading] = useState(false);
   const [recoverName, setRecoverName] = useState('');
   const [recoverPhone, setRecoverPhone] = useState('');
   const [recoveredTickets, setRecoveredTickets] = useState<Ticket[] | null>(null);
@@ -72,15 +73,36 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
     },
   }[lang];
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = searchId.trim();
-    const ticket = tickets.find(tk =>
+    if (!clean) return;
+
+    // Try local list first (instant if already loaded)
+    const local = tickets.find(tk =>
       tk.id.toLowerCase() === clean.toLowerCase() ||
       tk.id.toLowerCase() === `exp-${clean.toLowerCase()}`
     );
-    if (ticket) { setFoundTicket(ticket); setTrackError(''); }
-    else { setFoundTicket(null); setTrackError(t.notFound); }
+    if (local) { setFoundTicket(local); setTrackError(''); return; }
+
+    // Direct Firebase / proxy lookup — works in Iran, works before subscription loads
+    setTrackLoading(true);
+    setFoundTicket(null);
+    setTrackError('');
+    try {
+      const ids = [clean, `exp-${clean}`, clean.toUpperCase(), `EXP-${clean.toUpperCase()}`];
+      let found: Ticket | null = null;
+      for (const id of ids) {
+        const result = await getTicketById(id);
+        if (result) { found = result; break; }
+      }
+      if (found) { setFoundTicket(found); setTrackError(''); }
+      else { setFoundTicket(null); setTrackError(t.notFound); }
+    } catch {
+      setTrackError(lang === 'fa' ? 'خطا در اتصال. دوباره تلاش کنید.' : 'Connection error. Please try again.');
+    } finally {
+      setTrackLoading(false);
+    }
   };
 
   const handleRecover = (e: React.FormEvent) => {
@@ -194,8 +216,11 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
             <form onSubmit={handleSearch} className="flex gap-2">
               <input type="text" placeholder={t.placeholder} value={searchId}
                 onChange={e => setSearchId(e.target.value)} className={inputCls} dir="ltr" />
-              <button type="submit" className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-colors flex items-center gap-1.5">
-                <IconSearch className="w-4 h-4" />{t.search}
+              <button type="submit" disabled={trackLoading} className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-60 transition-colors flex items-center gap-1.5 shrink-0">
+                {trackLoading
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <IconSearch className="w-4 h-4" />}
+                {trackLoading ? (lang === 'fa' ? 'جستجو...' : 'Searching...') : t.search}
               </button>
             </form>
             {trackError && <p className="text-xs text-red-500 mt-3">{trackError}</p>}

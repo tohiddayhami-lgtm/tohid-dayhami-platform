@@ -801,6 +801,16 @@ export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) 
     }, (e) => {});
 };
 
+export const getTicketById = async (id: string): Promise<Ticket | null> => {
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    return await proxyGet<Ticket>('tickets', { doc: id });
+  }
+  const docSnap = await getDoc(doc(db, 'tickets', id));
+  if (docSnap.exists()) return docSnap.data() as Ticket;
+  return null;
+};
+
 export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
   const proxy = await checkProxyMode();
   if (proxy) {
