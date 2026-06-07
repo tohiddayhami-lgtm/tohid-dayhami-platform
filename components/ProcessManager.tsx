@@ -110,15 +110,17 @@ export const ProcessManager: React.FC<Props> = ({
     setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
   };
 
-  // If a process is open, render the mind map editor
+  // If a process is open, render the mind map editor as a full-screen overlay
   if (openProcess) {
     return (
-      <MindMapEditor
-        process={openProcess}
-        currentUser={currentUser}
-        onSave={async (updated) => { await onSave(updated); }}
-        onBack={() => setOpenProcessId(null)}
-      />
+      <div className="fixed inset-0 z-[90] bg-white flex flex-col">
+        <MindMapEditor
+          process={openProcess}
+          currentUser={currentUser}
+          onSave={async (updated) => { await onSave(updated); }}
+          onBack={() => setOpenProcessId(null)}
+        />
+      </div>
     );
   }
 
@@ -269,16 +271,18 @@ export const ProcessManager: React.FC<Props> = ({
                       </label>
                     ))}
                   </div>
-                  {newAccessIds.length > 0 && (
-                    <p className="text-xs text-gray-500 mt-1">{newAccessIds.length} نفر انتخاب شده</p>
-                  )}
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    {newAccessIds.length > 0
+                      ? `${newAccessIds.length} نفر انتخاب شده`
+                      : 'بدون انتخاب، فقط شما دسترسی خواهید داشت'}
+                  </p>
                 </div>
               )}
             </div>
             <div className="p-5 border-t border-gray-100 flex gap-3">
               <button
                 onClick={handleCreate}
-                disabled={!newTitle.trim() || isSaving || (newAccessType === 'specific' && newAccessIds.length === 0)}
+                disabled={!newTitle.trim() || isSaving}
                 className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? 'در حال ایجاد...' : 'ایجاد فرآیند'}
@@ -348,19 +352,18 @@ export const ProcessManager: React.FC<Props> = ({
                         </label>
                       ))}
                     </div>
-                    {accessIds.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        <IconCheck className="w-3 h-3 text-green-500" />
-                        {accessIds.length} نفر انتخاب شده
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-400 mt-1.5">
+                      {accessIds.length > 0
+                        ? `${accessIds.length} نفر انتخاب شده`
+                        : 'بدون انتخاب، فقط مستر دسترسی خواهد داشت'}
+                    </p>
                   </div>
                 )}
               </div>
               <div className="p-5 border-t border-gray-100 flex gap-3">
                 <button
                   onClick={handleSaveAccess}
-                  disabled={isSaving || (accessType === 'specific' && accessIds.length === 0)}
+                  disabled={isSaving}
                   className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}

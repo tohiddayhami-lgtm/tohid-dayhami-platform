@@ -119,6 +119,13 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     }
   }, [inlineEditing]);
 
+  // Auto-fit on first render so the map is centered in the viewport
+  useEffect(() => {
+    const t = setTimeout(() => fitToScreen(), 120);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const triggerSave = useCallback((updatedNodes: ProcessNode[]) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setIsSaving(true);
@@ -232,16 +239,16 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
     if (!containerRef.current) return;
     const vals = Object.values(positions) as { x: number; y: number }[];
     if (vals.length === 0) return;
-    const cW = containerRef.current.clientWidth - 320; // account for edit panel
+    const cW = containerRef.current.clientWidth;
     const cH = containerRef.current.clientHeight;
     const minX = Math.min(...vals.map(p => p.x));
     const minY = Math.min(...vals.map(p => p.y));
     const maxX = Math.max(...vals.map(p => p.x)) + NODE_W;
     const maxY = Math.max(...vals.map(p => p.y)) + NODE_H;
-    const contentW = maxX - minX + 120;
+    const contentW = maxX - minX + 160;
     const contentH = maxY - minY + 120;
     const newScale = Math.min(cW / contentW, cH / contentH, 1.4);
-    const newPanX = (cW - contentW * newScale) / 2 - minX * newScale + 60 * newScale;
+    const newPanX = (cW - contentW * newScale) / 2 - minX * newScale + 80 * newScale;
     const newPanY = (cH - contentH * newScale) / 2 - minY * newScale + 60 * newScale;
     setScale(newScale);
     setPan({ x: newPanX, y: newPanY });
@@ -569,7 +576,7 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
   const canvasH = posVals.length ? Math.max(...posVals.map(p => p.y)) + NODE_H + 200 : 800;
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)' }}>
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 shrink-0">
         <button
