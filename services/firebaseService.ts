@@ -22,12 +22,18 @@ export const db = getFirestore(app);
 // Firebase (Google) is blocked in Iran. On first use we test connectivity;
 // if blocked we route public read/write through /api/fb (Vercel serverless).
 
-const _PROXY_SESSION_KEY = '_iran_proxy';
+const _PROXY_LS_KEY = '_iran_proxy_v2';
+const _PROXY_TTL_MS = 10 * 60 * 1000; // 10 minutes — persist across page reloads
+
 let _proxyMode: boolean | null = (() => {
   try {
-    const v = sessionStorage.getItem(_PROXY_SESSION_KEY);
-    return v === null ? null : v === '1';
-  } catch { return null; }
+    const raw = localStorage.getItem(_PROXY_LS_KEY);
+    if (raw) {
+      const { v, ts } = JSON.parse(raw);
+      if (Date.now() - ts < _PROXY_TTL_MS) return v === '1';
+    }
+  } catch {}
+  return null;
 })();
 let _proxyWaiters: Array<(v: boolean) => void> = [];
 let _proxyChecking = false;
@@ -38,7 +44,7 @@ const checkProxyMode = (): Promise<boolean> => {
   _proxyChecking = true;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1500);
+  const timer = setTimeout(() => controller.abort(), 1000); // reduced from 1500ms
 
   return fetch(
     `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/appConfig?key=${firebaseConfig.apiKey}`,
@@ -47,7 +53,7 @@ const checkProxyMode = (): Promise<boolean> => {
     .then(() => { clearTimeout(timer); _proxyMode = false; })
     .catch(() => { _proxyMode = true; })
     .then(() => {
-      try { sessionStorage.setItem(_PROXY_SESSION_KEY, _proxyMode ? '1' : '0'); } catch {}
+      try { localStorage.setItem(_PROXY_LS_KEY, JSON.stringify({ v: _proxyMode ? '1' : '0', ts: Date.now() })); } catch {}
       _proxyWaiters.forEach(r => r(_proxyMode!));
       _proxyWaiters = [];
       return _proxyMode!;
@@ -61,9 +67,17 @@ const proxyGet = async <T>(col: string, opts: { doc?: string; orderField?: strin
   if (opts.doc) p.set('doc', opts.doc);
   if (opts.orderField) p.set('orderField', opts.orderField);
   if (opts.dir) p.set('dir', opts.dir);
-  const r = await fetch(`${_fb}?${p}`);
-  if (!r.ok) throw new Error(`Proxy ${r.status}`);
-  return r.json() as Promise<T>;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000); // 12s timeout — prevents infinite hang
+  try {
+    const r = await fetch(`${_fb}?${p}`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error(`Proxy ${r.status}`);
+    return r.json() as Promise<T>;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
 };
 
 const proxyWrite = async (col: string, docId: string, data: unknown): Promise<void> => {

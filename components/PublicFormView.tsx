@@ -80,7 +80,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
         // exception = network/Firebase error → retry with backoff
         if (cancelled) return;
         if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1200 * attempt));
+          await new Promise(r => setTimeout(r, 700 * attempt));
           if (!cancelled) loadForm(attempt + 1);
           return;
         } else {
