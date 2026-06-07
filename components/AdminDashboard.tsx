@@ -377,7 +377,7 @@ export const AdminDashboard: React.FC<Props> = ({
           favicon: 'فاوآیکون سایت',
           saveSeo: 'ذخیره تنظیمات سئو',
           customer_accounts: 'پنل مشتریان',
-          processes: 'فرآیندهای شرکت',
+          processes: 'مایند مپ',
           projectCategory: 'سرفصل پروژه',
           projectCategoryPh: 'مثال: صادرات، بازرگانی، فناوری...',
           partiesTitle: 'طرفین و شرکاء پروژه',
@@ -552,7 +552,7 @@ export const AdminDashboard: React.FC<Props> = ({
           favicon: 'Site Favicon',
           saveSeo: 'Save SEO Settings',
           customer_accounts: 'Customer Accounts',
-          processes: 'Company Processes',
+          processes: 'Mind Map',
           projectCategory: 'Project Category',
           projectCategoryPh: 'e.g. Export, Trade, Technology...',
           partiesTitle: 'Project Parties & Partners',
@@ -1733,7 +1733,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'messages' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMail className="w-4 h-4 shrink-0" /><span>{t.messages}</span>{unreadMessagesCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{unreadMessagesCount}</span>}</button>
                 <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'projects' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconProject className="w-4 h-4 shrink-0" /><span>{t.projects}</span></button>
                 <button onClick={() => setActiveTab('forms')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'forms' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.forms}</span></button>
-                <button onClick={() => setActiveTab('processes')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'processes' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMindMap className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'فرآیندهای شرکت' : 'Processes'}</span></button>
+                <button onClick={() => setActiveTab('processes')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'processes' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMindMap className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'مایند مپ' : 'Mind Map'}</span></button>
                 <button onClick={() => setActiveTab('sales')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'sales' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMoney className="w-4 h-4 shrink-0" /><span>{t.sales}</span></button>
                 {(isAdmin || isMaster) && (<button onClick={() => setActiveTab('expenses')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'expenses' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconWallet className="w-4 h-4 shrink-0" /><span>{t.expenses}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'services' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBriefcase className="w-4 h-4 shrink-0" /><span>{t.services}</span></button>)}

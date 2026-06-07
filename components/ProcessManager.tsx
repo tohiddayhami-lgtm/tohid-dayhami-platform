@@ -63,6 +63,11 @@ export const ProcessManager: React.FC<Props> = ({
       color: '#111827',
       isCollapsed: false,
     };
+    // non-master creators always get access to their own mind map
+    let accessibleTo = newAccessType === 'specific' ? newAccessIds : [];
+    if (!isMaster && newAccessType === 'specific' && !accessibleTo.includes(currentUser.id)) {
+      accessibleTo = [currentUser.id, ...accessibleTo];
+    }
     const newProcess: CompanyProcess = {
       id: `proc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       title: newTitle.trim(),
@@ -70,7 +75,7 @@ export const ProcessManager: React.FC<Props> = ({
       createdAt: new Date().toISOString(),
       createdBy: currentUser.fullName,
       accessType: newAccessType,
-      accessibleTo: newAccessType === 'specific' ? newAccessIds : [],
+      accessibleTo,
       nodes: [rootNode],
       rootNodeId: rootId,
     };
@@ -129,17 +134,15 @@ export const ProcessManager: React.FC<Props> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">فرآیندهای شرکت</h2>
-          <p className="text-sm text-gray-500 mt-0.5">مدیریت و مستندسازی فرآیندهای سازمانی</p>
+          <h2 className="text-xl font-bold text-gray-900">مایند مپ</h2>
+          <p className="text-sm text-gray-500 mt-0.5">ایجاد و مدیریت مایند مپ‌های تیم و سازمان</p>
         </div>
-        {isMaster && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-colors"
-          >
-            <IconPlus className="w-4 h-4" /> فرآیند جدید
-          </button>
-        )}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-colors"
+        >
+          <IconPlus className="w-4 h-4" /> مایند مپ جدید
+        </button>
       </div>
 
       {/* Process grid */}
@@ -147,7 +150,7 @@ export const ProcessManager: React.FC<Props> = ({
         <div className="text-center py-20 text-gray-400">
           <IconMindMap className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">
-            {isMaster ? 'هنوز فرآیندی تعریف نشده. اولین فرآیند را ایجاد کنید.' : 'هیچ فرآیندی برای شما قابل نمایش نیست.'}
+            هنوز مایند مپی ایجاد نشده. اولین مایند مپ را بسازید.
           </p>
         </div>
       ) : (
@@ -167,8 +170,8 @@ export const ProcessManager: React.FC<Props> = ({
                   <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-gray-900 group-hover:text-white transition-colors">
                     <IconMindMap className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
                   </div>
-                  {isMaster && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    {isMaster && (
                       <button
                         onClick={() => openAccessModal(proc)}
                         className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
@@ -176,15 +179,17 @@ export const ProcessManager: React.FC<Props> = ({
                       >
                         <IconShield className="w-4 h-4" />
                       </button>
+                    )}
+                    {(isMaster || proc.createdBy === currentUser.fullName) && (
                       <button
                         onClick={() => setShowDeleteConfirm(proc.id)}
                         className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
-                        title="حذف فرآیند"
+                        title="حذف مایند مپ"
                       >
                         <IconTrash className="w-4 h-4" />
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="font-semibold text-gray-900 text-sm mb-1 text-right">{proc.title}</h3>
@@ -210,14 +215,14 @@ export const ProcessManager: React.FC<Props> = ({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" dir="rtl">
             <div className="p-5 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">ایجاد فرآیند جدید</h3>
+              <h3 className="font-bold text-gray-900">ایجاد مایند مپ جدید</h3>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">عنوان فرآیند *</label>
+                <label className="text-sm font-medium text-gray-700 block mb-1">عنوان مایند مپ *</label>
                 <input
                   className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 text-right"
-                  placeholder="مثال: فرآیند جذب نیرو"
+                  placeholder="مثال: برنامه‌ریزی فروش، فرآیند جذب نیرو..."
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
                   autoFocus
@@ -285,7 +290,7 @@ export const ProcessManager: React.FC<Props> = ({
                 disabled={!newTitle.trim() || isSaving}
                 className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isSaving ? 'در حال ایجاد...' : 'ایجاد فرآیند'}
+                {isSaving ? 'در حال ایجاد...' : 'ایجاد مایند مپ'}
               </button>
               <button
                 onClick={() => { setShowCreateModal(false); setNewTitle(''); setNewDesc(''); setNewAccessType('all'); setNewAccessIds([]); }}
@@ -391,9 +396,9 @@ export const ProcessManager: React.FC<Props> = ({
                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <IconTrash className="w-6 h-6 text-red-600" />
                 </div>
-                <h3 className="font-bold text-gray-900 mb-1">حذف فرآیند</h3>
+                <h3 className="font-bold text-gray-900 mb-1">حذف مایند مپ</h3>
                 <p className="text-sm text-gray-600">
-                  فرآیند <strong>«{proc.title}»</strong> و تمام داده‌های آن حذف می‌شود. این عملیات قابل بازگشت نیست.
+                  مایند مپ <strong>«{proc.title}»</strong> و تمام داده‌های آن حذف می‌شود. این عملیات قابل بازگشت نیست.
                 </p>
               </div>
               <div className="px-5 pb-5 flex gap-3">
