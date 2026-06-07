@@ -22,6 +22,7 @@ import { FormBuilderPanel } from './FormBuilderPanel';
 import { NotificationCenter } from './NotificationCenter';
 import { CustomerAccountManager } from './CustomerAccountManager';
 import { ProcessManager } from './ProcessManager';
+import { CustomerBank } from './CustomerBank';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -99,7 +100,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -1725,6 +1726,7 @@ export const AdminDashboard: React.FC<Props> = ({
             {directManager && (<div className="text-[10px] text-gray-400 mb-3 inline-flex items-center gap-1"><IconLayout className="w-2.5 h-2.5" /> {directManager.fullName}</div>)}
             <div className="w-full space-y-1">
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'overview' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconActivity className="w-4 h-4 shrink-0" /><span>{t.overview}</span></button>
+                {hasCustomerAccess && <button onClick={() => setActiveTab('customer_bank')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_bank' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'بانک مشتریان' : 'Customer Bank'}</span></button>}
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'tasks' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconList className="w-4 h-4 shrink-0" /><span>{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
                 <button onClick={() => setActiveTab('staff_reports')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'staff_reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.staff_reports}</span></button>
                 <button onClick={() => setActiveTab('meetings')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'meetings' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconCalendarClock className="w-4 h-4 shrink-0" /><span>{t.meetings}</span></button>
@@ -1745,6 +1747,7 @@ export const AdminDashboard: React.FC<Props> = ({
       <div className="flex-grow">
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
+        {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
 
