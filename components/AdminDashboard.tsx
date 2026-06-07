@@ -977,7 +977,12 @@ export const AdminDashboard: React.FC<Props> = ({
                             <button onClick={() => setActiveModalTab('project')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeModalTab === 'project' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>{t.projectMgmt}</button>
                         </div>
                     </div>
-                    <button onClick={() => setSelectedTicketId(null)} className="bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-full border border-gray-200 transition-colors shadow-sm w-8 h-8 flex items-center justify-center">✕</button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => onUpdateTicket(selectedTicket.id, { isFlagged: !selectedTicket.isFlagged }, currentUser.displayName || currentUser.username)} title={selectedTicket.isFlagged ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${selectedTicket.isFlagged ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
+                            <IconStar className={`w-4 h-4 ${selectedTicket.isFlagged ? 'fill-yellow-400' : ''}`} />
+                        </button>
+                        <button onClick={() => setSelectedTicketId(null)} className="bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-full border border-gray-200 transition-colors shadow-sm w-8 h-8 flex items-center justify-center">✕</button>
+                    </div>
                 </div>
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50/50">
                     {activeModalTab === 'info' ? (
@@ -1205,6 +1210,26 @@ export const AdminDashboard: React.FC<Props> = ({
                                         )}
                                     </div>
                                 </div>
+                                {(config.labels || []).length > 0 && (
+                                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                    <label className="block text-xs font-bold text-gray-500 mb-2 flex items-center gap-1"><IconTag className="w-3.5 h-3.5" />لیبل‌ها</label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {(config.labels || []).map(lbl => {
+                                            const isAssigned = (selectedTicket.labelIds || []).includes(lbl.id);
+                                            const colors: Record<string,string> = { red:'bg-red-100 text-red-700 border-red-300', orange:'bg-orange-100 text-orange-700 border-orange-300', yellow:'bg-yellow-100 text-yellow-700 border-yellow-300', green:'bg-green-100 text-green-700 border-green-300', blue:'bg-blue-100 text-blue-700 border-blue-300', purple:'bg-purple-100 text-purple-700 border-purple-300', pink:'bg-pink-100 text-pink-700 border-pink-300', gray:'bg-gray-100 text-gray-600 border-gray-300' };
+                                            return (
+                                                <button key={lbl.id} onClick={() => {
+                                                    const curr = selectedTicket.labelIds || [];
+                                                    const next = isAssigned ? curr.filter(id => id !== lbl.id) : [...curr, lbl.id];
+                                                    onUpdateTicket(selectedTicket.id, { labelIds: next }, currentUser.displayName || currentUser.username);
+                                                }} className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium border transition-all ${isAssigned ? colors[lbl.color] || colors.gray : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>
+                                                    <IconTag className="w-2.5 h-2.5" />{lbl.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                )}
                                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                                     <label className="block text-xs font-bold text-gray-500 mb-2">{t.expert}</label>
                                     <div className="flex gap-2">
@@ -1813,24 +1838,51 @@ export const AdminDashboard: React.FC<Props> = ({
                              </div>
                              <select className="bg-gray-100 text-gray-600 text-sm font-bold px-3 py-1.5 rounded-lg border-transparent focus:border-gray-300 outline-none" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}><option value="all">{t.allStatuses}</option>{Object.values(TicketStatus).map(s => <option key={s} value={s}>{s}</option>)}</select>
                          </div>
+                         <div className="flex flex-wrap gap-2 items-center">
+                             <button onClick={() => setShowFlaggedOnly(v => !v)} title="فقط پرونده‌های فلگ‌شده" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${showFlaggedOnly ? 'bg-yellow-50 border-yellow-300 text-yellow-700' : 'bg-gray-100 border-transparent text-gray-500 hover:bg-gray-200'}`}>
+                                 <IconStar className={`w-3.5 h-3.5 ${showFlaggedOnly ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                                 مهم
+                             </button>
+                             {(config.labels || []).map(lbl => {
+                                 const colors: Record<string,string> = { red:'bg-red-100 text-red-700 border-red-300', orange:'bg-orange-100 text-orange-700 border-orange-300', yellow:'bg-yellow-100 text-yellow-700 border-yellow-300', green:'bg-green-100 text-green-700 border-green-300', blue:'bg-blue-100 text-blue-700 border-blue-300', purple:'bg-purple-100 text-purple-700 border-purple-300', pink:'bg-pink-100 text-pink-700 border-pink-300', gray:'bg-gray-100 text-gray-600 border-gray-300' };
+                                 const active = labelFilter === lbl.id;
+                                 return <button key={lbl.id} onClick={() => setLabelFilter(active ? null : lbl.id)} className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${active ? colors[lbl.color] || colors.gray : 'bg-gray-100 text-gray-500 border-transparent hover:bg-gray-200'}`}><IconTag className="w-3 h-3" />{lbl.name}</button>;
+                             })}
+                             {isMaster && <button onClick={() => setShowLabelManager(true)} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 border border-transparent hover:bg-gray-200 transition-all"><IconPlus className="w-3 h-3" />مدیریت لیبل‌ها</button>}
+                         </div>
                          <div className="relative w-full md:w-64">
                              <input type="text" className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-gray-300" placeholder={t.searchPlaceholder} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} />
                              <IconSearch className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                          </div>
                      </div>
                      <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-4 py-3 rounded-tr-lg text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3">{t.expert}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
-                        <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={ticket.id} className={`hover:bg-gray-50 transition-colors ${ticket.isFlagged ? 'bg-yellow-50/40' : ''}`}>
                             <td className="px-4 py-3 text-center text-xs font-bold text-gray-400">
                                 {filteredTickets.length - ((currentPage - 1) * ITEMS_PER_PAGE + idx)}
                             </td>
                             <td className="px-4 py-3">
                                 <div className="flex flex-col">
-                                    <span className="font-mono text-[10px] text-gray-400 mb-0.5">{ticket.id}</span>
-                                    <span className="font-bold text-gray-800 text-sm" title={ticket.customerName}>{ticket.customerName}</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <button onClick={e => { e.stopPropagation(); onUpdateTicket(ticket.id, { isFlagged: !ticket.isFlagged }, currentUser.displayName || currentUser.username); }} title={ticket.isFlagged ? 'حذف فلگ' : 'فلگ کردن'} className="flex-shrink-0">
+                                            <IconStar className={`w-4 h-4 transition-colors ${ticket.isFlagged ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} />
+                                        </button>
+                                        <span className="font-mono text-[10px] text-gray-400">{ticket.id}</span>
+                                    </div>
+                                    <span className="font-bold text-gray-800 text-sm mt-0.5" title={ticket.customerName}>{ticket.customerName}</span>
                                     {ticket.companyName && (
                                         <span className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded w-fit mt-0.5 border border-gray-100 flex items-center gap-1">
                                            <IconBriefcase className="w-3 h-3" /> {ticket.companyName}
                                         </span>
+                                    )}
+                                    {(ticket.labelIds || []).length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {(ticket.labelIds || []).map(lid => {
+                                                const lbl = (config.labels || []).find(l => l.id === lid);
+                                                if (!lbl) return null;
+                                                const colors: Record<string,string> = { red:'bg-red-100 text-red-700', orange:'bg-orange-100 text-orange-700', yellow:'bg-yellow-100 text-yellow-700', green:'bg-green-100 text-green-700', blue:'bg-blue-100 text-blue-700', purple:'bg-purple-100 text-purple-700', pink:'bg-pink-100 text-pink-700', gray:'bg-gray-100 text-gray-600' };
+                                                return <span key={lid} className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${colors[lbl.color] || colors.gray}`}><IconTag className="w-2.5 h-2.5" />{lbl.name}</span>;
+                                            })}
+                                        </div>
                                     )}
                                 </div>
                             </td>
@@ -2502,6 +2554,44 @@ export const AdminDashboard: React.FC<Props> = ({
           onDelete={onDeleteProcess}
           lang={lang}
         />
+      )}
+      {showLabelManager && isMaster && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4" onClick={() => setShowLabelManager(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2"><IconTag className="w-5 h-5 text-gray-600" />مدیریت لیبل‌ها</h3>
+              <button onClick={() => setShowLabelManager(false)} className="text-gray-400 hover:text-gray-600 w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100">✕</button>
+            </div>
+            <div className="space-y-2 mb-5 max-h-60 overflow-y-auto">
+              {(config.labels || []).length === 0 && <p className="text-sm text-gray-400 text-center py-4">لیبلی تعریف نشده</p>}
+              {(config.labels || []).map(lbl => {
+                const colors: Record<string,string> = { red:'bg-red-100 text-red-700', orange:'bg-orange-100 text-orange-700', yellow:'bg-yellow-100 text-yellow-700', green:'bg-green-100 text-green-700', blue:'bg-blue-100 text-blue-700', purple:'bg-purple-100 text-purple-700', pink:'bg-pink-100 text-pink-700', gray:'bg-gray-100 text-gray-600' };
+                return (
+                  <div key={lbl.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-medium ${colors[lbl.color] || colors.gray}`}><IconTag className="w-3.5 h-3.5" />{lbl.name}</span>
+                    <button onClick={() => { const next = (config.labels || []).filter(l => l.id !== lbl.id); onUpdateConfig({ ...config, labels: next }); }} className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"><IconTrash className="w-4 h-4" /></button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-xs font-bold text-gray-500">افزودن لیبل جدید</p>
+              <input className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200" placeholder="نام لیبل" value={newLabelName} onChange={e => setNewLabelName(e.target.value)} />
+              <div className="flex gap-1.5 flex-wrap">
+                {['red','orange','yellow','green','blue','purple','pink','gray'].map(c => {
+                  const dot: Record<string,string> = { red:'bg-red-400', orange:'bg-orange-400', yellow:'bg-yellow-400', green:'bg-green-400', blue:'bg-blue-400', purple:'bg-purple-400', pink:'bg-pink-400', gray:'bg-gray-400' };
+                  return <button key={c} onClick={() => setNewLabelColor(c)} className={`w-7 h-7 rounded-full ${dot[c]} transition-all ${newLabelColor === c ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'opacity-60 hover:opacity-100'}`} />;
+                })}
+              </div>
+              <button disabled={!newLabelName.trim()} onClick={() => {
+                const newLbl: TicketLabel = { id: `lbl-${Date.now()}`, name: newLabelName.trim(), color: newLabelColor };
+                onUpdateConfig({ ...config, labels: [...(config.labels || []), newLbl] });
+                setNewLabelName('');
+                setNewLabelColor('blue');
+              }} className="w-full bg-gray-900 text-white py-2 rounded-xl text-sm font-semibold hover:bg-black disabled:opacity-40 transition-colors flex items-center justify-center gap-1.5"><IconPlus className="w-4 h-4" />افزودن لیبل</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
