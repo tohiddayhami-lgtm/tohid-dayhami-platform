@@ -790,7 +790,31 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleDeleteTimelineEntry = (index: number) => { if (!selectedTicket || !isMaster) return; if (window.confirm('Delete entry?')) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline.splice(index, 1); onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleEditTimelineEntry = (index: number, currentDesc: string) => { if (!selectedTicket || !isMaster) return; const newDesc = window.prompt('Edit:', currentDesc); if (newDesc !== null) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline[index] = { ...newTimeline[index], description: newDesc }; onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
-  const handleCreateProject = async (e: React.FormEvent) => { e.preventDefault(); const newTicketId = `PROJ-${Math.floor(10000 + Math.random() * 90000)}`; const initialParty: ProjectParty = { id: `party-${Date.now()}`, name: newProjectData.customerName, type: newProjectData.customerType, phone: newProjectData.phoneNumber, profitSharePercent: 0, addedAt: new Date().toISOString() }; const newTicket: Ticket = { id: newTicketId, customerName: newProjectData.customerName, phoneNumber: newProjectData.phoneNumber, whatsappNumber: newProjectData.phoneNumber, location: 'N/A', serviceId: newProjectData.serviceId, description: `Project: ${newProjectData.title}`, status: TicketStatus.IN_PROGRESS, createdAt: new Date().toISOString(), priority: newProjectData.priority, files: [], timeline: [ { type: 'creation', title: 'Project Created', description: `Project "${newProjectData.title}" created by ${currentUser.fullName}.`, actorName: currentUser.fullName, timestamp: new Date().toISOString(), visibility: 'public' } ], projectData: { isActive: true, category: newProjectData.category.trim() || undefined, tariff: { amount: parseInt(newProjectData.tariffAmount.replace(/,/g, '')) || 0, currency: newProjectData.tariffCurrency }, startDate: newProjectData.startDate, endDate: newProjectData.endDate, teamMemberIds: [currentUser.id], teamMembers: [ { userId: currentUser.id, role: 'Project Manager', responsibility: 'Owner', joinedAt: new Date().toISOString() } ], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: 'Project Initialized.', parties: [initialParty], definitions: [] }, assignedTo: currentUser.id }; try { await onCreateTicket(newTicket); setCreatedProjectId(newTicketId); } catch (e) { alert('Error creating project'); } };
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newTicketId = `PROJ-${Math.floor(10000 + Math.random() * 90000)}`;
+    const displayName = newProjectData.customerName.trim() || (lang === 'fa' ? 'پروژه داخلی' : 'Internal Project');
+    const parties: ProjectParty[] = newProjectData.customerName.trim()
+      ? [{ id: `party-${Date.now()}`, name: newProjectData.customerName.trim(), type: newProjectData.customerType, phone: newProjectData.phoneNumber.trim() || undefined, profitSharePercent: 0, addedAt: new Date().toISOString() }]
+      : [];
+    const newTicket: Ticket = {
+      id: newTicketId,
+      customerName: displayName,
+      phoneNumber: newProjectData.phoneNumber.trim() || '-',
+      whatsappNumber: newProjectData.phoneNumber.trim() || '-',
+      location: 'N/A',
+      serviceId: newProjectData.serviceId || 'internal',
+      description: `Project: ${newProjectData.title}`,
+      status: TicketStatus.IN_PROGRESS,
+      createdAt: new Date().toISOString(),
+      priority: newProjectData.priority,
+      files: [],
+      timeline: [{ type: 'creation', title: 'Project Created', description: `Project "${newProjectData.title}" created by ${currentUser.fullName}.`, actorName: currentUser.fullName, timestamp: new Date().toISOString(), visibility: 'public' }],
+      projectData: { isActive: true, category: newProjectData.category.trim() || undefined, tariff: { amount: parseInt(newProjectData.tariffAmount.replace(/,/g, '')) || 0, currency: newProjectData.tariffCurrency }, startDate: newProjectData.startDate, endDate: newProjectData.endDate, teamMemberIds: [currentUser.id], teamMembers: [{ userId: currentUser.id, role: 'Project Manager', responsibility: 'Owner', joinedAt: new Date().toISOString() }], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: 'Project Initialized.', parties, definitions: [] },
+      assignedTo: currentUser.id,
+    };
+    try { await onCreateTicket(newTicket); setCreatedProjectId(newTicketId); } catch { alert('Error creating project'); }
+  };
   const handleProjectModalClose = () => { setShowNewProjectModal(false); setCreatedProjectId(null); setNewProjectData({ title: '', category: '', serviceId: '', customerName: '', customerType: 'client', phoneNumber: '', startDate: '', endDate: '', tariffAmount: '', tariffCurrency: 'IRR', priority: 'Medium' }); };
   const handleProjectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || e.target.files.length === 0) return; const files: File[] = Array.from(e.target.files); for (const file of files) { if (file.size > 5 * 1024 * 1024) { alert('File too large > 5MB'); continue; } const newFile: AttachedFile = { name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 }; setProjectForm(prev => ({ ...prev, projectFiles: [...prev.projectFiles, newFile] })); uploadFileWithProgress( file, (progress) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, progress } : f) })), (url) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name ? { ...f, content: url, status: 'success', progress: 100 } : f) })), (err) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name ? { ...f, status: 'error', errorMsg: err.message } : f) })), 'documents' ); } if (projectFileInputRef.current) projectFileInputRef.current.value = ''; };
   const handleRemoveProjectFile = (index: number) => { setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.filter((_, i) => i !== index) })); };
@@ -1494,17 +1518,20 @@ export const AdminDashboard: React.FC<Props> = ({
                 </div>
                 {/* Service */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.relatedService} <span className="text-red-500">*</span></label>
-                  <select required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.serviceId} onChange={e => setNewProjectData({...newProjectData, serviceId: e.target.value})}>
-                    <option value="">...</option>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.relatedService}</label>
+                  <select className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.serviceId} onChange={e => setNewProjectData({...newProjectData, serviceId: e.target.value})}>
+                    <option value="">{lang === 'fa' ? '— بدون سرویس —' : '— No service —'}</option>
                     {services.map(s => <option key={s.id} value={s.id}>{lang === 'en' && s.titleEn ? s.titleEn : s.title}</option>)}
                   </select>
                 </div>
                 {/* Customer name + type */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.customer} <span className="text-red-500">*</span></label>
-                    <input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.customerName} onChange={e => setNewProjectData({...newProjectData, customerName: e.target.value})} />
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      {t.customer}
+                      <span className="text-gray-400 text-[10px] font-normal mr-1">({lang === 'fa' ? 'اختیاری' : 'optional'})</span>
+                    </label>
+                    <input className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" placeholder={lang === 'fa' ? 'مثال: پروژه داخلی' : 'e.g. Internal project'} value={newProjectData.customerName} onChange={e => setNewProjectData({...newProjectData, customerName: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">{t.customerTypeLabel}</label>
@@ -1519,8 +1546,11 @@ export const AdminDashboard: React.FC<Props> = ({
                 </div>
                 {/* Phone */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.phone} <span className="text-red-500">*</span></label>
-                  <input required dir="ltr" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm text-right" value={newProjectData.phoneNumber} onChange={e => setNewProjectData({...newProjectData, phoneNumber: e.target.value})} />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {t.phone}
+                    <span className="text-gray-400 text-[10px] font-normal mr-1">({lang === 'fa' ? 'اختیاری' : 'optional'})</span>
+                  </label>
+                  <input dir="ltr" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm text-right" value={newProjectData.phoneNumber} onChange={e => setNewProjectData({...newProjectData, phoneNumber: e.target.value})} />
                 </div>
                 {/* Dates */}
                 <div className="grid grid-cols-2 gap-3">
