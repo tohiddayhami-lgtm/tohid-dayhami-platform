@@ -626,6 +626,13 @@ const App: React.FC = () => {
   };
 
   const saveNewTicketToSystem = async (ticket: Ticket) => {
+    // Guarantee a case code — if the caller didn't supply one, generate it now
+    if (!ticket.id) {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const suffix = (ticket.customData?.formId || ticket.serviceId || 'TKT').slice(0, 3).toUpperCase();
+      (ticket as any).id = `FRM-${rand}-${suffix}`;
+    }
+
     let assignedTo = ticket.assignedTo;
     let assignmentNote: TimelineEntry | null = null;
 
@@ -676,7 +683,11 @@ const App: React.FC = () => {
 
       if (assignedTo) {
         const assigneeName = personnel.find(p => p.id === assignedTo)?.fullName || 'مدیریت';
-        assignmentNote = { type: 'assignment', title: 'ارجاع خودکار', description: `پرونده به ${assigneeName} ارجاع داده شد.`, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
+        const wasCeoFallback = !ticket.customData?.__assigneePersonnelId && !ticket.customData?.__assigneeRole && !calculateAssignee(ticket.serviceId);
+        const note = wasCeoFallback
+          ? `فرم بدون تنظیم ارجاع ثبت شد — پرونده به‌صورت خودکار به ${assigneeName} ارجاع داده شد. ${assigneeName} می‌تواند پرونده را به کارشناس مربوطه ارجاع دهد.`
+          : `پرونده به ${assigneeName} ارجاع داده شد.`;
+        assignmentNote = { type: 'assignment', title: 'ارجاع خودکار', description: note, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
       }
     }
 

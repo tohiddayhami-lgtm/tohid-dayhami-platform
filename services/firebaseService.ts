@@ -556,15 +556,17 @@ export const subscribeToSalesRecords = (callback: (sales: SalesRecord[]) => void
 
 export const saveTicketToCloud = async (ticket: Ticket) => {
   try {
-    const ticketToSave = { ...ticket, files: cleanFilesForDB(ticket.files) };
+    // Guard: ensure ticket always has a valid ID before saving
+    const safeId = ticket.id || `TKT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const ticketToSave = { ...ticket, id: safeId, files: cleanFilesForDB(ticket.files) };
     const proxy = await checkProxyMode();
     if (proxy) {
-      await proxyWrite('tickets', ticket.id, sanitizeData(ticketToSave));
+      await proxyWrite('tickets', safeId, sanitizeData(ticketToSave));
     } else {
-      await setDoc(doc(db, "tickets", ticket.id), sanitizeData(ticketToSave));
+      await setDoc(doc(db, "tickets", safeId), sanitizeData(ticketToSave));
     }
-    logSystemAction('CREATE', 'Ticket', `تیکت جدید با عنوان ${ticket.serviceId} برای ${ticket.customerName} ایجاد شد`, 'سیستم/مشتری', ticket.id);
-    return ticket.id;
+    logSystemAction('CREATE', 'Ticket', `تیکت جدید با عنوان ${ticket.serviceId} برای ${ticket.customerName} ایجاد شد`, 'سیستم/مشتری', safeId);
+    return safeId;
   } catch (e) {
     console.error("Error adding ticket: ", e);
     throw e;
@@ -609,7 +611,11 @@ export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) => {
     } else {
       const q = query(collection(db, "tickets"));
       inner = onSnapshot(q, snap => {
-        const tickets = snap.docs.map(d => d.data() as Ticket);
+        const tickets = snap.docs.map(d => {
+          const data = d.data() as Ticket;
+          // Ensure id is always populated — fall back to Firestore doc.id
+          return { ...data, id: data.id || d.id };
+        });
         tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         callback(tickets);
       }, () => {});
