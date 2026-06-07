@@ -1748,6 +1748,9 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
         {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
+        {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
+          <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />
+        )}
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
 
@@ -2545,16 +2548,6 @@ export const AdminDashboard: React.FC<Props> = ({
           currentUserName={currentUser.fullName}
           onSave={onSaveCustomerAccount}
           onDelete={onDeleteCustomerAccount}
-          lang={lang}
-        />
-      )}
-      {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
-        <ProcessManager
-          processes={processes}
-          personnel={personnel}
-          currentUser={currentUser}
-          onSave={onSaveProcess}
-          onDelete={onDeleteProcess}
           lang={lang}
         />
       )}

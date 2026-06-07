@@ -137,7 +137,7 @@ export const ProcessManager: React.FC<Props> = ({
   }
 
   return (
-    <div className="space-y-5 animate-fade-in" dir="rtl">
+    <div className="space-y-5 animate-fade-in p-6" dir="rtl">
 
       {/* Header card */}
       <div className="flex items-center justify-between bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm">
