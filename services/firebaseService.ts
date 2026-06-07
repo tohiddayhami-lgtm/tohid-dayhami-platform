@@ -820,13 +820,21 @@ export const getTicketById = async (id: string): Promise<Ticket | null> => {
 export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
   const proxy = await checkProxyMode();
   if (proxy) {
-    // proxyGet throws on server errors; returns null when document doesn't exist (proxy sends 200+null for 404)
     return await proxyGet<CustomForm>('custom_forms', { doc: id });
   }
-  // getDoc throws on network errors; returns snapshot with exists()=false when document not found
-  const docSnap = await getDoc(doc(db, "custom_forms", id));
-  if (docSnap.exists()) return docSnap.data() as CustomForm;
-  return null;
+  try {
+    const docSnap = await getDoc(doc(db, "custom_forms", id));
+    if (docSnap.exists()) return docSnap.data() as CustomForm;
+    return null;
+  } catch {
+    // Firebase SDK failed even though the connectivity probe passed.
+    // This happens in restricted WebViews (Instagram, Facebook, Telegram in-app browsers)
+    // where the SDK's IndexedDB-based initialization is blocked.
+    // Fall back to the REST proxy and cache the result for this session.
+    _proxyMode = true;
+    try { localStorage.setItem(_PROXY_LS_KEY, JSON.stringify({ v: '1', ts: Date.now() })); } catch {}
+    return await proxyGet<CustomForm>('custom_forms', { doc: id });
+  }
 };
 
 export const saveAppConfigToCloud = async (config: AppConfig) => {
