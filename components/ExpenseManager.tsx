@@ -192,6 +192,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [payNote,    setPayNote]    = useState<string>('');
   const [incPayNote, setIncPayNote] = useState<string>('');
   const [showInstDetails, setShowInstDetails] = useState<{type:'exp'|'inc'; record:Expense|SalesRecord}|null>(null);
+  const [editingInst, setEditingInst] = useState<{instId:string; amount:string; date:string; note:string}|null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMaster = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
@@ -453,6 +454,53 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     if (editingExp) await updateExpense(exp.id, exp, currentUser.fullName);
     else            await saveExpense(exp, currentUser.fullName);
     setIsSubmitting(false); setShowExpModal(false); setEditingExp(null);
+  };
+
+  const deleteInstallment = async (instId: string) => {
+    if (!showInstDetails) return;
+    const isExp = showInstDetails.type === 'exp';
+    const rec   = showInstDetails.record;
+    const insts = ((rec as any).installments as PaymentInstallment[] || []).filter(x => x.id !== instId);
+    const newPaid = insts.reduce((s, x) => s + x.amount, 0);
+    if (isExp) {
+      const exp = rec as Expense;
+      const status: 'paid'|'pending'|'partial' = newPaid >= exp.amount ? 'paid' : newPaid > 0 ? 'partial' : 'pending';
+      await updateExpense(exp.id, { installments: insts, paidAmount: newPaid, status }, currentUser.fullName);
+      setShowInstDetails({ type: 'exp', record: { ...exp, installments: insts, paidAmount: newPaid, status } });
+    } else {
+      const sr = rec as SalesRecord;
+      const status = calcIncStatus(sr.saleAmount, newPaid);
+      await updateSalesRecord(sr.id, { installments: insts, receivedAmount: newPaid, paymentStatus: status, updatedAt: new Date().toISOString(), updatedBy: currentUser.fullName }, currentUser.fullName);
+      setShowInstDetails({ type: 'inc', record: { ...sr, installments: insts, receivedAmount: newPaid, paymentStatus: status } });
+    }
+    setEditingInst(null);
+  };
+
+  const saveEditInstallment = async () => {
+    if (!showInstDetails || !editingInst) return;
+    setIsSubmitting(true);
+    const isExp  = showInstDetails.type === 'exp';
+    const rec    = showInstDetails.record;
+    const newAmt = parseFloat(normalizeDigits(editingInst.amount).replace(/,/g,'')) || 0;
+    const insts  = ((rec as any).installments as PaymentInstallment[] || []).map(x =>
+      x.id === editingInst.instId
+        ? { ...x, amount: newAmt, date: editingInst.date, ...(editingInst.note.trim() ? { note: editingInst.note.trim() } : { note: undefined }) }
+        : x
+    );
+    const newPaid = insts.reduce((s, x) => s + x.amount, 0);
+    if (isExp) {
+      const exp = rec as Expense;
+      const status: 'paid'|'pending'|'partial' = newPaid >= exp.amount ? 'paid' : newPaid > 0 ? 'partial' : 'pending';
+      await updateExpense(exp.id, { installments: insts, paidAmount: newPaid, status }, currentUser.fullName);
+      setShowInstDetails({ type: 'exp', record: { ...exp, installments: insts, paidAmount: newPaid, status } });
+    } else {
+      const sr = rec as SalesRecord;
+      const status = calcIncStatus(sr.saleAmount, newPaid);
+      await updateSalesRecord(sr.id, { installments: insts, receivedAmount: newPaid, paymentStatus: status, updatedAt: new Date().toISOString(), updatedBy: currentUser.fullName }, currentUser.fullName);
+      setShowInstDetails({ type: 'inc', record: { ...sr, installments: insts, receivedAmount: newPaid, paymentStatus: status } });
+    }
+    setIsSubmitting(false);
+    setEditingInst(null);
   };
 
   const savePay = async () => {
@@ -1864,7 +1912,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
         const cur   = (rec as any).currency as string;
         return (
           <div className="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in"
-            onClick={()=>setShowInstDetails(null)}>
+            onClick={()=>{ setShowInstDetails(null); setEditingInst(null); }}>
             <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
               onClick={e=>e.stopPropagation()}>
               <div className={`p-5 border-b flex justify-between items-center ${isExp ? 'bg-rose-50' : 'bg-emerald-50'}`}>
@@ -1872,7 +1920,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   <IconHistory className="w-5 h-5"/>
                   {isExp ? 'جزییات پرداخت‌ها' : 'جزییات دریافت‌ها'}
                 </h3>
-                <button onClick={()=>setShowInstDetails(null)} className="p-2 hover:bg-gray-100 rounded-full">✕</button>
+                <button onClick={()=>{ setShowInstDetails(null); setEditingInst(null); }} className="p-2 hover:bg-gray-100 rounded-full">✕</button>
               </div>
               <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
                 <div className="font-bold text-gray-800 text-sm">{title}</div>
@@ -1903,21 +1951,69 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
                       <IconList className="w-3 h-3"/> تاریخچه ({insts.length} مرحله)
                     </div>
-                    {insts.map((inst, i) => (
-                      <div key={inst.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border ${isExp ? 'bg-green-50 border-green-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 ${isExp ? 'bg-green-500' : 'bg-emerald-500'}`}>
-                          {i+1}
+                    {insts.map((inst, i) => {
+                      const isEditing = editingInst?.instId === inst.id;
+                      return (
+                        <div key={inst.id}
+                          className={`rounded-xl border ${isExp ? 'bg-green-50 border-green-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                          {isEditing ? (
+                            <div className="p-3 space-y-2">
+                              <div className="flex gap-2">
+                                <input type="text"
+                                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-blue-400 font-black text-sm dir-ltr text-right"
+                                  value={editingInst!.amount}
+                                  onChange={e=>setEditingInst(p=>p&&({...p, amount:fmtInput(e.target.value)}))}
+                                  placeholder="مبلغ"/>
+                                <input type="date"
+                                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-blue-400 font-mono text-sm"
+                                  value={editingInst!.date}
+                                  onChange={e=>setEditingInst(p=>p&&({...p, date:e.target.value}))}/>
+                              </div>
+                              <input type="text"
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-blue-400 text-sm"
+                                value={editingInst!.note}
+                                onChange={e=>setEditingInst(p=>p&&({...p, note:e.target.value}))}
+                                placeholder="توضیحات (اختیاری)"/>
+                              <div className="flex gap-2">
+                                <button onClick={saveEditInstallment} disabled={isSubmitting}
+                                  className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-black rounded-lg flex justify-center items-center gap-1">
+                                  <IconCheck className="w-3.5 h-3.5"/> ذخیره
+                                </button>
+                                <button onClick={()=>setEditingInst(null)}
+                                  className="flex-1 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg">انصراف</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 p-3">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 ${isExp ? 'bg-green-500' : 'bg-emerald-500'}`}>
+                                {i+1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-mono text-xs text-gray-500 dir-ltr">{inst.date}</div>
+                                {inst.note && <div className="text-[10px] text-gray-500 mt-0.5">{inst.note}</div>}
+                              </div>
+                              <div className={`font-black text-sm ${isExp ? 'text-green-700' : 'text-emerald-700'}`}>
+                                {fmtNum(inst.amount)} {cur}
+                              </div>
+                              {isMaster && (
+                                <div className="flex gap-0.5 shrink-0">
+                                  <button
+                                    onClick={()=>setEditingInst({instId:inst.id, amount:inst.amount.toLocaleString(), date:inst.date, note:inst.note||''})}
+                                    className="p-1 text-blue-400 hover:bg-blue-100 rounded-lg" title="ویرایش">
+                                    <IconEdit className="w-3.5 h-3.5"/>
+                                  </button>
+                                  <button
+                                    onClick={()=>{ if(window.confirm('این مرحله پرداخت حذف شود؟')) deleteInstallment(inst.id); }}
+                                    className="p-1 text-red-400 hover:bg-red-100 rounded-lg" title="حذف">
+                                    <IconTrash className="w-3.5 h-3.5"/>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-mono text-xs text-gray-500 dir-ltr">{inst.date}</div>
-                          {inst.note && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{inst.note}</div>}
-                        </div>
-                        <div className={`font-black text-sm ${isExp ? 'text-green-700' : 'text-emerald-700'}`}>
-                          {fmtNum(inst.amount)} {cur}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div className={`flex justify-between items-center p-3 rounded-xl font-black text-sm border-2 ${isExp ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                       <span>{isExp ? 'جمع پرداخت‌ها:' : 'جمع دریافت‌ها:'}</span>
                       <span>{fmtNum(insts.reduce((s,x)=>s+x.amount,0))} {cur}</span>
@@ -1926,7 +2022,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                 )}
               </div>
               <div className="p-5 border-t bg-gray-50/50">
-                <button onClick={()=>setShowInstDetails(null)}
+                <button onClick={()=>{ setShowInstDetails(null); setEditingInst(null); }}
                   className="w-full py-3 text-gray-500 font-bold hover:bg-white rounded-2xl border border-gray-200">بستن</button>
               </div>
             </div>
