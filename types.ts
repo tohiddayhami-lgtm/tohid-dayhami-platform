@@ -614,3 +614,38 @@ export interface CustomerAccount {
   createdAt: string;
   createdBy: string;
 }
+
+// ── Company Processes / Mind Map ─────────────────────────────────────────────
+
+export interface ProcessNodeFile {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  size: number;
+}
+
+export interface ProcessNode {
+  id: string;
+  label: string;
+  parentId: string | null;
+  childIds: string[];
+  notes: string;
+  files: ProcessNodeFile[];
+  color: string;
+  isCollapsed: boolean;
+}
+
+export interface CompanyProcess {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+  accessType: 'all' | 'specific';
+  accessibleTo: string[];
+  nodes: ProcessNode[];
+  rootNodeId: string;
+  lastUpdated?: string;
+  updatedBy?: string;
+}

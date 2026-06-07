@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -20,6 +20,7 @@ import {
   subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
+  subscribeToProcesses, saveProcess, deleteProcess,
 } from './services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
@@ -186,6 +187,7 @@ const App: React.FC = () => {
   const [appConfig, setAppConfig] = useState<AppConfig>(() => readCache<AppConfig>(CACHE_KEYS.CONFIG) ?? INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [customerAccounts, setCustomerAccounts] = useState<CustomerAccount[]>([]);
+  const [processes, setProcesses] = useState<CompanyProcess[]>([]);
   const [currentCustomerUser, setCurrentCustomerUser] = useState<CustomerAccount | null>(null);
 
   const t = DICTIONARY[lang];
@@ -379,7 +381,8 @@ const App: React.FC = () => {
     const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); };
+    const unsubProcesses = subscribeToProcesses(setProcesses);
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1225,6 +1228,9 @@ const App: React.FC = () => {
                     customerAccounts={customerAccounts}
                     onSaveCustomerAccount={async (acc) => { await saveCustomerAccount(acc); }}
                     onDeleteCustomerAccount={async (id) => { await deleteCustomerAccount(id); }}
+                    processes={processes}
+                    onSaveProcess={async (proc) => { await saveProcess(proc); }}
+                    onDeleteProcess={async (id) => { await deleteProcess(id); }}
                   />
                 )}
               </>

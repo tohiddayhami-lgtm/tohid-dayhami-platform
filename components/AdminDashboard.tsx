@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount } from '../types';
-import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet } from './Icons';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess } from '../types';
+import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
@@ -21,6 +21,7 @@ import { ExpenseManager } from './ExpenseManager';
 import { FormBuilderPanel } from './FormBuilderPanel';
 import { NotificationCenter } from './NotificationCenter';
 import { CustomerAccountManager } from './CustomerAccountManager';
+import { ProcessManager } from './ProcessManager';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -52,6 +53,9 @@ interface Props {
   customerAccounts?: CustomerAccount[];
   onSaveCustomerAccount?: (account: CustomerAccount) => Promise<void>;
   onDeleteCustomerAccount?: (id: string) => Promise<void>;
+  processes?: CompanyProcess[];
+  onSaveProcess?: (process: CompanyProcess) => Promise<void>;
+  onDeleteProcess?: (id: string) => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -81,6 +85,9 @@ export const AdminDashboard: React.FC<Props> = ({
   customerAccounts = [],
   onSaveCustomerAccount,
   onDeleteCustomerAccount,
+  processes = [],
+  onSaveProcess,
+  onDeleteProcess,
 }) => {
   const safeRoles = currentUser?.roles || [];
   const isAdmin = safeRoles.includes('مدیر');
@@ -92,7 +99,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -364,6 +371,7 @@ export const AdminDashboard: React.FC<Props> = ({
           favicon: 'فاوآیکون سایت',
           saveSeo: 'ذخیره تنظیمات سئو',
           customer_accounts: 'پنل مشتریان',
+          processes: 'فرآیندهای شرکت',
           projectCategory: 'سرفصل پروژه',
           projectCategoryPh: 'مثال: صادرات، بازرگانی، فناوری...',
           partiesTitle: 'طرفین و شرکاء پروژه',
@@ -538,6 +546,7 @@ export const AdminDashboard: React.FC<Props> = ({
           favicon: 'Site Favicon',
           saveSeo: 'Save SEO Settings',
           customer_accounts: 'Customer Accounts',
+          processes: 'Company Processes',
           projectCategory: 'Project Category',
           projectCategoryPh: 'e.g. Export, Trade, Technology...',
           partiesTitle: 'Project Parties & Partners',
@@ -1688,6 +1697,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'messages' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMail className="w-4 h-4 shrink-0" /><span>{t.messages}</span>{unreadMessagesCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{unreadMessagesCount}</span>}</button>
                 <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'projects' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconProject className="w-4 h-4 shrink-0" /><span>{t.projects}</span></button>
                 <button onClick={() => setActiveTab('forms')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'forms' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.forms}</span></button>
+                <button onClick={() => setActiveTab('processes')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'processes' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMindMap className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'فرآیندهای شرکت' : 'Processes'}</span></button>
                 <button onClick={() => setActiveTab('sales')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'sales' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMoney className="w-4 h-4 shrink-0" /><span>{t.sales}</span></button>
                 {(isAdmin || isMaster) && (<button onClick={() => setActiveTab('expenses')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'expenses' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconWallet className="w-4 h-4 shrink-0" /><span>{t.expenses}</span></button>)}
                 {hasTariffAccess && (<button onClick={() => setActiveTab('services')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'services' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBriefcase className="w-4 h-4 shrink-0" /><span>{t.services}</span></button>)}
@@ -2471,6 +2481,16 @@ export const AdminDashboard: React.FC<Props> = ({
           currentUserName={currentUser.fullName}
           onSave={onSaveCustomerAccount}
           onDelete={onDeleteCustomerAccount}
+          lang={lang}
+        />
+      )}
+      {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
+        <ProcessManager
+          processes={processes}
+          personnel={personnel}
+          currentUser={currentUser}
+          onSave={onSaveProcess}
+          onDelete={onDeleteProcess}
           lang={lang}
         />
       )}
