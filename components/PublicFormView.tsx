@@ -55,6 +55,13 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   const [fileError, setFileError]           = useState('');
   const generalFileInputRef                 = useRef<HTMLInputElement>(null);
 
+  // Stable ticket ID — generated once at mount so retries are idempotent (same Firestore doc)
+  const stableTicketIdRef = useRef<string>(
+    `FRM-${Math.floor(1000 + Math.random() * 9000)}-${(formId || 'F').substring(0, 3).toUpperCase()}`
+  );
+  // Synchronous submit guard — state updates are async and can't block a rapid double-click
+  const submitInFlightRef = useRef(false);
+
   const trackingUrl = trackingBaseUrl || `${window.location.origin}/?page=tracking`;
 
   useEffect(() => {
@@ -187,11 +194,15 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       return;
     }
 
+    // Sync guard: prevents double-submission even before React re-renders the disabled button
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setSubmitting(true);
     try {
       const now = new Date().toISOString();
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      const ticketId = `FRM-${rand}-${(formId || 'F').substring(0, 3).toUpperCase()}`;
+      // Use the stable ID generated at mount — retrying after a network error reuses the same
+      // Firestore document ID, so setDoc overwrites instead of creating a duplicate.
+      const ticketId = stableTicketIdRef.current;
 
       const customData: Record<string, string> = { formId, formTitle: form?.title || '' };
       if (form?.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
@@ -245,6 +256,8 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       setTrackingCode(ticketId);
       setSubmitted(true);
     } catch {
+      // On failure, release the guard so the user can retry — but the ticket ID stays stable
+      submitInFlightRef.current = false;
       alert(formLang === 'fa' ? 'خطا در ثبت فرم. لطفاً دوباره تلاش کنید.' : 'Submission failed. Please try again.');
     } finally {
       setSubmitting(false);

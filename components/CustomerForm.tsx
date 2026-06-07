@@ -104,6 +104,16 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successTicketIds, setSuccessTicketIds] = useState<string[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Stable per-service IDs — generated once at mount so retries hit the same Firestore document
+  const stableIdsRef = useRef<Record<string, string>>({});
+  const getStableId = (serviceId: string) => {
+    if (!stableIdsRef.current[serviceId]) {
+      stableIdsRef.current[serviceId] = `EXP-${Math.floor(1000 + Math.random() * 9000)}-${serviceId.substring(0, 2).toUpperCase()}`;
+    }
+    return stableIdsRef.current[serviceId];
+  };
+  // Synchronous submit guard — React state updates are async and can't block rapid double-clicks
+  const submitInFlightRef = useRef(false);
 
   const t = {
     fa: {
@@ -181,6 +191,9 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
     if (files.some(f => f.status === 'uploading')) { alert(lang === 'fa' ? 'منتظر اتمام آپلود باشید.' : 'Wait for uploads to finish.'); return; }
     if (files.some(f => f.status === 'error') && !window.confirm(lang === 'fa' ? 'برخی فایل‌ها آپلود نشدند. ادامه می‌دهید؟' : 'Some files failed. Continue?')) return;
 
+    // Sync guard: prevents double-submission even before React re-renders the disabled button
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setIsSubmitting(true);
     const validFiles = files.filter(f => f.status === 'success');
     const safetyTimer = setTimeout(() => { setIsSubmitting(false); }, 45000);
@@ -196,7 +209,8 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       for (const serviceId of selectedServiceIds) {
         const selectedService = services.find(s => s.id === serviceId);
         const subs = selectedSubServices[serviceId] || [];
-        const ticketId = `EXP-${Math.floor(1000 + Math.random() * 9000)}-${serviceId.substring(0, 2).toUpperCase()}`;
+        // Stable ID per service — retrying after a network error reuses the same Firestore document
+        const ticketId = getStableId(serviceId);
         generatedIds.push(ticketId);
 
         const effectiveDescription = serviceId === 's_other' && otherText
@@ -227,6 +241,8 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
       setSuccessTicketIds(generatedIds);
     } catch (error: any) {
       clearTimeout(safetyTimer);
+      // On failure, release the guard so the user can retry — stable IDs ensure no duplicate doc
+      submitInFlightRef.current = false;
       alert(lang === 'fa' ? `خطا: ${error.message || 'مشکل در شبکه'}` : 'Connection Error');
     } finally {
       setIsSubmitting(false);
