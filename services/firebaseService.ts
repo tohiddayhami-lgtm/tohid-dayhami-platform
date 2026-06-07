@@ -62,6 +62,24 @@ const checkProxyMode = (): Promise<boolean> => {
 
 const _fb = '/api/fb';
 
+// Parse a single Firestore REST value to plain JS
+function _fsVal(v: Record<string, unknown>): unknown {
+  if ('stringValue'    in v) return v.stringValue;
+  if ('integerValue'   in v) return Number(v.integerValue);
+  if ('doubleValue'    in v) return v.doubleValue;
+  if ('booleanValue'   in v) return v.booleanValue;
+  if ('nullValue'      in v) return null;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('arrayValue'     in v) return ((v.arrayValue as { values?: Record<string, unknown>[] }).values || []).map(_fsVal);
+  if ('mapValue'       in v) return _fsFields((v.mapValue as { fields?: Record<string, Record<string, unknown>> }).fields || {});
+  return null;
+}
+function _fsFields(fields: Record<string, Record<string, unknown>>): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  for (const [k, fv] of Object.entries(fields)) o[k] = _fsVal(fv);
+  return o;
+}
+
 const proxyGet = async <T>(col: string, opts: { doc?: string; orderField?: string; dir?: 'asc' | 'desc' } = {}): Promise<T> => {
   const p = new URLSearchParams({ col });
   if (opts.doc) p.set('doc', opts.doc);
@@ -818,21 +836,23 @@ export const getTicketById = async (id: string): Promise<Ticket | null> => {
 };
 
 export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
-  const proxy = await checkProxyMode();
-  if (proxy) {
-    return await proxyGet<CustomForm>('custom_forms', { doc: id });
-  }
+  // Use Firebase REST API directly — pure HTTP fetch, no SDK/IndexedDB, works in
+  // Instagram/Facebook/Telegram in-app browsers and avoids Vercel cold starts.
+  const restUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/custom_forms/${id}?key=${firebaseConfig.apiKey}`;
   try {
-    const docSnap = await getDoc(doc(db, "custom_forms", id));
-    if (docSnap.exists()) return docSnap.data() as CustomForm;
-    return null;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    let res: Response;
+    try { res = await fetch(restUrl, { signal: ctrl.signal }); }
+    finally { clearTimeout(t); }
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json() as { name?: string; fields?: Record<string, Record<string, unknown>> };
+    if (!data.fields) return null;
+    const docId = (data.name ?? '').split('/').pop() ?? id;
+    return { id: docId, ..._fsFields(data.fields) } as unknown as CustomForm;
   } catch {
-    // Firebase SDK failed even though the connectivity probe passed.
-    // This happens in restricted WebViews (Instagram, Facebook, Telegram in-app browsers)
-    // where the SDK's IndexedDB-based initialization is blocked.
-    // Fall back to the REST proxy and cache the result for this session.
-    _proxyMode = true;
-    try { localStorage.setItem(_PROXY_LS_KEY, JSON.stringify({ v: '1', ts: Date.now() })); } catch {}
+    // googleapis.com unreachable (Iran without VPN) → fall back to Vercel proxy
     return await proxyGet<CustomForm>('custom_forms', { doc: id });
   }
 };
