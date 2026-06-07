@@ -154,20 +154,47 @@ export interface ProjectTeamMember {
   joinedAt: string;
 }
 
+export type ProjectPartyType = 'client' | 'partner' | 'supplier' | 'investor' | 'other';
+
+export interface ProjectParty {
+  id: string;
+  name: string;
+  type: ProjectPartyType;
+  company?: string;
+  phone?: string;
+  profitSharePercent: number;
+  notes?: string;
+  addedAt: string;
+}
+
+export interface ProjectDefinitionItem {
+  id: string;
+  category: string;
+  label: string;
+  value: string;
+  fileUrl?: string;
+  fileName?: string;
+  addedAt: string;
+  addedBy: string;
+}
+
 export interface ProjectDetails {
   isActive: boolean;
+  category?: string;
   tariff?: Price;
   startDate: string;
   endDate: string;
-  teamMemberIds: string[]; 
+  teamMemberIds: string[];
   teamMembers?: ProjectTeamMember[];
   projectFiles: AttachedFile[];
   payments: Payment[];
   invoices?: Invoice[];
   milestones?: ProjectMilestone[];
   risks?: ProjectRisk[];
-  progress: number; 
+  progress: number;
   statusNote?: string;
+  parties?: ProjectParty[];
+  definitions?: ProjectDefinitionItem[];
 }
 
 export interface Ticket {

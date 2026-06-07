@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -145,6 +145,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const [projectForm, setProjectForm] = useState<ProjectDetails>({
       isActive: false,
+      category: '',
       tariff: { amount: 0, currency: 'IRR' },
       startDate: '',
       endDate: '',
@@ -156,8 +157,21 @@ export const AdminDashboard: React.FC<Props> = ({
       milestones: [],
       risks: [],
       progress: 0,
-      statusNote: ''
+      statusNote: '',
+      parties: [],
+      definitions: [],
   });
+
+  const [newParty, setNewParty] = useState<{ name: string; type: ProjectPartyType; company: string; phone: string; profitSharePercent: number; notes: string }>({
+      name: '', type: 'client', company: '', phone: '', profitSharePercent: 0, notes: ''
+  });
+
+  const [newDefItem, setNewDefItem] = useState<{ category: string; label: string; value: string }>({
+      category: '', label: '', value: ''
+  });
+  const [defUploading, setDefUploading] = useState(false);
+  const [pendingDefFile, setPendingDefFile] = useState<{ url: string; name: string } | null>(null);
+  const defFileInputRef = useRef<HTMLInputElement>(null);
   
   const [newPayment, setNewPayment] = useState<Partial<Payment>>({
       amount: 0,
@@ -179,8 +193,10 @@ export const AdminDashboard: React.FC<Props> = ({
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
   const [newProjectData, setNewProjectData] = useState({
       title: '',
+      category: '',
       serviceId: '',
       customerName: '',
+      customerType: 'client' as ProjectPartyType,
       phoneNumber: '',
       startDate: '',
       endDate: '',
@@ -343,6 +359,36 @@ export const AdminDashboard: React.FC<Props> = ({
           favicon: 'فاوآیکون سایت',
           saveSeo: 'ذخیره تنظیمات سئو',
           customer_accounts: 'پنل مشتریان',
+          projectCategory: 'سرفصل پروژه',
+          projectCategoryPh: 'مثال: صادرات، بازرگانی، فناوری...',
+          partiesTitle: 'طرفین و شرکاء پروژه',
+          partyName: 'نام طرف',
+          partyType: 'نوع طرف',
+          partyCompany: 'شرکت/سازمان',
+          partyPhone: 'تلفن',
+          partyShare: 'سهم (%)',
+          partyNotes: 'یادداشت',
+          addParty: 'افزودن طرف',
+          partyTypeClient: 'کارفرما / مشتری',
+          partyTypePartner: 'همکار / شریک',
+          partyTypeSupplier: 'تامین‌کننده',
+          partyTypeInvestor: 'سرمایه‌گذار',
+          partyTypeOther: 'سایر',
+          definitionsTitle: 'جدول تعریفات پروژه',
+          defCategory: 'دسته‌بندی',
+          defLabel: 'عنوان / موضوع',
+          defValue: 'مقدار / توضیح',
+          defFile: 'فایل ضمیمه',
+          addDefItem: 'افزودن ردیف',
+          defCategoryPh: 'مثال: مدارک قراردادی',
+          defLabelPh: 'مثال: شماره قرارداد',
+          defValuePh: 'مثال: ۱۴۰۳/۱۲۳',
+          totalShare: 'جمع سهام',
+          noParties: 'هنوز طرفی تعریف نشده است.',
+          noDefinitions: 'هنوز ردیفی اضافه نشده است.',
+          uploadingDef: 'در حال آپلود...',
+          attachFile: 'پیوست فایل',
+          customerTypeLabel: 'نوع ارتباط',
       },
       en: {
           overview: 'Overview & Dashboard',
@@ -485,7 +531,38 @@ export const AdminDashboard: React.FC<Props> = ({
           ogDesc: 'OG Description',
           ogImage: 'OG Image URL',
           favicon: 'Site Favicon',
-          saveSeo: 'Save SEO Settings'
+          saveSeo: 'Save SEO Settings',
+          customer_accounts: 'Customer Accounts',
+          projectCategory: 'Project Category',
+          projectCategoryPh: 'e.g. Export, Trade, Technology...',
+          partiesTitle: 'Project Parties & Partners',
+          partyName: 'Party Name',
+          partyType: 'Type',
+          partyCompany: 'Company / Org',
+          partyPhone: 'Phone',
+          partyShare: 'Share (%)',
+          partyNotes: 'Notes',
+          addParty: 'Add Party',
+          partyTypeClient: 'Client / Employer',
+          partyTypePartner: 'Partner / Collaborator',
+          partyTypeSupplier: 'Supplier',
+          partyTypeInvestor: 'Investor',
+          partyTypeOther: 'Other',
+          definitionsTitle: 'Project Definitions Table',
+          defCategory: 'Category',
+          defLabel: 'Label / Topic',
+          defValue: 'Value / Description',
+          defFile: 'Attachment',
+          addDefItem: 'Add Row',
+          defCategoryPh: 'e.g. Contract Docs',
+          defLabelPh: 'e.g. Contract No.',
+          defValuePh: 'e.g. CTR-2024-001',
+          totalShare: 'Total Share',
+          noParties: 'No parties defined yet.',
+          noDefinitions: 'No rows added yet.',
+          uploadingDef: 'Uploading...',
+          attachFile: 'Attach File',
+          customerTypeLabel: 'Relationship Type',
       }
   }[lang];
 
@@ -520,7 +597,7 @@ export const AdminDashboard: React.FC<Props> = ({
               setProjectForm(selectedTicket.projectData);
               setNewPayment({ amount: 0, currency: selectedTicket.projectData.tariff?.currency || 'IRR', type: 'deposit', note: '' });
           } else {
-              setProjectForm({ isActive: false, tariff: { amount: 0, currency: 'IRR' }, startDate: '', endDate: '', teamMemberIds: [], teamMembers: [], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: '' });
+              setProjectForm({ isActive: false, category: '', tariff: { amount: 0, currency: 'IRR' }, startDate: '', endDate: '', teamMemberIds: [], teamMembers: [], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: '', parties: [], definitions: [] });
           }
       }
   }, [selectedTicketId, selectedTicket]);
@@ -713,8 +790,8 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleDeleteTimelineEntry = (index: number) => { if (!selectedTicket || !isMaster) return; if (window.confirm('Delete entry?')) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline.splice(index, 1); onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleEditTimelineEntry = (index: number, currentDesc: string) => { if (!selectedTicket || !isMaster) return; const newDesc = window.prompt('Edit:', currentDesc); if (newDesc !== null) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline[index] = { ...newTimeline[index], description: newDesc }; onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
-  const handleCreateProject = async (e: React.FormEvent) => { e.preventDefault(); const newTicketId = `PROJ-${Math.floor(10000 + Math.random() * 90000)}`; const newTicket: Ticket = { id: newTicketId, customerName: newProjectData.customerName, phoneNumber: newProjectData.phoneNumber, whatsappNumber: newProjectData.phoneNumber, location: 'N/A', serviceId: newProjectData.serviceId, description: `Project: ${newProjectData.title}`, status: TicketStatus.IN_PROGRESS, createdAt: new Date().toISOString(), priority: newProjectData.priority, files: [], timeline: [ { type: 'creation', title: 'Project Created', description: `Project "${newProjectData.title}" created by ${currentUser.fullName}.`, actorName: currentUser.fullName, timestamp: new Date().toISOString(), visibility: 'public' } ], projectData: { isActive: true, tariff: { amount: parseInt(newProjectData.tariffAmount.replace(/,/g, '')) || 0, currency: newProjectData.tariffCurrency }, startDate: newProjectData.startDate, endDate: newProjectData.endDate, teamMemberIds: [currentUser.id], teamMembers: [ { userId: currentUser.id, role: 'Project Manager', responsibility: 'Owner', joinedAt: new Date().toISOString() } ], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: 'Project Initialized.' }, assignedTo: currentUser.id }; try { await onCreateTicket(newTicket); setCreatedProjectId(newTicketId); } catch (e) { alert('Error creating project'); } };
-  const handleProjectModalClose = () => { setShowNewProjectModal(false); setCreatedProjectId(null); setNewProjectData({ title: '', serviceId: '', customerName: '', phoneNumber: '', startDate: '', endDate: '', tariffAmount: '', tariffCurrency: 'IRR', priority: 'Medium' }); };
+  const handleCreateProject = async (e: React.FormEvent) => { e.preventDefault(); const newTicketId = `PROJ-${Math.floor(10000 + Math.random() * 90000)}`; const initialParty: ProjectParty = { id: `party-${Date.now()}`, name: newProjectData.customerName, type: newProjectData.customerType, phone: newProjectData.phoneNumber, profitSharePercent: 0, addedAt: new Date().toISOString() }; const newTicket: Ticket = { id: newTicketId, customerName: newProjectData.customerName, phoneNumber: newProjectData.phoneNumber, whatsappNumber: newProjectData.phoneNumber, location: 'N/A', serviceId: newProjectData.serviceId, description: `Project: ${newProjectData.title}`, status: TicketStatus.IN_PROGRESS, createdAt: new Date().toISOString(), priority: newProjectData.priority, files: [], timeline: [ { type: 'creation', title: 'Project Created', description: `Project "${newProjectData.title}" created by ${currentUser.fullName}.`, actorName: currentUser.fullName, timestamp: new Date().toISOString(), visibility: 'public' } ], projectData: { isActive: true, category: newProjectData.category.trim() || undefined, tariff: { amount: parseInt(newProjectData.tariffAmount.replace(/,/g, '')) || 0, currency: newProjectData.tariffCurrency }, startDate: newProjectData.startDate, endDate: newProjectData.endDate, teamMemberIds: [currentUser.id], teamMembers: [ { userId: currentUser.id, role: 'Project Manager', responsibility: 'Owner', joinedAt: new Date().toISOString() } ], projectFiles: [], payments: [], invoices: [], milestones: [], risks: [], progress: 0, statusNote: 'Project Initialized.', parties: [initialParty], definitions: [] }, assignedTo: currentUser.id }; try { await onCreateTicket(newTicket); setCreatedProjectId(newTicketId); } catch (e) { alert('Error creating project'); } };
+  const handleProjectModalClose = () => { setShowNewProjectModal(false); setCreatedProjectId(null); setNewProjectData({ title: '', category: '', serviceId: '', customerName: '', customerType: 'client', phoneNumber: '', startDate: '', endDate: '', tariffAmount: '', tariffCurrency: 'IRR', priority: 'Medium' }); };
   const handleProjectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => { if (!e.target.files || e.target.files.length === 0) return; const files: File[] = Array.from(e.target.files); for (const file of files) { if (file.size > 5 * 1024 * 1024) { alert('File too large > 5MB'); continue; } const newFile: AttachedFile = { name: file.name, size: file.size, type: file.type, content: '', status: 'uploading', progress: 0 }; setProjectForm(prev => ({ ...prev, projectFiles: [...prev.projectFiles, newFile] })); uploadFileWithProgress( file, (progress) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, progress } : f) })), (url) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name ? { ...f, content: url, status: 'success', progress: 100 } : f) })), (err) => setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.map(f => f.name === file.name ? { ...f, status: 'error', errorMsg: err.message } : f) })), 'documents' ); } if (projectFileInputRef.current) projectFileInputRef.current.value = ''; };
   const handleRemoveProjectFile = (index: number) => { setProjectForm(prev => ({ ...prev, projectFiles: prev.projectFiles.filter((_, i) => i !== index) })); };
   const handleSaveInvoice = (invoice: Invoice) => { if (!selectedTicket) return; const invoices = projectForm.invoices || []; const existingIdx = invoices.findIndex(i => i.id === invoice.id); let newInvoices = existingIdx >= 0 ? invoices.map((inv, i) => i === existingIdx ? invoice : inv) : [...invoices, invoice]; const updatedProjectData = { ...projectForm, invoices: newInvoices, isActive: true }; onUpdateTicket(selectedTicket.id, { projectData: updatedProjectData }, currentUser.fullName, `Invoice ${invoice.number} updated.`); logSystemAction('UPDATE', 'Project', `Invoice ${invoice.number} saved`, currentUser.fullName, selectedTicket.id); setShowInvoiceModal(false); };
@@ -724,6 +801,48 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleAddRisk = () => { if(!newRiskTitle.trim()) return; const risk: ProjectRisk = { id: `rsk-${Date.now()}`, title: newRiskTitle, impact: newRiskImpact }; setProjectForm(prev => ({ ...prev, risks: [...(prev.risks || []), risk] })); setNewRiskTitle(''); };
   const handleAddTeamMember = async () => { if (!newTeamMemberId || !newTeamMemberResp.trim() || !selectedTicket) return; if (projectForm.teamMemberIds.includes(newTeamMemberId)) return; const newTask: Task = { id: `task-${Date.now()}`, title: `Project Join: ${selectedTicket.customerName}`, description: `Role: "${newTeamMemberRole}", Resp: ${newTeamMemberResp}`, creatorId: currentUser.id, creatorName: currentUser.fullName, assigneeIds: [newTeamMemberId], isCompleted: false, priority: 'High', createdAt: new Date().toISOString(), comments: [] }; await saveTaskToCloud(newTask); const newMember: ProjectTeamMember = { userId: newTeamMemberId, role: newTeamMemberRole || 'Member', responsibility: newTeamMemberResp, joinedAt: new Date().toISOString() }; setProjectForm(prev => ({ ...prev, teamMemberIds: [...prev.teamMemberIds, newTeamMemberId], teamMembers: [...(prev.teamMembers || []), newMember] })); setNewTeamMemberId(''); setNewTeamMemberRole(''); setNewTeamMemberResp(''); };
   const handleRemoveTeamMember = (userId: string) => { if (window.confirm('Remove member?')) { setProjectForm(prev => ({ ...prev, teamMemberIds: prev.teamMemberIds.filter(id => id !== userId), teamMembers: (prev.teamMembers || []).filter(m => m.userId !== userId) })); } };
+
+  const partyTypeLabel = (type: ProjectPartyType): string => ({
+    client: t.partyTypeClient, partner: t.partyTypePartner, supplier: t.partyTypeSupplier, investor: t.partyTypeInvestor, other: t.partyTypeOther,
+  }[type]);
+
+  const handleAddParty = () => {
+    if (!newParty.name.trim()) return;
+    const party: ProjectParty = { id: `party-${Date.now()}`, name: newParty.name.trim(), type: newParty.type, company: newParty.company.trim() || undefined, phone: newParty.phone.trim() || undefined, profitSharePercent: newParty.profitSharePercent, notes: newParty.notes.trim() || undefined, addedAt: new Date().toISOString() };
+    setProjectForm(prev => ({ ...prev, parties: [...(prev.parties || []), party] }));
+    setNewParty({ name: '', type: 'client', company: '', phone: '', profitSharePercent: 0, notes: '' });
+  };
+
+  const handleRemoveParty = (id: string) => {
+    setProjectForm(prev => ({ ...prev, parties: (prev.parties || []).filter(p => p.id !== id) }));
+  };
+
+  const handleDefFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert(lang === 'fa' ? 'حداکثر ۱۰ مگابایت' : 'Max 10 MB'); return; }
+    setDefUploading(true);
+    uploadFileWithProgress(
+      file,
+      () => {},
+      (url) => { setPendingDefFile({ url, name: file.name }); setDefUploading(false); },
+      () => { alert(lang === 'fa' ? 'خطا در آپلود' : 'Upload failed'); setDefUploading(false); },
+      'documents'
+    );
+    if (defFileInputRef.current) defFileInputRef.current.value = '';
+  };
+
+  const handleAddDefItem = () => {
+    if (!newDefItem.label.trim() && !pendingDefFile) return;
+    const item: ProjectDefinitionItem = { id: `def-${Date.now()}`, category: newDefItem.category.trim(), label: newDefItem.label.trim(), value: newDefItem.value.trim(), fileUrl: pendingDefFile?.url, fileName: pendingDefFile?.name, addedAt: new Date().toISOString(), addedBy: currentUser.fullName };
+    setProjectForm(prev => ({ ...prev, definitions: [...(prev.definitions || []), item] }));
+    setNewDefItem({ category: '', label: '', value: '' });
+    setPendingDefFile(null);
+  };
+
+  const handleRemoveDefItem = (id: string) => {
+    setProjectForm(prev => ({ ...prev, definitions: (prev.definitions || []).filter(d => d.id !== id) }));
+  };
   const handleRenameTicketFile = (fileContentUrl: string, newName: string) => {
     if (!selectedTicket || !newName.trim()) return;
     const newTimeline = (selectedTicket.timeline || []).map(entry => {
@@ -1048,6 +1167,13 @@ export const AdminDashboard: React.FC<Props> = ({
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                                     <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2">{t.projectMgmt}</h4>
+                                    <div>
+                                      <label className="text-xs font-bold text-gray-500 block mb-1">{t.projectCategory}</label>
+                                      <input className="w-full border rounded-lg p-2 text-sm" placeholder={t.projectCategoryPh} value={projectForm.category || ''} onChange={e => setProjectForm({...projectForm, category: e.target.value})} list="proj-cat-edit" />
+                                      <datalist id="proj-cat-edit">
+                                        {[...new Set(tickets.filter(tk => tk.projectData?.category).map(tk => tk.projectData!.category!))].map(c => <option key={c} value={c} />)}
+                                      </datalist>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className="text-xs font-bold text-gray-500 block mb-1">{t.startDate}</label><input type="date" className="w-full border rounded-lg p-2 text-sm" value={projectForm.startDate} onChange={e => setProjectForm({...projectForm, startDate: e.target.value})} /></div>
                                         <div><label className="text-xs font-bold text-gray-500 block mb-1">{t.endDate}</label><input type="date" className="w-full border rounded-lg p-2 text-sm" value={projectForm.endDate} onChange={e => setProjectForm({...projectForm, endDate: e.target.value})} /></div>
@@ -1073,6 +1199,165 @@ export const AdminDashboard: React.FC<Props> = ({
                                     <select className="border rounded p-1 text-sm bg-white" value={newPayment.type} onChange={e => setNewPayment({...newPayment, type: e.target.value as any})}><option value="deposit">Deposit</option><option value="settlement">Settlement</option><option value="installment">Installment</option></select><button onClick={() => { if(!newPayment.amount) return; setProjectForm(prev => ({...prev, payments: [...prev.payments, { id: `pay-${Date.now()}`, amount: newPayment.amount!, currency: projectForm.tariff?.currency || 'IRR', date: new Date().toISOString().split('T')[0], type: newPayment.type as any }] })); setNewPayment({...newPayment, amount: 0}); }} className="bg-green-600 text-white px-3 rounded text-sm font-bold hover:bg-green-700">{t.recordPayment}</button></div></div>
                                 </div>
                             </div>
+                            {/* ── Project Parties ── */}
+                            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                              <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
+                                <IconUsers className="w-4 h-4 text-indigo-500" /> {t.partiesTitle}
+                              </h4>
+                              {/* Parties table */}
+                              {(projectForm.parties || []).length > 0 ? (
+                                <div className="overflow-x-auto mb-4">
+                                  <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                      <tr className="bg-gray-50 text-gray-500 text-xs font-bold uppercase">
+                                        <th className="px-3 py-2 text-right rounded-tr-lg">{t.partyName}</th>
+                                        <th className="px-3 py-2 text-right">{t.partyType}</th>
+                                        <th className="px-3 py-2 text-right">{t.partyCompany}</th>
+                                        <th className="px-3 py-2 text-right">{t.partyPhone}</th>
+                                        <th className="px-3 py-2 text-center">{t.partyShare}</th>
+                                        <th className="px-3 py-2 text-right">{t.partyNotes}</th>
+                                        <th className="px-3 py-2 rounded-tl-lg"></th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {(projectForm.parties || []).map((party) => (
+                                        <tr key={party.id} className="hover:bg-gray-50">
+                                          <td className="px-3 py-2 font-semibold text-gray-800">{party.name}</td>
+                                          <td className="px-3 py-2">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${party.type === 'client' ? 'bg-blue-50 text-blue-600' : party.type === 'partner' ? 'bg-emerald-50 text-emerald-600' : party.type === 'supplier' ? 'bg-amber-50 text-amber-600' : party.type === 'investor' ? 'bg-purple-50 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+                                              {partyTypeLabel(party.type)}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 text-xs">{party.company || '—'}</td>
+                                          <td className="px-3 py-2 text-gray-500 text-xs dir-ltr">{party.phone || '—'}</td>
+                                          <td className="px-3 py-2 text-center">
+                                            <span className="font-bold text-indigo-600">{party.profitSharePercent}%</span>
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-400 text-xs max-w-[100px] truncate">{party.notes || '—'}</td>
+                                          <td className="px-3 py-2">
+                                            <button onClick={() => handleRemoveParty(party.id)} className="text-red-300 hover:text-red-500"><IconTrash className="w-4 h-4" /></button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="border-t-2 border-gray-200 bg-gray-50">
+                                        <td colSpan={4} className="px-3 py-2 text-xs font-bold text-gray-500">{t.totalShare}</td>
+                                        <td className="px-3 py-2 text-center font-black text-indigo-700">
+                                          {(projectForm.parties || []).reduce((s, p) => s + p.profitSharePercent, 0)}%
+                                        </td>
+                                        <td colSpan={2}></td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-400 italic mb-4">{t.noParties}</p>
+                              )}
+                              {/* Add party form */}
+                              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input className="border rounded-lg p-2 text-xs bg-white" placeholder={t.partyName} value={newParty.name} onChange={e => setNewParty({...newParty, name: e.target.value})} />
+                                  <select className="border rounded-lg p-2 text-xs bg-white" value={newParty.type} onChange={e => setNewParty({...newParty, type: e.target.value as ProjectPartyType})}>
+                                    <option value="client">{t.partyTypeClient}</option>
+                                    <option value="partner">{t.partyTypePartner}</option>
+                                    <option value="supplier">{t.partyTypeSupplier}</option>
+                                    <option value="investor">{t.partyTypeInvestor}</option>
+                                    <option value="other">{t.partyTypeOther}</option>
+                                  </select>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <input className="border rounded-lg p-2 text-xs bg-white" placeholder={t.partyCompany} value={newParty.company} onChange={e => setNewParty({...newParty, company: e.target.value})} />
+                                  <input className="border rounded-lg p-2 text-xs bg-white dir-ltr" placeholder={t.partyPhone} value={newParty.phone} onChange={e => setNewParty({...newParty, phone: e.target.value})} />
+                                  <div className="flex items-center gap-1">
+                                    <input type="number" min={0} max={100} className="border rounded-lg p-2 text-xs bg-white w-full" placeholder={t.partyShare} value={newParty.profitSharePercent || ''} onChange={e => setNewParty({...newParty, profitSharePercent: parseFloat(e.target.value) || 0})} />
+                                    <span className="text-xs text-gray-400">%</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input className="flex-1 border rounded-lg p-2 text-xs bg-white" placeholder={t.partyNotes} value={newParty.notes} onChange={e => setNewParty({...newParty, notes: e.target.value})} />
+                                  <button onClick={handleAddParty} className="bg-indigo-600 text-white px-4 rounded-lg text-xs font-bold hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addParty}</button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ── Project Definitions Table ── */}
+                            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                              <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4 flex items-center gap-2">
+                                <IconList className="w-4 h-4 text-indigo-500" /> {t.definitionsTitle}
+                              </h4>
+                              <input type="file" ref={defFileInputRef} className="hidden" onChange={handleDefFileUpload} />
+                              {/* Definitions table */}
+                              {(projectForm.definitions || []).length > 0 ? (
+                                <div className="overflow-x-auto mb-4">
+                                  <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                      <tr className="bg-gray-50 text-gray-500 text-xs font-bold uppercase">
+                                        <th className="px-3 py-2 text-right rounded-tr-lg">{t.defCategory}</th>
+                                        <th className="px-3 py-2 text-right">{t.defLabel}</th>
+                                        <th className="px-3 py-2 text-right">{t.defValue}</th>
+                                        <th className="px-3 py-2 text-right">{t.defFile}</th>
+                                        <th className="px-3 py-2 rounded-tl-lg"></th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {/* Group by category */}
+                                      {(() => {
+                                        const defs = projectForm.definitions || [];
+                                        const cats = [...new Set(defs.map(d => d.category || ''))];
+                                        return cats.map(cat => (
+                                          <React.Fragment key={cat}>
+                                            {cat && (
+                                              <tr className="bg-indigo-50">
+                                                <td colSpan={5} className="px-3 py-1.5 text-[11px] font-bold text-indigo-600 uppercase tracking-wider">{cat}</td>
+                                              </tr>
+                                            )}
+                                            {defs.filter(d => (d.category || '') === cat).map(item => (
+                                              <tr key={item.id} className="hover:bg-gray-50">
+                                                <td className="px-3 py-2 text-[11px] text-gray-400">{item.category || '—'}</td>
+                                                <td className="px-3 py-2 font-semibold text-gray-800">{item.label}</td>
+                                                <td className="px-3 py-2 text-gray-600 max-w-[180px]">{item.value || '—'}</td>
+                                                <td className="px-3 py-2">
+                                                  {item.fileUrl ? (
+                                                    <a href={item.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline text-xs"><IconFile className="w-3 h-3" />{item.fileName || lang === 'fa' ? 'فایل' : 'File'}</a>
+                                                  ) : <span className="text-gray-300 text-xs">—</span>}
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                  <button onClick={() => handleRemoveDefItem(item.id)} className="text-red-300 hover:text-red-500"><IconTrash className="w-4 h-4" /></button>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </React.Fragment>
+                                        ));
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-400 italic mb-4">{t.noDefinitions}</p>
+                              )}
+                              {/* Add definition row form */}
+                              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <input className="border rounded-lg p-2 text-xs bg-white" placeholder={t.defCategoryPh} value={newDefItem.category} onChange={e => setNewDefItem({...newDefItem, category: e.target.value})} list="def-category-list" />
+                                  <datalist id="def-category-list">
+                                    {[...new Set((projectForm.definitions || []).map(d => d.category).filter(Boolean))].map(c => <option key={c} value={c} />)}
+                                    {['مدارک قراردادی','اطلاعات اولیه','مشخصات فنی','مدارک مالی','گزارشات'].map(c => <option key={c} value={c} />)}
+                                  </datalist>
+                                  <input className="border rounded-lg p-2 text-xs bg-white" placeholder={t.defLabelPh} value={newDefItem.label} onChange={e => setNewDefItem({...newDefItem, label: e.target.value})} />
+                                  <input className="border rounded-lg p-2 text-xs bg-white" placeholder={t.defValuePh} value={newDefItem.value} onChange={e => setNewDefItem({...newDefItem, value: e.target.value})} />
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                  <button type="button" onClick={() => defFileInputRef.current?.click()} disabled={defUploading} className="flex items-center gap-1 text-xs border border-gray-300 bg-white px-3 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                                    <IconUpload className="w-3 h-3" />
+                                    {defUploading ? t.uploadingDef : pendingDefFile ? pendingDefFile.name : t.attachFile}
+                                  </button>
+                                  {pendingDefFile && <button type="button" onClick={() => setPendingDefFile(null)} className="text-red-400 hover:text-red-600 text-xs">✕</button>}
+                                  <button onClick={handleAddDefItem} disabled={!newDefItem.label.trim() && !pendingDefFile} className="mr-auto bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-40 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addDefItem}</button>
+                                </div>
+                              </div>
+                            </div>
+
                             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm"><h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">{t.projectDocs}</h4><div className="flex flex-wrap gap-3 mb-4">{(projectForm.projectFiles || []).map((f, i) => (<div key={i} className="relative group bg-gray-50 border border-gray-200 p-2 rounded-lg flex items-center gap-2"><IconFile className="w-4 h-4 text-gray-500" /><a href={f.content} target="_blank" className="text-sm text-blue-600 hover:underline truncate max-w-[150px]">{f.name}</a><button onClick={() => handleRemoveProjectFile(i)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"><IconTrash className="w-3 h-3" /></button></div>))}</div><div onClick={() => projectFileInputRef.current?.click()} className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 hover:border-indigo-300 transition-colors"><IconUpload className="w-6 h-6 text-gray-400 mx-auto mb-1" /><span className="text-xs text-gray-500">{t.uploadHint}</span><input type="file" ref={projectFileInputRef} className="hidden" multiple onChange={handleProjectFileUpload} /></div></div>
                             <button onClick={handleSaveProject} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">{t.saveProject}</button>
                         </div>
@@ -1175,7 +1460,105 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceModal customer={{ id: selectedTicket.customerName, fullName: selectedTicket.customerName, companyName: selectedTicket.companyName, location: selectedTicket.location, phoneNumber: selectedTicket.phoneNumber, whatsappNumber: selectedTicket.whatsappNumber, firstContact: '', totalTickets: 0 }} template={config.invoiceTemplate || { companyName: config.appTitle, address: '', phone: '', footerText: '', termsConditions: '', defaultTaxRate: 0, colorTheme: '#4f46e5' }} initialData={editingInvoice} onSave={handleSaveInvoice} onClose={() => setShowInvoiceModal(false)} />
       )}
       {showNewProjectModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><div className="bg-white rounded-xl w-full max-w-lg shadow-2xl animate-fade-in overflow-hidden"><div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center"><h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm"><IconProject className="w-4 h-4" />{t.newProject}</h3><button onClick={handleProjectModalClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button></div>{createdProjectId ? (<div className="p-8 text-center"><div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><IconCheck className="w-7 h-7 text-gray-700" /></div><h3 className="text-lg font-semibold text-gray-900 mb-2">{t.successProject}</h3><p className="text-gray-400 text-sm mb-6">Tracking Code:</p><div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-between gap-3 mb-6"><span className="font-mono font-bold text-xl text-gray-900 tracking-wider">{createdProjectId}</span><button onClick={() => { navigator.clipboard.writeText(createdProjectId); alert(t.copyCode); }} className="bg-white border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 p-2 rounded-lg transition-colors"><IconCopy className="w-4 h-4" /></button></div><button onClick={handleProjectModalClose} className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-black transition-colors">{t.understand}</button></div>) : (<form onSubmit={handleCreateProject} className="p-5 space-y-4"><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.projectTitle}</label><input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.title} onChange={e => setNewProjectData({...newProjectData, title: e.target.value})} /></div><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.relatedService}</label><select className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" required value={newProjectData.serviceId} onChange={e => setNewProjectData({...newProjectData, serviceId: e.target.value})}><option value="">...</option>{services.map(s => <option key={s.id} value={s.id}>{lang === 'en' && s.titleEn ? s.titleEn : s.title}</option>)}</select></div><div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.customer}</label><input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.customerName} onChange={e => setNewProjectData({...newProjectData, customerName: e.target.value})} /></div><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.phone}</label><input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm dir-ltr text-right" value={newProjectData.phoneNumber} onChange={e => setNewProjectData({...newProjectData, phoneNumber: e.target.value})} /></div></div><div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.startDate}</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.startDate} onChange={e => setNewProjectData({...newProjectData, startDate: e.target.value})} /></div><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.endDate}</label><input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.endDate} onChange={e => setNewProjectData({...newProjectData, endDate: e.target.value})} /></div></div><div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.contractAmount}</label><div className="flex gap-2"><input className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" placeholder="0" value={newProjectData.tariffAmount} onChange={e => setNewProjectData({...newProjectData, tariffAmount: formatNumberInput(e.target.value)})} /><select className="px-2 py-2 rounded-lg border border-gray-200 bg-white text-sm" value={newProjectData.tariffCurrency} onChange={e => setNewProjectData({...newProjectData, tariffCurrency: e.target.value as Currency})}><option value="IRR">IRR</option><option value="USD">USD</option><option value="OMR">OMR</option></select></div></div><div><label className="block text-xs font-medium text-gray-600 mb-1">{t.priority}</label><select className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.priority} onChange={e => setNewProjectData({...newProjectData, priority: e.target.value as any})}><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div></div><div className="flex gap-3 pt-2"><button type="button" onClick={handleProjectModalClose} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">{t.cancel}</button><button type="submit" className="flex-1 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black">{t.create}</button></div></form>)}</div></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl animate-fade-in overflow-hidden my-4">
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm"><IconProject className="w-4 h-4" />{t.newProject}</h3>
+              <button onClick={handleProjectModalClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            {createdProjectId ? (
+              <div className="p-8 text-center">
+                <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><IconCheck className="w-7 h-7 text-gray-700" /></div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{t.successProject}</h3>
+                <p className="text-gray-400 text-sm mb-6">{lang === 'fa' ? 'کد پروژه:' : 'Project Code:'}</p>
+                <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-4 flex items-center justify-between gap-3 mb-6">
+                  <span className="font-mono font-bold text-xl text-gray-900 tracking-wider">{createdProjectId}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(createdProjectId); alert(t.copyCode); }} className="bg-white border border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400 p-2 rounded-lg transition-colors"><IconCopy className="w-4 h-4" /></button>
+                </div>
+                <button onClick={handleProjectModalClose} className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-black transition-colors">{t.understand}</button>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateProject} className="p-5 space-y-4">
+                {/* Project title */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.projectTitle} <span className="text-red-500">*</span></label>
+                  <input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.title} onChange={e => setNewProjectData({...newProjectData, title: e.target.value})} />
+                </div>
+                {/* Category */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.projectCategory}</label>
+                  <input className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" placeholder={t.projectCategoryPh} value={newProjectData.category} onChange={e => setNewProjectData({...newProjectData, category: e.target.value})} list="project-category-list" />
+                  <datalist id="project-category-list">
+                    {[...new Set(tickets.filter(tk => tk.projectData?.category).map(tk => tk.projectData!.category!))].map(c => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
+                {/* Service */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.relatedService} <span className="text-red-500">*</span></label>
+                  <select required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.serviceId} onChange={e => setNewProjectData({...newProjectData, serviceId: e.target.value})}>
+                    <option value="">...</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{lang === 'en' && s.titleEn ? s.titleEn : s.title}</option>)}
+                  </select>
+                </div>
+                {/* Customer name + type */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.customer} <span className="text-red-500">*</span></label>
+                    <input required className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.customerName} onChange={e => setNewProjectData({...newProjectData, customerName: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.customerTypeLabel}</label>
+                    <select className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.customerType} onChange={e => setNewProjectData({...newProjectData, customerType: e.target.value as ProjectPartyType})}>
+                      <option value="client">{t.partyTypeClient}</option>
+                      <option value="partner">{t.partyTypePartner}</option>
+                      <option value="supplier">{t.partyTypeSupplier}</option>
+                      <option value="investor">{t.partyTypeInvestor}</option>
+                      <option value="other">{t.partyTypeOther}</option>
+                    </select>
+                  </div>
+                </div>
+                {/* Phone */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t.phone} <span className="text-red-500">*</span></label>
+                  <input required dir="ltr" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm text-right" value={newProjectData.phoneNumber} onChange={e => setNewProjectData({...newProjectData, phoneNumber: e.target.value})} />
+                </div>
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.startDate}</label>
+                    <input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.startDate} onChange={e => setNewProjectData({...newProjectData, startDate: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.endDate}</label>
+                    <input type="date" className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" value={newProjectData.endDate} onChange={e => setNewProjectData({...newProjectData, endDate: e.target.value})} />
+                  </div>
+                </div>
+                {/* Contract amount + priority */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.contractAmount}</label>
+                    <div className="flex gap-1">
+                      <input className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 text-sm" placeholder="0" value={newProjectData.tariffAmount} onChange={e => setNewProjectData({...newProjectData, tariffAmount: formatNumberInput(e.target.value)})} />
+                      <select className="px-2 py-2 rounded-lg border border-gray-200 bg-white text-sm" value={newProjectData.tariffCurrency} onChange={e => setNewProjectData({...newProjectData, tariffCurrency: e.target.value as Currency})}>
+                        <option value="IRR">IRR</option><option value="USD">USD</option><option value="OMR">OMR</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">{t.priority}</label>
+                    <select className="w-full px-3 py-2 rounded-lg border border-gray-200 outline-none focus:border-gray-800 bg-white text-sm" value={newProjectData.priority} onChange={e => setNewProjectData({...newProjectData, priority: e.target.value as any})}>
+                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={handleProjectModalClose} className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">{t.cancel}</button>
+                  <button type="submit" className="flex-1 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black">{t.create}</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
       
       <div className="w-full md:w-56 shrink-0 space-y-4">
@@ -1380,30 +1763,55 @@ export const AdminDashboard: React.FC<Props> = ({
                         <table className="w-full text-right text-sm">
                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider">
                                 <tr>
-                                    <th className="px-6 py-4 w-12 text-center">{t.row}</th>
-                                    <th className="px-6 py-4">{t.customer}</th>
-                                    <th className="px-6 py-4">{t.service}</th>
-                                    <th className="px-6 py-4">{t.progress}</th>
-                                    <th className="px-6 py-4">{t.status}</th>
-                                    <th className="px-6 py-4 text-center">{t.action}</th>
+                                    <th className="px-4 py-4 w-12 text-center">{t.row}</th>
+                                    <th className="px-4 py-4">{t.customer}</th>
+                                    <th className="px-4 py-4">{t.projectCategory}</th>
+                                    <th className="px-4 py-4">{t.partiesTitle}</th>
+                                    <th className="px-4 py-4">{t.service}</th>
+                                    <th className="px-4 py-4">{t.progress}</th>
+                                    <th className="px-4 py-4">{t.status}</th>
+                                    <th className="px-4 py-4 text-center">{t.action}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {currentProjectDisplayList.map((project, idx) => (
                                     <tr key={project.id} className="hover:bg-gray-50 transition-colors group">
-                                        <td className="px-6 py-4 text-center text-xs font-bold text-gray-400">{idx + 1}</td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-4 py-4 text-center text-xs font-bold text-gray-400">{idx + 1}</td>
+                                        <td className="px-4 py-4">
                                             <div className="font-bold text-gray-900">{project.customerName}</div>
                                             <div className="text-[10px] text-gray-400 font-mono">#{project.id}</div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-4 py-4">
+                                            {project.projectData?.category ? (
+                                                <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                                    {project.projectData.category}
+                                                </span>
+                                            ) : <span className="text-gray-300 text-xs">—</span>}
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            {(project.projectData?.parties || []).length > 0 ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {(project.projectData?.parties || []).slice(0, 2).map(p => (
+                                                        <div key={p.id} className="flex items-center gap-1">
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${p.type === 'client' ? 'bg-blue-400' : p.type === 'partner' ? 'bg-emerald-400' : p.type === 'supplier' ? 'bg-amber-400' : 'bg-gray-400'}`} />
+                                                            <span className="text-xs text-gray-700">{p.name}</span>
+                                                            <span className="text-[10px] text-gray-400">{p.profitSharePercent}%</span>
+                                                        </div>
+                                                    ))}
+                                                    {(project.projectData?.parties || []).length > 2 && (
+                                                        <span className="text-[10px] text-gray-400">+{(project.projectData?.parties?.length || 0) - 2} {lang === 'fa' ? 'نفر دیگر' : 'more'}</span>
+                                                    )}
+                                                </div>
+                                            ) : <span className="text-gray-300 text-xs">—</span>}
+                                        </td>
+                                        <td className="px-4 py-4">
                                             <div className="text-gray-700">{getServiceTitle(project.serviceId)}</div>
                                             <div className={`inline-flex items-center gap-1 text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded ${getPriorityBadge(project.priority || 'Medium').bg} ${getPriorityBadge(project.priority || 'Medium').text}`}>
                                                 <IconFlag className="w-2.5 h-2.5" /> {project.priority}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <div className="w-full max-w-[120px]">
+                                        <td className="px-4 py-4">
+                                            <div className="w-full max-w-[100px]">
                                                 <div className="flex justify-between text-[10px] text-gray-500 mb-1 font-bold">
                                                     <span>{project.projectData?.progress}%</span>
                                                 </div>
@@ -1412,12 +1820,12 @@ export const AdminDashboard: React.FC<Props> = ({
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-4 py-4">
                                             <span className={`px-2 py-1 rounded-[6px] text-[10px] font-bold ${getStatusBadge(project.status)}`}>
                                                 {project.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-4 py-4 text-center">
                                             <button onClick={() => setSelectedTicketId(project.id)} className="bg-gray-100 text-gray-700 hover:bg-gray-900 hover:text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-all">
                                                 {t.view}
                                             </button>
@@ -1426,7 +1834,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                 ))}
                                 {currentProjectDisplayList.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="py-20 text-center text-gray-400 bg-white italic">
+                                        <td colSpan={8} className="py-20 text-center text-gray-400 bg-white italic">
                                             <IconProject className="w-12 h-12 mx-auto mb-3 opacity-10" />
                                             {t.notFound}
                                         </td>
