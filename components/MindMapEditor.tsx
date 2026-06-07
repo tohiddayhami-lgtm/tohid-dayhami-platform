@@ -443,18 +443,24 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
   };
 
   const editPanel = selectedNode && (
-    <div className="w-72 shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden" dir="rtl">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900 text-sm truncate flex-1">{selectedNode.label}</h3>
-        <button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-gray-700 mr-2 text-lg leading-none">&times;</button>
+    <div className="w-60 shrink-0 bg-white border-s border-gray-100 flex flex-col overflow-hidden" dir="rtl">
+      {/* Panel header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h3 className="font-medium text-gray-800 text-xs truncate flex-1 leading-relaxed">{selectedNode.label}</h3>
+        <button
+          onClick={() => setSelectedId(null)}
+          className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors shrink-0 mr-1"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Label */}
         <div>
-          <label className="text-xs font-medium text-gray-500 mb-1 block">عنوان</label>
+          <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">عنوان</label>
           <input
-            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 text-right"
+            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 focus:bg-white text-right transition-colors"
             value={editLabel}
             onChange={e => setEditLabel(e.target.value)}
             onBlur={() => { if (editLabel !== selectedNode.label) updateNode(selectedNode.id, { label: editLabel }); }}
@@ -462,17 +468,20 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
           />
         </div>
 
-        {/* Color (only for non-root) */}
+        {/* Color */}
         {selectedNode.parentId !== null && (
           <div>
-            <label className="text-xs font-medium text-gray-500 mb-2 block">رنگ</label>
+            <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2 block">رنگ</label>
             <div className="flex flex-wrap gap-2">
               {BRANCH_COLORS.map(c => (
                 <button
                   key={c}
                   onClick={() => updateNode(selectedNode.id, { color: c })}
-                  className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-                  style={{ backgroundColor: c, borderColor: selectedNode.color === c ? '#111' : 'transparent' }}
+                  className="w-5 h-5 rounded-full transition-all hover:scale-110"
+                  style={{
+                    backgroundColor: c,
+                    boxShadow: selectedNode.color === c ? `0 0 0 2px white, 0 0 0 3.5px ${c}` : 'none',
+                  }}
                 />
               ))}
             </div>
@@ -481,90 +490,95 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
 
         {/* Notes */}
         <div>
-          <label className="text-xs font-medium text-gray-500 mb-1 block">یادداشت</label>
+          <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">یادداشت</label>
           <textarea
-            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400 resize-none text-right"
+            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-gray-300 focus:bg-white resize-none text-right transition-colors"
             rows={3}
             value={editNotes}
             onChange={e => setEditNotes(e.target.value)}
             onBlur={() => { if (editNotes !== selectedNode.notes) updateNode(selectedNode.id, { notes: editNotes }); }}
-            placeholder="یادداشت یا توضیح..."
+            placeholder="یادداشت..."
           />
         </div>
 
         {/* Files */}
         <div>
-          <label className="text-xs font-medium text-gray-500 mb-2 block">فایل‌ها ({selectedNode.files.length})</label>
+          <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5 block">
+            فایل‌ها {selectedNode.files.length > 0 && <span className="normal-case font-normal">({selectedNode.files.length})</span>}
+          </label>
           {selectedNode.files.length > 0 && (
             <div className="space-y-1 mb-2">
               {selectedNode.files.map(f => (
-                <div key={f.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 text-xs">
-                  <span className="flex-1 truncate text-gray-700">{f.name}</span>
-                  <span className="text-gray-400 shrink-0">{formatBytes(f.size)}</span>
-                  <a href={f.url} target="_blank" rel="noopener noreferrer"
-                     className="text-blue-500 hover:text-blue-700 shrink-0">↗</a>
+                <div key={f.id} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                  <span className="flex-1 truncate text-xs text-gray-700">{f.name}</span>
+                  <span className="text-[10px] text-gray-400 shrink-0">{formatBytes(f.size)}</span>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 shrink-0 text-xs">↗</a>
                   <button
                     onClick={() => updateNode(selectedNode.id, { files: selectedNode.files.filter(x => x.id !== f.id) })}
-                    className="text-red-400 hover:text-red-600 shrink-0"
-                  >&times;</button>
+                    className="text-gray-300 hover:text-red-500 shrink-0 transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg>
+                  </button>
                 </div>
               ))}
             </div>
           )}
-
           {uploading ? (
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-              <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
-              <p className="text-xs text-gray-500 mt-1">در حال آپلود... {Math.round(uploadProgress)}%</p>
+            <div className="space-y-1">
+              <div className="w-full bg-gray-100 rounded-full h-1.5">
+                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-400">آپلود... {Math.round(uploadProgress)}%</p>
             </div>
           ) : (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 border-2 border-dashed border-gray-300 rounded-lg text-xs text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
             >
-              <IconFolder className="w-4 h-4" /> افزودن فایل
+              <IconFolder className="w-3.5 h-3.5" /> افزودن فایل
             </button>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }}
-          />
+          <input ref={fileInputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }} />
         </div>
 
         {/* Add child */}
         <button
           onClick={() => addChildNode(selectedNode.id)}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-medium transition-colors"
         >
-          <IconPlus className="w-4 h-4" /> افزودن زیرشاخه
+          <IconPlus className="w-3.5 h-3.5" /> افزودن زیرشاخه
         </button>
 
-        {/* Delete */}
+        {/* Delete node */}
         {selectedNode.parentId !== null && (
-          <div>
-            {showDeleteConfirm ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center space-y-2">
-                <p className="text-xs text-red-700 font-medium">
-                  {selectedNode.childIds.length > 0 ? 'این شاخه و تمام زیرشاخه‌هایش حذف می‌شوند.' : 'این شاخه حذف می‌شود.'}
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => deleteNodeRecursive(selectedNode.id)}
-                    className="flex-1 bg-red-600 text-white py-1.5 rounded-lg text-xs font-medium hover:bg-red-700">حذف</button>
-                  <button onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 bg-white border border-gray-200 text-gray-600 py-1.5 rounded-lg text-xs hover:bg-gray-50">انصراف</button>
-                </div>
+          showDeleteConfirm ? (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-red-600 text-center">
+                {selectedNode.childIds.length > 0 ? 'این شاخه و زیرشاخه‌هایش حذف می‌شوند.' : 'این شاخه حذف می‌شود.'}
+              </p>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => deleteNodeRecursive(selectedNode.id)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-1.5 rounded-lg text-xs font-medium transition-colors"
+                >
+                  حذف
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 bg-white border border-gray-200 text-gray-600 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors"
+                >
+                  انصراف
+                </button>
               </div>
-            ) : (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="w-full flex items-center justify-center gap-2 py-2 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 transition-colors"
-              >
-                <IconTrash className="w-4 h-4" /> حذف شاخه
-              </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl text-xs transition-colors"
+            >
+              <IconTrash className="w-3.5 h-3.5" /> حذف شاخه
+            </button>
+          )
         )}
       </div>
     </div>
@@ -576,44 +590,56 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
   const canvasH = posVals.length ? Math.max(...posVals.map(p => p.y)) + NODE_H + 200 : 800;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 shrink-0">
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-gray-100 shrink-0">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-all font-medium shrink-0"
+          dir="rtl"
         >
-          <span className="text-lg leading-none">→</span> بازگشت
+          ← بازگشت
         </button>
-        <div className="w-px h-5 bg-gray-200" />
-        <h2 className="font-semibold text-gray-900 text-sm flex-1" dir="rtl">{process.title}</h2>
+        <div className="w-px h-4 bg-gray-200 shrink-0" />
+        <h2 className="font-semibold text-gray-900 text-sm flex-1 truncate" dir="rtl">{process.title}</h2>
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => setScale(s => Math.min(2.5, s * 1.2))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" title="بزرگ‌نمایی">
-            <IconZoomIn className="w-4 h-4" />
+        {/* Zoom pill */}
+        <div className="flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
+          <button
+            onClick={() => setScale(s => Math.max(0.25, s * 0.83))}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
+            title="کوچک‌نمایی"
+          >
+            <IconZoomOut className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => setScale(s => Math.max(0.25, s * 0.83))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" title="کوچک‌نمایی">
-            <IconZoomOut className="w-4 h-4" />
+          <span className="text-xs text-gray-500 w-10 text-center tabular-nums select-none">{Math.round(scale * 100)}%</span>
+          <button
+            onClick={() => setScale(s => Math.min(2.5, s * 1.2))}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
+            title="بزرگ‌نمایی"
+          >
+            <IconZoomIn className="w-3.5 h-3.5" />
           </button>
-          <button onClick={fitToScreen}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" title="تنظیم به صفحه">
-            <IconFitScreen className="w-4 h-4" />
+          <div className="w-px h-3.5 bg-gray-300 mx-0.5" />
+          <button
+            onClick={fitToScreen}
+            className="p-1.5 rounded-md hover:bg-white text-gray-500 hover:text-gray-800 transition-all"
+            title="تنظیم به صفحه"
+          >
+            <IconFitScreen className="w-3.5 h-3.5" />
           </button>
-          <span className="text-xs text-gray-400 px-1 w-12 text-center">{Math.round(scale * 100)}%</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => { const root = nodes.find(n => n.parentId === null); if (root) addChildNode(root.id); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-medium transition-colors"
           >
-            <IconPlus className="w-3.5 h-3.5" /> افزودن دسته
+            <IconPlus className="w-3.5 h-3.5" /> افزودن شاخه
           </button>
-          {isSaving && <span className="text-xs text-gray-400">در حال ذخیره...</span>}
-          {!isSaving && <span className="text-xs text-green-600 font-medium">✓ ذخیره شد</span>}
+          <div className={`text-[11px] px-2 py-1 rounded-lg transition-all ${isSaving ? 'text-gray-400 bg-gray-50' : 'text-green-600 bg-green-50'}`}>
+            {isSaving ? 'ذخیره...' : '✓ ذخیره شد'}
+          </div>
         </div>
       </div>
 
@@ -622,7 +648,7 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
         {/* Canvas */}
         <div
           ref={containerRef}
-          className="flex-1 relative overflow-hidden bg-gray-50"
+          className="flex-1 relative overflow-hidden bg-[#FAFAFA]"
           style={{ cursor: isPanning ? 'grabbing' : 'grab', userSelect: 'none' }}
           onWheel={handleWheel}
           onMouseDown={handleCanvasMouseDown}
@@ -630,11 +656,11 @@ export const MindMapEditor: React.FC<Props> = ({ process, currentUser, onSave, o
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          {/* Grid dots background */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.4 }}>
+          {/* Dot grid */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.5 }}>
             <defs>
-              <pattern id="grid-dot" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
-                <circle cx="1" cy="1" r="1" fill="#D1D5DB" />
+              <pattern id="grid-dot" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="0.8" fill="#D1D5DB" />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#grid-dot)" />

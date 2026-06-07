@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CompanyProcess, Personnel, ProcessNode } from '../types';
 import { MindMapEditor } from './MindMapEditor';
-import { IconPlus, IconTrash, IconEdit, IconShield, IconUsers, IconCheck, IconMindMap } from './Icons';
+import { IconPlus, IconTrash, IconShield, IconUsers, IconCheck, IconMindMap } from './Icons';
 
 interface Props {
   processes: CompanyProcess[];
@@ -19,6 +19,10 @@ function canAccess(process: CompanyProcess, user: Personnel): boolean {
   return process.accessibleTo.includes(user.id);
 }
 
+const IconX = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+);
+
 export const ProcessManager: React.FC<Props> = ({
   processes,
   personnel,
@@ -30,23 +34,20 @@ export const ProcessManager: React.FC<Props> = ({
   const isMaster = currentUser.username === 'master';
   const [openProcessId, setOpenProcessId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showAccessModal, setShowAccessModal] = useState<string | null>(null); // processId
+  const [showAccessModal, setShowAccessModal] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  // Create form state
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newAccessType, setNewAccessType] = useState<'all' | 'specific'>('all');
   const [newAccessIds, setNewAccessIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Access modal state
   const [accessType, setAccessType] = useState<'all' | 'specific'>('all');
   const [accessIds, setAccessIds] = useState<string[]>([]);
 
   const visibleProcesses = processes.filter(p => canAccess(p, currentUser));
   const activePersonnel = personnel.filter(p => p.status === 'active' && p.username !== 'master');
-
   const openProcess = visibleProcesses.find(p => p.id === openProcessId);
 
   const handleCreate = async () => {
@@ -63,7 +64,6 @@ export const ProcessManager: React.FC<Props> = ({
       color: '#111827',
       isCollapsed: false,
     };
-    // non-master creators always get access to their own mind map
     let accessibleTo = newAccessType === 'specific' ? newAccessIds : [];
     if (!isMaster && newAccessType === 'specific' && !accessibleTo.includes(currentUser.id)) {
       accessibleTo = [currentUser.id, ...accessibleTo];
@@ -111,11 +111,18 @@ export const ProcessManager: React.FC<Props> = ({
     setShowAccessModal(proc.id);
   };
 
-  const toggleAccessId = (id: string, arr: string[], setArr: (v: string[]) => void) => {
+  const toggleId = (id: string, arr: string[], setArr: (v: string[]) => void) => {
     setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
   };
 
-  // If a process is open, render the mind map editor as a full-screen overlay
+  const closeCreate = () => {
+    setShowCreateModal(false);
+    setNewTitle('');
+    setNewDesc('');
+    setNewAccessType('all');
+    setNewAccessIds([]);
+  };
+
   if (openProcess) {
     return (
       <div className="fixed inset-0 z-[90] bg-white flex flex-col">
@@ -130,79 +137,103 @@ export const ProcessManager: React.FC<Props> = ({
   }
 
   return (
-    <div className="p-6 space-y-6 animate-fade-in" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">مایند مپ</h2>
-          <p className="text-sm text-gray-500 mt-0.5">ایجاد و مدیریت مایند مپ‌های تیم و سازمان</p>
+    <div className="space-y-5 animate-fade-in" dir="rtl">
+
+      {/* Header card */}
+      <div className="flex items-center justify-between bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
+            <IconMindMap className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">مایند مپ</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{visibleProcesses.length} مایند مپ</p>
+          </div>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-medium transition-colors"
         >
-          <IconPlus className="w-4 h-4" /> مایند مپ جدید
+          <IconPlus className="w-4 h-4" />
+          مایند مپ جدید
         </button>
       </div>
 
-      {/* Process grid */}
+      {/* Grid */}
       {visibleProcesses.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <IconMindMap className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">
-            هنوز مایند مپی ایجاد نشده. اولین مایند مپ را بسازید.
-          </p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-24 flex flex-col items-center gap-3">
+          <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center">
+            <IconMindMap className="w-7 h-7 text-gray-300" />
+          </div>
+          <p className="text-sm text-gray-400">هنوز مایند مپی ایجاد نشده. اولین مایند مپ را بسازید.</p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="mt-1 flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black transition-colors"
+          >
+            <IconPlus className="w-4 h-4" /> مایند مپ جدید
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleProcesses.map(proc => {
-            const nodeCount = proc.nodes.length - 1; // exclude root
-            const accessLabel = proc.accessType === 'all'
-              ? 'همه کارکنان'
-              : `${proc.accessibleTo.length} نفر انتخابی`;
+            const nodeCount = proc.nodes.length - 1;
+            const accessLabel = proc.accessType === 'all' ? 'همه کارکنان' : `${proc.accessibleTo.length} نفر انتخابی`;
+            const isOwner = proc.createdBy === currentUser.fullName;
+            const updatedDate = proc.lastUpdated
+              ? new Date(proc.lastUpdated).toLocaleDateString('fa-IR', { month: 'short', day: 'numeric' })
+              : new Date(proc.createdAt).toLocaleDateString('fa-IR', { month: 'short', day: 'numeric' });
+
             return (
               <div
                 key={proc.id}
-                className="bg-white rounded-xl border border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm transition-all group cursor-pointer"
                 onClick={() => setOpenProcessId(proc.id)}
+                className="bg-white rounded-2xl border border-gray-100 p-5 hover:border-gray-200 hover:shadow-sm transition-all group cursor-pointer relative"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-gray-900 group-hover:text-white transition-colors">
-                    <IconMindMap className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
-                  </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                    {isMaster && (
-                      <button
-                        onClick={() => openAccessModal(proc)}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
-                        title="تنظیم دسترسی"
-                      >
-                        <IconShield className="w-4 h-4" />
-                      </button>
-                    )}
-                    {(isMaster || proc.createdBy === currentUser.fullName) && (
-                      <button
-                        onClick={() => setShowDeleteConfirm(proc.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
-                        title="حذف مایند مپ"
-                      >
-                        <IconTrash className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+                {/* Actions */}
+                <div
+                  className="absolute top-3 left-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {isMaster && (
+                    <button
+                      onClick={() => openAccessModal(proc)}
+                      className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors"
+                      title="تنظیم دسترسی"
+                    >
+                      <IconShield className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {(isMaster || isOwner) && (
+                    <button
+                      onClick={() => setShowDeleteConfirm(proc.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                      title="حذف"
+                    >
+                      <IconTrash className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <h3 className="font-semibold text-gray-900 text-sm mb-1 text-right">{proc.title}</h3>
+                {/* Icon */}
+                <div className="w-10 h-10 bg-gray-50 group-hover:bg-indigo-50 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                  <IconMindMap className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                </div>
+
+                <h3 className="font-semibold text-gray-900 text-sm mb-1 text-right leading-snug">{proc.title}</h3>
                 {proc.description && (
-                  <p className="text-xs text-gray-500 line-clamp-2 text-right mb-3">{proc.description}</p>
+                  <p className="text-xs text-gray-400 line-clamp-2 text-right mb-4 leading-relaxed">{proc.description}</p>
                 )}
 
-                <div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t border-gray-100">
+                <div className="flex items-center justify-between pt-3 border-t border-gray-50 text-[11px] text-gray-400">
                   <span className="flex items-center gap-1">
-                    <IconUsers className="w-3.5 h-3.5" />
+                    <IconUsers className="w-3 h-3" />
                     {accessLabel}
                   </span>
-                  <span>{nodeCount} شاخه</span>
+                  <div className="flex items-center gap-2">
+                    <span>{nodeCount} شاخه</span>
+                    <span className="text-gray-200">·</span>
+                    <span>{updatedDate}</span>
+                  </div>
                 </div>
               </div>
             );
@@ -210,90 +241,92 @@ export const ProcessManager: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* ── Create Modal ────────────────────────────────── */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" dir="rtl">
-            <div className="p-5 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">ایجاد مایند مپ جدید</h3>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in" dir="rtl">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-sm">مایند مپ جدید</h3>
+              <button onClick={closeCreate} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <IconX className="w-4 h-4" />
+              </button>
             </div>
+
             <div className="p-5 space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">عنوان مایند مپ *</label>
+                <label className="text-xs font-semibold text-gray-600 block mb-1.5">عنوان *</label>
                 <input
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 text-right"
+                  autoFocus
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 focus:bg-white text-right transition-colors"
                   placeholder="مثال: برنامه‌ریزی فروش، فرآیند جذب نیرو..."
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
-                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && newTitle.trim() && handleCreate()}
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">توضیح (اختیاری)</label>
+                <label className="text-xs font-semibold text-gray-600 block mb-1.5">توضیح <span className="font-normal text-gray-400">(اختیاری)</span></label>
                 <textarea
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 resize-none text-right"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 focus:bg-white resize-none text-right transition-colors"
                   rows={2}
-                  placeholder="توضیح کوتاهی از این فرآیند..."
+                  placeholder="توضیح کوتاه..."
                   value={newDesc}
                   onChange={e => setNewDesc(e.target.value)}
                 />
               </div>
 
-              {/* Access type */}
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">سطح دسترسی</label>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setNewAccessType('all')}
-                    className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${newAccessType === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
-                  >
-                    همه کارکنان
-                  </button>
-                  <button
-                    onClick={() => setNewAccessType('specific')}
-                    className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${newAccessType === 'specific' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
-                  >
-                    افراد انتخابی
-                  </button>
+                <label className="text-xs font-semibold text-gray-600 block mb-2">سطح دسترسی</label>
+                <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+                  {[{ v: 'all' as const, l: 'همه کارکنان' }, { v: 'specific' as const, l: 'افراد انتخابی' }].map(({ v, l }) => (
+                    <button
+                      key={v}
+                      onClick={() => setNewAccessType(v)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${newAccessType === v ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {newAccessType === 'specific' && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">انتخاب پرسنل</label>
-                  <div className="max-h-48 overflow-y-auto space-y-1 border border-gray-200 rounded-xl p-2">
+                  <label className="text-xs font-semibold text-gray-600 block mb-2">انتخاب پرسنل</label>
+                  <div className="max-h-44 overflow-y-auto space-y-0.5 border border-gray-100 rounded-xl bg-gray-50 p-2">
                     {activePersonnel.length === 0 && (
-                      <p className="text-xs text-gray-400 text-center py-2">پرسنل فعالی وجود ندارد</p>
+                      <p className="text-xs text-gray-400 text-center py-3">پرسنل فعالی وجود ندارد</p>
                     )}
                     {activePersonnel.map(p => (
-                      <label key={p.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${newAccessIds.includes(p.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
-                             onClick={() => toggleAccessId(p.id, newAccessIds, setNewAccessIds)}>
+                      <label key={p.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
+                        <div
+                          className={`w-4 h-4 rounded-md border-2 flex items-center justify-center transition-colors cursor-pointer shrink-0 ${newAccessIds.includes(p.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300 bg-white'}`}
+                          onClick={() => toggleId(p.id, newAccessIds, setNewAccessIds)}
+                        >
                           {newAccessIds.includes(p.id) && <IconCheck className="w-2.5 h-2.5 text-white" />}
                         </div>
-                        <span className="text-sm text-gray-700">{p.fullName}</span>
-                        <span className="text-xs text-gray-400 mr-auto">{p.roles[0]}</span>
+                        <span className="text-sm text-gray-700 flex-1">{p.fullName}</span>
+                        <span className="text-xs text-gray-400">{p.roles[0]}</span>
                       </label>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5">
-                    {newAccessIds.length > 0
-                      ? `${newAccessIds.length} نفر انتخاب شده`
-                      : 'بدون انتخاب، فقط شما دسترسی خواهید داشت'}
+                  <p className="text-[11px] text-gray-400 mt-1.5 text-right">
+                    {newAccessIds.length > 0 ? `${newAccessIds.length} نفر انتخاب شده` : 'هیچ‌کس انتخاب نشده'}
                   </p>
                 </div>
               )}
             </div>
-            <div className="p-5 border-t border-gray-100 flex gap-3">
+
+            <div className="px-5 py-4 border-t border-gray-100 flex gap-2">
               <button
                 onClick={handleCreate}
                 disabled={!newTitle.trim() || isSaving}
-                className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSaving ? 'در حال ایجاد...' : 'ایجاد مایند مپ'}
               </button>
               <button
-                onClick={() => { setShowCreateModal(false); setNewTitle(''); setNewDesc(''); setNewAccessType('all'); setNewAccessIds([]); }}
+                onClick={closeCreate}
                 className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
               >
                 انصراف
@@ -303,75 +336,69 @@ export const ProcessManager: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Access Control Modal */}
+      {/* ── Access Control Modal ────────────────────────── */}
       {showAccessModal && (() => {
         const proc = processes.find(p => p.id === showAccessModal);
         if (!proc) return null;
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" dir="rtl">
-              <div className="p-5 border-b border-gray-100">
-                <h3 className="font-bold text-gray-900">تنظیم دسترسی</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{proc.title}</p>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in" dir="rtl">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">تنظیم دسترسی</h3>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[280px]">{proc.title}</p>
+                </div>
+                <button onClick={() => setShowAccessModal(null)} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <IconX className="w-4 h-4" />
+                </button>
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">چه کسانی دسترسی داشته باشند؟</label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setAccessType('all')}
-                      className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${accessType === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
-                    >
-                      <IconUsers className="w-4 h-4 inline ml-1.5" />
-                      همه کارکنان
-                    </button>
-                    <button
-                      onClick={() => setAccessType('specific')}
-                      className={`flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors ${accessType === 'specific' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
-                    >
-                      <IconShield className="w-4 h-4 inline ml-1.5" />
-                      افراد انتخابی
-                    </button>
+                  <label className="text-xs font-semibold text-gray-600 block mb-2">چه کسانی دسترسی داشته باشند؟</label>
+                  <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+                    {[{ v: 'all' as const, l: 'همه کارکنان' }, { v: 'specific' as const, l: 'افراد انتخابی' }].map(({ v, l }) => (
+                      <button
+                        key={v}
+                        onClick={() => setAccessType(v)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${accessType === v ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                        {l}
+                      </button>
+                    ))}
                   </div>
                 </div>
-
                 {accessType === 'specific' && (
                   <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">انتخاب پرسنل</label>
-                    <div className="max-h-56 overflow-y-auto space-y-1 border border-gray-200 rounded-xl p-2">
-                      {activePersonnel.length === 0 && (
-                        <p className="text-xs text-gray-400 text-center py-2">پرسنل فعالی وجود ندارد</p>
-                      )}
+                    <label className="text-xs font-semibold text-gray-600 block mb-2">انتخاب پرسنل</label>
+                    <div className="max-h-52 overflow-y-auto space-y-0.5 border border-gray-100 rounded-xl bg-gray-50 p-2">
                       {activePersonnel.map(p => (
-                        <label key={p.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <label key={p.id} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-white cursor-pointer transition-colors">
                           <div
-                            className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${accessIds.includes(p.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
-                            onClick={() => toggleAccessId(p.id, accessIds, setAccessIds)}
+                            className={`w-4 h-4 rounded-md border-2 flex items-center justify-center transition-colors cursor-pointer shrink-0 ${accessIds.includes(p.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300 bg-white'}`}
+                            onClick={() => toggleId(p.id, accessIds, setAccessIds)}
                           >
                             {accessIds.includes(p.id) && <IconCheck className="w-2.5 h-2.5 text-white" />}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-gray-800">{p.fullName}</p>
-                            <p className="text-xs text-gray-400">{p.roles.join('، ')}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800 truncate">{p.fullName}</p>
+                            <p className="text-[11px] text-gray-400">{p.roles.join('، ')}</p>
                           </div>
                         </label>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-400 mt-1.5">
-                      {accessIds.length > 0
-                        ? `${accessIds.length} نفر انتخاب شده`
-                        : 'بدون انتخاب، فقط مستر دسترسی خواهد داشت'}
+                    <p className="text-[11px] text-gray-400 mt-1.5">
+                      {accessIds.length > 0 ? `${accessIds.length} نفر انتخاب شده` : 'فقط مستر دسترسی خواهد داشت'}
                     </p>
                   </div>
                 )}
               </div>
-              <div className="p-5 border-t border-gray-100 flex gap-3">
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-2">
                 <button
                   onClick={handleSaveAccess}
                   disabled={isSaving}
-                  className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors"
                 >
-                  {isSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                  {isSaving ? 'ذخیره...' : 'ذخیره تغییرات'}
                 </button>
                 <button
                   onClick={() => setShowAccessModal(null)}
@@ -385,32 +412,40 @@ export const ProcessManager: React.FC<Props> = ({
         );
       })()}
 
-      {/* Delete Confirm Modal */}
+      {/* ── Delete Confirm ─────────────────────────────── */}
       {showDeleteConfirm && (() => {
         const proc = processes.find(p => p.id === showDeleteConfirm);
         if (!proc) return null;
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDeleteConfirm(null)}>
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" dir="rtl" onClick={e => e.stopPropagation()}>
-              <div className="p-5 text-center">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <IconTrash className="w-6 h-6 text-red-600" />
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDeleteConfirm(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-fade-in"
+              dir="rtl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-6 text-center">
+                <div className="w-11 h-11 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <IconTrash className="w-5 h-5 text-red-500" />
                 </div>
-                <h3 className="font-bold text-gray-900 mb-1">حذف مایند مپ</h3>
-                <p className="text-sm text-gray-600">
-                  مایند مپ <strong>«{proc.title}»</strong> و تمام داده‌های آن حذف می‌شود. این عملیات قابل بازگشت نیست.
+                <h3 className="font-bold text-gray-900 text-sm mb-2">حذف مایند مپ</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  مایند مپ <span className="font-semibold text-gray-700">«{proc.title}»</span> و تمام داده‌هایش حذف می‌شود.
+                  این عملیات قابل بازگشت نیست.
                 </p>
               </div>
-              <div className="px-5 pb-5 flex gap-3">
+              <div className="px-5 pb-5 flex gap-2">
                 <button
                   onClick={() => handleDelete(proc.id)}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors"
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors"
                 >
-                  بله، حذف شود
+                  حذف
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
-                  className="px-5 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 transition-colors"
                 >
                   انصراف
                 </button>
