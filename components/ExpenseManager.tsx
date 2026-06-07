@@ -189,6 +189,8 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [dispIncNewReceipt, setDispIncNewReceipt] = useState('');
   const [payDate,    setPayDate]    = useState<string>('');
   const [incPayDate, setIncPayDate] = useState<string>('');
+  const [payNote,    setPayNote]    = useState<string>('');
+  const [incPayNote, setIncPayNote] = useState<string>('');
   const [showInstDetails, setShowInstDetails] = useState<{type:'exp'|'inc'; record:Expense|SalesRecord}|null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -426,7 +428,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     setDispPaidAmt((ex.paidAmount||0).toLocaleString());
     setShowExpModal(true);
   };
-  const openPayExp = (ex: Expense) => { setShowPayModal(ex); setExpForm({...ex}); setDispPaidAmt(''); setPayDate(new Date().toISOString().split('T')[0]); };
+  const openPayExp = (ex: Expense) => { setShowPayModal(ex); setExpForm({...ex}); setDispPaidAmt(''); setPayDate(new Date().toISOString().split('T')[0]); setPayNote(''); };
 
   const saveExp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -464,6 +466,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       id: `inst-${Date.now()}`,
       amount: added,
       date: payDate || new Date().toISOString().split('T')[0],
+      ...(payNote.trim() ? { note: payNote.trim() } : {}),
     };
     const installments = [...(showPayModal.installments || []), newInst];
     await updateExpense(showPayModal.id, {paidAmount:newPaid, status, installments}, currentUser.fullName);
@@ -505,6 +508,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     setShowIncPayModal(sr);
     setDispIncNewReceipt('');
     setIncPayDate(new Date().toISOString().split('T')[0]);
+    setIncPayNote('');
   };
 
   const calcIncStatus = (total: number, received: number): 'received'|'partial'|'pending' =>
@@ -562,6 +566,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       id: `inst-${Date.now()}`,
       amount: added,
       date: incPayDate || new Date().toISOString().split('T')[0],
+      ...(incPayNote.trim() ? { note: incPayNote.trim() } : {}),
     };
     const installments = [...(showIncPayModal.installments || []), newInst];
     await updateSalesRecord(showIncPayModal.id, {
@@ -1812,6 +1817,13 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   className="w-full px-4 py-3 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 font-mono text-sm"
                   value={payDate} onChange={e=>setPayDate(e.target.value)}/>
               </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">بابت چه موضوعی (اختیاری)</label>
+                <input type="text"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 text-sm"
+                  value={payNote} onChange={e=>setPayNote(e.target.value)}
+                  placeholder="مثلاً: قسط اول / پیش‌پرداخت / نصف باقیمانده"/>
+              </div>
               {(showPayModal.installments||[]).length > 0 && (
                 <div>
                   <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest flex items-center gap-1.5">
@@ -1971,6 +1983,13 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   <input type="date"
                     className="w-full px-4 py-3 rounded-xl border-2 border-emerald-100 outline-none focus:border-emerald-500 font-mono text-sm"
                     value={incPayDate} onChange={e=>setIncPayDate(e.target.value)}/>
+                </div>
+                <div className="mt-3">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">بابت چه موضوعی (اختیاری)</label>
+                  <input type="text"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-emerald-100 outline-none focus:border-emerald-500 text-sm"
+                    value={incPayNote} onChange={e=>setIncPayNote(e.target.value)}
+                    placeholder="مثلاً: پیش‌پرداخت / قسط دوم / تسویه نهایی"/>
                 </div>
                 {(showIncPayModal.installments||[]).length > 0 && (
                   <div className="mt-3">
