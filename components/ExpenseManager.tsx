@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile, SalesRecord } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconUsers, IconRefreshCw, IconMoney, IconChart, IconTrendingUp } from './Icons';
+import { Expense, Currency, ExpenseCategory, Personnel, AttachedFile, SalesRecord, PaymentInstallment } from '../types';
+import { IconPlus, IconTrash, IconEdit, IconCheck, IconSearch, IconFileText, IconWallet, IconUsers, IconRefreshCw, IconMoney, IconChart, IconTrendingUp, IconHistory, IconList } from './Icons';
 import { saveExpense, updateExpense, deleteExpense, subscribeToExpenses, uploadFileWithProgress, subscribeToSalesRecords, saveSalesRecord, updateSalesRecord, deleteSalesRecord, saveFxRates, subscribeToFxRates } from '../services/firebaseService';
 import { Language } from '../App';
 
@@ -187,6 +187,9 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const [dispIncAmt,      setDispIncAmt]      = useState('');
   const [dispIncReceived, setDispIncReceived] = useState('');
   const [dispIncNewReceipt, setDispIncNewReceipt] = useState('');
+  const [payDate,    setPayDate]    = useState<string>('');
+  const [incPayDate, setIncPayDate] = useState<string>('');
+  const [showInstDetails, setShowInstDetails] = useState<{type:'exp'|'inc'; record:Expense|SalesRecord}|null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMaster = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
@@ -423,7 +426,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     setDispPaidAmt((ex.paidAmount||0).toLocaleString());
     setShowExpModal(true);
   };
-  const openPayExp = (ex: Expense) => { setShowPayModal(ex); setExpForm({...ex}); setDispPaidAmt(''); };
+  const openPayExp = (ex: Expense) => { setShowPayModal(ex); setExpForm({...ex}); setDispPaidAmt(''); setPayDate(new Date().toISOString().split('T')[0]); };
 
   const saveExp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -457,7 +460,13 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
     const newPaid = (showPayModal.paidAmount||0) + added;
     const status: 'paid'|'pending'|'partial' =
       newPaid >= showPayModal.amount ? 'paid' : newPaid > 0 ? 'partial' : 'pending';
-    await updateExpense(showPayModal.id, {paidAmount:newPaid,status}, currentUser.fullName);
+    const newInst: PaymentInstallment = {
+      id: `inst-${Date.now()}`,
+      amount: added,
+      date: payDate || new Date().toISOString().split('T')[0],
+    };
+    const installments = [...(showPayModal.installments || []), newInst];
+    await updateExpense(showPayModal.id, {paidAmount:newPaid, status, installments}, currentUser.fullName);
     setIsSubmitting(false); setShowPayModal(null);
   };
 
@@ -495,6 +504,7 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const openIncPay = (sr: SalesRecord) => {
     setShowIncPayModal(sr);
     setDispIncNewReceipt('');
+    setIncPayDate(new Date().toISOString().split('T')[0]);
   };
 
   const calcIncStatus = (total: number, received: number): 'received'|'partial'|'pending' =>
@@ -545,12 +555,19 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
   const saveIncPay = async () => {
     if (!showIncPayModal) return;
     setIsSubmitting(true);
-    const added      = parseAmt(dispIncNewReceipt);
+    const added       = parseAmt(dispIncNewReceipt);
     const newReceived = (showIncPayModal.receivedAmount || 0) + added;
-    const status     = calcIncStatus(showIncPayModal.saleAmount, newReceived);
+    const status      = calcIncStatus(showIncPayModal.saleAmount, newReceived);
+    const newInst: PaymentInstallment = {
+      id: `inst-${Date.now()}`,
+      amount: added,
+      date: incPayDate || new Date().toISOString().split('T')[0],
+    };
+    const installments = [...(showIncPayModal.installments || []), newInst];
     await updateSalesRecord(showIncPayModal.id, {
       receivedAmount: newReceived,
       paymentStatus:  status,
+      installments,
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser.fullName,
     }, currentUser.fullName);
@@ -1311,6 +1328,12 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                             className="p-1 text-emerald-500 hover:bg-emerald-50 rounded" title="ثبت دریافت جدید">
                             <IconMoney className="w-3.5 h-3.5"/>
                           </button>
+                          {(sr.installments||[]).length > 0 && (
+                            <button onClick={()=>setShowInstDetails({type:'inc', record:sr})}
+                              className="p-1 text-violet-500 hover:bg-violet-50 rounded" title="جزییات دریافت‌ها">
+                              <IconHistory className="w-3.5 h-3.5"/>
+                            </button>
+                          )}
                           <button onClick={()=>openEditInc(sr)}
                             className="p-1 text-blue-400 hover:bg-blue-50 rounded" title="ویرایش">
                             <IconEdit className="w-3.5 h-3.5"/>
@@ -1375,6 +1398,12 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                     <td className="px-3 py-2 text-center">
                       <div className="flex justify-center gap-0.5">
                         <button onClick={()=>openPayExp(ex)}  className="p-1 text-green-500 hover:bg-green-50 rounded" title="ثبت پرداخت"><IconMoney className="w-3.5 h-3.5"/></button>
+                        {(ex.installments||[]).length > 0 && (
+                          <button onClick={()=>setShowInstDetails({type:'exp', record:ex})}
+                            className="p-1 text-violet-500 hover:bg-violet-50 rounded" title="جزییات پرداخت‌ها">
+                            <IconHistory className="w-3.5 h-3.5"/>
+                          </button>
+                        )}
                         <button onClick={()=>openEditExp(ex)} className="p-1 text-blue-400 hover:bg-blue-50 rounded"><IconEdit className="w-3.5 h-3.5"/></button>
                         {isMaster && <button onClick={()=>delExp(ex.id)} className="p-1 text-red-400 hover:bg-red-50 rounded"><IconTrash className="w-3.5 h-3.5"/></button>}
                       </div>
@@ -1777,6 +1806,28 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   className="w-full px-4 py-4 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 font-black text-2xl text-green-600 dir-ltr text-center"
                   value={dispPaidAmt} onChange={e=>setDispPaidAmt(fmtInput(e.target.value))} placeholder="0"/>
               </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">تاریخ این پرداخت</label>
+                <input type="date"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-green-100 outline-none focus:border-green-500 font-mono text-sm"
+                  value={payDate} onChange={e=>setPayDate(e.target.value)}/>
+              </div>
+              {(showPayModal.installments||[]).length > 0 && (
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest flex items-center gap-1.5">
+                    <IconList className="w-3 h-3"/> سابقه پرداخت‌ها
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {showPayModal.installments!.map((inst,i) => (
+                      <div key={inst.id} className="flex justify-between items-center bg-green-50 border border-green-100 rounded-xl px-3 py-2 text-xs">
+                        <span className="text-gray-500 font-mono dir-ltr">{inst.date}</span>
+                        <span className="font-black text-green-700">{fmtNum(inst.amount)} {showPayModal.currency}</span>
+                        <span className="text-[9px] text-gray-400">#{i+1}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-5 bg-gray-50 flex gap-3">
               <button onClick={()=>setShowPayModal(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-white rounded-xl">انصراف</button>
@@ -1790,6 +1841,87 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
       )}
 
       {/* ══ Income Partial Receipt Modal ══ */}
+      {/* ══ Installment Details Modal ══ */}
+      {showInstDetails && (() => {
+        const isExp = showInstDetails.type === 'exp';
+        const rec   = showInstDetails.record;
+        const insts = (rec as any).installments as PaymentInstallment[] || [];
+        const title = isExp ? (rec as Expense).title : (rec as SalesRecord).customerName;
+        const total = isExp ? (rec as Expense).amount : (rec as SalesRecord).saleAmount;
+        const paid  = isExp ? ((rec as Expense).paidAmount||0) : ((rec as SalesRecord).receivedAmount||0);
+        const cur   = (rec as any).currency as string;
+        return (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in"
+            onClick={()=>setShowInstDetails(null)}>
+            <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+              onClick={e=>e.stopPropagation()}>
+              <div className={`p-5 border-b flex justify-between items-center ${isExp ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+                <h3 className={`font-black text-lg flex items-center gap-2 ${isExp ? 'text-rose-900' : 'text-emerald-900'}`}>
+                  <IconHistory className="w-5 h-5"/>
+                  {isExp ? 'جزییات پرداخت‌ها' : 'جزییات دریافت‌ها'}
+                </h3>
+                <button onClick={()=>setShowInstDetails(null)} className="p-2 hover:bg-gray-100 rounded-full">✕</button>
+              </div>
+              <div className="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                <div className="font-bold text-gray-800 text-sm">{title}</div>
+                <div className={`rounded-xl p-4 border space-y-2 text-xs font-bold ${isExp ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">مبلغ کل:</span>
+                    <span>{fmtNum(total)} {cur}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">{isExp ? 'پرداخت‌شده:' : 'دریافت‌شده:'}</span>
+                    <span className={isExp ? 'text-rose-700' : 'text-emerald-700'}>{fmtNum(paid)} {cur}</span>
+                  </div>
+                  {paid < total && (
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="text-gray-600">مانده:</span>
+                      <span className="text-amber-600">{fmtNum(total - paid)} {cur}</span>
+                    </div>
+                  )}
+                  <div className={`h-2 rounded-full overflow-hidden mt-1 ${isExp ? 'bg-rose-100' : 'bg-emerald-100'}`}>
+                    <div className={`h-full rounded-full ${isExp ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                      style={{width:`${Math.min(100,total>0?(paid/total)*100:0)}%`}}/>
+                  </div>
+                </div>
+                {insts.length === 0 ? (
+                  <div className="text-center text-gray-400 py-6 text-xs">هنوز هیچ پرداختی ثبت نشده است</div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <IconList className="w-3 h-3"/> تاریخچه ({insts.length} مرحله)
+                    </div>
+                    {insts.map((inst, i) => (
+                      <div key={inst.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border ${isExp ? 'bg-green-50 border-green-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0 ${isExp ? 'bg-green-500' : 'bg-emerald-500'}`}>
+                          {i+1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-mono text-xs text-gray-500 dir-ltr">{inst.date}</div>
+                          {inst.note && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{inst.note}</div>}
+                        </div>
+                        <div className={`font-black text-sm ${isExp ? 'text-green-700' : 'text-emerald-700'}`}>
+                          {fmtNum(inst.amount)} {cur}
+                        </div>
+                      </div>
+                    ))}
+                    <div className={`flex justify-between items-center p-3 rounded-xl font-black text-sm border-2 ${isExp ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                      <span>{isExp ? 'جمع پرداخت‌ها:' : 'جمع دریافت‌ها:'}</span>
+                      <span>{fmtNum(insts.reduce((s,x)=>s+x.amount,0))} {cur}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="p-5 border-t bg-gray-50/50">
+                <button onClick={()=>setShowInstDetails(null)}
+                  className="w-full py-3 text-gray-500 font-bold hover:bg-white rounded-2xl border border-gray-200">بستن</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showIncPayModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/60 backdrop-blur-md p-4 animate-fade-in" onClick={()=>setShowIncPayModal(null)}>
           <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
@@ -1834,6 +1966,28 @@ export const ExpenseManager: React.FC<Props> = ({ currentUser, personnel, lang }
                   value={dispIncNewReceipt}
                   onChange={e=>setDispIncNewReceipt(fmtInput(e.target.value))}
                   placeholder="0"/>
+                <div className="mt-3">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest">تاریخ این دریافت</label>
+                  <input type="date"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-emerald-100 outline-none focus:border-emerald-500 font-mono text-sm"
+                    value={incPayDate} onChange={e=>setIncPayDate(e.target.value)}/>
+                </div>
+                {(showIncPayModal.installments||[]).length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-widest flex items-center gap-1.5">
+                      <IconList className="w-3 h-3"/> سابقه دریافت‌ها
+                    </div>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {showIncPayModal.installments!.map((inst,i) => (
+                        <div key={inst.id} className="flex justify-between items-center bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-xs">
+                          <span className="text-gray-500 font-mono dir-ltr">{inst.date}</span>
+                          <span className="font-black text-emerald-700">{fmtNum(inst.amount)} {showIncPayModal.currency}</span>
+                          <span className="text-[9px] text-gray-400">#{i+1}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {(() => { const a=parseAmt(dispIncNewReceipt); const h=convHint(a,showIncPayModal.currency||'IRR'); if(!a)return null; return (
                   <div className="flex flex-wrap justify-center gap-1.5 mt-2">
                     {h.omr&&<span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold">≈ {h.omr}</span>}

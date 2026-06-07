@@ -317,6 +317,13 @@ export interface CustomForm {
   createdBy: string;
 }
 
+export interface PaymentInstallment {
+  id: string;
+  amount: number;
+  date: string;
+  note?: string;
+}
+
 export interface SalesRecord {
   id: string;
   salespersonId: string;
@@ -326,6 +333,7 @@ export interface SalesRecord {
   customerName: string;
   saleAmount: number;           // Total contract / invoice amount
   receivedAmount?: number;      // Amount actually received so far
+  installments?: PaymentInstallment[];
   paymentStatus?: 'received' | 'partial' | 'pending';
   currency: Currency;
   commissionRate: number;
@@ -363,6 +371,7 @@ export interface Expense {
   title: string;
   amount: number;
   paidAmount?: number;
+  installments?: PaymentInstallment[];
   currency: Currency;
   category: ExpenseCategory;
   date: string;
