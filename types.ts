@@ -78,16 +78,17 @@ export interface Personnel {
 export interface Customer {
   id: string;
   fullName: string;
-  companyName?: string; 
-  location: string; 
+  companyName?: string;
+  location: string;
   phoneNumber: string;
   whatsappNumber: string;
   email?: string;
   businessType?: string;
   firstContact: string;
   totalTickets: number;
-  source?: string; 
+  source?: string;
   loyaltyCode?: string;
+  labelIds?: string[];
 }
 
 export interface TimelineEntry {
@@ -206,6 +207,12 @@ export interface ProjectDetails {
   definitions?: ProjectDefinitionItem[];
 }
 
+export interface TicketLabel {
+  id: string;
+  name: string;
+  color: string; // 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray'
+}
+
 export interface Ticket {
   id: string;
   customerName: string;
@@ -228,6 +235,8 @@ export interface Ticket {
   projectData?: ProjectDetails;
   discountApplied?: boolean;
   customerUploadWindow?: CustomerUploadWindow;
+  isFlagged?: boolean;
+  labelIds?: string[];
 }
 
 export interface InternalMessage {
@@ -597,6 +606,7 @@ export interface AppConfig {
   ogImage?: string;
   metaPortUrl?: string;
   heroBgImage?: string;
+  labels?: TicketLabel[];
 }
 
 export interface AnalyticsEvent {

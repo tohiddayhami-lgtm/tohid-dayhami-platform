@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess } from '../types';
-import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap } from './Icons';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel } from '../types';
+import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
@@ -110,7 +110,12 @@ export const AdminDashboard: React.FC<Props> = ({
   const [filterMode, setFilterMode] = useState<'all' | 'my' | 'history'>(canViewAllTickets ? 'all' : 'my');
   const [projectSubTab, setProjectSubTab] = useState<'active' | 'history'>('active');
   const [statusFilter, setStatusFilter] = useState<TicketStatus | 'all'>('all');
-  const [globalSearch, setGlobalSearch] = useState(''); 
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [showLabelManager, setShowLabelManager] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('blue');
+  const [globalSearch, setGlobalSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   
@@ -596,7 +601,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
   useEffect(() => {
       setCurrentPage(1);
-  }, [filterMode, statusFilter, globalSearch]);
+  }, [filterMode, statusFilter, globalSearch, showFlaggedOnly, labelFilter]);
 
   useEffect(() => {
       setIsEditingTicket(false);
@@ -694,6 +699,8 @@ export const AdminDashboard: React.FC<Props> = ({
       }
 
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+      if (showFlaggedOnly && !t.isFlagged) return false;
+      if (labelFilter && !(t.labelIds || []).includes(labelFilter)) return false;
       if (globalSearch.trim()) {
           const term = globalSearch.toLowerCase();
           const matchesId = (t.id || '').toLowerCase().includes(term);
@@ -707,6 +714,8 @@ export const AdminDashboard: React.FC<Props> = ({
       }
       return true;
     }).sort((a, b) => {
+      if (a.isFlagged && !b.isFlagged) return -1;
+      if (!a.isFlagged && b.isFlagged) return 1;
       if (a.priority === 'High' && b.priority !== 'High') return -1;
       if (a.priority !== 'High' && b.priority === 'High') return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
