@@ -34,6 +34,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   const [loading, setLoading]     = useState(true);
   const [notFound, setNotFound]   = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey]   = useState(0);
   const [formLang, setFormLang]   = useState<Language>(appLang);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [contactName, setContactName]   = useState('');
@@ -58,27 +59,33 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    setNotFound(false);
+    setForm(null);
 
     const loadForm = async (attempt = 1) => {
       try {
         const f = await getCustomFormById(formId);
         if (cancelled) return;
-        if (f && f.isPublic === false) {
-          // Explicitly marked private
+        if (!f) {
+          // null = document does not exist in Firestore (not a network error)
           setNotFound(true);
-        } else if (f) {
-          // isPublic === true OR undefined (older forms without the field) → show it
+        } else if (f.isPublic === false) {
+          setNotFound(true);
+        } else {
           setForm(f);
-        } else if (attempt < 3) {
-          // null = network/Firebase error → retry up to 2 more times
+        }
+      } catch {
+        // exception = network/Firebase error → retry with backoff
+        if (cancelled) return;
+        if (attempt < 3) {
           await new Promise(r => setTimeout(r, 1200 * attempt));
           if (!cancelled) loadForm(attempt + 1);
           return;
         } else {
           setLoadError(true);
         }
-      } catch {
-        if (!cancelled) setLoadError(true);
       }
       if (!cancelled) setLoading(false);
     };
@@ -87,7 +94,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     return () => { cancelled = true; };
     // Keep ?form= query param — do NOT replace with #/f/ hash.
     // Hash fragments are stripped by Instagram/WhatsApp/Telegram in-app browsers.
-  }, [formId]);
+  }, [formId, retryKey]);
 
   const handleResponse = (fieldId: string, value: string) => {
     setResponses(r => ({ ...r, [fieldId]: value }));
@@ -326,7 +333,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
         {formLang === 'fa' ? 'اتصال اینترنت را بررسی کنید و دوباره امتحان کنید.' : 'Please check your connection and try again.'}
       </p>
       <button
-        onClick={() => { setLoadError(false); setLoading(true); getCustomFormById(formId).then(f => { if (f && f.isPublic !== false && f) setForm(f); else setNotFound(true); setLoading(false); }); }}
+        onClick={() => setRetryKey(k => k + 1)}
         className="bg-gray-800 text-white px-6 py-2 rounded-lg text-sm font-semibold hover:bg-gray-700 transition-colors"
       >
         {formLang === 'fa' ? 'تلاش مجدد' : 'Try Again'}

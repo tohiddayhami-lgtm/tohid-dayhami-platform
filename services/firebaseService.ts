@@ -38,7 +38,7 @@ const checkProxyMode = (): Promise<boolean> => {
   _proxyChecking = true;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3500);
+  const timer = setTimeout(() => controller.abort(), 1500);
 
   return fetch(
     `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/appConfig?key=${firebaseConfig.apiKey}`,
@@ -788,15 +788,15 @@ export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) 
 };
 
 export const getCustomFormById = async (id: string): Promise<CustomForm | null> => {
-  try {
-    const proxy = await checkProxyMode();
-    if (proxy) {
-      return await proxyGet<CustomForm>('custom_forms', { doc: id });
-    }
-    const docSnap = await getDoc(doc(db, "custom_forms", id));
-    if (docSnap.exists()) return docSnap.data() as CustomForm;
-    return null;
-  } catch { return null; }
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    // proxyGet throws on server errors; returns null when document doesn't exist (proxy sends 200+null for 404)
+    return await proxyGet<CustomForm>('custom_forms', { doc: id });
+  }
+  // getDoc throws on network errors; returns snapshot with exists()=false when document not found
+  const docSnap = await getDoc(doc(db, "custom_forms", id));
+  if (docSnap.exists()) return docSnap.data() as CustomForm;
+  return null;
 };
 
 export const saveAppConfigToCloud = async (config: AppConfig) => {
