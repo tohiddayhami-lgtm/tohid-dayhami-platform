@@ -220,6 +220,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           hiddenInContact: 'مخفی از فرم تماس با ما',
           deptNameLabel: 'نام دپارتمان',
           contactLabelPlaceholder: 'لیبل در تماس با ما (اختیاری، مثلا: ارتباط با مدیرعامل)',
+          moveUp: 'انتقال به بالا',
+          moveDown: 'انتقال به پایین',
           rolesByDeptTitle: 'سمت‌ها بر اساس دپارتمان',
           noDepartment: 'بدون دپارتمان',
           selectDeptForRole: 'دپارتمان',
@@ -266,6 +268,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           hiddenInContact: 'Hidden from Contact Us form',
           deptNameLabel: 'Department name',
           contactLabelPlaceholder: 'Contact Us label (optional, e.g. "Contact the CEO")',
+          moveUp: 'Move up',
+          moveDown: 'Move down',
           rolesByDeptTitle: 'Positions by Department',
           noDepartment: 'No Department',
           selectDeptForRole: 'Department',
@@ -426,6 +430,14 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
       departments: departments.map(d => d.id === deptId ? { ...d, showInContact: d.showInContact === false } : d),
     });
   };
+  // Reorder departments (dir = -1 moves up, +1 moves down). Array order = display order in the Contact Us form.
+  const handleMoveDepartment = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= departments.length) return;
+    const next = [...departments];
+    [next[index], next[target]] = [next[target], next[index]];
+    onUpdateConfig({ ...config, departments: next });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -441,7 +453,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
              </div>
              <div className="flex flex-wrap gap-2">
                {departments.length === 0 && <span className="text-xs text-gray-400">{lang === 'fa' ? 'هنوز دپارتمانی تعریف نشده است.' : 'No departments defined yet.'}</span>}
-               {departments.map(d => {
+               {departments.map((d, idx) => {
                  const visibleInContact = d.showInContact !== false;
                  return (
                  <div key={d.id} className={`bg-white border border-indigo-200 rounded-lg text-sm ${editingDeptId === d.id ? 'p-2 w-full sm:w-auto' : 'px-3 py-1.5 flex items-center gap-2'}`}>
@@ -480,6 +492,10 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                        >
                          {visibleInContact ? '👁 ' + t.showInContact : t.hiddenInContact}
                        </button>
+                       <span className="flex items-center">
+                         <button type="button" onClick={() => handleMoveDepartment(idx, -1)} disabled={idx === 0} title={t.moveUp} className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-gray-400 text-xs leading-none px-0.5">▲</button>
+                         <button type="button" onClick={() => handleMoveDepartment(idx, 1)} disabled={idx === departments.length - 1} title={t.moveDown} className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-gray-400 text-xs leading-none px-0.5">▼</button>
+                       </span>
                        <button type="button" onClick={() => startEditDept(d)} title={t.editDept} className="text-indigo-400 hover:text-indigo-600"><IconEdit className="w-3 h-3" /></button>
                        <button type="button" onClick={() => handleDeleteDepartment(d.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>
                      </>
