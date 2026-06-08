@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
-import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight } from './Icons';
+import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend }) => {
-  const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'contacts'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'contacts' | 'archive'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,7 +49,8 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
 
   const t = {
     fa: {
-      inbox: 'صندوق ورودی', sent: 'ارسال‌شده', allContacts: 'همه مکاتبات',
+      inbox: 'صندوق ورودی', sent: 'ارسال‌شده', allContacts: 'همه مکاتبات', archiveTab: 'آرشیو',
+      archive: 'آرشیو', unarchive: 'خروج از آرشیو',
       compose: 'پیام جدید', search: 'جستجو...',
       subject: 'موضوع', body: 'متن پیام',
       recipients: 'گیرندگان', send: 'ارسال',
@@ -80,7 +81,8 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       referEmpty: 'حداقل یک پرسنل یا دپارتمان را انتخاب کنید.',
     },
     en: {
-      inbox: 'Inbox', sent: 'Sent', allContacts: 'All correspondence',
+      inbox: 'Inbox', sent: 'Sent', allContacts: 'All correspondence', archiveTab: 'Archive',
+      archive: 'Archive', unarchive: 'Unarchive',
       compose: 'New Message', search: 'Search...',
       subject: 'Subject', body: 'Message',
       recipients: 'To', send: 'Send',
@@ -112,13 +114,18 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     },
   }[lang];
 
+  const isArchived = (m: InternalMessage) => (m.archivedBy || []).includes(currentUser.id);
+
   const filteredMessages = useMemo(() => {
-    let list = activeTab === 'inbox'
-      ? messages.filter(m => m.recipientIds.includes(currentUser.id))
+    let list = activeTab === 'archive'
+      // Everything the current user archived (whether received, sent, or a correspondence)
+      ? messages.filter(m => (m.archivedBy || []).includes(currentUser.id))
+      : activeTab === 'inbox'
+      ? messages.filter(m => m.recipientIds.includes(currentUser.id) && !(m.archivedBy || []).includes(currentUser.id))
       : activeTab === 'sent'
-      ? messages.filter(m => m.senderId === currentUser.id)
-      // Master-only: every customer correspondence in the system (even if not a recipient)
-      : messages.filter(m => m.isCustomerContact);
+      ? messages.filter(m => m.senderId === currentUser.id && !(m.archivedBy || []).includes(currentUser.id))
+      // Master-only: every customer correspondence in the system (even if not a recipient), excluding archived
+      : messages.filter(m => m.isCustomerContact && !(m.archivedBy || []).includes(currentUser.id));
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       list = list.filter(m =>
@@ -169,6 +176,16 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     if (activeTab === 'inbox' && !msg.readBy.includes(currentUser.id)) {
       updateMessageInCloud(msg.id, { readBy: [...msg.readBy, currentUser.id] });
     }
+  };
+
+  // Archive / unarchive a message for the current user only (keeps inbox/sent tidy)
+  const handleToggleArchive = (msg: InternalMessage) => {
+    const archived = (msg.archivedBy || []).includes(currentUser.id);
+    const next = archived
+      ? (msg.archivedBy || []).filter(id => id !== currentUser.id)
+      : [...(msg.archivedBy || []), currentUser.id];
+    updateMessageInCloud(msg.id, { archivedBy: next });
+    setSelectedMsgId(null);
   };
 
   const handleContactReply = async () => {
@@ -269,7 +286,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
         <div className="px-4 pt-4 pb-3 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-gray-900">
-              {activeTab === 'inbox' ? t.inbox : activeTab === 'sent' ? t.sent : t.allContacts}
+              {activeTab === 'inbox' ? t.inbox : activeTab === 'sent' ? t.sent : activeTab === 'archive' ? t.archiveTab : t.allContacts}
               {activeTab === 'inbox' && unreadCount > 0 && (
                 <span className="mr-2 text-[11px] font-medium bg-blue-500 text-white rounded-full px-1.5 py-0.5">{unreadCount}</span>
               )}
@@ -308,6 +325,13 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                 {t.allContacts}
               </button>
             )}
+            <button
+              onClick={() => { setActiveTab('archive'); setSelectedMsgId(null); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'archive' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <IconFolder className="w-3.5 h-3.5" />
+              {t.archiveTab}
+            </button>
           </div>
 
           {/* Search */}
@@ -413,6 +437,14 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                   >
                     <IconArrowRight className="w-3.5 h-3.5 ltr:rotate-180" />
                     {t.refer}
+                  </button>
+                  <button
+                    onClick={() => handleToggleArchive(selectedMessage)}
+                    className="flex items-center gap-1 px-2.5 h-7 rounded-lg border border-gray-200 text-gray-600 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors text-xs font-medium"
+                    title={isArchived(selectedMessage) ? t.unarchive : t.archive}
+                  >
+                    <IconFolder className="w-3.5 h-3.5" />
+                    {isArchived(selectedMessage) ? t.unarchive : t.archive}
                   </button>
                   {isMaster && (
                     <button
