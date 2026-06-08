@@ -109,7 +109,7 @@ const INITIAL_CONFIG: AppConfig = {
     { id: 'f6', key: 'email', label: 'ایمیل (اختیاری)', labelEn: 'Email (Optional)', type: 'email', required: false, placeholder: 'email@example.com', placeholderEn: 'email@example.com', order: 6, isSystem: true },
     { id: 'h2', key: 'h_req', label: 'جزئیات درخواست', labelEn: 'Request Details', type: 'header', required: false, order: 7, isSystem: true },
     { id: 'f7', key: 'businessType', label: 'نوع کسب‌وکار', labelEn: 'Business Type', type: 'select', required: true, options: ['تولیدی', 'بازرگانی', 'صنایع دستی', 'کشاورزی', 'خدماتی', 'دانش‌بنیان', 'سایر'], optionsEn: ['Manufacturing', 'Trading', 'Handicrafts', 'Agriculture', 'Services', 'Knowledge-Based', 'Other'], order: 8, isSystem: true },
-    { id: 'f8', key: 'description', label: 'اطلاعات محصول', labelEn: 'Product Information', type: 'textarea', required: true, placeholder: 'نوع محصول یا خدمتی که ارائه می‌دهید را توضیح دهید...', placeholderEn: 'Describe the type of product or service you offer...', order: 9, isSystem: true },
+    { id: 'f8', key: 'description', label: 'اطلاعات محصول', labelEn: 'Product Information', type: 'textarea', required: false, placeholder: 'نوع محصول یا خدمتی که ارائه می‌دهید را توضیح دهید...', placeholderEn: 'Describe the type of product or service you offer...', order: 9, isSystem: true },
   ],
   assignmentConfig: { mode: 'manual', targetType: 'role', serviceRoleMap: {}, servicePersonnelMap: {} }
 };
@@ -359,6 +359,8 @@ const App: React.FC = () => {
               placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
               placeholderEn: field.placeholderEn || def.placeholderEn,
               optionsEn:     field.optionsEn     || def.optionsEn,
+              // "اطلاعات محصول" (Product Information) is now optional
+              required:      field.id === 'f8' ? false : field.required,
             };
           });
           const merged = { ...cfg, formFields: mergedFields };
