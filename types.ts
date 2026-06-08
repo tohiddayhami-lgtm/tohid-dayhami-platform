@@ -67,6 +67,13 @@ export interface Department {
   contactLabel?: string; // optional custom label shown to customers in the "Contact Us" form instead of the department name (e.g. "ارتباط با مدیرعامل")
 }
 
+// External company / agency under contract — behaves like a department, but its members are free-text contact names
+export interface Company {
+  id: string;
+  name: string;
+  members: string[]; // names of the company's/agency's personnel/contacts (a company may have several)
+}
+
 export interface Personnel {
   id: string;
   fullName: string;
@@ -633,6 +640,7 @@ export interface AppConfig {
   formFields: FormField[];
   personnelRoles?: string[];
   departments?: Department[];
+  companies?: Company[]; // external companies / agencies under contract, each with its own member names
   invoiceTemplate?: InvoiceTemplate;
   assignmentConfig?: AssignmentConfig;
   topPerformerId?: string;
