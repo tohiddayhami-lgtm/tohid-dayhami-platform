@@ -136,6 +136,15 @@ const extractFormId = (): string | null => {
   return null;
 };
 
+// Extracts a pre-selected service ID from ?service=... — used by per-service share links (?page=form&service=<id>)
+const extractServiceId = (): string | null => {
+  try {
+    const qp = new URLSearchParams(window.location.search).get('service');
+    if (qp) return qp;
+  } catch {}
+  return null;
+};
+
 // Parses current URL into a ViewState, checking query params first (social-media-safe),
 // then hash fragments (internal navigation). Query params survive Instagram/WhatsApp/Telegram.
 const parseUrl = (search: string, hash: string): ViewState | null => {
@@ -168,7 +177,7 @@ const getInitialView = (): ViewState => {
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [contactTick, setContactTick] = useState(0); // bumped to open the "Contact Us" tab inside TrackingView
-  const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
+  const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(extractServiceId);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
   // Reads from ?form= (social media links) OR #/f/ (internal nav), synchronously on first render
   const [customFormId, setCustomFormId] = useState<string | null>(extractFormId);
@@ -299,6 +308,7 @@ const App: React.FC = () => {
       if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
       const fid = extractFormId();
       if (v === 'custom-form' && fid) setCustomFormId(fid);
+      if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
     };

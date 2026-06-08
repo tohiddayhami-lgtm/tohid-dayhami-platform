@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { ServiceOption, Currency, SubService } from '../types';
-import { IconPlus, IconEdit, IconTrash, IconCheck, IconFileText } from './Icons';
+import { IconPlus, IconEdit, IconTrash, IconCheck, IconFileText, IconCopy } from './Icons';
 import { Language } from '../App';
 
 interface Props {
@@ -34,6 +34,16 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
   const [importData,   setImportData]   = useState<ServiceOption[]>([]);
   const [importError,  setImportError]  = useState('');
   const importRef = useRef<HTMLInputElement>(null);
+  // per-service share link "copied" feedback
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  // Build & copy a service-specific link that opens the request form with this service pre-selected
+  const copyServiceLink = (id: string) => {
+    const link = `${window.location.origin}/?page=form&service=${encodeURIComponent(id)}`;
+    navigator.clipboard.writeText(link)
+      .then(() => { setCopiedLinkId(id); setTimeout(() => setCopiedLinkId(null), 2000); })
+      .catch(() => { window.prompt('لینک اختصاصی این خدمت:', link); });
+  };
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const fmtPrice = (amt: number, cur: Currency) =>
@@ -453,6 +463,16 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
                     {svc.subServices!.length} زیرمجموعه
                   </span>
                 )}
+
+                {/* per-service share link */}
+                <button
+                  onClick={e => { e.stopPropagation(); copyServiceLink(svc.id); }}
+                  className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 transition-all ${copiedLinkId === svc.id ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-gray-500 border-gray-200 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                  title="کپی لینک اختصاصی فرم درخواست این خدمت (با تیک پیش‌فرض همین خدمت)"
+                >
+                  {copiedLinkId === svc.id ? <IconCheck className="w-3 h-3" /> : <IconCopy className="w-3 h-3" />}
+                  {copiedLinkId === svc.id ? 'کپی شد' : 'لینک'}
+                </button>
 
                 {/* active toggle */}
                 {!readonly && (

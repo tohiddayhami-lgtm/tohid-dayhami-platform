@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, memo, useCallback } from 'react';
+import React, { useState, useRef, memo, useCallback, useMemo } from 'react';
 import { ServiceOption, Ticket, TicketStatus, AttachedFile, AppConfig, FormField } from '../types';
 import { analyzeTicket } from '../services/geminiService';
 import { uploadFileWithProgress } from '../services/firebaseService';
@@ -97,6 +97,16 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(
     initialServiceId ? [initialServiceId] : []
   );
+
+  // When the form is opened via a service-specific link, float that service to the very top
+  const orderedServices = useMemo(() => {
+    if (!initialServiceId) return services;
+    const idx = services.findIndex(s => s.id === initialServiceId);
+    if (idx <= 0) return services;
+    const copy = [...services];
+    const [picked] = copy.splice(idx, 1);
+    return [picked, ...copy];
+  }, [services, initialServiceId]);
   const [selectedSubServices, setSelectedSubServices] = useState<Record<string, string[]>>({});
   const [otherText, setOtherText] = useState('');
   const [requestDesc, setRequestDesc] = useState('');
@@ -336,7 +346,7 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
             {t.service}
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {services.map(service => {
+            {orderedServices.map(service => {
               const isSelected = selectedServiceIds.includes(service.id);
               const ServiceIcon = getServiceIcon(service);
               const desc = lang === 'en' && service.descriptionEn ? service.descriptionEn : service.description;
