@@ -135,6 +135,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDept, setNewRoleDept] = useState(''); // department id for the position being added
   const [newDeptName, setNewDeptName] = useState('');
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null); // department being renamed
+  const [editingDeptName, setEditingDeptName] = useState('');
   const [showRoleManager, setShowRoleManager] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -210,6 +212,11 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           rolePlaceholder: 'عنوان سمت جدید',
           deptManageTitle: 'دپارتمان‌ها',
           deptPlaceholder: 'نام دپارتمان جدید (مثلا: صادرات)',
+          editDept: 'ویرایش عنوان',
+          saveDept: 'ذخیره',
+          cancelDept: 'انصراف',
+          showInContact: 'نمایش در فرم تماس با ما',
+          hiddenInContact: 'مخفی از فرم تماس با ما',
           rolesByDeptTitle: 'سمت‌ها بر اساس دپارتمان',
           noDepartment: 'بدون دپارتمان',
           selectDeptForRole: 'دپارتمان',
@@ -249,6 +256,11 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           rolePlaceholder: 'New Role Title',
           deptManageTitle: 'Departments',
           deptPlaceholder: 'New department name (e.g. Export)',
+          editDept: 'Edit title',
+          saveDept: 'Save',
+          cancelDept: 'Cancel',
+          showInContact: 'Shown in Contact Us form',
+          hiddenInContact: 'Hidden from Contact Us form',
           rolesByDeptTitle: 'Positions by Department',
           noDepartment: 'No Department',
           selectDeptForRole: 'Department',
@@ -390,6 +402,24 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
       onUpdateConfig({ ...config, departments: departments.filter(d => d.id !== deptId) });
     }
   };
+  // Begin / save / cancel renaming a department title
+  const startEditDept = (dept: Department) => { setEditingDeptId(dept.id); setEditingDeptName(dept.name); };
+  const cancelEditDept = () => { setEditingDeptId(null); setEditingDeptName(''); };
+  const saveEditDept = () => {
+    const name = editingDeptName.trim();
+    if (!name) return;
+    // Block duplicate names (ignoring the department being edited)
+    if (departments.some(d => d.id !== editingDeptId && d.name === name)) { cancelEditDept(); return; }
+    onUpdateConfig({ ...config, departments: departments.map(d => d.id === editingDeptId ? { ...d, name } : d) });
+    cancelEditDept();
+  };
+  // Toggle whether a department appears in the public "Contact Us" form
+  const handleToggleDeptContact = (deptId: string) => {
+    onUpdateConfig({
+      ...config,
+      departments: departments.map(d => d.id === deptId ? { ...d, showInContact: d.showInContact === false } : d),
+    });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -405,13 +435,41 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
              </div>
              <div className="flex flex-wrap gap-2">
                {departments.length === 0 && <span className="text-xs text-gray-400">{lang === 'fa' ? 'هنوز دپارتمانی تعریف نشده است.' : 'No departments defined yet.'}</span>}
-               {departments.map(d => (
+               {departments.map(d => {
+                 const visibleInContact = d.showInContact !== false;
+                 return (
                  <div key={d.id} className="bg-white border border-indigo-200 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
-                   <span className="font-medium text-indigo-700">{d.name}</span>
-                   <span className="text-[10px] text-gray-400">({(d.positions || []).length})</span>
-                   <button type="button" onClick={() => handleDeleteDepartment(d.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>
+                   {editingDeptId === d.id ? (
+                     <>
+                       <input
+                         autoFocus
+                         className="px-2 py-1 rounded border border-indigo-300 text-sm outline-none focus:border-indigo-500 w-36"
+                         value={editingDeptName}
+                         onChange={e => setEditingDeptName(e.target.value)}
+                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEditDept(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditDept(); } }}
+                       />
+                       <button type="button" onClick={saveEditDept} title={t.saveDept} className="text-emerald-500 hover:text-emerald-700"><IconCheck className="w-3.5 h-3.5" /></button>
+                       <button type="button" onClick={cancelEditDept} title={t.cancelDept} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
+                     </>
+                   ) : (
+                     <>
+                       <span className="font-medium text-indigo-700">{d.name}</span>
+                       <span className="text-[10px] text-gray-400">({(d.positions || []).length})</span>
+                       <button
+                         type="button"
+                         onClick={() => handleToggleDeptContact(d.id)}
+                         title={visibleInContact ? t.showInContact : t.hiddenInContact}
+                         className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium transition-colors ${visibleInContact ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                       >
+                         {visibleInContact ? '👁 ' + t.showInContact : t.hiddenInContact}
+                       </button>
+                       <button type="button" onClick={() => startEditDept(d)} title={t.editDept} className="text-indigo-400 hover:text-indigo-600"><IconEdit className="w-3 h-3" /></button>
+                       <button type="button" onClick={() => handleDeleteDepartment(d.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>
+                     </>
+                   )}
                  </div>
-               ))}
+                 );
+               })}
              </div>
            </div>
 

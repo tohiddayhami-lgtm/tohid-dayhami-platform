@@ -43,7 +43,8 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
   const [contactError, setContactError] = useState('');
   const [contactThreads, setContactThreads] = useState<InternalMessage[] | null>(null);
 
-  const departments = config?.departments || [];
+  // Only departments the master has chosen to expose in the Contact Us form (undefined = shown, for backward compatibility)
+  const departments = (config?.departments || []).filter(d => d.showInContact !== false);
 
   const MAX_UPLOAD_MB = 20;
   const MAX_FILES = 5;

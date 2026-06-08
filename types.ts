@@ -63,6 +63,7 @@ export interface Department {
   id: string;
   name: string;
   positions: string[]; // names of positions (from personnelRoles) assigned to this department
+  showInContact?: boolean; // whether this department is shown to customers in the "Contact Us" form (undefined = shown, for backward compatibility)
 }
 
 export interface Personnel {
