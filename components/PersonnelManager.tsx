@@ -137,6 +137,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [newDeptName, setNewDeptName] = useState('');
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null); // department being renamed
   const [editingDeptName, setEditingDeptName] = useState('');
+  const [editingDeptLabel, setEditingDeptLabel] = useState(''); // custom Contact Us label for the department being edited
   const [showRoleManager, setShowRoleManager] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -217,6 +218,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           cancelDept: 'انصراف',
           showInContact: 'نمایش در فرم تماس با ما',
           hiddenInContact: 'مخفی از فرم تماس با ما',
+          deptNameLabel: 'نام دپارتمان',
+          contactLabelPlaceholder: 'لیبل در تماس با ما (اختیاری، مثلا: ارتباط با مدیرعامل)',
           rolesByDeptTitle: 'سمت‌ها بر اساس دپارتمان',
           noDepartment: 'بدون دپارتمان',
           selectDeptForRole: 'دپارتمان',
@@ -261,6 +264,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           cancelDept: 'Cancel',
           showInContact: 'Shown in Contact Us form',
           hiddenInContact: 'Hidden from Contact Us form',
+          deptNameLabel: 'Department name',
+          contactLabelPlaceholder: 'Contact Us label (optional, e.g. "Contact the CEO")',
           rolesByDeptTitle: 'Positions by Department',
           noDepartment: 'No Department',
           selectDeptForRole: 'Department',
@@ -402,15 +407,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
       onUpdateConfig({ ...config, departments: departments.filter(d => d.id !== deptId) });
     }
   };
-  // Begin / save / cancel renaming a department title
-  const startEditDept = (dept: Department) => { setEditingDeptId(dept.id); setEditingDeptName(dept.name); };
-  const cancelEditDept = () => { setEditingDeptId(null); setEditingDeptName(''); };
+  // Begin / save / cancel renaming a department title (and its custom Contact Us label)
+  const startEditDept = (dept: Department) => { setEditingDeptId(dept.id); setEditingDeptName(dept.name); setEditingDeptLabel(dept.contactLabel || ''); };
+  const cancelEditDept = () => { setEditingDeptId(null); setEditingDeptName(''); setEditingDeptLabel(''); };
   const saveEditDept = () => {
     const name = editingDeptName.trim();
     if (!name) return;
     // Block duplicate names (ignoring the department being edited)
     if (departments.some(d => d.id !== editingDeptId && d.name === name)) { cancelEditDept(); return; }
-    onUpdateConfig({ ...config, departments: departments.map(d => d.id === editingDeptId ? { ...d, name } : d) });
+    const contactLabel = editingDeptLabel.trim();
+    onUpdateConfig({ ...config, departments: departments.map(d => d.id === editingDeptId ? { ...d, name, contactLabel: contactLabel || undefined } : d) });
     cancelEditDept();
   };
   // Toggle whether a department appears in the public "Contact Us" form
@@ -438,22 +444,33 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                {departments.map(d => {
                  const visibleInContact = d.showInContact !== false;
                  return (
-                 <div key={d.id} className="bg-white border border-indigo-200 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
+                 <div key={d.id} className={`bg-white border border-indigo-200 rounded-lg text-sm ${editingDeptId === d.id ? 'p-2 w-full sm:w-auto' : 'px-3 py-1.5 flex items-center gap-2'}`}>
                    {editingDeptId === d.id ? (
-                     <>
+                     <div className="flex flex-col gap-1.5 min-w-[220px]">
                        <input
                          autoFocus
-                         className="px-2 py-1 rounded border border-indigo-300 text-sm outline-none focus:border-indigo-500 w-36"
+                         className="px-2 py-1 rounded border border-indigo-300 text-sm outline-none focus:border-indigo-500 w-full"
+                         placeholder={t.deptNameLabel}
                          value={editingDeptName}
                          onChange={e => setEditingDeptName(e.target.value)}
                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEditDept(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditDept(); } }}
                        />
-                       <button type="button" onClick={saveEditDept} title={t.saveDept} className="text-emerald-500 hover:text-emerald-700"><IconCheck className="w-3.5 h-3.5" /></button>
-                       <button type="button" onClick={cancelEditDept} title={t.cancelDept} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
-                     </>
+                       <input
+                         className="px-2 py-1 rounded border border-gray-200 text-xs outline-none focus:border-indigo-500 w-full"
+                         placeholder={t.contactLabelPlaceholder}
+                         value={editingDeptLabel}
+                         onChange={e => setEditingDeptLabel(e.target.value)}
+                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEditDept(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditDept(); } }}
+                       />
+                       <div className="flex items-center gap-2 justify-end">
+                         <button type="button" onClick={saveEditDept} title={t.saveDept} className="text-emerald-500 hover:text-emerald-700 flex items-center gap-1 text-xs font-bold"><IconCheck className="w-3.5 h-3.5" />{t.saveDept}</button>
+                         <button type="button" onClick={cancelEditDept} title={t.cancelDept} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
+                       </div>
+                     </div>
                    ) : (
                      <>
                        <span className="font-medium text-indigo-700">{d.name}</span>
+                       {(d.contactLabel || '').trim() && <span className="text-[10px] text-gray-400 italic" title={t.contactLabelPlaceholder}>«{d.contactLabel}»</span>}
                        <span className="text-[10px] text-gray-400">({(d.positions || []).length})</span>
                        <button
                          type="button"

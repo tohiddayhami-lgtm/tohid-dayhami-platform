@@ -64,6 +64,7 @@ export interface Department {
   name: string;
   positions: string[]; // names of positions (from personnelRoles) assigned to this department
   showInContact?: boolean; // whether this department is shown to customers in the "Contact Us" form (undefined = shown, for backward compatibility)
+  contactLabel?: string; // optional custom label shown to customers in the "Contact Us" form instead of the department name (e.g. "ارتباط با مدیرعامل")
 }
 
 export interface Personnel {

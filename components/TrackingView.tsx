@@ -567,7 +567,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
               </div>
               <select value={contactDept} onChange={e => setContactDept(e.target.value)} className={inputCls}>
                 <option value="">{t.contactDeptPlaceholder}</option>
-                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {departments.map(d => <option key={d.id} value={d.id}>{(d.contactLabel || '').trim() || d.name}</option>)}
               </select>
               <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} rows={4}
                 placeholder={t.contactMsgPlaceholder} className={inputCls} />
