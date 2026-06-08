@@ -59,10 +59,16 @@ export interface PersonnelDocument {
   file: AttachedFile;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+  positions: string[]; // names of positions (from personnelRoles) assigned to this department
+}
+
 export interface Personnel {
   id: string;
   fullName: string;
-  roles: string[]; 
+  roles: string[];
   jobDescription?: string; 
   reportsTo?: string;
   email: string;
@@ -594,6 +600,7 @@ export interface AppConfig {
   featuredBusinesses?: FeaturedBusiness[];
   formFields: FormField[];
   personnelRoles?: string[];
+  departments?: Department[];
   invoiceTemplate?: InvoiceTemplate;
   assignmentConfig?: AssignmentConfig;
   topPerformerId?: string;

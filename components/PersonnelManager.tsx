@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Personnel, AppConfig, PersonnelDocument, AttachedFile } from '../types';
+import { Personnel, AppConfig, PersonnelDocument, AttachedFile, Department } from '../types';
 import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, IconUsers, IconMoney, IconBriefcase, IconUpload, IconFile, IconPaperclip, IconLayout, IconInvoice } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
@@ -133,6 +133,8 @@ interface Props {
 export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate, onUpdateConfig, lang }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleDept, setNewRoleDept] = useState(''); // department id for the position being added
+  const [newDeptName, setNewDeptName] = useState('');
   const [showRoleManager, setShowRoleManager] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -195,11 +197,22 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
     setJdDraft(d => { const arr = [...d.compensation.commission]; if (lang === 'pct') { arr[idx] = { ...arr[idx], percentage: parseFloat(val) || 0 }; } else { arr[idx] = { ...arr[idx], [field]: { ...(arr[idx][field as 'department'] as BL), [lang]: val } }; } return { ...d, compensation: { ...d.compensation, commission: arr } }; });
 
   const availableRoles = config.personnelRoles || ['مدیر', 'کارشناس صادرات', 'طراح گرافیک/بسته بندی', 'پشتیبانی', 'کارشناس آموزش'];
+  const departments: Department[] = config.departments || [];
+
+  // The department a given position belongs to (or undefined if unassigned)
+  const deptOfRole = (roleName: string): Department | undefined => departments.find(d => (d.positions || []).includes(roleName));
+  // Positions not assigned to any department
+  const unassignedRoles = availableRoles.filter(r => !deptOfRole(r));
 
   const t = {
       fa: {
-          rolesTitle: 'مدیریت سمت‌ها',
+          rolesTitle: 'مدیریت سمت‌ها و دپارتمان‌ها',
           rolePlaceholder: 'عنوان سمت جدید',
+          deptManageTitle: 'دپارتمان‌ها',
+          deptPlaceholder: 'نام دپارتمان جدید (مثلا: صادرات)',
+          rolesByDeptTitle: 'سمت‌ها بر اساس دپارتمان',
+          noDepartment: 'بدون دپارتمان',
+          selectDeptForRole: 'دپارتمان',
           add: 'افزودن',
           editUser: 'ویرایش اطلاعات پرسنل',
           newUser: 'تعریف حساب کاربری و پرسنل جدید',
@@ -232,8 +245,13 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           docsLbl: 'مدارک:'
       },
       en: {
-          rolesTitle: 'Manage Roles',
+          rolesTitle: 'Manage Roles & Departments',
           rolePlaceholder: 'New Role Title',
+          deptManageTitle: 'Departments',
+          deptPlaceholder: 'New department name (e.g. Export)',
+          rolesByDeptTitle: 'Positions by Department',
+          noDepartment: 'No Department',
+          selectDeptForRole: 'Department',
           add: 'Add',
           editUser: 'Edit Staff Info',
           newUser: 'New Staff Account',
@@ -330,20 +348,142 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   };
 
   const handleRemove = (id: string) => { if (window.confirm(t.deleteConfirm)) { onUpdate(personnel.filter(p => p.id !== id)); if (editingId === id) handleCancelEdit(); } };
-  const handleAddRole = () => { if (!newRoleName.trim() || availableRoles.includes(newRoleName.trim())) return; onUpdateConfig({ ...config, personnelRoles: [...availableRoles, newRoleName.trim()] }); setNewRoleName(''); };
-  const handleDeleteRole = (roleToDelete: string) => { if (window.confirm(`Delete ${roleToDelete}?`)) { onUpdateConfig({ ...config, personnelRoles: availableRoles.filter(r => r !== roleToDelete) }); } };
+  const handleAddRole = () => {
+    const name = newRoleName.trim();
+    if (!name || availableRoles.includes(name)) return;
+    // Optionally place the new position into the selected department
+    const nextDepts = newRoleDept
+      ? departments.map(d => d.id === newRoleDept ? { ...d, positions: [...(d.positions || []), name] } : d)
+      : departments;
+    onUpdateConfig({ ...config, personnelRoles: [...availableRoles, name], departments: nextDepts });
+    setNewRoleName('');
+  };
+  const handleDeleteRole = (roleToDelete: string) => {
+    if (roleToDelete === 'مدیر') return;
+    if (window.confirm(`Delete ${roleToDelete}?`)) {
+      onUpdateConfig({
+        ...config,
+        personnelRoles: availableRoles.filter(r => r !== roleToDelete),
+        departments: departments.map(d => ({ ...d, positions: (d.positions || []).filter(p => p !== roleToDelete) })),
+      });
+    }
+  };
+  // Move a position to a department (empty deptId => unassigned)
+  const handleAssignRoleToDept = (roleName: string, deptId: string) => {
+    const nextDepts = departments.map(d => {
+      const has = (d.positions || []).includes(roleName);
+      if (d.id === deptId) return has ? d : { ...d, positions: [...(d.positions || []), roleName] };
+      return has ? { ...d, positions: (d.positions || []).filter(p => p !== roleName) } : d;
+    });
+    onUpdateConfig({ ...config, departments: nextDepts });
+  };
+  const handleAddDepartment = () => {
+    const name = newDeptName.trim();
+    if (!name || departments.some(d => d.name === name)) return;
+    const newDept: Department = { id: `dept-${Date.now()}`, name, positions: [] };
+    onUpdateConfig({ ...config, departments: [...departments, newDept] });
+    setNewDeptName('');
+  };
+  const handleDeleteDepartment = (deptId: string) => {
+    const dept = departments.find(d => d.id === deptId);
+    if (window.confirm(`حذف دپارتمان «${dept?.name}»؟ سمت‌های آن حذف نمی‌شوند و بدون دپارتمان باقی می‌مانند.`)) {
+      onUpdateConfig({ ...config, departments: departments.filter(d => d.id !== deptId) });
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
        <div className="flex justify-end"><button onClick={() => setShowRoleManager(!showRoleManager)} className="text-sm text-indigo-600 flex items-center gap-1 hover:underline"><IconSettings className="w-4 h-4" /> {t.rolesTitle}</button></div>
-       {showRoleManager && (<div className="bg-gray-50 p-4 rounded-xl border border-indigo-100 mb-4 animate-fade-in"><div className="flex gap-2 mb-4"><input className="flex-grow px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500" placeholder={t.rolePlaceholder} value={newRoleName} onChange={e => setNewRoleName(e.target.value)} /><button onClick={handleAddRole} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700">{t.add}</button></div><div className="flex flex-wrap gap-2">{availableRoles.map((role, idx) => (<div key={idx} className="bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2"><span>{role}</span>{role !== 'مدیر' && (<button onClick={() => handleDeleteRole(role)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>)}</div>))}</div></div>)}
+       {showRoleManager && (
+         <div className="bg-gray-50 p-4 rounded-xl border border-indigo-100 mb-4 animate-fade-in space-y-5">
+           {/* ── Departments ── */}
+           <div>
+             <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><IconBriefcase className="w-4 h-4 text-indigo-500" /> {t.deptManageTitle}</h4>
+             <div className="flex gap-2 mb-3">
+               <input className="flex-grow px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500" placeholder={t.deptPlaceholder} value={newDeptName} onChange={e => setNewDeptName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddDepartment(); } }} />
+               <button type="button" onClick={handleAddDepartment} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700">{t.add}</button>
+             </div>
+             <div className="flex flex-wrap gap-2">
+               {departments.length === 0 && <span className="text-xs text-gray-400">{lang === 'fa' ? 'هنوز دپارتمانی تعریف نشده است.' : 'No departments defined yet.'}</span>}
+               {departments.map(d => (
+                 <div key={d.id} className="bg-white border border-indigo-200 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
+                   <span className="font-medium text-indigo-700">{d.name}</span>
+                   <span className="text-[10px] text-gray-400">({(d.positions || []).length})</span>
+                   <button type="button" onClick={() => handleDeleteDepartment(d.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>
+                 </div>
+               ))}
+             </div>
+           </div>
+
+           {/* ── Add position (optionally into a department) ── */}
+           <div className="border-t border-gray-200 pt-4">
+             <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><IconUsers className="w-4 h-4 text-indigo-500" /> {t.rolesByDeptTitle}</h4>
+             <div className="flex gap-2 mb-4 flex-wrap">
+               <input className="flex-grow min-w-[140px] px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500" placeholder={t.rolePlaceholder} value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddRole(); } }} />
+               <select className="px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white outline-none focus:border-indigo-500" value={newRoleDept} onChange={e => setNewRoleDept(e.target.value)}>
+                 <option value="">{t.noDepartment}</option>
+                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+               </select>
+               <button type="button" onClick={handleAddRole} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700">{t.add}</button>
+             </div>
+
+             {/* Positions grouped by department */}
+             <div className="space-y-3">
+               {[...departments, { id: '', name: t.noDepartment, positions: unassignedRoles } as Department].map(group => {
+                 const groupRoles = group.id ? (group.positions || []).filter(r => availableRoles.includes(r)) : unassignedRoles;
+                 if (group.id && groupRoles.length === 0) return null;
+                 if (!group.id && groupRoles.length === 0) return null;
+                 return (
+                   <div key={group.id || '__none__'}>
+                     <p className={`text-xs font-bold mb-1.5 ${group.id ? 'text-indigo-600' : 'text-gray-400'}`}>{group.name}</p>
+                     <div className="flex flex-wrap gap-2">
+                       {groupRoles.map(role => (
+                         <div key={role} className="bg-white border border-gray-200 px-2.5 py-1.5 rounded-lg text-sm flex items-center gap-2">
+                           <span>{role}</span>
+                           <select
+                             className="text-[11px] bg-gray-50 border border-gray-200 rounded px-1 py-0.5 outline-none text-gray-500 max-w-[110px]"
+                             value={deptOfRole(role)?.id || ''}
+                             onChange={e => handleAssignRoleToDept(role, e.target.value)}
+                             title={t.selectDeptForRole}
+                           >
+                             <option value="">{t.noDepartment}</option>
+                             {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                           </select>
+                           {role !== 'مدیر' && (<button type="button" onClick={() => handleDeleteRole(role)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>)}
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           </div>
+         </div>
+       )}
        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-colors" style={editingId ? { borderColor: '#8b5cf6', borderWidth: '2px' } : {}}><div className="flex items-center gap-3 mb-6"><div className={`p-2 rounded-lg ${editingId ? 'bg-indigo-100 text-indigo-600' : 'bg-purple-100 text-purple-600'}`}>{editingId ? <IconEdit className="w-5 h-5" /> : <IconPlus className="w-5 h-5" />}</div><h3 className="text-lg font-bold text-gray-800">{editingId ? t.editUser : t.newUser}</h3></div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
              <div className="md:col-span-3 flex flex-col items-center gap-4"><div onClick={() => !isProcessingImage && avatarInputRef.current?.click()} className={`w-32 h-32 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden relative group transition-all ${isProcessingImage ? 'opacity-50 cursor-wait' : ''}`}>{formData.avatar ? (<img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />) : (<div className="text-center text-gray-400"><IconUsers className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">{isProcessingImage ? t.uploading : t.uploadPhoto}</span></div>)}</div><input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} /></div>
              <div className="md:col-span-9 space-y-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.name}</label><input type="text" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})}/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.email}</label><input type="email" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/></div></div>
-                 <div><label className="block text-sm font-medium text-gray-700 mb-2">{t.roles}</label><div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl bg-gray-50 max-h-32 overflow-y-auto">{availableRoles.map((role) => (<button type="button" key={role} onClick={() => toggleRole(role)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${formData.roles.includes(role) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300'}`}>{role} {formData.roles.includes(role) && '✓'}</button>))}</div></div>
+                 <div><label className="block text-sm font-medium text-gray-700 mb-2">{t.roles}</label>
+                   <div className="p-3 border border-gray-200 rounded-xl bg-gray-50 max-h-48 overflow-y-auto space-y-3">
+                     {[...departments, { id: '', name: t.noDepartment, positions: unassignedRoles } as Department].map(group => {
+                       const groupRoles = group.id ? (group.positions || []).filter(r => availableRoles.includes(r)) : unassignedRoles;
+                       if (groupRoles.length === 0) return null;
+                       return (
+                         <div key={group.id || '__none__'}>
+                           <p className={`text-[11px] font-bold mb-1.5 ${group.id ? 'text-indigo-600' : 'text-gray-400'}`}>{group.name}</p>
+                           <div className="flex flex-wrap gap-2">
+                             {groupRoles.map(role => (
+                               <button type="button" key={role} onClick={() => toggleRole(role)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${formData.roles.includes(role) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300'}`}>{role} {formData.roles.includes(role) && '✓'}</button>
+                             ))}
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.manager}</label><select className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none bg-white" value={formData.reportsTo} onChange={e => setFormData({...formData, reportsTo: e.target.value})}><option value="">-</option>{personnel.filter(p => p.id !== editingId).map(p => (<option key={p.id} value={p.id}>{p.fullName} ({p.roles.join(', ')})</option>))}</select></div></div>
                  <div>
                    <input type="file" ref={jobDescImportRef} className="hidden" accept=".json,application/json" onChange={handleJDImport} />
@@ -671,9 +811,14 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                 <div className="flex-grow min-w-0">
                   <h4 className="font-bold text-gray-900 truncate">{person.fullName}</h4>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {(person.roles || []).map((role, rIdx) => (
-                      <span key={rIdx} className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{role}</span>
-                    ))}
+                    {(person.roles || []).map((role, rIdx) => {
+                      const dept = deptOfRole(role);
+                      return (
+                        <span key={rIdx} className="text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">
+                          {role}{dept && <span className="text-indigo-400"> · {dept.name}</span>}
+                        </span>
+                      );
+                    })}
                   </div>
                   {manager && (
                     <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
