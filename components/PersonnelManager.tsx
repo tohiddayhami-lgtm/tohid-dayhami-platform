@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Personnel, AppConfig, PersonnelDocument, AttachedFile, Department, Company } from '../types';
+import { Personnel, AppConfig, PersonnelDocument, AttachedFile, Department } from '../types';
 import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, IconUsers, IconMoney, IconBriefcase, IconUpload, IconFile, IconPaperclip, IconLayout, IconInvoice } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
@@ -139,12 +139,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [editingDeptName, setEditingDeptName] = useState('');
   const [editingDeptLabel, setEditingDeptLabel] = useState(''); // custom Contact Us label for the department being edited
   const [showRoleManager, setShowRoleManager] = useState(false);
-  // Companies & Agencies management
-  const [showCompanyManager, setShowCompanyManager] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState('');
-  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
-  const [editingCompanyName, setEditingCompanyName] = useState('');
-  const [memberDrafts, setMemberDrafts] = useState<Record<string, string>>({}); // new-member input per company id
 
   const [formData, setFormData] = useState({
     fullName: '', roles: [] as string[], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
@@ -207,7 +201,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
 
   const availableRoles = config.personnelRoles || ['مدیر', 'کارشناس صادرات', 'طراح گرافیک/بسته بندی', 'پشتیبانی', 'کارشناس آموزش'];
   const departments: Department[] = config.departments || [];
-  const companies: Company[] = config.companies || [];
 
   // The department a given position belongs to (or undefined if unassigned)
   const deptOfRole = (roleName: string): Department | undefined => departments.find(d => (d.positions || []).includes(roleName));
@@ -217,13 +210,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const t = {
       fa: {
           rolesTitle: 'مدیریت سمت‌ها و دپارتمان‌ها',
-          companiesTitle: 'شرکت‌ها و نمایندگی‌ها',
-          companyManageTitle: 'شرکت‌ها و نمایندگی‌های طرف قرارداد',
-          companyPlaceholder: 'نام شرکت/نمایندگی جدید',
-          companyMemberPlaceholder: 'نام پرسنل/رابط این شرکت',
-          companyNoneYet: 'هنوز شرکتی ثبت نشده است.',
-          companyMembersLabel: 'پرسنل/رابط‌ها',
-          companyNoMembers: 'هنوز اسمی اضافه نشده',
           rolePlaceholder: 'عنوان سمت جدید',
           deptManageTitle: 'دپارتمان‌ها',
           deptPlaceholder: 'نام دپارتمان جدید (مثلا: صادرات)',
@@ -272,13 +258,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
       },
       en: {
           rolesTitle: 'Manage Roles & Departments',
-          companiesTitle: 'Companies & Agencies',
-          companyManageTitle: 'Contracted Companies & Agencies',
-          companyPlaceholder: 'New company/agency name',
-          companyMemberPlaceholder: 'Contact/staff name at this company',
-          companyNoneYet: 'No companies added yet.',
-          companyMembersLabel: 'Staff / Contacts',
-          companyNoMembers: 'No names added yet',
           rolePlaceholder: 'New Role Title',
           deptManageTitle: 'Departments',
           deptPlaceholder: 'New department name (e.g. Export)',
@@ -460,54 +439,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
     onUpdateConfig({ ...config, departments: next });
   };
 
-  // ── Companies & Agencies (شرکت‌ها و نمایندگی‌ها) ──
-  const handleAddCompany = () => {
-    const name = newCompanyName.trim();
-    if (!name || companies.some(c => c.name === name)) return;
-    const newCompany: Company = { id: `co-${Date.now()}`, name, members: [] };
-    onUpdateConfig({ ...config, companies: [...companies, newCompany] });
-    setNewCompanyName('');
-  };
-  const handleDeleteCompany = (companyId: string) => {
-    const c = companies.find(x => x.id === companyId);
-    if (window.confirm(`حذف «${c?.name}»؟`)) {
-      onUpdateConfig({ ...config, companies: companies.filter(x => x.id !== companyId) });
-    }
-  };
-  const startEditCompany = (c: Company) => { setEditingCompanyId(c.id); setEditingCompanyName(c.name); };
-  const cancelEditCompany = () => { setEditingCompanyId(null); setEditingCompanyName(''); };
-  const saveEditCompany = () => {
-    const name = editingCompanyName.trim();
-    if (!name) return;
-    if (companies.some(c => c.id !== editingCompanyId && c.name === name)) { cancelEditCompany(); return; }
-    onUpdateConfig({ ...config, companies: companies.map(c => c.id === editingCompanyId ? { ...c, name } : c) });
-    cancelEditCompany();
-  };
-  const setMemberDraft = (companyId: string, val: string) => setMemberDrafts(p => ({ ...p, [companyId]: val }));
-  const handleAddMember = (companyId: string) => {
-    const name = (memberDrafts[companyId] || '').trim();
-    if (!name) return;
-    onUpdateConfig({
-      ...config,
-      companies: companies.map(c => c.id === companyId
-        ? (c.members || []).includes(name) ? c : { ...c, members: [...(c.members || []), name] }
-        : c),
-    });
-    setMemberDraft(companyId, '');
-  };
-  const handleRemoveMember = (companyId: string, name: string) => {
-    onUpdateConfig({
-      ...config,
-      companies: companies.map(c => c.id === companyId ? { ...c, members: (c.members || []).filter(m => m !== name) } : c),
-    });
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
-       <div className="flex justify-end gap-4 flex-wrap">
-         <button onClick={() => setShowCompanyManager(!showCompanyManager)} className="text-sm text-indigo-600 flex items-center gap-1 hover:underline"><IconBriefcase className="w-4 h-4" /> {t.companiesTitle}</button>
-         <button onClick={() => setShowRoleManager(!showRoleManager)} className="text-sm text-indigo-600 flex items-center gap-1 hover:underline"><IconSettings className="w-4 h-4" /> {t.rolesTitle}</button>
-       </div>
+       <div className="flex justify-end"><button onClick={() => setShowRoleManager(!showRoleManager)} className="text-sm text-indigo-600 flex items-center gap-1 hover:underline"><IconSettings className="w-4 h-4" /> {t.rolesTitle}</button></div>
        {showRoleManager && (
          <div className="bg-gray-50 p-4 rounded-xl border border-indigo-100 mb-4 animate-fade-in space-y-5">
            {/* ── Departments ── */}
@@ -617,61 +551,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
            </div>
          </div>
        )}
-
-       {/* ── Companies & Agencies ── */}
-       {showCompanyManager && (
-         <div className="bg-gray-50 p-4 rounded-xl border border-indigo-100 mb-4 animate-fade-in">
-           <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1.5"><IconBriefcase className="w-4 h-4 text-indigo-500" /> {t.companyManageTitle}</h4>
-           <div className="flex gap-2 mb-3">
-             <input className="flex-grow px-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500" placeholder={t.companyPlaceholder} value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddCompany(); } }} />
-             <button type="button" onClick={handleAddCompany} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700">{t.add}</button>
-           </div>
-
-           {companies.length === 0 && <p className="text-xs text-gray-400">{t.companyNoneYet}</p>}
-
-           <div className="space-y-2.5">
-             {companies.map(c => (
-               <div key={c.id} className="bg-white border border-indigo-200 rounded-xl p-3">
-                 {/* Company header: name (editable) + delete */}
-                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                   {editingCompanyId === c.id ? (
-                     <>
-                       <input autoFocus className="px-2 py-1 rounded border border-indigo-300 text-sm outline-none focus:border-indigo-500 w-44" value={editingCompanyName} onChange={e => setEditingCompanyName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEditCompany(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditCompany(); } }} />
-                       <button type="button" onClick={saveEditCompany} className="text-emerald-500 hover:text-emerald-700"><IconCheck className="w-4 h-4" /></button>
-                       <button type="button" onClick={cancelEditCompany} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
-                     </>
-                   ) : (
-                     <>
-                       <IconBriefcase className="w-4 h-4 text-indigo-500" />
-                       <span className="font-bold text-indigo-700 text-sm">{c.name}</span>
-                       <span className="text-[10px] text-gray-400">({(c.members || []).length})</span>
-                       <button type="button" onClick={() => startEditCompany(c)} title={t.editDept} className="text-indigo-400 hover:text-indigo-600"><IconEdit className="w-3.5 h-3.5" /></button>
-                       <button type="button" onClick={() => handleDeleteCompany(c.id)} className="text-red-400 hover:text-red-600 ms-auto"><IconTrash className="w-3.5 h-3.5" /></button>
-                     </>
-                   )}
-                 </div>
-
-                 {/* Members */}
-                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{t.companyMembersLabel}</p>
-                 <div className="flex flex-wrap gap-2 mb-2">
-                   {(c.members || []).length === 0 && <span className="text-xs text-gray-300 italic">{t.companyNoMembers}</span>}
-                   {(c.members || []).map(m => (
-                     <div key={m} className="bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-sm flex items-center gap-2">
-                       <span>{m}</span>
-                       <button type="button" onClick={() => handleRemoveMember(c.id, m)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3 h-3" /></button>
-                     </div>
-                   ))}
-                 </div>
-                 <div className="flex gap-2">
-                   <input className="flex-grow px-3 py-1.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500" placeholder={t.companyMemberPlaceholder} value={memberDrafts[c.id] || ''} onChange={e => setMemberDraft(c.id, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddMember(c.id); } }} />
-                   <button type="button" onClick={() => handleAddMember(c.id)} className="bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-200">{t.add}</button>
-                 </div>
-               </div>
-             ))}
-           </div>
-         </div>
-       )}
-
        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-colors" style={editingId ? { borderColor: '#8b5cf6', borderWidth: '2px' } : {}}><div className="flex items-center gap-3 mb-6"><div className={`p-2 rounded-lg ${editingId ? 'bg-indigo-100 text-indigo-600' : 'bg-purple-100 text-purple-600'}`}>{editingId ? <IconEdit className="w-5 h-5" /> : <IconPlus className="w-5 h-5" />}</div><h3 className="text-lg font-bold text-gray-800">{editingId ? t.editUser : t.newUser}</h3></div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
