@@ -245,6 +245,14 @@ export interface Ticket {
   labelIds?: string[];
 }
 
+export interface ContactReply {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface InternalMessage {
   id: string;
   senderId: string;
@@ -257,6 +265,14 @@ export interface InternalMessage {
   files?: AttachedFile[];
   createdAt: string;
   readBy: string[];
+  // ── Customer "Contact Us" messages (from public tracking page) ──
+  isCustomerContact?: boolean;      // true if originated from a customer via the tracking page
+  contactName?: string;             // name the customer registered with
+  contactPhone?: string;            // mobile they registered with — used for recognition & reply lookup
+  contactDepartmentId?: string;     // selected department id
+  contactDepartmentName?: string;   // selected department name (snapshot)
+  customerId?: string;              // linked customer record (resolved by phone)
+  replies?: ContactReply[];         // staff replies, visible to the customer by name+mobile
 }
 
 export interface TaskComment {

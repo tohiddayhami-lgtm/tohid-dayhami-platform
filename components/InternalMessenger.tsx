@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { InternalMessage, Personnel, AttachedFile } from '../types';
+import { InternalMessage, Personnel, AttachedFile, ContactReply } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
@@ -27,6 +27,10 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Inline reply to a customer "Contact Us" message (appended to the message thread)
+  const [contactReplyText, setContactReplyText] = useState('');
+  const [isReplyingContact, setIsReplyingContact] = useState(false);
+
   const isMaster = currentUser.username === 'master';
 
   useEffect(() => {
@@ -47,6 +51,13 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       from: 'از:', to: 'به:',
       noSelect: 'یک پیام انتخاب کنید',
       empty: 'پیامی وجود ندارد',
+      contactBadge: 'تماس از مشتری',
+      contactPhone: 'موبایل:',
+      contactDept: 'دپارتمان:',
+      repliesTitle: 'پاسخ‌ها به مشتری',
+      replyPlaceholder: 'پاسخ خود را بنویسید... (مشتری این پاسخ را در صفحه پیگیری می‌بیند)',
+      sendReply: 'ارسال پاسخ',
+      noReplyYet: 'هنوز پاسخی ثبت نشده است.',
     },
     en: {
       inbox: 'Inbox', sent: 'Sent',
@@ -59,6 +70,13 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       from: 'From:', to: 'To:',
       noSelect: 'Select a message',
       empty: 'No messages',
+      contactBadge: 'Customer enquiry',
+      contactPhone: 'Mobile:',
+      contactDept: 'Department:',
+      repliesTitle: 'Replies to customer',
+      replyPlaceholder: 'Write your reply... (the customer sees it on the tracking page)',
+      sendReply: 'Send reply',
+      noReplyYet: 'No reply yet.',
     },
   }[lang];
 
@@ -113,6 +131,23 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     if (activeTab === 'inbox' && !msg.readBy.includes(currentUser.id)) {
       updateMessageInCloud(msg.id, { readBy: [...msg.readBy, currentUser.id] });
     }
+  };
+
+  const handleContactReply = async () => {
+    if (!selectedMessage || !contactReplyText.trim()) return;
+    setIsReplyingContact(true);
+    try {
+      const reply: ContactReply = {
+        id: `r-${Date.now()}`,
+        authorId: currentUser.id,
+        authorName: currentUser.fullName,
+        body: contactReplyText.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      await updateMessageInCloud(selectedMessage.id, { replies: [...(selectedMessage.replies || []), reply] });
+      setContactReplyText('');
+    } catch { alert(lang === 'fa' ? 'خطا در ارسال پاسخ' : 'Failed to send reply'); }
+    finally { setIsReplyingContact(false); }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -292,7 +327,52 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
 
             {/* Message Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
+              {selectedMessage.isCustomerContact && (
+                <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{t.contactBadge}</span>
+                  {selectedMessage.contactDepartmentName && <span className="text-xs text-amber-800">{t.contactDept} <b>{selectedMessage.contactDepartmentName}</b></span>}
+                  {selectedMessage.contactPhone && <span className="text-xs text-amber-800" dir="ltr">{t.contactPhone} {selectedMessage.contactPhone}</span>}
+                </div>
+              )}
               <p className="text-sm text-gray-800 leading-7 whitespace-pre-wrap break-words">{selectedMessage.body}</p>
+
+              {selectedMessage.isCustomerContact && (
+                <div className="mt-6 pt-5 border-t border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-3 flex items-center gap-1.5"><IconReply className="w-3.5 h-3.5" />{t.repliesTitle}</p>
+                  {(!selectedMessage.replies || selectedMessage.replies.length === 0) ? (
+                    <p className="text-xs text-gray-400 mb-3">{t.noReplyYet}</p>
+                  ) : (
+                    <div className="space-y-2 mb-3">
+                      {selectedMessage.replies.map(r => (
+                        <div key={r.id} className="bg-emerald-50/60 border border-emerald-100 rounded-xl px-3 py-2">
+                          <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                            <span className="text-[11px] font-semibold text-emerald-700">{r.authorName}</span>
+                            <span className="text-[10px] text-gray-400" dir="ltr">{formatFullDate(r.createdAt)}</span>
+                          </div>
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{r.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      value={contactReplyText}
+                      onChange={e => setContactReplyText(e.target.value)}
+                      rows={2}
+                      placeholder={t.replyPlaceholder}
+                      className="flex-1 text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 resize-none"
+                    />
+                    <button
+                      onClick={handleContactReply}
+                      disabled={isReplyingContact || !contactReplyText.trim()}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-medium hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                    >
+                      {isReplyingContact ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" /> : <IconSend className="w-3.5 h-3.5" />}
+                      {t.sendReply}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {selectedMessage.files && selectedMessage.files.length > 0 && (
                 <div className="mt-6 pt-5 border-t border-gray-100">
@@ -316,7 +396,8 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
               )}
             </div>
 
-            {/* Reply Bar */}
+            {/* Reply Bar (internal messages only — contact messages reply inline above) */}
+            {!selectedMessage.isCustomerContact && (
             <div className="px-6 py-3 border-t border-gray-100 shrink-0">
               <button
                 onClick={() => {
@@ -331,6 +412,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                 {t.reply}
               </button>
             </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400">

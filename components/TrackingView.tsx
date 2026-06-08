@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, AttachedFile } from '../types';
-import { IconSearch, IconCheck, IconFile, IconActivity, IconCopy, IconUpload, IconTrash, IconSend, IconClock } from './Icons';
+import { Ticket, TicketStatus, ServiceOption, AttachedFile, AppConfig, InternalMessage } from '../types';
+import { IconSearch, IconCheck, IconFile, IconActivity, IconCopy, IconUpload, IconTrash, IconSend, IconClock, IconMail, IconReply } from './Icons';
 import { Language } from '../App';
 import { uploadFileWithProgress, getTicketById } from '../services/firebaseService';
 
@@ -9,11 +9,14 @@ interface Props {
   tickets: Ticket[];
   services: ServiceOption[];
   lang: Language;
+  config?: AppConfig;
   onCustomerUpload?: (ticketId: string, message: string, files: AttachedFile[]) => Promise<void>;
+  onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<void>;
+  lookupContactMessages?: (name: string, phone: string) => InternalMessage[];
 }
 
-export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCustomerUpload }) => {
-  const [tab, setTab] = useState<'track' | 'recover'>('track');
+export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages }) => {
+  const [tab, setTab] = useState<'track' | 'recover' | 'contact'>('track');
   const [searchId, setSearchId] = useState('');
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
   const [trackError, setTrackError] = useState('');
@@ -30,6 +33,17 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
   const [uploadDone, setUploadDone] = useState(false);
   const uploadFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Contact-us state
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactDept, setContactDept] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [contactThreads, setContactThreads] = useState<InternalMessage[] | null>(null);
+
+  const departments = config?.departments || [];
 
   const MAX_UPLOAD_MB = 20;
   const MAX_FILES = 5;
@@ -52,6 +66,25 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
       currentStep: 'پرونده در این مرحله است.', completedStep: 'انجام شد.', pendingStep: 'در انتظار...',
       historyTitle: 'تاریخچه پرونده', historyEmpty: 'هنوز رویدادی ثبت نشده است.',
       viewTicket: 'مشاهده وضعیت',
+      contactTab: 'تماس با ما',
+      contactTitle: 'ارتباط با دپارتمان‌ها',
+      contactDesc: 'دپارتمان موردنظر را انتخاب کنید و پیام خود را بفرستید. پاسخ را با همین نام و شماره موبایل از همین صفحه پیگیری کنید.',
+      contactDept: 'دپارتمان',
+      contactDeptPlaceholder: '— انتخاب دپارتمان —',
+      contactMsg: 'متن پیام',
+      contactMsgPlaceholder: 'پیام خود را بنویسید...',
+      contactSend: 'ارسال پیام',
+      contactSending: 'در حال ارسال...',
+      contactSent: 'پیام شما ثبت شد. کارشناسان دپارتمان مربوطه پاسخ خواهند داد.',
+      contactNoDepts: 'در حال حاضر دپارتمانی برای ارتباط تعریف نشده است.',
+      contactIncomplete: 'لطفاً همه فیلدها (نام، موبایل، دپارتمان و پیام) را تکمیل کنید.',
+      contactError: 'خطا در ارسال. دوباره تلاش کنید.',
+      contactMyMessages: 'پیام‌ها و پاسخ‌های من',
+      contactLookup: 'مشاهده پاسخ‌ها',
+      contactNoThreads: 'پیامی با این نام و شماره موبایل یافت نشد.',
+      contactReplies: 'پاسخ‌ها',
+      contactNoReply: 'هنوز پاسخی ثبت نشده است.',
+      contactYou: 'شما',
     },
     en: {
       trackTab: 'Track by ID', recoverTab: 'Recover Tracking ID',
@@ -70,6 +103,25 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
       currentStep: 'Your case is at this stage.', completedStep: 'Done.', pendingStep: 'Pending...',
       historyTitle: 'Case History', historyEmpty: 'No events recorded yet.',
       viewTicket: 'View Status',
+      contactTab: 'Contact Us',
+      contactTitle: 'Contact a Department',
+      contactDesc: 'Choose a department and send your message. Track the reply from this page using the same name and mobile number.',
+      contactDept: 'Department',
+      contactDeptPlaceholder: '— Select a department —',
+      contactMsg: 'Message',
+      contactMsgPlaceholder: 'Write your message...',
+      contactSend: 'Send Message',
+      contactSending: 'Sending...',
+      contactSent: 'Your message was received. The department staff will reply.',
+      contactNoDepts: 'No departments are available for contact at the moment.',
+      contactIncomplete: 'Please complete all fields (name, mobile, department and message).',
+      contactError: 'Submission failed. Please try again.',
+      contactMyMessages: 'My messages & replies',
+      contactLookup: 'View replies',
+      contactNoThreads: 'No messages found with this name and mobile number.',
+      contactReplies: 'Replies',
+      contactNoReply: 'No reply yet.',
+      contactYou: 'You',
     },
   }[lang];
 
@@ -121,6 +173,33 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
 
   const copyId = (id: string) => {
     navigator.clipboard.writeText(id).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); });
+  };
+
+  const handleContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onContactSubmit) return;
+    if (!contactName.trim() || !contactPhone.trim() || !contactDept || !contactMessage.trim()) {
+      setContactError(t.contactIncomplete);
+      return;
+    }
+    setContactSubmitting(true);
+    setContactError('');
+    try {
+      await onContactSubmit({ name: contactName.trim(), phone: contactPhone.trim(), departmentId: contactDept, message: contactMessage.trim() });
+      setContactMessage('');
+      // Show the customer their conversation thread (including the message just sent)
+      setTimeout(() => { if (lookupContactMessages) setContactThreads(lookupContactMessages(contactName, contactPhone)); }, 400);
+    } catch {
+      setContactError(t.contactError);
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
+  const handleContactLookup = () => {
+    if (!lookupContactMessages) return;
+    const found = lookupContactMessages(contactName, contactPhone);
+    setContactThreads(found);
   };
 
   const getStepStatus = (step: TicketStatus, current: TicketStatus) => {
@@ -197,12 +276,14 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-7 gap-6">
-        {(['track', 'recover'] as const).map((tabId) => (
+        {(['track', 'recover', 'contact'] as const).map((tabId) => (
           <button key={tabId}
             onClick={() => { setTab(tabId); setFoundTicket(null); setTrackError(''); setRecoveredTickets(null); setRecoverError(''); }}
             className={`py-3 px-0.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${tab === tabId ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
-            {tabId === 'track' ? <><IconSearch className="w-3.5 h-3.5" />{t.trackTab}</> : <><IconCopy className="w-3.5 h-3.5" />{t.recoverTab}</>}
+            {tabId === 'track' ? <><IconSearch className="w-3.5 h-3.5" />{t.trackTab}</>
+              : tabId === 'recover' ? <><IconCopy className="w-3.5 h-3.5" />{t.recoverTab}</>
+              : <><IconMail className="w-3.5 h-3.5" />{t.contactTab}</>}
           </button>
         ))}
       </div>
@@ -462,6 +543,104 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, onCusto
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Contact Us ── */}
+      {tab === 'contact' && (
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-1">{t.contactTitle}</h2>
+          <p className="text-sm text-gray-400 mb-5">{t.contactDesc}</p>
+
+          {departments.length === 0 ? (
+            <div className="border border-dashed border-gray-200 rounded-2xl py-10 text-center text-sm text-gray-400">
+              {t.contactNoDepts}
+            </div>
+          ) : (
+            <form onSubmit={handleContact} className="space-y-3 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input type="text" placeholder={t.namePlaceholder} value={contactName}
+                  onChange={e => setContactName(e.target.value)} className={inputCls} />
+                <input type="tel" placeholder={t.phonePlaceholder} value={contactPhone}
+                  onChange={e => setContactPhone(e.target.value)} className={inputCls} dir="ltr" />
+              </div>
+              <select value={contactDept} onChange={e => setContactDept(e.target.value)} className={inputCls}>
+                <option value="">{t.contactDeptPlaceholder}</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} rows={4}
+                placeholder={t.contactMsgPlaceholder} className={inputCls} />
+              {contactError && <p className="text-xs text-red-500">{contactError}</p>}
+              <button type="submit" disabled={contactSubmitting}
+                className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
+                {contactSubmitting
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <IconSend className="w-4 h-4" />}
+                {contactSubmitting ? t.contactSending : t.contactSend}
+              </button>
+            </form>
+          )}
+
+          {/* My messages & replies — lookup by name + mobile */}
+          <div className="border-t border-gray-100 pt-6">
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <p className="text-sm font-semibold text-gray-700">{t.contactMyMessages}</p>
+              <button type="button" onClick={handleContactLookup}
+                disabled={!contactName.trim() || !contactPhone.trim()}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                <IconSearch className="w-3.5 h-3.5" />{t.contactLookup}
+              </button>
+            </div>
+
+            {contactThreads !== null && contactThreads.length === 0 && (
+              <p className="text-xs text-gray-400 py-4 text-center">{t.contactNoThreads}</p>
+            )}
+
+            {contactThreads && contactThreads.length > 0 && (
+              <div className="space-y-3 animate-fade-in">
+                {contactThreads.map(m => (
+                  <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-gray-700">{m.contactDepartmentName || ''}</span>
+                      <span className="text-[10px] text-gray-400" dir="ltr">{new Date(m.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
+                    </div>
+                    {/* Customer's original message */}
+                    <div className="px-4 py-3">
+                      <div className="flex items-start gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(m.contactName || t.contactYou).charAt(0)}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-medium text-gray-500 mb-0.5">{t.contactYou}</p>
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{m.body}</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Replies */}
+                    <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+                      <p className="text-[11px] font-semibold text-gray-400 mb-2 flex items-center gap-1"><IconReply className="w-3 h-3" />{t.contactReplies}</p>
+                      {(!m.replies || m.replies.length === 0) ? (
+                        <p className="text-xs text-gray-400">{t.contactNoReply}</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {m.replies.map(r => (
+                            <div key={r.id} className="flex items-start gap-2">
+                              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(r.authorName || '?').charAt(0)}</div>
+                              <div className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl px-3 py-2">
+                                <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                                  <span className="text-[11px] font-medium text-emerald-700">{r.authorName}</span>
+                                  <span className="text-[10px] text-gray-400" dir="ltr">{new Date(r.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
+                                </div>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{r.body}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

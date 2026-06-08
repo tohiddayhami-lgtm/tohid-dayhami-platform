@@ -17,7 +17,7 @@ import {
   saveServicesToCloud,
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings,
-  subscribeToMessages, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
+  subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
@@ -699,7 +699,9 @@ const App: React.FC = () => {
     if (assignmentNote) initialTimeline.push(assignmentNote);
 
     let newCustomer: Customer | undefined;
-    const existingCustomer = customers.find(c => c.phoneNumber === ticket.phoneNumber);
+    // Recognize the customer by mobile number (normalized) — same phone = same customer, even with a different name
+    const ticketPhoneNorm = (ticket.phoneNumber || '').replace(/\D/g, '');
+    const existingCustomer = customers.find(c => (c.phoneNumber || '').replace(/\D/g, '') === ticketPhoneNorm && ticketPhoneNorm !== '');
     if (existingCustomer) {
       newCustomer = { ...existingCustomer, fullName: ticket.customerName, companyName: ticket.companyName || existingCustomer.companyName, location: ticket.location || existingCustomer.location, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType || existingCustomer.businessType, totalTickets: existingCustomer.totalTickets + 1, source: existingCustomer.source || 'Web Form' };
     } else {
@@ -816,6 +818,73 @@ const App: React.FC = () => {
       timeline: [...(ticket.timeline || []), newEntry],
       customerUploadWindow: { ...(ticket.customerUploadWindow as any), isOpen: false },
     });
+  };
+
+  // ── Public "Contact Us" (from tracking page) → lands in مکاتبات, routed to a department ──
+  const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
+
+  const handleContactSubmit = async (data: { name: string; phone: string; departmentId: string; message: string }) => {
+    const name = data.name.trim();
+    const phoneRaw = data.phone.trim();
+    const phone = normalizePhone(phoneRaw);
+    const message = data.message.trim();
+    if (!name || !phone || !message || !data.departmentId) throw new Error('اطلاعات ناقص است');
+
+    const dept = (appConfig.departments || []).find(d => d.id === data.departmentId);
+    if (!dept) throw new Error('دپارتمان نامعتبر است');
+
+    // ── Customer recognition by mobile (same phone = same customer, even with a different name) ──
+    const existingCustomer = customers.find(c => normalizePhone(c.phoneNumber) === phone);
+    let customerId: string;
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      // Remember the latest name they used; keep their record (recognized by phone)
+      await saveCustomerToCloud({ ...existingCustomer, fullName: name || existingCustomer.fullName });
+    } else {
+      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const phoneSuffix = phone.slice(-4);
+      const newCustomer: Customer = {
+        id: `C-${Date.now()}`, fullName: name, location: '', phoneNumber: phoneRaw, whatsappNumber: phoneRaw,
+        firstContact: new Date().toISOString(), totalTickets: 0, source: 'Contact Form',
+        loyaltyCode: `VIP-${phoneSuffix}-${randomStr}`,
+      };
+      customerId = newCustomer.id;
+      await saveCustomerToCloud(newCustomer);
+    }
+
+    // ── Route to staff whose سمت belongs to the selected department; fallback to master ──
+    let recipients = personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
+    if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
+
+    const msg: InternalMessage = {
+      id: `contact-${Date.now()}`,
+      senderId: '',
+      senderName: name,
+      recipientIds: recipients.map(p => p.id),
+      recipientNames: recipients.map(p => p.fullName),
+      subject: `تماس از ${name} — دپارتمان ${dept.name}`,
+      body: message,
+      createdAt: new Date().toISOString(),
+      readBy: [],
+      isCustomerContact: true,
+      contactName: name,
+      contactPhone: phone,
+      contactDepartmentId: dept.id,
+      contactDepartmentName: dept.name,
+      customerId,
+      replies: [],
+    };
+    await sendInternalMessage(msg);
+  };
+
+  // Customer looks up their own contact conversations by name + mobile (no auth)
+  const lookupContactMessages = (name: string, phone: string): InternalMessage[] => {
+    const n = name.trim().toLowerCase();
+    const ph = normalizePhone(phone);
+    if (!ph) return [];
+    return messages
+      .filter(m => m.isCustomerContact && normalizePhone(m.contactPhone || '') === ph && (!n || (m.contactName || '').trim().toLowerCase() === n))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
   const handleCustomerAddComment = async (ticketId: string, commentText: string, files?: AttachedFile[]) => {
@@ -1175,7 +1244,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} />
+              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} />
             )}
 
             {view === 'custom-form' && (
