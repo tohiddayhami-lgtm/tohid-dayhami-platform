@@ -167,6 +167,7 @@ const getInitialView = (): ViewState => {
 
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
+  const [contactTick, setContactTick] = useState(0); // bumped to open the "Contact Us" tab inside TrackingView
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
   // Reads from ?form= (social media links) OR #/f/ (internal nav), synchronously on first render
@@ -953,17 +954,14 @@ const App: React.FC = () => {
                 {item.label}
               </button>
             ))}
-            {/* Tohid Meta Port — external link */}
-            <a
-              href={toAbsoluteUrl(appConfig.metaPortUrl || '')}
-              target={appConfig.metaPortUrl ? '_blank' : undefined}
-              rel="noopener noreferrer"
-              onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
+            {/* تماس با ما — opens the Contact Us tab in the tracking view */}
+            <button
+              onClick={() => { setContactTick(c => c + 1); setView('tracking'); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-50"
             >
-              <IconPort className="w-3.5 h-3.5" />
-              Tohid Meta Port
-            </a>
+              <IconMessageSquare className="w-3.5 h-3.5" />
+              {lang === 'fa' ? 'تماس با ما' : 'Contact Us'}
+            </button>
           </nav>
 
           {/* Right side: lang toggle + staff login icon */}
@@ -1250,7 +1248,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} />
+              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} openContactTick={contactTick} />
             )}
 
             {view === 'custom-form' && (
@@ -1352,16 +1350,13 @@ const App: React.FC = () => {
             <span className="text-[10px] font-medium">{item.label}</span>
           </button>
         ))}
-        <a
-          href={toAbsoluteUrl(appConfig.metaPortUrl || '')}
-          target={appConfig.metaPortUrl ? '_blank' : undefined}
-          rel="noopener noreferrer"
-          onClick={e => { if (!appConfig.metaPortUrl) e.preventDefault(); }}
+        <button
+          onClick={() => { setContactTick(c => c + 1); setView('tracking'); }}
           className="flex flex-col items-center gap-0.5 px-3 py-1 text-gray-400"
         >
-          <IconPort className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Meta Port</span>
-        </a>
+          <IconMessageSquare className="w-5 h-5" />
+          <span className="text-[10px] font-medium">{lang === 'fa' ? 'تماس با ما' : 'Contact'}</span>
+        </button>
       </div>
     </div>
   );

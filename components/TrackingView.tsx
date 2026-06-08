@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Ticket, TicketStatus, ServiceOption, AttachedFile, AppConfig, InternalMessage } from '../types';
 import { IconSearch, IconCheck, IconFile, IconActivity, IconCopy, IconUpload, IconTrash, IconSend, IconClock, IconMail, IconReply } from './Icons';
 import { Language } from '../App';
@@ -13,10 +13,14 @@ interface Props {
   onCustomerUpload?: (ticketId: string, message: string, files: AttachedFile[]) => Promise<void>;
   onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<void>;
   lookupContactMessages?: (name: string, phone: string) => InternalMessage[];
+  openContactTick?: number; // bumped by the parent to switch to the "Contact Us" tab
 }
 
-export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages }) => {
+export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, openContactTick }) => {
   const [tab, setTab] = useState<'track' | 'recover' | 'contact'>('track');
+
+  // When the parent requests the Contact Us tab (e.g. from the header nav), switch to it
+  useEffect(() => { if (openContactTick) setTab('contact'); }, [openContactTick]);
   const [searchId, setSearchId] = useState('');
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
   const [trackError, setTrackError] = useState('');
