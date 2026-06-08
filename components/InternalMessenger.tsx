@@ -3,6 +3,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
+import { getStaffCode, findPersonnelByCode } from '../services/staffId';
 import { Language } from '../App';
 
 interface Props {
@@ -22,6 +23,8 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
+  const [recipientCode, setRecipientCode] = useState(''); // staff ID typed to add a recipient
+  const [recipientError, setRecipientError] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -54,6 +57,12 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       compose: 'پیام جدید', search: 'جستجو...',
       subject: 'موضوع', body: 'متن پیام',
       recipients: 'گیرندگان', send: 'ارسال',
+      recipientIdPlaceholder: 'آی دی پرسنلی گیرنده را وارد کنید',
+      addRecipient: 'افزودن',
+      recipientNotFound: 'پرسنلی با این آی دی یافت نشد.',
+      recipientSelf: 'نمی‌توانید برای خودتان ارسال کنید.',
+      yourId: 'آی دی پرسنلی شما:',
+      staffIdLabel: 'آی دی:',
       reply: 'پاسخ', delete: 'حذف',
       files: 'پیوست‌ها', cancel: 'انصراف',
       writeHere: 'متن پیام را بنویسید...',
@@ -86,6 +95,12 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       compose: 'New Message', search: 'Search...',
       subject: 'Subject', body: 'Message',
       recipients: 'To', send: 'Send',
+      recipientIdPlaceholder: 'Enter the recipient personnel ID',
+      addRecipient: 'Add',
+      recipientNotFound: 'No personnel found with this ID.',
+      recipientSelf: 'You cannot message yourself.',
+      yourId: 'Your personnel ID:',
+      staffIdLabel: 'ID:',
       reply: 'Reply', delete: 'Delete',
       files: 'Attachments', cancel: 'Cancel',
       writeHere: 'Write your message...',
@@ -165,7 +180,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       await sendInternalMessage(newMessage);
       onAfterSend?.(recipientIds, currentUser.fullName, subject);
       setIsComposeOpen(false);
-      setRecipientIds([]); setSubject(''); setBody(''); setAttachments([]);
+      setRecipientIds([]); setRecipientCode(''); setRecipientError(''); setSubject(''); setBody(''); setAttachments([]);
       setActiveTab('sent');
       if (!isMobile) setSelectedMsgId(newMessage.id);
     } catch { alert('خطا در ارسال'); } finally { setIsSending(false); }
@@ -186,6 +201,15 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       : [...(msg.archivedBy || []), currentUser.id];
     updateMessageInCloud(msg.id, { archivedBy: next });
     setSelectedMsgId(null);
+  };
+
+  // Add a recipient by typing their personnel ID (no full company list is shown)
+  const addRecipientByCode = () => {
+    const person = findPersonnelByCode(personnel, recipientCode);
+    if (!person) { setRecipientError(t.recipientNotFound); return; }
+    if (person.id === currentUser.id) { setRecipientError(t.recipientSelf); return; }
+    if (!recipientIds.includes(person.id)) setRecipientIds(prev => [...prev, person.id]);
+    setRecipientCode(''); setRecipientError('');
   };
 
   const handleContactReply = async () => {
@@ -671,20 +695,52 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {/* To */}
+              {/* To — by personnel ID (no full company list shown) */}
               <div className="px-5 py-3 border-b border-gray-100">
                 <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-400 pt-1 shrink-0 w-12 text-left">{t.recipients}</span>
-                  <div className="flex flex-wrap gap-1.5 flex-1">
-                    {personnel.filter(p => p.id !== currentUser.id).map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => setRecipientIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${recipientIds.includes(p.id) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}
-                      >
-                        {p.fullName}
+                  <span className="text-xs text-gray-400 pt-2 shrink-0 w-12 text-left">{t.recipients}</span>
+                  <div className="flex-1 min-w-0">
+                    {/* Added recipients as chips */}
+                    {recipientIds.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {recipientIds.map(id => {
+                          const p = personnel.find(pp => pp.id === id);
+                          if (!p) return null;
+                          return (
+                            <span key={id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
+                              {p.fullName}
+                              <span className="font-mono text-[10px] opacity-80" dir="ltr">{getStaffCode(p)}</span>
+                              <button onClick={() => setRecipientIds(prev => prev.filter(rid => rid !== id))} className="hover:text-white/70">✕</button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {/* ID input */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={recipientCode}
+                        onChange={e => { setRecipientCode(e.target.value); setRecipientError(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRecipientByCode(); } }}
+                        placeholder={t.recipientIdPlaceholder}
+                        dir="ltr"
+                        className="flex-1 min-w-0 text-sm text-gray-800 placeholder-gray-300 border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400"
+                      />
+                      <button type="button" onClick={addRecipientByCode}
+                        className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors shrink-0">
+                        {t.addRecipient}
                       </button>
-                    ))}
+                    </div>
+                    {/* Live resolved-name hint */}
+                    {recipientCode.trim() && !recipientError && (() => {
+                      const match = findPersonnelByCode(personnel, recipientCode);
+                      return match
+                        ? <p className="text-[11px] text-emerald-600 mt-1.5">✓ {match.fullName}</p>
+                        : <p className="text-[11px] text-gray-400 mt-1.5">{t.recipientNotFound}</p>;
+                    })()}
+                    {recipientError && <p className="text-[11px] text-red-500 mt-1.5">{recipientError}</p>}
+                    {/* Your own ID, for sharing with colleagues */}
+                    <p className="text-[10px] text-gray-400 mt-2">{t.yourId} <span className="font-mono text-gray-600" dir="ltr">{getStaffCode(currentUser)}</span></p>
                   </div>
                 </div>
               </div>

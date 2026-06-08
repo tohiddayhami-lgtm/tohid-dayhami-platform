@@ -75,6 +75,7 @@ export interface Personnel {
   reportsTo?: string;
   email: string;
   username: string;
+  staffCode?: string; // dedicated personnel/messaging ID — colleagues use it to message this person
   password?: string;
   avatar?: string; 
   documents?: PersonnelDocument[]; 

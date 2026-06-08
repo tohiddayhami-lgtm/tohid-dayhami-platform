@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Personnel, AppConfig, PersonnelDocument, AttachedFile, Department } from '../types';
 import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, IconUsers, IconMoney, IconBriefcase, IconUpload, IconFile, IconPaperclip, IconLayout, IconInvoice } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
+import { getStaffCode } from '../services/staffId';
 import { Language } from '../App';
 
 // ── Job Description — bilingual structured format ──
@@ -139,6 +140,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [editingDeptName, setEditingDeptName] = useState('');
   const [editingDeptLabel, setEditingDeptLabel] = useState(''); // custom Contact Us label for the department being edited
   const [showRoleManager, setShowRoleManager] = useState(false);
+  const [copiedStaffId, setCopiedStaffId] = useState<string | null>(null);
+  const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
 
   const [formData, setFormData] = useState({
     fullName: '', roles: [] as string[], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
@@ -254,6 +257,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           deleteConfirm: 'آیا از حذف این پرسنل اطمینان دارید؟',
           emailLbl: 'ایمیل:',
           usernameLbl: 'نام کاربری:',
+          staffIdLbl: 'آی دی پرسنلی:',
+          copyId: 'کپی',
+          copiedId: 'کپی شد',
           docsLbl: 'مدارک:'
       },
       en: {
@@ -302,6 +308,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           deleteConfirm: 'Are you sure you want to delete this staff member?',
           emailLbl: 'Email:',
           usernameLbl: 'Username:',
+          staffIdLbl: 'Personnel ID:',
+          copyId: 'Copy',
+          copiedId: 'Copied',
           docsLbl: 'Docs:'
       }
   }[lang];
@@ -927,6 +936,15 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                 </div>
                 <div className="flex justify-between bg-gray-50 px-2 py-1 rounded text-gray-500">
                   <span>{t.usernameLbl}</span><span className="font-mono text-gray-700">{person.username}</span>
+                </div>
+                <div className="flex items-center justify-between bg-indigo-50 px-2 py-1 rounded text-indigo-600">
+                  <span>{t.staffIdLbl}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-indigo-700" dir="ltr">{getStaffCode(person)}</span>
+                    <button type="button" onClick={() => copyStaffId(getStaffCode(person))} className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-white hover:bg-indigo-100 transition-colors">
+                      {copiedStaffId === getStaffCode(person) ? t.copiedId : t.copyId}
+                    </button>
+                  </span>
                 </div>
               </div>
 
