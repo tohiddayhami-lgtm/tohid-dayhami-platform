@@ -255,6 +255,17 @@ export interface ContactReply {
   createdAt: string;
 }
 
+// A referral/forward of a correspondence to other personnel or a department
+export interface MessageReferral {
+  id: string;
+  byId: string;            // who referred it
+  byName: string;
+  toNames: string[];       // personnel names it was referred to
+  departmentName?: string; // department name, if referred to a whole department
+  note?: string;           // optional note from the referrer
+  createdAt: string;
+}
+
 export interface InternalMessage {
   id: string;
   senderId: string;
@@ -273,8 +284,10 @@ export interface InternalMessage {
   contactPhone?: string;            // mobile they registered with — used for recognition & reply lookup
   contactDepartmentId?: string;     // selected department id
   contactDepartmentName?: string;   // selected department name (snapshot)
+  contactTrackingCode?: string;     // human-friendly tracking code for the correspondence (shown in کارتابل & to the customer)
   customerId?: string;              // linked customer record (resolved by phone)
   replies?: ContactReply[];         // staff replies, visible to the customer by name+mobile
+  referrals?: MessageReferral[];    // history of referrals/forwards to other personnel/departments
 }
 
 export interface TaskComment {

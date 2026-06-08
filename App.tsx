@@ -856,6 +856,10 @@ const App: React.FC = () => {
     let recipients = personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
     if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
 
+    // Human-friendly tracking code for the correspondence (e.g. MK-1234-AB7C)
+    const trackingRandom = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const trackingCode = `MK-${phone.slice(-4)}-${trackingRandom}`;
+
     const msg: InternalMessage = {
       id: `contact-${Date.now()}`,
       senderId: '',
@@ -871,8 +875,10 @@ const App: React.FC = () => {
       contactPhone: phone,
       contactDepartmentId: dept.id,
       contactDepartmentName: dept.name,
+      contactTrackingCode: trackingCode,
       customerId,
       replies: [],
+      referrals: [],
     };
     await sendInternalMessage(msg);
   };

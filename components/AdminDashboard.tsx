@@ -2110,7 +2110,7 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}
         {activeTab === 'messages' && <InternalMessenger
-            currentUser={currentUser} personnel={personnel} messages={messages} lang={lang}
+            currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} departments={config.departments || []}
             onAfterSend={async (recipientIds, senderName, subject) => {
               const nc = config.notificationConfig;
               if (!nc?.enabled || !nc.onNewMessage) return;

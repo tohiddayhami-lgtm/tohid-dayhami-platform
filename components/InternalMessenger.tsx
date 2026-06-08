@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { InternalMessage, Personnel, AttachedFile, ContactReply } from '../types';
+import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
@@ -10,10 +10,11 @@ interface Props {
   personnel: Personnel[];
   messages: InternalMessage[];
   lang: Language;
+  departments?: Department[];
   onAfterSend?: (recipientIds: string[], senderName: string, subject: string) => void;
 }
 
-export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, onAfterSend }) => {
+export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend }) => {
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -30,6 +31,13 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   // Inline reply to a customer "Contact Us" message (appended to the message thread)
   const [contactReplyText, setContactReplyText] = useState('');
   const [isReplyingContact, setIsReplyingContact] = useState(false);
+
+  // Refer / forward a correspondence to other personnel or a department
+  const [isReferOpen, setIsReferOpen] = useState(false);
+  const [referPersonnelIds, setReferPersonnelIds] = useState<string[]>([]);
+  const [referDeptId, setReferDeptId] = useState('');
+  const [referNote, setReferNote] = useState('');
+  const [isReferring, setIsReferring] = useState(false);
 
   const isMaster = currentUser.username === 'master';
 
@@ -58,6 +66,18 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       replyPlaceholder: 'پاسخ خود را بنویسید... (مشتری این پاسخ را در صفحه پیگیری می‌بیند)',
       sendReply: 'ارسال پاسخ',
       noReplyYet: 'هنوز پاسخی ثبت نشده است.',
+      trackingCode: 'کد رهگیری:',
+      refer: 'ارجاع',
+      referTitle: 'ارجاع مکاتبه',
+      referToPersonnel: 'ارجاع به پرسنل',
+      referToDept: 'ارجاع به دپارتمان',
+      referDeptPlaceholder: '— انتخاب دپارتمان —',
+      referNotePlaceholder: 'یادداشت (اختیاری)...',
+      referSubmit: 'ثبت ارجاع',
+      referHistory: 'سوابق ارجاع',
+      referredBy: 'ارجاع توسط',
+      referredTo: 'به',
+      referEmpty: 'حداقل یک پرسنل یا دپارتمان را انتخاب کنید.',
     },
     en: {
       inbox: 'Inbox', sent: 'Sent',
@@ -77,6 +97,18 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       replyPlaceholder: 'Write your reply... (the customer sees it on the tracking page)',
       sendReply: 'Send reply',
       noReplyYet: 'No reply yet.',
+      trackingCode: 'Tracking code:',
+      refer: 'Refer',
+      referTitle: 'Refer correspondence',
+      referToPersonnel: 'Refer to personnel',
+      referToDept: 'Refer to a department',
+      referDeptPlaceholder: '— Select a department —',
+      referNotePlaceholder: 'Note (optional)...',
+      referSubmit: 'Submit referral',
+      referHistory: 'Referral history',
+      referredBy: 'Referred by',
+      referredTo: 'to',
+      referEmpty: 'Select at least one staff member or a department.',
     },
   }[lang];
 
@@ -148,6 +180,49 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       setContactReplyText('');
     } catch { alert(lang === 'fa' ? 'خطا در ارسال پاسخ' : 'Failed to send reply'); }
     finally { setIsReplyingContact(false); }
+  };
+
+  // Personnel whose سمت belongs to the given department
+  const deptStaff = (deptId: string): Personnel[] => {
+    const dept = departments.find(d => d.id === deptId);
+    if (!dept) return [];
+    return personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
+  };
+
+  const openRefer = () => { setReferPersonnelIds([]); setReferDeptId(''); setReferNote(''); setIsReferOpen(true); };
+
+  const handleRefer = async () => {
+    if (!selectedMessage) return;
+    const dept = referDeptId ? departments.find(d => d.id === referDeptId) : undefined;
+    const deptIds = referDeptId ? deptStaff(referDeptId).map(p => p.id) : [];
+    const referredIds = Array.from(new Set([...referPersonnelIds, ...deptIds]));
+    if (referredIds.length === 0) { alert(t.referEmpty); return; }
+    setIsReferring(true);
+    try {
+      const nameOf = (id: string) => personnel.find(p => p.id === id)?.fullName || 'Unknown';
+      const referredNames = referredIds.map(nameOf);
+      // Merge referred personnel into the message recipients so it lands in their کارتابل
+      const newRecipientIds = Array.from(new Set([...(selectedMessage.recipientIds || []), ...referredIds]));
+      const newRecipientNames = newRecipientIds.map(nameOf);
+      const referral: MessageReferral = {
+        id: `ref-${Date.now()}`,
+        byId: currentUser.id,
+        byName: currentUser.fullName,
+        toNames: referredNames,
+        departmentName: dept?.name,
+        note: referNote.trim() || undefined,
+        createdAt: new Date().toISOString(),
+      };
+      await updateMessageInCloud(selectedMessage.id, {
+        recipientIds: newRecipientIds,
+        recipientNames: newRecipientNames,
+        referrals: [...(selectedMessage.referrals || []), referral],
+      });
+      // Notify the newly referred personnel (e.g. WhatsApp), reusing the existing pipeline
+      onAfterSend?.(referredIds, currentUser.fullName, selectedMessage.subject);
+      setIsReferOpen(false);
+    } catch { alert(lang === 'fa' ? 'خطا در ثبت ارجاع' : 'Failed to refer'); }
+    finally { setIsReferring(false); }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,6 +340,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                       <div className={`text-xs truncate mb-0.5 ${isUnread ? 'font-medium text-gray-900' : 'text-gray-600'}`}>
                         {msg.subject}
                       </div>
+                      {msg.contactTrackingCode && (
+                        <span className="inline-block text-[9px] font-mono bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded mb-0.5" dir="ltr">{msg.contactTrackingCode}</span>
+                      )}
                       <div className="text-[11px] text-gray-400 truncate leading-relaxed">
                         {msg.body.replace(/\n/g, ' ')}
                       </div>
@@ -313,6 +391,14 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] text-gray-400 hidden sm:inline">{formatFullDate(selectedMessage.createdAt)}</span>
+                  <button
+                    onClick={openRefer}
+                    className="flex items-center gap-1 px-2.5 h-7 rounded-lg border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-colors text-xs font-medium"
+                    title={t.referTitle}
+                  >
+                    <IconArrowRight className="w-3.5 h-3.5 ltr:rotate-180" />
+                    {t.refer}
+                  </button>
                   {isMaster && (
                     <button
                       onClick={() => { if (confirm('پیام حذف شود؟')) { deleteMessageFromCloud(selectedMessage.id); setSelectedMsgId(null); } }}
@@ -330,11 +416,31 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
               {selectedMessage.isCustomerContact && (
                 <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
                   <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{t.contactBadge}</span>
+                  {selectedMessage.contactTrackingCode && <span className="text-xs text-amber-900 font-semibold flex items-center gap-1">{t.trackingCode} <b className="font-mono bg-amber-900 text-white px-1.5 py-0.5 rounded" dir="ltr">{selectedMessage.contactTrackingCode}</b></span>}
                   {selectedMessage.contactDepartmentName && <span className="text-xs text-amber-800">{t.contactDept} <b>{selectedMessage.contactDepartmentName}</b></span>}
                   {selectedMessage.contactPhone && <span className="text-xs text-amber-800" dir="ltr">{t.contactPhone} {selectedMessage.contactPhone}</span>}
                 </div>
               )}
               <p className="text-sm text-gray-800 leading-7 whitespace-pre-wrap break-words">{selectedMessage.body}</p>
+
+              {selectedMessage.referrals && selectedMessage.referrals.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-gray-100">
+                  <p className="text-xs font-medium text-gray-500 mb-3 flex items-center gap-1.5"><IconArrowRight className="w-3.5 h-3.5 ltr:rotate-180" />{t.referHistory}</p>
+                  <div className="space-y-2">
+                    {selectedMessage.referrals.map(r => (
+                      <div key={r.id} className="bg-blue-50/60 border border-blue-100 rounded-xl px-3 py-2">
+                        <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                          <span className="text-[11px] text-blue-800">
+                            <b>{r.byName}</b> {t.referredTo}: {r.departmentName ? <b>{r.departmentName}</b> : r.toNames.join('، ')}
+                          </span>
+                          <span className="text-[10px] text-gray-400" dir="ltr">{formatFullDate(r.createdAt)}</span>
+                        </div>
+                        {r.note && <p className="text-xs text-gray-700 whitespace-pre-wrap break-words">{r.note}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {selectedMessage.isCustomerContact && (
                 <div className="mt-6 pt-5 border-t border-gray-100">
@@ -423,6 +529,80 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
           </div>
         )}
       </div>
+
+      {/* ── Refer / Forward Modal ── */}
+      {isReferOpen && selectedMessage && (
+        <div
+          className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm"
+          onClick={() => setIsReferOpen(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[80vh] overflow-hidden border border-gray-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+              <h3 className="text-sm font-semibold text-gray-900">{t.referTitle}</h3>
+              <button onClick={() => setIsReferOpen(false)} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 text-xs transition-colors">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Refer to a department */}
+              {departments.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">{t.referToDept}</label>
+                  <select
+                    value={referDeptId}
+                    onChange={e => setReferDeptId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none focus:border-blue-400"
+                  >
+                    <option value="">{t.referDeptPlaceholder}</option>
+                    {departments.map(d => <option key={d.id} value={d.id}>{d.name} ({deptStaff(d.id).length})</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Refer to specific personnel */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">{t.referToPersonnel}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {personnel.filter(p => p.id !== currentUser.id).map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setReferPersonnelIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${referPersonnelIds.includes(p.id) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}
+                    >
+                      {p.fullName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional note */}
+              <div>
+                <textarea
+                  value={referNote}
+                  onChange={e => setReferNote(e.target.value)}
+                  rows={2}
+                  placeholder={t.referNotePlaceholder}
+                  className="w-full text-sm text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:border-blue-400 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
+              <button onClick={() => setIsReferOpen(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors">{t.cancel}</button>
+              <button
+                onClick={handleRefer}
+                disabled={isReferring || (referPersonnelIds.length === 0 && !referDeptId)}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-500 text-white rounded-xl text-xs font-medium hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isReferring ? <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" /> : <IconArrowRight className="w-3.5 h-3.5 ltr:rotate-180" />}
+                {t.referSubmit}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Compose Modal ── */}
       {isComposeOpen && (

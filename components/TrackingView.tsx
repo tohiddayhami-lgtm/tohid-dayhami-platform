@@ -86,6 +86,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       contactReplies: 'پاسخ‌ها',
       contactNoReply: 'هنوز پاسخی ثبت نشده است.',
       contactYou: 'شما',
+      contactTracking: 'کد رهگیری مکاتبه:',
     },
     en: {
       trackTab: 'Track by ID', recoverTab: 'Recover Tracking ID',
@@ -123,6 +124,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       contactReplies: 'Replies',
       contactNoReply: 'No reply yet.',
       contactYou: 'You',
+      contactTracking: 'Correspondence tracking code:',
     },
   }[lang];
 
@@ -601,8 +603,13 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
               <div className="space-y-3 animate-fade-in">
                 {contactThreads.map(m => (
                   <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-gray-700">{m.contactDepartmentName || ''}</span>
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-gray-700">{m.contactDepartmentName || ''}</span>
+                        {m.contactTrackingCode && (
+                          <span className="text-[10px] font-mono bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr" title={t.contactTracking}>{m.contactTrackingCode}</span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-gray-400" dir="ltr">{new Date(m.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
                     </div>
                     {/* Customer's original message */}
