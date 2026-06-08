@@ -15,7 +15,7 @@ interface Props {
 }
 
 export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend }) => {
-  const [activeTab, setActiveTab] = useState<'inbox' | 'sent'>('inbox');
+  const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'contacts'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,7 +49,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
 
   const t = {
     fa: {
-      inbox: 'صندوق ورودی', sent: 'ارسال‌شده',
+      inbox: 'صندوق ورودی', sent: 'ارسال‌شده', allContacts: 'همه مکاتبات',
       compose: 'پیام جدید', search: 'جستجو...',
       subject: 'موضوع', body: 'متن پیام',
       recipients: 'گیرندگان', send: 'ارسال',
@@ -80,7 +80,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       referEmpty: 'حداقل یک پرسنل یا دپارتمان را انتخاب کنید.',
     },
     en: {
-      inbox: 'Inbox', sent: 'Sent',
+      inbox: 'Inbox', sent: 'Sent', allContacts: 'All correspondence',
       compose: 'New Message', search: 'Search...',
       subject: 'Subject', body: 'Message',
       recipients: 'To', send: 'Send',
@@ -115,13 +115,19 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   const filteredMessages = useMemo(() => {
     let list = activeTab === 'inbox'
       ? messages.filter(m => m.recipientIds.includes(currentUser.id))
-      : messages.filter(m => m.senderId === currentUser.id);
+      : activeTab === 'sent'
+      ? messages.filter(m => m.senderId === currentUser.id)
+      // Master-only: every customer correspondence in the system (even if not a recipient)
+      : messages.filter(m => m.isCustomerContact);
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       list = list.filter(m =>
         m.subject.toLowerCase().includes(term) ||
         m.body.toLowerCase().includes(term) ||
-        m.senderName.toLowerCase().includes(term)
+        m.senderName.toLowerCase().includes(term) ||
+        (m.contactTrackingCode || '').toLowerCase().includes(term) ||
+        (m.contactPhone || '').includes(term) ||
+        (m.contactDepartmentName || '').toLowerCase().includes(term)
       );
     }
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -263,7 +269,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
         <div className="px-4 pt-4 pb-3 border-b border-gray-200 bg-white shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-gray-900">
-              {activeTab === 'inbox' ? t.inbox : t.sent}
+              {activeTab === 'inbox' ? t.inbox : activeTab === 'sent' ? t.sent : t.allContacts}
               {activeTab === 'inbox' && unreadCount > 0 && (
                 <span className="mr-2 text-[11px] font-medium bg-blue-500 text-white rounded-full px-1.5 py-0.5">{unreadCount}</span>
               )}
@@ -293,6 +299,15 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
               <IconSend className="w-3.5 h-3.5" />
               {t.sent}
             </button>
+            {isMaster && (
+              <button
+                onClick={() => { setActiveTab('contacts'); setSelectedMsgId(null); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'contacts' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <IconMail className="w-3.5 h-3.5" />
+                {t.allContacts}
+              </button>
+            )}
           </div>
 
           {/* Search */}
@@ -327,13 +342,13 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                   >
                     {/* Avatar */}
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5 ${isUnread ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      {activeTab === 'inbox' ? getInitial(msg.senderName) : getInitial(currentUser.fullName)}
+                      {activeTab === 'sent' ? getInitial(currentUser.fullName) : getInitial(msg.senderName)}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2 mb-0.5">
                         <span className={`text-xs truncate ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-600'}`}>
-                          {activeTab === 'inbox' ? msg.senderName : msg.recipientNames.join('، ')}
+                          {activeTab === 'sent' ? msg.recipientNames.join('، ') : msg.senderName}
                         </span>
                         <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{formatDate(msg.createdAt)}</span>
                       </div>
