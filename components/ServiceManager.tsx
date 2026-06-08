@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { ServiceOption, Currency, SubService } from '../types';
+import { ServiceOption, Currency, SubService, AppConfig } from '../types';
 import { IconPlus, IconEdit, IconTrash, IconCheck, IconFileText, IconCopy } from './Icons';
 import { Language } from '../App';
 
@@ -9,6 +9,7 @@ interface Props {
   onUpdate: (services: ServiceOption[]) => void;
   readonly?: boolean;
   lang: Language;
+  config?: AppConfig;
 }
 
 const CURRENCIES: Currency[] = ['IRR', 'OMR', 'USD'];
@@ -21,7 +22,9 @@ const blankForm = (): Partial<ServiceOption> => ({
 
 const blankSub = () => ({ title: '', titleEn: '', amount: 0, currency: 'OMR' as Currency });
 
-export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly = false, lang }) => {
+export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly = false, lang, config }) => {
+  const departments = config?.departments || [];
+  const roles = config?.personnelRoles || [];
   // which card is open
   const [openId,      setOpenId]      = useState<string | null>(null);
   // which service is in edit mode (null = add-new panel)
@@ -81,6 +84,8 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
         price: form.price,
         isActive: form.isActive ?? true,
         subServices: form.subServices || [],
+        routeDepartmentId: form.routeDepartmentId,
+        routePosition: form.routePosition,
       };
       onUpdate([...services, svc]);
       setOpenId(svc.id);
@@ -135,6 +140,37 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
     onUpdate(services.map(s =>
       s.id === svcId ? { ...s, subServices: s.subServices?.filter(sb => sb.id !== subId) } : s
     ));
+
+  // Update a sub-service's routing fields directly
+  const updateSubService = (svcId: string, subId: string, patch: Partial<SubService>) =>
+    onUpdate(services.map(s =>
+      s.id === svcId ? { ...s, subServices: s.subServices?.map(sb => sb.id === subId ? { ...sb, ...patch } : sb) } : s
+    ));
+
+  // Reusable routing picker: department + position selects, mutually exclusive (position wins).
+  const RoutingSelects = ({ deptId, position, onChange }: { deptId?: string; position?: string; onChange: (patch: { routeDepartmentId?: string; routePosition?: string }) => void }) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <select
+        className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white outline-none focus:border-indigo-400 max-w-[160px]"
+        value={deptId || ''}
+        onChange={e => onChange({ routeDepartmentId: e.target.value || undefined, routePosition: undefined })}
+        title="ارجاع به دپارتمان"
+      >
+        <option value="">— دپارتمان —</option>
+        {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+      </select>
+      <span className="text-[10px] text-gray-300">یا</span>
+      <select
+        className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white outline-none focus:border-indigo-400 max-w-[160px]"
+        value={position || ''}
+        onChange={e => onChange({ routePosition: e.target.value || undefined, routeDepartmentId: undefined })}
+        title="ارجاع به سمت"
+      >
+        <option value="">— سمت —</option>
+        {roles.map(r => <option key={r} value={r}>{r}</option>)}
+      </select>
+    </div>
+  );
 
   // ── export ────────────────────────────────────────────────────────────────
   const exportJSON = () => {
@@ -524,6 +560,13 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
                         <input type="checkbox" className="w-4 h-4 rounded accent-indigo-600" checked={form.isActive??true} onChange={e=>setForm(p=>({...p,isActive:e.target.checked}))}/>
                         <span className="text-sm text-gray-700">نمایش در فرم مشتری (فعال)</span>
                       </label>
+                      <Field label="ارجاع خودکار درخواست‌های این خدمت">
+                        <RoutingSelects
+                          deptId={form.routeDepartmentId}
+                          position={form.routePosition}
+                          onChange={patch => setForm(p => ({ ...p, ...patch }))}
+                        />
+                      </Field>
                       <div className="flex gap-2">
                         <button type="button" onClick={cancelEdit} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl">انصراف</button>
                         <button type="submit" className="px-5 py-2 text-sm font-bold bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-200 hover:bg-indigo-700 flex items-center gap-1.5"><IconCheck className="w-4 h-4"/>ذخیره تغییرات</button>
@@ -544,26 +587,38 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
                             <div className="text-xs text-gray-300 italic">زیرمجموعه‌ای ثبت نشده</div>
                           )}
                           {(svc.subServices||[]).map(sub => (
-                            <div key={sub.id} className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"/>
-                                <span className="text-sm font-medium text-gray-700">{sub.title}</span>
-                                {sub.titleEn && sub.titleEn !== sub.title && (
-                                  <span className="text-[10px] text-gray-400 dir-ltr">{sub.titleEn}</span>
-                                )}
+                            <div key={sub.id} className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0"/>
+                                  <span className="text-sm font-medium text-gray-700">{sub.title}</span>
+                                  {sub.titleEn && sub.titleEn !== sub.title && (
+                                    <span className="text-[10px] text-gray-400 dir-ltr">{sub.titleEn}</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {sub.price && sub.price.amount > 0 && (
+                                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                                      {fmtPrice(sub.price.amount, sub.price.currency)}
+                                    </span>
+                                  )}
+                                  {!readonly && (
+                                    <button onClick={() => removeSubService(svc.id, sub.id)} className="p-1 text-red-400 hover:bg-red-50 rounded-lg">
+                                      <IconTrash className="w-3.5 h-3.5"/>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {sub.price && sub.price.amount > 0 && (
-                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                                    {fmtPrice(sub.price.amount, sub.price.currency)}
-                                  </span>
-                                )}
-                                {!readonly && (
-                                  <button onClick={() => removeSubService(svc.id, sub.id)} className="p-1 text-red-400 hover:bg-red-50 rounded-lg">
-                                    <IconTrash className="w-3.5 h-3.5"/>
-                                  </button>
-                                )}
-                              </div>
+                              {!readonly && (departments.length > 0 || roles.length > 0) && (
+                                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                                  <span className="text-[10px] text-gray-400 shrink-0">ارجاع:</span>
+                                  <RoutingSelects
+                                    deptId={sub.routeDepartmentId}
+                                    position={sub.routePosition}
+                                    onChange={patch => updateSubService(svc.id, sub.id, patch)}
+                                  />
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

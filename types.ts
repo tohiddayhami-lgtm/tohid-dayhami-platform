@@ -30,6 +30,8 @@ export interface SubService {
   title: string;
   titleEn?: string;
   price?: Price;
+  routeDepartmentId?: string; // auto-route requests of this sub-service to a department
+  routePosition?: string;     // auto-route requests of this sub-service to a position/سمت (takes priority over department)
 }
 
 export interface ServiceOption {
@@ -43,6 +45,8 @@ export interface ServiceOption {
   isActive: boolean;
   subServices?: SubService[];
   defaultCommission?: number;
+  routeDepartmentId?: string; // auto-route requests of this service to a department
+  routePosition?: string;     // auto-route requests of this service to a position/سمت (takes priority over department)
 }
 
 export interface PersonnelPermissions {

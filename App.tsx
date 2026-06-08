@@ -589,15 +589,60 @@ const App: React.FC = () => {
     return undefined;
   }, [appConfig.assignmentConfig, personnel, tickets, services]);
 
+  // Eligible active staff for a routing target (position takes priority over department)
+  const eligibleForRouting = useCallback((routePosition?: string, routeDepartmentId?: string): Personnel[] => {
+    if (routePosition) {
+      const nr = normalizeRoleName(routePosition);
+      return personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => normalizeRoleName(r) === nr));
+    }
+    if (routeDepartmentId) {
+      const dept = (appConfig.departments || []).find(d => d.id === routeDepartmentId);
+      if (!dept) return [];
+      const positions = dept.positions || [];
+      return personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => positions.includes(r)));
+    }
+    return [];
+  }, [personnel, appConfig.departments]);
+
+  const pickLeastLoaded = useCallback((eligible: Personnel[]): string | undefined => {
+    if (eligible.length === 0) return undefined;
+    if (eligible.length === 1) return eligible[0].id;
+    const wl = eligible.map(s => ({ id: s.id, count: tickets.filter(t => t.assignedTo === s.id && t.status !== TicketStatus.COMPLETED && t.status !== TicketStatus.CANCELLED).length }));
+    wl.sort((a, b) => a.count - b.count);
+    return wl[0].id;
+  }, [tickets]);
+
+  // Per-service / per-sub-service routing configured in the Services & Tariffs section.
+  // Sub-service routing takes priority over the service-level routing.
+  const resolveServiceRouting = useCallback((ticket: Ticket): string | undefined => {
+    const service = services.find(s => s.id === ticket.serviceId || s.title === ticket.serviceId || s.titleEn === ticket.serviceId || s.title.includes(ticket.serviceId));
+    if (!service) return undefined;
+    for (const subId of (ticket.selectedSubServices || [])) {
+      const sub = service.subServices?.find(ss => ss.id === subId);
+      if (sub && (sub.routePosition || sub.routeDepartmentId)) {
+        const pick = pickLeastLoaded(eligibleForRouting(sub.routePosition, sub.routeDepartmentId));
+        if (pick) return pick;
+      }
+    }
+    if (service.routePosition || service.routeDepartmentId) {
+      const pick = pickLeastLoaded(eligibleForRouting(service.routePosition, service.routeDepartmentId));
+      if (pick) return pick;
+    }
+    return undefined;
+  }, [services, eligibleForRouting, pickLeastLoaded]);
+
   useEffect(() => {
-    if (!currentUser || !appConfig.assignmentConfig || appConfig.assignmentConfig.mode === 'manual') return;
+    if (!currentUser) return;
     const isAuthorized = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
     if (!isAuthorized) return;
     const unassigned = tickets.filter(t => !t.assignedTo && t.status !== TicketStatus.CANCELLED && t.status !== TicketStatus.COMPLETED);
     if (unassigned.length === 0) return;
+    const autoMode = !!appConfig.assignmentConfig && appConfig.assignmentConfig.mode !== 'manual';
     const processAssignments = async () => {
       for (const ticket of unassigned) {
-        const assigneeId = calculateAssignee(ticket.serviceId);
+        // Service/sub-service routing first; fall back to the global assignment config (if not manual)
+        let assigneeId = resolveServiceRouting(ticket);
+        if (!assigneeId && autoMode) assigneeId = calculateAssignee(ticket.serviceId);
         if (assigneeId) {
           const assignee = personnel.find(p => p.id === assigneeId);
           if (assignee) {
@@ -607,7 +652,7 @@ const App: React.FC = () => {
       }
     };
     processAssignments();
-  }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, personnel]);
+  }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, resolveServiceRouting, personnel]);
 
   // Returns the best fallback assignee: prefers managers who have WhatsApp notification set up
   const getCeoFallbackId = (): string | undefined => {
