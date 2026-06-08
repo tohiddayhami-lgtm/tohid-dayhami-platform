@@ -8,6 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
+import { ContactPopup } from './components/ContactPopup';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
@@ -169,6 +170,7 @@ const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [preSelectedServiceId, setPreSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId,    setExpandedServiceId]    = useState<string | null>(null);
+  const [showContactPopup,     setShowContactPopup]     = useState(false);
   // Reads from ?form= (social media links) OR #/f/ (internal nav), synchronously on first render
   const [customFormId, setCustomFormId] = useState<string | null>(extractFormId);
   const [lang, setLang] = useState<Language>('fa');
@@ -1032,6 +1034,13 @@ const App: React.FC = () => {
                     >
                       {t.trackBtn}
                     </button>
+                    <button
+                      onClick={() => setShowContactPopup(true)}
+                      className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <IconMessageSquare className="w-4 h-4" />
+                      {lang === 'fa' ? 'مکاتبه با ما' : 'Contact Us'}
+                    </button>
                   </div>
                   </div>{/* end z-index wrapper */}
                 </section>
@@ -1233,6 +1242,26 @@ const App: React.FC = () => {
 
                 {appConfig.featuredBusinesses && appConfig.featuredBusinesses.length > 0 && (
                   <FeaturedBusinesses businesses={appConfig.featuredBusinesses} lang={lang} />
+                )}
+
+                {/* ── Floating "Contact Us" button ── */}
+                <button
+                  onClick={() => setShowContactPopup(true)}
+                  className="fixed bottom-5 ltr:right-5 rtl:left-5 z-[150] flex items-center gap-2 pl-4 pr-5 py-3 bg-gray-900 text-white rounded-full shadow-lg shadow-gray-900/20 hover:bg-black hover:shadow-xl transition-all animate-fade-in group"
+                  title={lang === 'fa' ? 'مکاتبه با ما' : 'Contact Us'}
+                >
+                  <IconMessageSquare className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="text-sm font-semibold whitespace-nowrap">{lang === 'fa' ? 'مکاتبه با ما' : 'Contact Us'}</span>
+                </button>
+
+                {showContactPopup && (
+                  <ContactPopup
+                    config={appConfig}
+                    lang={lang}
+                    onContactSubmit={handleContactSubmit}
+                    lookupContactMessages={lookupContactMessages}
+                    onClose={() => setShowContactPopup(false)}
+                  />
                 )}
               </div>
             )}
