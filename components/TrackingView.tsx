@@ -11,12 +11,13 @@ interface Props {
   lang: Language;
   config?: AppConfig;
   onCustomerUpload?: (ticketId: string, message: string, files: AttachedFile[]) => Promise<void>;
-  onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<void>;
+  onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<string | void>;
   lookupContactMessages?: (name: string, phone: string) => InternalMessage[];
+  lookupContactByCode?: (code: string) => InternalMessage | null;
   openContactTick?: number; // bumped by the parent to switch to the "Contact Us" tab
 }
 
-export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, openContactTick }) => {
+export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, lookupContactByCode, openContactTick }) => {
   const [tab, setTab] = useState<'track' | 'recover' | 'contact'>('track');
 
   // When the parent requests the Contact Us tab (e.g. from the header nav), switch to it
@@ -28,6 +29,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
   const [recoverName, setRecoverName] = useState('');
   const [recoverPhone, setRecoverPhone] = useState('');
   const [recoveredTickets, setRecoveredTickets] = useState<Ticket[] | null>(null);
+  const [recoveredContacts, setRecoveredContacts] = useState<InternalMessage[] | null>(null);
   const [recoverError, setRecoverError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -46,7 +48,9 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [contactError, setContactError] = useState('');
   const [contactSuccess, setContactSuccess] = useState(false);
+  const [sentTrackingCode, setSentTrackingCode] = useState('');
   const [contactThreads, setContactThreads] = useState<InternalMessage[] | null>(null);
+  const [foundContact, setFoundContact] = useState<InternalMessage | null>(null); // correspondence found by code in the track tab
 
   // Only departments the master has chosen to expose in the Contact Us form (undefined = shown, for backward compatibility)
   const departments = (config?.departments || []).filter(d => d.showInContact !== false);
@@ -58,14 +62,15 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     fa: {
       trackTab: 'پیگیری با کد رهگیری', recoverTab: 'بازیابی کد رهگیری',
       trackTitle: 'پیگیری وضعیت درخواست',
-      trackDesc: 'کد رهگیری را که هنگام ثبت دریافت کردید وارد کنید.',
-      placeholder: 'کد رهگیری — مثال: EXP-4829', search: 'جستجو',
+      trackDesc: 'کد رهگیری پرونده یا کد رهگیری مکاتبه (MK-...) را وارد کنید.',
+      placeholder: 'کد رهگیری — مثال: EXP-4829 یا MK-1234-AB7C', search: 'جستجو',
       notFound: 'درخواستی با این کد یافت نشد.',
       recoverTitle: 'بازیابی کد رهگیری',
       recoverDesc: 'نام و شماره موبایلی که هنگام ثبت درخواست وارد کردید را بنویسید.',
       namePlaceholder: 'نام و نام خانوادگی', phonePlaceholder: 'شماره موبایل — مثال: 09120000000',
       recoverBtn: 'بازیابی', recoverNotFound: 'درخواستی با این مشخصات یافت نشد.',
       recoverFound: 'کدهای رهگیری شما:', copy: 'کپی', copied: 'کپی شد',
+      recoverTypeRequest: 'درخواست', recoverTypeContact: 'مکاتبه',
       number: 'شماره پرونده', applicant: 'متقاضی', service: 'سرویس',
       date: 'تاریخ ثبت', priority: 'اولویت', files: 'فایل‌های پیوست',
       steps: ['ثبت درخواست', 'ارزیابی اولیه', 'در دست اقدام', 'تکمیل شد'],
@@ -92,18 +97,22 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       contactNoReply: 'هنوز پاسخی ثبت نشده است.',
       contactYou: 'شما',
       contactTracking: 'کد رهگیری مکاتبه:',
+      contactTrackHint: 'این کد را نگه دارید؛ از همین بخش «پیگیری پرونده» می‌توانید با وارد کردن آن، پاسخ‌های مکاتبه را ببینید.',
+      trackContactTitle: 'مکاتبه شما',
+      trackContactNotFound: 'مکاتبه‌ای با این کد رهگیری یافت نشد.',
     },
     en: {
       trackTab: 'Track by ID', recoverTab: 'Recover Tracking ID',
       trackTitle: 'Track Your Request',
-      trackDesc: 'Enter the tracking ID you received when submitting your request.',
-      placeholder: 'Tracking ID — e.g. EXP-4829', search: 'Search',
+      trackDesc: 'Enter a case tracking ID or a correspondence code (MK-...).',
+      placeholder: 'Tracking ID — e.g. EXP-4829 or MK-1234-AB7C', search: 'Search',
       notFound: 'No application found with this ID.',
       recoverTitle: 'Recover Tracking ID',
       recoverDesc: 'Enter the name and phone number you used when submitting your request.',
       namePlaceholder: 'Full Name', phonePlaceholder: 'Phone Number — e.g. +1 555 000 0000',
       recoverBtn: 'Recover', recoverNotFound: 'No requests found with these details.',
-      recoverFound: 'Your tracking IDs:', copy: 'Copy', copied: 'Copied',
+      recoverFound: 'Your tracking codes:', copy: 'Copy', copied: 'Copied',
+      recoverTypeRequest: 'Request', recoverTypeContact: 'Correspondence',
       number: 'Case ID', applicant: 'Applicant', service: 'Service',
       date: 'Date', priority: 'Priority', files: 'Attachments',
       steps: ['Submitted', 'Under Review', 'In Progress', 'Completed'],
@@ -130,6 +139,9 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       contactNoReply: 'No reply yet.',
       contactYou: 'You',
       contactTracking: 'Correspondence tracking code:',
+      contactTrackHint: 'Keep this code. You can view the replies anytime from the "Track" tab by entering it.',
+      trackContactTitle: 'Your correspondence',
+      trackContactNotFound: 'No correspondence found with this tracking code.',
     },
   }[lang];
 
@@ -137,6 +149,16 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     e.preventDefault();
     const clean = searchId.trim();
     if (!clean) return;
+
+    // Correspondence tracking code (MK-...) → look up the conversation instead of a ticket
+    if (/^mk-/i.test(clean) && lookupContactByCode) {
+      const msg = lookupContactByCode(clean);
+      setFoundTicket(null);
+      if (msg) { setFoundContact(msg); setTrackError(''); }
+      else { setFoundContact(null); setTrackError(t.trackContactNotFound); }
+      return;
+    }
+    setFoundContact(null);
 
     // Try local list first (instant if already loaded)
     const local = tickets.find(tk =>
@@ -175,8 +197,12 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       const tPhone = (tk.phoneNumber  || '').replace(/\D/g, '');
       return tName === name && (tPhone === phone || tPhone.endsWith(phone) || phone.endsWith(tPhone));
     });
-    if (found.length > 0) { setRecoveredTickets(found); setRecoverError(''); }
-    else { setRecoveredTickets(null); setRecoverError(t.recoverNotFound); }
+    // Also recover the customer's correspondences (Contact Us messages) by name + mobile
+    const contacts = lookupContactMessages ? lookupContactMessages(recoverName, recoverPhone).filter(m => m.contactTrackingCode) : [];
+    setRecoveredTickets(found);
+    setRecoveredContacts(contacts);
+    if (found.length === 0 && contacts.length === 0) setRecoverError(t.recoverNotFound);
+    else setRecoverError('');
   };
 
   const copyId = (id: string) => {
@@ -194,10 +220,10 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     setContactError('');
     setContactSuccess(false);
     try {
-      await onContactSubmit({ name: contactName.trim(), phone: contactPhone.trim(), departmentId: contactDept, message: contactMessage.trim() });
+      const code = await onContactSubmit({ name: contactName.trim(), phone: contactPhone.trim(), departmentId: contactDept, message: contactMessage.trim() });
       setContactMessage('');
+      setSentTrackingCode(typeof code === 'string' ? code : '');
       setContactSuccess(true);
-      setTimeout(() => setContactSuccess(false), 6000);
       // Show the customer their conversation thread (including the message just sent)
       setTimeout(() => { if (lookupContactMessages) setContactThreads(lookupContactMessages(contactName, contactPhone)); }, 400);
     } catch {
@@ -282,6 +308,53 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-gray-400 transition-colors";
 
+  // One correspondence thread (original message + staff replies) — shared by the Contact tab and the Track-by-code result
+  const renderThread = (m: InternalMessage) => (
+    <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-gray-700">{m.contactDepartmentName || ''}</span>
+          {m.contactTrackingCode && (
+            <span className="text-[10px] font-mono bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr" title={t.contactTracking}>{m.contactTrackingCode}</span>
+          )}
+        </div>
+        <span className="text-[10px] text-gray-400" dir="ltr">{new Date(m.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
+      </div>
+      {/* Customer's original message */}
+      <div className="px-4 py-3">
+        <div className="flex items-start gap-2">
+          <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(m.contactName || t.contactYou).charAt(0)}</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-medium text-gray-500 mb-0.5">{t.contactYou}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{m.body}</p>
+          </div>
+        </div>
+      </div>
+      {/* Replies */}
+      <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+        <p className="text-[11px] font-semibold text-gray-400 mb-2 flex items-center gap-1"><IconReply className="w-3 h-3" />{t.contactReplies}</p>
+        {(!m.replies || m.replies.length === 0) ? (
+          <p className="text-xs text-gray-400">{t.contactNoReply}</p>
+        ) : (
+          <div className="space-y-2">
+            {m.replies.map(r => (
+              <div key={r.id} className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(r.authorName || '?').charAt(0)}</div>
+                <div className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                    <span className="text-[11px] font-medium text-emerald-700">{r.authorName}</span>
+                    <span className="text-[10px] text-gray-400" dir="ltr">{new Date(r.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{r.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-2xl mx-auto pb-16 animate-fade-in">
 
@@ -289,7 +362,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       <div className="flex border-b border-gray-200 mb-7 gap-6">
         {(['track', 'recover', 'contact'] as const).map((tabId) => (
           <button key={tabId}
-            onClick={() => { setTab(tabId); setFoundTicket(null); setTrackError(''); setRecoveredTickets(null); setRecoverError(''); }}
+            onClick={() => { setTab(tabId); setFoundTicket(null); setTrackError(''); setRecoveredTickets(null); setRecoveredContacts(null); setRecoverError(''); setFoundContact(null); }}
             className={`py-3 px-0.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${tab === tabId ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
             {tabId === 'track' ? <><IconSearch className="w-3.5 h-3.5" />{t.trackTab}</>
@@ -500,6 +573,21 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
               })()}
             </div>
           )}
+
+          {/* Correspondence found by tracking code (MK-...) */}
+          {foundContact && (
+            <div className="space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><IconMail className="w-4 h-4 text-gray-400" />{t.trackContactTitle}</p>
+                <button type="button"
+                  onClick={() => { if (lookupContactByCode) setFoundContact(lookupContactByCode(searchId.trim())); }}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+                  <IconSearch className="w-3.5 h-3.5" />{t.contactLookup}
+                </button>
+              </div>
+              {renderThread(foundContact)}
+            </div>
+          )}
         </>
       )}
 
@@ -520,15 +608,20 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
 
           {recoverError && <p className="text-xs text-red-500">{recoverError}</p>}
 
-          {recoveredTickets && recoveredTickets.length > 0 && (
+          {((recoveredTickets && recoveredTickets.length > 0) || (recoveredContacts && recoveredContacts.length > 0)) && (
             <div className="animate-fade-in space-y-2">
               <p className="text-xs font-semibold text-gray-500 mb-3">{t.recoverFound}</p>
-              {recoveredTickets
+
+              {/* Case requests */}
+              {(recoveredTickets || [])
                 .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                 .map(tk => (
                 <div key={tk.id} className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <span className="font-mono text-sm font-bold text-gray-900 tracking-wide">{tk.id}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">{t.recoverTypeRequest}</span>
+                      <span className="font-mono text-sm font-bold text-gray-900 tracking-wide" dir="ltr">{tk.id}</span>
+                    </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {serviceTitle(tk.serviceId)} · {new Date(tk.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}
                     </p>
@@ -545,7 +638,38 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                       {copiedId === tk.id ? t.copied : t.copy}
                     </button>
                     <button
-                      onClick={() => { setTab('track'); setSearchId(tk.id); setFoundTicket(tk); }}
+                      onClick={() => { setTab('track'); setSearchId(tk.id); setFoundTicket(tk); setFoundContact(null); }}
+                      className="text-xs font-medium px-2.5 py-1 rounded-lg bg-gray-900 text-white hover:bg-black transition-colors">
+                      {t.viewTicket}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Correspondences */}
+              {(recoveredContacts || [])
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .map(m => (
+                <div key={m.id} className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">{t.recoverTypeContact}</span>
+                      <span className="font-mono text-sm font-bold text-gray-900 tracking-wide" dir="ltr">{m.contactTrackingCode}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {m.contactDepartmentName || ''} · {new Date(m.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {m.replies && m.replies.length > 0 && (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">{m.replies.length} {t.contactReplies}</span>
+                    )}
+                    <button onClick={() => copyId(m.contactTrackingCode || '')}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${copiedId === m.contactTrackingCode ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                      {copiedId === m.contactTrackingCode ? t.copied : t.copy}
+                    </button>
+                    <button
+                      onClick={() => { setTab('track'); setSearchId(m.contactTrackingCode || ''); setFoundContact(m); setFoundTicket(null); }}
                       className="text-xs font-medium px-2.5 py-1 rounded-lg bg-gray-900 text-white hover:bg-black transition-colors">
                       {t.viewTicket}
                     </button>
@@ -583,9 +707,24 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                 placeholder={t.contactMsgPlaceholder} className={inputCls} />
               {contactError && <p className="text-xs text-red-500">{contactError}</p>}
               {contactSuccess && (
-                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm animate-fade-in">
-                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><IconCheck className="w-3.5 h-3.5" /></span>
-                  <span>{t.contactSent}</span>
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm animate-fade-in">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><IconCheck className="w-3.5 h-3.5" /></span>
+                    <span>{t.contactSent}</span>
+                  </div>
+                  {sentTrackingCode && (
+                    <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs text-emerald-800">{t.contactTracking}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold bg-emerald-600 text-white px-2 py-1 rounded" dir="ltr">{sentTrackingCode}</span>
+                        <button type="button" onClick={() => copyId(sentTrackingCode)}
+                          className="text-xs font-medium px-2 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors">
+                          {copiedId === sentTrackingCode ? t.copied : t.copy}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-emerald-700/80 mt-2">{t.contactTrackHint}</p>
                 </div>
               )}
               <button type="submit" disabled={contactSubmitting}
@@ -615,51 +754,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
 
             {contactThreads && contactThreads.length > 0 && (
               <div className="space-y-3 animate-fade-in">
-                {contactThreads.map(m => (
-                  <div key={m.id} className="border border-gray-200 rounded-2xl overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-700">{m.contactDepartmentName || ''}</span>
-                        {m.contactTrackingCode && (
-                          <span className="text-[10px] font-mono bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr" title={t.contactTracking}>{m.contactTrackingCode}</span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-gray-400" dir="ltr">{new Date(m.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
-                    </div>
-                    {/* Customer's original message */}
-                    <div className="px-4 py-3">
-                      <div className="flex items-start gap-2">
-                        <div className="w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(m.contactName || t.contactYou).charAt(0)}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-gray-500 mb-0.5">{t.contactYou}</p>
-                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{m.body}</p>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Replies */}
-                    <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-                      <p className="text-[11px] font-semibold text-gray-400 mb-2 flex items-center gap-1"><IconReply className="w-3 h-3" />{t.contactReplies}</p>
-                      {(!m.replies || m.replies.length === 0) ? (
-                        <p className="text-xs text-gray-400">{t.contactNoReply}</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {m.replies.map(r => (
-                            <div key={r.id} className="flex items-start gap-2">
-                              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{(r.authorName || '?').charAt(0)}</div>
-                              <div className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl px-3 py-2">
-                                <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                                  <span className="text-[11px] font-medium text-emerald-700">{r.authorName}</span>
-                                  <span className="text-[10px] text-gray-400" dir="ltr">{new Date(r.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US')}</span>
-                                </div>
-                                <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{r.body}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {contactThreads.map(m => renderThread(m))}
               </div>
             )}
           </div>

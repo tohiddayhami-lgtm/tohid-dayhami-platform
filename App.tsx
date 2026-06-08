@@ -882,6 +882,14 @@ const App: React.FC = () => {
       referrals: [],
     };
     await sendInternalMessage(msg);
+    return trackingCode;
+  };
+
+  // Customer looks up a single correspondence by its tracking code (MK-...)
+  const lookupContactByCode = (code: string): InternalMessage | null => {
+    const c = code.trim().toUpperCase();
+    if (!c) return null;
+    return messages.find(m => m.isCustomerContact && (m.contactTrackingCode || '').toUpperCase() === c) || null;
   };
 
   // Customer looks up their own contact conversations by name + mobile (no auth)
@@ -1248,7 +1256,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} openContactTick={contactTick} />
+              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} lookupContactByCode={lookupContactByCode} openContactTick={contactTick} />
             )}
 
             {view === 'custom-form' && (
