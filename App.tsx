@@ -865,8 +865,11 @@ const App: React.FC = () => {
       await saveCustomerToCloud(newCustomer);
     }
 
-    // ── Route to staff whose سمت belongs to the selected department; fallback to master ──
-    let recipients = personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
+    // ── Route to a specific سمت if configured, otherwise to all staff of the selected department; fallback to master ──
+    const targetPosition = dept.contactRecipientPosition;
+    let recipients = targetPosition
+      ? personnel.filter(p => (p.roles || []).includes(targetPosition))
+      : personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
     if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
 
     // Human-friendly tracking code for the correspondence (e.g. MK-1234-AB7C)

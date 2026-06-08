@@ -139,6 +139,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null); // department being renamed
   const [editingDeptName, setEditingDeptName] = useState('');
   const [editingDeptLabel, setEditingDeptLabel] = useState(''); // custom Contact Us label for the department being edited
+  const [editingDeptPosition, setEditingDeptPosition] = useState(''); // which سمت receives contact messages ('' = whole department)
   const [showRoleManager, setShowRoleManager] = useState(false);
   const [copiedStaffId, setCopiedStaffId] = useState<string | null>(null);
   const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
@@ -223,6 +224,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           hiddenInContact: 'مخفی از فرم تماس با ما',
           deptNameLabel: 'نام دپارتمان',
           contactLabelPlaceholder: 'لیبل در تماس با ما (اختیاری، مثلا: ارتباط با مدیرعامل)',
+          contactRecipientAll: 'دریافت توسط کل دپارتمان',
+          contactRecipientLabel: 'گیرنده مکاتبه در تماس با ما',
           moveUp: 'انتقال به بالا',
           moveDown: 'انتقال به پایین',
           rolesByDeptTitle: 'سمت‌ها بر اساس دپارتمان',
@@ -274,6 +277,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           hiddenInContact: 'Hidden from Contact Us form',
           deptNameLabel: 'Department name',
           contactLabelPlaceholder: 'Contact Us label (optional, e.g. "Contact the CEO")',
+          contactRecipientAll: 'Whole department receives it',
+          contactRecipientLabel: 'Contact Us recipient',
           moveUp: 'Move up',
           moveDown: 'Move down',
           rolesByDeptTitle: 'Positions by Department',
@@ -421,15 +426,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
     }
   };
   // Begin / save / cancel renaming a department title (and its custom Contact Us label)
-  const startEditDept = (dept: Department) => { setEditingDeptId(dept.id); setEditingDeptName(dept.name); setEditingDeptLabel(dept.contactLabel || ''); };
-  const cancelEditDept = () => { setEditingDeptId(null); setEditingDeptName(''); setEditingDeptLabel(''); };
+  const startEditDept = (dept: Department) => { setEditingDeptId(dept.id); setEditingDeptName(dept.name); setEditingDeptLabel(dept.contactLabel || ''); setEditingDeptPosition(dept.contactRecipientPosition || ''); };
+  const cancelEditDept = () => { setEditingDeptId(null); setEditingDeptName(''); setEditingDeptLabel(''); setEditingDeptPosition(''); };
   const saveEditDept = () => {
     const name = editingDeptName.trim();
     if (!name) return;
     // Block duplicate names (ignoring the department being edited)
     if (departments.some(d => d.id !== editingDeptId && d.name === name)) { cancelEditDept(); return; }
     const contactLabel = editingDeptLabel.trim();
-    onUpdateConfig({ ...config, departments: departments.map(d => d.id === editingDeptId ? { ...d, name, contactLabel: contactLabel || undefined } : d) });
+    const contactRecipientPosition = editingDeptPosition.trim();
+    onUpdateConfig({ ...config, departments: departments.map(d => d.id === editingDeptId ? { ...d, name, contactLabel: contactLabel || undefined, contactRecipientPosition: contactRecipientPosition || undefined } : d) });
     cancelEditDept();
   };
   // Toggle whether a department appears in the public "Contact Us" form
@@ -483,6 +489,15 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                          onChange={e => setEditingDeptLabel(e.target.value)}
                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveEditDept(); } else if (e.key === 'Escape') { e.preventDefault(); cancelEditDept(); } }}
                        />
+                       <label className="text-[10px] text-gray-400 -mb-1">{t.contactRecipientLabel}</label>
+                       <select
+                         className="px-2 py-1 rounded border border-gray-200 text-xs bg-white outline-none focus:border-indigo-500 w-full"
+                         value={editingDeptPosition}
+                         onChange={e => setEditingDeptPosition(e.target.value)}
+                       >
+                         <option value="">{t.contactRecipientAll}</option>
+                         {(d.positions || []).filter(p => availableRoles.includes(p)).map(p => <option key={p} value={p}>{p}</option>)}
+                       </select>
                        <div className="flex items-center gap-2 justify-end">
                          <button type="button" onClick={saveEditDept} title={t.saveDept} className="text-emerald-500 hover:text-emerald-700 flex items-center gap-1 text-xs font-bold"><IconCheck className="w-3.5 h-3.5" />{t.saveDept}</button>
                          <button type="button" onClick={cancelEditDept} title={t.cancelDept} className="text-gray-400 hover:text-gray-600 text-xs font-bold">✕</button>
@@ -493,6 +508,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                        <span className="font-medium text-indigo-700">{d.name}</span>
                        {(d.contactLabel || '').trim() && <span className="text-[10px] text-gray-400 italic" title={t.contactLabelPlaceholder}>«{d.contactLabel}»</span>}
                        <span className="text-[10px] text-gray-400">({(d.positions || []).length})</span>
+                       {(d.contactRecipientPosition || '').trim() && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100" title={t.contactRecipientLabel}>→ {d.contactRecipientPosition}</span>}
                        <button
                          type="button"
                          onClick={() => handleToggleDeptContact(d.id)}
