@@ -134,6 +134,11 @@ export const AdminDashboard: React.FC<Props> = ({
   
   const [tempAssignedTo, setTempAssignedTo] = useState<string>('');
 
+  // ── Bulk actions (overview / cartable) ──
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+  const [bulkStatusValue, setBulkStatusValue] = useState<string>('');
+  const [bulkAssignValue, setBulkAssignValue] = useState<string>('');
+
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>(undefined);
 
@@ -235,7 +240,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const t = {
       fa: {
-          overview: 'داشبورد و کارتابل',
+          overview: 'کارتابل',
           tasks: 'امور روزانه',
           meetings: 'تقویم جلسات',
           messages: 'مکاتبات',
@@ -273,6 +278,11 @@ export const AdminDashboard: React.FC<Props> = ({
           action: 'عملیات',
           check: 'بررسی',
           notFound: 'موردی یافت نشد.',
+          bulkSelected: 'مورد انتخاب شده',
+          bulkStatusPh: 'تغییر وضعیت گروهی',
+          bulkAssignPh: 'ارجاع گروهی به',
+          bulkClear: 'لغو انتخاب',
+          selectAll: 'انتخاب همه',
           newProject: 'تعریف پروژه جدید',
           projectTitle: 'عنوان پروژه',
           relatedService: 'سرویس مرتبط',
@@ -410,7 +420,7 @@ export const AdminDashboard: React.FC<Props> = ({
           customerTypeLabel: 'نوع ارتباط',
       },
       en: {
-          overview: 'Overview & Dashboard',
+          overview: 'Cartable',
           tasks: 'Daily Tasks',
           meetings: 'Meeting Calendar',
           messages: 'Messages',
@@ -448,6 +458,11 @@ export const AdminDashboard: React.FC<Props> = ({
           action: 'Action',
           check: 'Review',
           notFound: 'No records found.',
+          bulkSelected: 'selected',
+          bulkStatusPh: 'Bulk change status',
+          bulkAssignPh: 'Bulk assign to',
+          bulkClear: 'Clear selection',
+          selectAll: 'Select all',
           newProject: 'Create New Project',
           projectTitle: 'Project Title',
           relatedService: 'Related Service',
@@ -833,6 +848,35 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleDeleteTimelineEntry = (index: number) => { if (!selectedTicket || !isMaster) return; if (window.confirm('Delete entry?')) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline.splice(index, 1); onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleEditTimelineEntry = (index: number, currentDesc: string) => { if (!selectedTicket || !isMaster) return; const newDesc = window.prompt('Edit:', currentDesc); if (newDesc !== null) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline[index] = { ...newTimeline[index], description: newDesc }; onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
+  // ── Bulk action handlers ──
+  const toggleTicketSelection = (id: string) => setSelectedTicketIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const clearSelection = () => { setSelectedTicketIds(new Set()); setBulkStatusValue(''); setBulkAssignValue(''); };
+  const handleBulkStatusChange = (status: TicketStatus) => {
+    const ids = Array.from(selectedTicketIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(lang === 'fa' ? `تغییر وضعیت ${ids.length} پرونده به «${status}»؟` : `Change status of ${ids.length} request(s) to "${status}"?`)) { setBulkStatusValue(''); return; }
+    ids.forEach(id => onUpdateTicket(id, { status }, currentUser.fullName, `Bulk status → ${status}`));
+    logSystemAction('UPDATE', 'Ticket', `Bulk status change (${ids.length}) → ${status}`, currentUser.fullName);
+    clearSelection();
+  };
+  const handleBulkAssign = async (assigneeId: string) => {
+    if (!canAssign) return;
+    const ids = Array.from(selectedTicketIds);
+    if (ids.length === 0) return;
+    const targetUser = personnel.find(p => p.id === assigneeId);
+    const targetLabel = targetUser ? targetUser.fullName : (lang === 'fa' ? 'تعیین نشده' : 'Unassigned');
+    if (!window.confirm(lang === 'fa' ? `ارجاع ${ids.length} پرونده به «${targetLabel}»؟` : `Assign ${ids.length} request(s) to "${targetLabel}"?`)) { setBulkAssignValue(''); return; }
+    const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned';
+    ids.forEach(id => onUpdateTicket(id, { assignedTo: assigneeId }, currentUser.fullName, actionDesc));
+    logSystemAction('UPDATE', 'Ticket', `Bulk assign (${ids.length}) → ${targetLabel}`, currentUser.fullName);
+    if (targetUser && targetUser.id !== currentUser.id) {
+      const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: lang === 'fa' ? `ارجاع گروهی (${ids.length} پرونده)` : `Bulk assignment (${ids.length})`, body: lang === 'fa' ? `${ids.length} پرونده به شما ارجاع داده شد.` : `${ids.length} request(s) have been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] };
+      await sendInternalMessage(msg);
+    }
+    clearSelection();
+    alert(lang === 'fa' ? 'ارجاع گروهی انجام شد.' : 'Bulk assignment done.');
+  };
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     const newTicketId = `PROJ-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -1861,8 +1905,29 @@ export const AdminDashboard: React.FC<Props> = ({
                              <IconSearch className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                          </div>
                      </div>
-                     <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-4 py-3 rounded-tr-lg text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3">{t.expert}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
-                        <tr key={ticket.id} className={`hover:bg-gray-50 transition-colors ${ticket.isFlagged ? 'bg-yellow-50/40' : ''}`}>
+                     {selectedTicketIds.size > 0 && (
+                         <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl animate-fade-in">
+                             <span className="text-sm font-bold text-indigo-700">{selectedTicketIds.size} {t.bulkSelected}</span>
+                             <select value={bulkStatusValue} onChange={(e) => { const v = e.target.value; setBulkStatusValue(v); if (v) handleBulkStatusChange(v as TicketStatus); }} className="bg-white text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg border border-indigo-200 outline-none focus:border-indigo-400">
+                                 <option value="">{t.bulkStatusPh}</option>
+                                 {Object.values(TicketStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                             </select>
+                             {canAssign && (
+                                 <select value={bulkAssignValue} onChange={(e) => { const v = e.target.value; if (!v) return; setBulkAssignValue(v); handleBulkAssign(v === '__unassign__' ? '' : v); }} className="bg-white text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg border border-indigo-200 outline-none focus:border-indigo-400">
+                                     <option value="">{t.bulkAssignPh}</option>
+                                     <option value="__unassign__">{t.notAssigned}</option>
+                                     {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName}{p.roles[0] ? ` - ${p.roles[0]}` : ''}</option>)}
+                                 </select>
+                             )}
+                             <button onClick={clearSelection} className="text-sm text-gray-500 hover:text-gray-700 mr-auto flex items-center gap-1"><span className="text-base leading-none">✕</span>{t.bulkClear}</button>
+                         </div>
+                     )}
+                     {(() => { const pageIds = paginatedTickets.map(pt => pt.id); const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedTicketIds.has(id)); return (
+                     <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-3 py-3 rounded-tr-lg text-center w-10"><input type="checkbox" className="w-4 h-4 cursor-pointer accent-indigo-600" checked={allPageSelected} onChange={() => setSelectedTicketIds(prev => { const n = new Set(prev); if (allPageSelected) pageIds.forEach(id => n.delete(id)); else pageIds.forEach(id => n.add(id)); return n; })} title={t.selectAll} /></th><th className="px-4 py-3 text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3">{t.expert}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
+                        <tr key={ticket.id} className={`hover:bg-gray-50 transition-colors ${selectedTicketIds.has(ticket.id) ? 'bg-indigo-50/60' : ticket.isFlagged ? 'bg-yellow-50/40' : ''}`}>
+                            <td className="px-3 py-3 text-center">
+                                <input type="checkbox" className="w-4 h-4 cursor-pointer accent-indigo-600" checked={selectedTicketIds.has(ticket.id)} onChange={() => toggleTicketSelection(ticket.id)} />
+                            </td>
                             <td className="px-4 py-3 text-center text-xs font-bold text-gray-400">
                                 {filteredTickets.length - ((currentPage - 1) * ITEMS_PER_PAGE + idx)}
                             </td>
@@ -1911,6 +1976,7 @@ export const AdminDashboard: React.FC<Props> = ({
                             <td className="px-4 py-3 text-center"><button onClick={() => setSelectedTicketId(ticket.id)} className="bg-gray-900 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-black transition-colors">{t.check}</button></td>
                         </tr>
                      ))}</tbody></table>{paginatedTickets.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">{t.notFound}</div>}</div>
+                     ); })()}
                      {totalPages > 1 && (
                         <div className="flex justify-center items-center p-4 border-t border-gray-100 gap-4">
                             <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-bold">{t.prev}</button>
