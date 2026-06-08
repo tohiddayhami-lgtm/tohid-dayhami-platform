@@ -41,6 +41,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
   const [contactMessage, setContactMessage] = useState('');
   const [contactSubmitting, setContactSubmitting] = useState(false);
   const [contactError, setContactError] = useState('');
+  const [contactSuccess, setContactSuccess] = useState(false);
   const [contactThreads, setContactThreads] = useState<InternalMessage[] | null>(null);
 
   // Only departments the master has chosen to expose in the Contact Us form (undefined = shown, for backward compatibility)
@@ -187,9 +188,12 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     }
     setContactSubmitting(true);
     setContactError('');
+    setContactSuccess(false);
     try {
       await onContactSubmit({ name: contactName.trim(), phone: contactPhone.trim(), departmentId: contactDept, message: contactMessage.trim() });
       setContactMessage('');
+      setContactSuccess(true);
+      setTimeout(() => setContactSuccess(false), 6000);
       // Show the customer their conversation thread (including the message just sent)
       setTimeout(() => { if (lookupContactMessages) setContactThreads(lookupContactMessages(contactName, contactPhone)); }, 400);
     } catch {
@@ -574,6 +578,12 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
               <textarea value={contactMessage} onChange={e => setContactMessage(e.target.value)} rows={4}
                 placeholder={t.contactMsgPlaceholder} className={inputCls} />
               {contactError && <p className="text-xs text-red-500">{contactError}</p>}
+              {contactSuccess && (
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm animate-fade-in">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><IconCheck className="w-3.5 h-3.5" /></span>
+                  <span>{t.contactSent}</span>
+                </div>
+              )}
               <button type="submit" disabled={contactSubmitting}
                 className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black disabled:opacity-60 transition-colors flex items-center justify-center gap-2">
                 {contactSubmitting
