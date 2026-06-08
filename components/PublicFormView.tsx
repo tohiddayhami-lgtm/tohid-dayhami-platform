@@ -277,6 +277,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     fa: {
       loading: 'در حال بارگذاری فرم...',
       notFound: 'فرم مورد نظر یافت نشد یا در دسترس عمومی نیست.',
+      closed: 'مهلت تکمیل این فرم به پایان رسیده است.',
       contactSection: 'اطلاعات تماس',
       nameLabel: 'نام و نام خانوادگی', namePlaceholder: 'مثال: علی محمدی',
       phoneLabel: 'شماره تماس', phonePlaceholder: 'مثال: 09120000000',
@@ -300,6 +301,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     en: {
       loading: 'Loading form...',
       notFound: 'Form not found or not publicly accessible.',
+      closed: 'The deadline for completing this form has ended.',
       contactSection: 'Contact Information',
       nameLabel: 'Full Name', namePlaceholder: 'e.g. John Smith',
       phoneLabel: 'Phone Number', phonePlaceholder: 'e.g. +1 555 000 0000',
@@ -358,6 +360,15 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
     <div className="max-w-lg mx-auto py-24 text-center">
       <IconClipboard className="w-12 h-12 text-gray-200 mx-auto mb-4" />
       <p className="text-gray-500 text-sm">{t.notFound}</p>
+    </div>
+  );
+
+  // Form closed by the admin — no longer accepting submissions
+  if (form?.isClosed) return (
+    <div className="max-w-lg mx-auto py-24 text-center" dir={formLang === 'fa' ? 'rtl' : 'ltr'}>
+      <div className="w-16 h-16 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-4 text-3xl">⏳</div>
+      <h2 className="text-lg font-bold text-gray-800 mb-1">{form.title}</h2>
+      <p className="text-gray-500 text-sm">{(form.closedMessage || '').trim() || t.closed}</p>
     </div>
   );
 

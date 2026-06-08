@@ -364,6 +364,8 @@ export interface CustomForm {
   allowedPersonnelIds?: string[]; // specific people who can see this form
   allowAttachments?: boolean;     // whether submitters can attach files
   isPublic?: boolean;
+  isClosed?: boolean;            // when true, the form no longer accepts submissions (link shows a "deadline ended" message)
+  closedMessage?: string;        // optional custom message shown when the form is closed
   assigneePersonnelId?: string;  // assign to specific person
   assigneeRole?: string;         // assign to first person with this role
   createdAt: string;

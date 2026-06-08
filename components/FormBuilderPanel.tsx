@@ -225,6 +225,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     });
   };
 
+  // Close / reopen a form — when closed, the public link shows "deadline ended"
+  const toggleClosed = (form: CustomForm) => {
+    updateCustomFormInCloud(form.id, { isClosed: !form.isClosed }, currentUser.fullName);
+  };
+
   const openCreate = () => {
     setEditingId(null);
     setDraft(emptyDraft());
@@ -1282,6 +1287,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                     <IconFolder className="w-5 h-5" />
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    {form.isClosed && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                        ⏳ {lang === 'fa' ? 'بسته‌شده' : 'Closed'}
+                      </span>
+                    )}
                     {form.isPublic && (
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                         {lang === 'fa' ? 'عمومی' : 'Public'}
@@ -1335,6 +1345,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                       className="py-1.5 px-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       JSON
+                    </button>
+                    <button
+                      onClick={() => toggleClosed(form)}
+                      title={form.isClosed ? (lang === 'fa' ? 'فعال‌سازی مجدد فرم' : 'Reopen form') : (lang === 'fa' ? 'بستن فرم (توقف دریافت پاسخ)' : 'Close form (stop submissions)')}
+                      className={`py-1.5 px-2.5 text-xs font-medium rounded-lg border transition-colors ${form.isClosed ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-amber-600 border-amber-200 hover:bg-amber-50'}`}
+                    >
+                      {form.isClosed ? (lang === 'fa' ? 'فعال‌سازی' : 'Reopen') : (lang === 'fa' ? 'بستن فرم' : 'Close')}
                     </button>
                     <button
                       onClick={() => openEdit(form)}
