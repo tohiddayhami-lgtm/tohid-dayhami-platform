@@ -4,6 +4,7 @@ import { Meeting, Personnel, NotificationConfig } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
+import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
@@ -443,14 +444,12 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}</label>
-                <div className="flex flex-wrap gap-1.5 p-2 border border-gray-300 rounded-lg max-h-28 overflow-y-auto bg-gray-50">
-                  {personnel.map(p => (
-                    <button key={p.id} type="button" onClick={() => toggleAttendee(p.id)}
-                      className={`px-2 py-0.5 rounded-full text-xs font-semibold border transition-colors ${formData.attendeeIds.includes(p.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'}`}>
-                      {p.fullName}
-                    </button>
-                  ))}
-                </div>
+                <StaffIdPicker
+                  personnel={personnel}
+                  selectedIds={formData.attendeeIds}
+                  onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
+                  lang={lang}
+                />
               </div>
 
               <div>

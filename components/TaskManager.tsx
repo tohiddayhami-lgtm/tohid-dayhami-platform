@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Task, Personnel, TaskComment, InternalMessage, TaskChecklistItem } from '../types';
 import { IconCheckSquare, IconPlus, IconList, IconUsers, IconMessageSquare, IconTrash, IconClock, IconSend, IconEdit, IconCheck, IconSearch, IconHistory, IconArrowRight } from './Icons';
 import { saveTaskToCloud, updateTaskInCloud, deleteTaskFromCloud, sendInternalMessage } from '../services/firebaseService';
+import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 
 interface Props {
@@ -443,15 +444,13 @@ export const TaskManager: React.FC<Props> = ({ currentUser, personnel, tasks, la
                                 <label className="text-[10px] font-black text-gray-400 mb-4 block uppercase tracking-widest">تیم انجام دهنده</label>
                                 <div className="flex flex-wrap gap-2">
                                     {isEditing ? (
-                                        personnel.map(p => (
-                                            <button key={p.id} onClick={() => {
-                                                const current = editingTaskData.assigneeIds || [];
-                                                const updated = current.includes(p.id) ? current.filter(id => id !== p.id) : [...current, p.id];
-                                                setEditingTaskData({...editingTaskData, assigneeIds: updated});
-                                            }} className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all border ${editingTaskData.assigneeIds?.includes(p.id) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-400 border-gray-100 hover:border-indigo-200'}`}>
-                                                {p.fullName}
-                                            </button>
-                                        ))
+                                        <StaffIdPicker
+                                            personnel={personnel}
+                                            selectedIds={editingTaskData.assigneeIds || []}
+                                            onChange={ids => setEditingTaskData({...editingTaskData, assigneeIds: ids})}
+                                            lang={lang}
+                                            className="w-full"
+                                        />
                                     ) : (
                                         selectedTask.assigneeIds.map(uid => {
                                             const p = personnel.find(per => per.id === uid);

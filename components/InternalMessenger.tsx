@@ -4,6 +4,7 @@ import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
 import { getStaffCode, findPersonnelByCode } from '../services/staffId';
+import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 
 interface Props {
@@ -632,20 +633,16 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                 </div>
               )}
 
-              {/* Refer to specific personnel */}
+              {/* Refer to specific personnel — by personnel ID */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">{t.referToPersonnel}</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {personnel.filter(p => p.id !== currentUser.id).map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => setReferPersonnelIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all border ${referPersonnelIds.includes(p.id) ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'}`}
-                    >
-                      {p.fullName}
-                    </button>
-                  ))}
-                </div>
+                <StaffIdPicker
+                  personnel={personnel}
+                  selectedIds={referPersonnelIds}
+                  onChange={setReferPersonnelIds}
+                  lang={lang}
+                  currentUserId={currentUser.id}
+                />
               </div>
 
               {/* Optional note */}
