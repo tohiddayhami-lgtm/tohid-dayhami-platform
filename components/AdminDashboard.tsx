@@ -847,7 +847,26 @@ export const AdminDashboard: React.FC<Props> = ({
   const handleUpdateTicketStatus = (status: TicketStatus) => { if (!selectedTicket) return; onUpdateTicket(selectedTicket.id, { status }, currentUser.fullName); logSystemAction('UPDATE', 'Ticket', `Status changed to ${status}`, currentUser.fullName, selectedTicket.id); };
   const handleDeleteTimelineEntry = (index: number) => { if (!selectedTicket || !isMaster) return; if (window.confirm('Delete entry?')) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline.splice(index, 1); onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
   const handleEditTimelineEntry = (index: number, currentDesc: string) => { if (!selectedTicket || !isMaster) return; const newDesc = window.prompt('Edit:', currentDesc); if (newDesc !== null) { const newTimeline = [...(selectedTicket.timeline || [])]; newTimeline[index] = { ...newTimeline[index], description: newDesc }; onUpdateTicket(selectedTicket.id, { timeline: newTimeline }, currentUser.fullName); } };
-  const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
+  // Send a WhatsApp notification to a staff member when a case is assigned/referred to them
+  const notifyAssignee = async (targetUserId: string, ticketId: string, customerName: string) => {
+    const nc = config.notificationConfig;
+    if (!nc?.enabled || !nc.onNewTicket) return;
+    const assignee = personnel.find(p => p.id === targetUserId);
+    if (!assignee) return;
+    const phone = nc.personnelPhones?.[targetUserId];
+    if (!phone) return;
+    const msg = renderTemplate(nc.ticketTemplate, {
+      recipientName: assignee.fullName,
+      ticketId,
+      customerName: customerName || '',
+      senderName: currentUser.fullName,
+      status: '',
+    });
+    const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[targetUserId]);
+    await saveNotificationLog(buildLog('new_ticket', targetUserId, assignee.fullName, phone, msg, result, ticketId));
+  };
+
+  const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); await notifyAssignee(targetUser.id, selectedTicket.id, selectedTicket.customerName); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
   // ── Bulk action handlers ──
   const toggleTicketSelection = (id: string) => setSelectedTicketIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const clearSelection = () => { setSelectedTicketIds(new Set()); setBulkStatusValue(''); setBulkAssignValue(''); };
@@ -872,6 +891,8 @@ export const AdminDashboard: React.FC<Props> = ({
     if (targetUser && targetUser.id !== currentUser.id) {
       const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: lang === 'fa' ? `ارجاع گروهی (${ids.length} پرونده)` : `Bulk assignment (${ids.length})`, body: lang === 'fa' ? `${ids.length} پرونده به شما ارجاع داده شد.` : `${ids.length} request(s) have been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] };
       await sendInternalMessage(msg);
+      // One WhatsApp notification summarizing the bulk assignment
+      await notifyAssignee(targetUser.id, lang === 'fa' ? `${ids.length} پرونده` : `${ids.length} cases`, '');
     }
     clearSelection();
     alert(lang === 'fa' ? 'ارجاع گروهی انجام شد.' : 'Bulk assignment done.');
