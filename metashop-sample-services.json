@@ -19,6 +19,17 @@
   "cartButtonText": "Request Service",
   "orderThankYouText": "Thank you! Your service request has been received. Our team will contact you shortly. Keep your tracking code below.",
   "searchPlaceholder": "Search services...",
+  "defaultLang": "fa",
+  "productsTabLabel": "خدمات",
+  "productsTabLabelEn": "Services",
+  "pages": [
+    {
+      "id": "pg-about", "label": "درباره ما", "labelEn": "About Us", "type": "text",
+      "body": "مجموعه خدمات توحید دیهمی شامل مشاوره صادرات و ورود به بازار، طراحی برند و بسته‌بندی، و اجاره خودرو در مسقط است.",
+      "bodyEn": "Tohid Dayhami Services covers export & market-entry consulting, brand & packaging design, and car rental in Muscat.",
+      "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160750_2669ecb7-f9ab-472f-a053-aaca6be06b3d.png"]
+    }
+  ],
   "products": [
     { "id": "ss1", "name": "Export Market-Entry Consulting", "sku": "SVC-CONSULT-EXP", "group": "Consulting", "description": "One-on-one strategic consulting session for entering GCC & global markets: pricing, logistics, certifications.", "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160822_b37cc5a5-15ca-4401-91d4-eb896a48fc09.png"], "active": true, "currency": "OMR", "price": 45, "unit": "session", "priceUnit": "per session", "features": [{ "label": "Duration", "value": "90 minutes" }, { "label": "Format", "value": "Online / In-person" }] },
     { "id": "ss2", "name": "Brand & Packaging Design", "sku": "SVC-DESIGN-PKG", "group": "Design", "description": "Print-ready Adobe Illustrator packaging design + professional mockups. Includes 3 revisions.", "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160807_15f8d67c-56ed-4a12-9962-063b8be3924a.png"], "active": true, "currency": "OMR", "price": 120, "unit": "project", "priceUnit": "per project", "features": [{ "label": "Deliverables", "value": "AI files + mockups" }, { "label": "Timeline", "value": "~20 days" }, { "label": "Revisions", "value": "3 included" }] },

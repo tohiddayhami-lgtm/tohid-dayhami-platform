@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { Language } from '../App';
 
 interface OrderData {
@@ -36,9 +36,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [lookupPhone, setLookupPhone] = useState('');
   const [lookupResults, setLookupResults] = useState<MetaShopOrder[] | null>(null);
   const [copied, setCopied] = useState(false);
-  const [uiLang, setUiLang] = useState<Language>(lang);
+  const [uiLang, setUiLang] = useState<Language>(shop.defaultLang || lang);
+  const [tab, setTab] = useState<string>('products');
 
   const T = uiLang === 'fa';
+  const pages = shop.pages || [];
+  // pick the right language for a bilingual field
+  const L = (fa?: string, en?: string) => (uiLang === 'en' ? (en || fa) : fa) || '';
   const t = {
     cartBtn: shop.cartButtonText || (T ? 'ثبت سفارش' : 'Place Order'),
     add: isServices ? (T ? 'افزودن به درخواست' : 'Add to request') : (T ? 'افزودن به سبد' : 'Add to cart'),
@@ -84,6 +88,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     colLine: T ? 'مبلغ' : 'Amount',
     invHint: T ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.' : 'This is a proforma preview; the final amount is confirmed after review.',
     confirm: T ? 'ثبت نهایی سفارش' : 'Confirm & submit order',
+    productsTab: isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Product List'),
   };
 
   const theme = shop.theme;
@@ -197,6 +202,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       </header>
 
       <main className="ms-container">
+        {/* Tabs (Product List + custom pages) */}
+        {pages.length > 0 && (
+          <nav className="ms-tabs">
+            <button className={`ms-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>{L(shop.productsTabLabel, shop.productsTabLabelEn) || t.productsTab}</button>
+            {pages.map(pg => <button key={pg.id} className={`ms-tab ${tab === pg.id ? 'active' : ''}`} onClick={() => setTab(pg.id)}>{L(pg.label, pg.labelEn)}</button>)}
+          </nav>
+        )}
+
+        {tab === 'products' && (<>
         {/* Search */}
         <div className="ms-tools">
           <div className="ms-search">
@@ -267,6 +281,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             )}
           </div>
         )}
+        </>)}
+
+        {/* Custom content pages */}
+        {pages.map(pg => tab === pg.id ? <PageView key={pg.id} page={pg} uiLang={uiLang} L={L} /> : null)}
       </main>
 
       <footer className="ms-footer">
@@ -410,6 +428,51 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   );
 };
 
+// Custom content page (About Us, Certifications, Gallery, ...)
+const PageView: React.FC<{ page: MetaShopPage; uiLang: Language; L: (fa?: string, en?: string) => string }> = ({ page, L }) => {
+  const title = L(page.label, page.labelEn);
+  const desc = L(page.description, page.descriptionEn);
+  const paras = (L(page.body, page.bodyEn) || '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  const imgs = page.images || [];
+
+  if (page.type === 'gallery') {
+    return (
+      <section className="ms-page">
+        <h2 className="ms-page-title">{title}</h2>
+        {desc && <p className="ms-page-desc">{desc}</p>}
+        <div className="ms-gallery">{imgs.map((src, i) => <figure key={i} className="ms-gphoto"><img src={src} alt="" loading="lazy" /></figure>)}</div>
+      </section>
+    );
+  }
+  if (page.type === 'cards') {
+    return (
+      <section className="ms-page">
+        <h2 className="ms-page-title">{title}</h2>
+        {desc && <p className="ms-page-desc">{desc}</p>}
+        <div className="ms-pcards">
+          {(page.cards || []).map(c => (
+            <div key={c.id} className="ms-pcard">
+              {c.image && <div className="ms-pcard-imgwrap"><img src={c.image} alt="" loading="lazy" /></div>}
+              <div className="ms-pcard-name">{L(c.name, c.nameEn)}</div>
+              {(c.desc || c.descEn) && <div className="ms-pcard-desc">{L(c.desc, c.descEn)}</div>}
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+  // text page (optionally with side images)
+  return (
+    <section className="ms-page">
+      <h2 className="ms-page-title">{title}</h2>
+      <div className={`ms-text ${imgs.length ? 'has-img' : ''}`}>
+        {imgs.length > 0 && <div className="ms-text-imgs">{imgs.map((s, i) => <img key={i} src={s} alt="" loading="lazy" />)}</div>}
+        <div className="ms-text-paras">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+      </div>
+    </section>
+  );
+};
+
 const MS_CSS = `
 .ms-root { --ms-primary:#2d4a1a; background: var(--ms-bg,#fdfbf6); color: var(--ms-text,#2d3a24); min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
 .ms-root * { box-sizing:border-box; }
@@ -430,6 +493,34 @@ const MS_CSS = `
 .ms-cover h1 { font-size:clamp(26px,5vw,52px); font-weight:900; letter-spacing:-.02em; line-height:1.05; }
 .ms-subtitle { font-size:clamp(15px,2.2vw,22px); opacity:.9; font-weight:300; margin-top:8px; }
 .ms-container { max-width:1280px; margin:0 auto; padding:0 20px; }
+/* tabs */
+.ms-tabs { display:flex; justify-content:center; gap:8px; margin:24px auto 8px; padding:6px; width:max-content; max-width:100%; overflow-x:auto; background:rgba(15,23,42,.04); border:1px solid rgba(15,23,42,.08); border-radius:999px; scrollbar-width:none; }
+.ms-tabs::-webkit-scrollbar { display:none; }
+.ms-tab { border:0; background:transparent; color:#64748b; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; transition:all .18s; }
+.ms-tab:hover { color:var(--ms-heading,#1f2a18); }
+.ms-tab.active { background:#fff; color:var(--ms-heading,#1f2a18); box-shadow:0 8px 26px rgba(15,23,42,.10); }
+/* content pages */
+.ms-page { max-width:1000px; margin:40px auto 56px; animation:msFade .28s ease; }
+@keyframes msFade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+.ms-page-title { text-align:center; font-size:13px; font-weight:800; letter-spacing:.22em; text-transform:uppercase; color:var(--ms-primary); opacity:.85; margin-bottom:24px; }
+.ms-page-desc { max-width:760px; margin:0 auto 28px; font-size:clamp(15px,2vw,19px); line-height:1.8; color:var(--ms-text); text-align:center; }
+.ms-text { display:grid; gap:32px; max-width:880px; margin:0 auto; }
+.ms-text.has-img { grid-template-columns:1fr; }
+@media (min-width:760px){ .ms-text.has-img { grid-template-columns:1fr 1fr; gap:48px; align-items:center; } }
+.ms-text-imgs { display:grid; gap:12px; }
+.ms-text-imgs img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:16px; }
+.ms-text-paras p { font-size:16px; line-height:1.85; color:var(--ms-text); margin-bottom:16px; }
+.ms-text-paras p:first-child { font-size:clamp(17px,2.2vw,20px); font-weight:600; color:var(--ms-heading,#1f2a18); }
+.ms-gallery { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
+.ms-gphoto { margin:0; aspect-ratio:1/1; border-radius:18px; overflow:hidden; background:#f1f5f9; border:1px solid #e2e8f0; }
+.ms-gphoto img { width:100%; height:100%; object-fit:cover; }
+.ms-pcards { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
+@media (max-width:480px){ .ms-pcards { grid-template-columns:1fr 1fr; gap:12px; } }
+.ms-pcard { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:20px 14px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.ms-pcard-imgwrap { width:84px; height:84px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
+.ms-pcard-imgwrap img { max-width:84px; max-height:84px; object-fit:contain; }
+.ms-pcard-name { font-size:13px; font-weight:700; color:var(--ms-heading,#1f2a18); line-height:1.3; margin-bottom:6px; }
+.ms-pcard-desc { font-size:11px; color:#64748b; line-height:1.5; }
 .ms-tools { max-width:760px; margin:20px auto 6px; }
 .ms-search { position:relative; }
 .ms-search input { width:100%; border:1.5px solid #e2e8f0; border-radius:999px; padding:11px 42px 11px 16px; font-size:13px; outline:none; box-shadow:0 8px 26px rgba(15,23,42,.06); }

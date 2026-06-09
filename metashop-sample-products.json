@@ -19,6 +19,30 @@
   "cartButtonText": "Request FOB/CIF Quote",
   "orderThankYouText": "Thank you! Your fresh produce inquiry has been received. We will prepare a proforma invoice with FOB Sohar / CIF pricing within 24 hours. Keep your tracking code below.",
   "searchPlaceholder": "Search all products...",
+  "defaultLang": "en",
+  "productsTabLabel": "فهرست محصولات",
+  "productsTabLabelEn": "Product List",
+  "pages": [
+    {
+      "id": "pg-about", "label": "درباره ما", "labelEn": "About Us", "type": "text",
+      "bodyEn": "Tohid Dayhami Business Solutions is a Muscat-based exporter of premium Iranian fresh produce, dried fruits, nuts, and specialty agricultural products. We operate strategic cold-chain logistics from Sohar Port, Sultanate of Oman — serving 30+ countries.\n\nWe source the very best from Iran's flagship regions: Akbari pistachios from Rafsanjan, Piarom dates from Hormozgan, Sargol saffron from Qaenat, Rabab pomegranates from Neyriz, and year-round hydroponic greenhouse vegetables.\n\nEvery shipment is fully certified — Global G.A.P., HACCP, ISO 22000:2018, Halal, and Phytosanitary Certificate.",
+      "body": "توحید دیهمی بیزینس سولوشنز صادرکننده‌ی محصولات تازه و خشک‌بار ممتاز ایرانی مستقر در مسقط است. ما لجستیک زنجیره سرد را از بندر صحار عمان مدیریت می‌کنیم و به بیش از ۳۰ کشور خدمات می‌دهیم.\n\nبهترین‌ها را از مناطق شاخص ایران تأمین می‌کنیم: پسته اکبری رفسنجان، خرمای پیارم هرمزگان، زعفران سرگل قائنات و انار رباب نِی‌ریز.\n\nهر محموله دارای گواهی‌های Global G.A.P، HACCP، ISO 22000، حلال و بهداشت گیاهی است.",
+      "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160741_f6b419f8-74d1-424a-bc12-4c1bd7b192ba.png", "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160750_2669ecb7-f9ab-472f-a053-aaca6be06b3d.png"]
+    },
+    {
+      "id": "pg-certs", "label": "گواهینامه‌ها و استانداردها", "labelEn": "Certifications & Standards", "type": "cards",
+      "descriptionEn": "Every shipment carries the full suite of international certifications — giving our clients market access worldwide.",
+      "description": "هر محموله مجموعه کامل گواهینامه‌های بین‌المللی را دارد.",
+      "cards": [
+        { "id": "cc1", "name": "Global G.A.P.", "nameEn": "Global G.A.P.", "descEn": "Good Agricultural Practices across all supplier farms.", "desc": "گواهی شیوه‌های خوب کشاورزی.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160847_556a5f3d-a753-4850-bbff-90f87e225963.png" },
+        { "id": "cc2", "name": "HACCP", "nameEn": "HACCP Certified", "descEn": "Food-safety hazard control system.", "desc": "سیستم ایمنی غذایی HACCP.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160855_6a23e8d2-0071-4bda-9f42-fe63722b097c.png" },
+        { "id": "cc3", "name": "ISO 22000:2018", "nameEn": "ISO 22000:2018", "descEn": "Food-safety management system certification.", "desc": "گواهی مدیریت ایمنی غذایی.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160903_e2be6f66-a062-4cfc-a88a-69e646721398.png" },
+        { "id": "cc4", "name": "Phytosanitary", "nameEn": "Phytosanitary Certificate", "descEn": "Plant-health certificate for every shipment.", "desc": "گواهی بهداشت گیاهی.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160910_8ffc307d-99f9-4df7-bb6b-90615dfcdb7e.png" },
+        { "id": "cc5", "name": "HALAL", "nameEn": "HALAL Certified", "descEn": "Compliance with Islamic dietary law.", "desc": "مطابق قوانین غذایی اسلامی.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160917_c3c38086-67da-4de0-8238-2c0e06d73039.png" },
+        { "id": "cc6", "name": "EU Organic", "nameEn": "EU Organic Certified", "descEn": "EU Organic certification for select lines.", "desc": "گواهی ارگانیک اتحادیه اروپا.", "image": "https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160924_024f6c10-dafb-4f5c-853b-8d59c731fc80.png" }
+      ]
+    }
+  ],
   "products": [
     { "id": "sp1", "name": "Premium Akbari Pistachios — 1kg Vacuum Pack", "sku": "TDH-PIS-AKB-1KG", "hsCode": "08025100", "group": "Iconic Iranian Specialties", "description": "Top-grade long Akbari pistachios from Rafsanjan, vacuum-packed for freshness.", "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160554_0e06b51a-499d-44c9-92ac-74d09dd74696.png"], "active": true, "currency": "USD", "price": 13.5, "packPrice": 13.5, "unit": "kg", "pack": 1, "moq": "8000", "stockLabel": "In stock", "origin": { "name": "Iran" } },
     { "id": "sp2", "name": "Piarom Dates — 500g Royal Gift Box", "sku": "TDH-DAT-PRM-500", "hsCode": "08041000", "group": "Iconic Iranian Specialties", "description": "Semi-dry Piarom (Maryami) dates from Hormozgan in an elegant gift box.", "images": ["https://d8j0ntlcm91z4.cloudfront.net/user_37LxMnMIKo1nDrfSeM1P16PUV6Y/hf_20260515_160602_e9e83a3c-473e-4b3e-a86d-7728c6665998.png"], "active": true, "currency": "USD", "price": 11, "packPrice": 5.5, "unit": "kg", "pack": 0.5, "moq": "12000", "stockLabel": "In stock" },

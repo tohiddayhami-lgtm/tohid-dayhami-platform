@@ -34,8 +34,32 @@ export const PRODUCTS_SAMPLE: MetaShop = {
   cartButtonText: 'Request FOB/CIF Quote',
   orderThankYouText: 'Thank you! Your fresh produce inquiry has been received. We will prepare a proforma invoice with FOB Sohar / CIF pricing within 24 hours. Keep your tracking code below.',
   searchPlaceholder: 'Search all products...',
+  defaultLang: 'en',
+  productsTabLabel: 'فهرست محصولات',
+  productsTabLabelEn: 'Product List',
   assignType: undefined,
   assignedPersonnelIds: [],
+  pages: [
+    {
+      id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',
+      bodyEn: 'Tohid Dayhami Business Solutions is a Muscat-based exporter of premium Iranian fresh produce, dried fruits, nuts, and specialty agricultural products. We operate strategic cold-chain logistics from Sohar Port, Sultanate of Oman — serving 30+ countries.\n\nWe source the very best from Iran’s flagship regions: Akbari pistachios from Rafsanjan, Piarom dates from Hormozgan, Sargol saffron from Qaenat, Rabab pomegranates from Neyriz, and year-round hydroponic greenhouse vegetables.\n\nEvery shipment is fully certified — Global G.A.P., HACCP, ISO 22000:2018, Halal, and Phytosanitary Certificate. Selected lines carry EU Organic certification.',
+      body: 'توحید دیهمی بیزینس سولوشنز صادرکننده‌ی محصولات تازه و خشک‌بار ممتاز ایرانی مستقر در مسقط است. ما لجستیک زنجیره سرد را از بندر صحار عمان مدیریت می‌کنیم و به بیش از ۳۰ کشور خدمات می‌دهیم.\n\nبهترین‌ها را از مناطق شاخص ایران تأمین می‌کنیم: پسته اکبری رفسنجان، خرمای پیارم هرمزگان، زعفران سرگل قائنات، انار رباب نِی‌ریز و سبزیجات گلخانه‌ای تمام‌فصل.\n\nهر محموله دارای گواهی‌های Global G.A.P، HACCP، ISO 22000، حلال و بهداشت گیاهی است.',
+      images: [`${CF}/hf_20260515_160741_f6b419f8-74d1-424a-bc12-4c1bd7b192ba.png`, `${CF}/hf_20260515_160750_2669ecb7-f9ab-472f-a053-aaca6be06b3d.png`],
+    },
+    {
+      id: 'pg-certs', label: 'گواهینامه‌ها و استانداردها', labelEn: 'Certifications & Standards', type: 'cards',
+      descriptionEn: 'Every shipment carries the full suite of international certifications — giving our clients market access worldwide.',
+      description: 'هر محموله مجموعه کامل گواهینامه‌های بین‌المللی را دارد تا دسترسی مشتریان ما به بازارهای جهانی تضمین شود.',
+      cards: [
+        { id: 'cc1', name: 'Global G.A.P.', nameEn: 'Global G.A.P.', descEn: 'Good Agricultural Practices certification across all supplier farms.', desc: 'گواهی شیوه‌های خوب کشاورزی برای همه مزارع تأمین‌کننده.', image: `${CF}/hf_20260515_160847_556a5f3d-a753-4850-bbff-90f87e225963.png` },
+        { id: 'cc2', name: 'HACCP', nameEn: 'HACCP Certified', descEn: 'Hazard Analysis & Critical Control Points food-safety system.', desc: 'سیستم ایمنی غذایی تحلیل خطر و نقاط کنترل بحرانی.', image: `${CF}/hf_20260515_160855_6a23e8d2-0071-4bda-9f42-fe63722b097c.png` },
+        { id: 'cc3', name: 'ISO 22000:2018', nameEn: 'ISO 22000:2018', descEn: 'International food-safety management system certification.', desc: 'گواهی سیستم مدیریت ایمنی غذایی بین‌المللی.', image: `${CF}/hf_20260515_160903_e2be6f66-a062-4cfc-a88a-69e646721398.png` },
+        { id: 'cc4', name: 'Phytosanitary', nameEn: 'Phytosanitary Certificate', descEn: 'Plant-health certificate issued for every export shipment.', desc: 'گواهی بهداشت گیاهی برای هر محموله صادراتی.', image: `${CF}/hf_20260515_160910_8ffc307d-99f9-4df7-bb6b-90615dfcdb7e.png` },
+        { id: 'cc5', name: 'HALAL', nameEn: 'HALAL Certified', descEn: 'Compliance with Islamic dietary law across the product range.', desc: 'مطابقت با قوانین غذایی اسلامی در کل سبد محصولات.', image: `${CF}/hf_20260515_160917_c3c38086-67da-4de0-8238-2c0e06d73039.png` },
+        { id: 'cc6', name: 'EU Organic', nameEn: 'EU Organic Certified', descEn: 'European Union Organic certification for select product lines.', desc: 'گواهی ارگانیک اتحادیه اروپا برای خطوط منتخب.', image: `${CF}/hf_20260515_160924_024f6c10-dafb-4f5c-853b-8d59c731fc80.png` },
+      ],
+    },
+  ],
   products: [
     { id: 'sp1', name: 'Premium Akbari Pistachios — 1kg Vacuum Pack', sku: 'TDH-PIS-AKB-1KG', hsCode: '08025100', group: 'Iconic Iranian Specialties', description: 'Top-grade long Akbari pistachios from Rafsanjan, vacuum-packed for freshness.', images: [`${CF}/hf_20260515_160554_0e06b51a-499d-44c9-92ac-74d09dd74696.png`], active: true, currency: 'USD', price: 13.5, packPrice: 13.5, unit: 'kg', pack: 1, moq: '8000', stockLabel: 'In stock', origin: { name: 'Iran' } },
     { id: 'sp2', name: 'Piarom Dates — 500g Royal Gift Box', sku: 'TDH-DAT-PRM-500', hsCode: '08041000', group: 'Iconic Iranian Specialties', description: 'Semi-dry Piarom (Maryami) dates from Hormozgan in an elegant gift box.', images: [`${CF}/hf_20260515_160602_e9e83a3c-473e-4b3e-a86d-7728c6665998.png`], active: true, currency: 'USD', price: 11, packPrice: 5.5, unit: 'kg', pack: 0.5, moq: '12000', stockLabel: 'In stock' },
@@ -75,8 +99,19 @@ export const SERVICES_SAMPLE: MetaShop = {
   cartButtonText: 'Request Service',
   orderThankYouText: 'Thank you! Your service request has been received. Our team will contact you shortly. Keep your tracking code below.',
   searchPlaceholder: 'Search services...',
+  defaultLang: 'fa',
+  productsTabLabel: 'خدمات',
+  productsTabLabelEn: 'Services',
   assignType: undefined,
   assignedPersonnelIds: [],
+  pages: [
+    {
+      id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',
+      body: 'مجموعه خدمات توحید دیهمی شامل مشاوره صادرات و ورود به بازار، طراحی برند و بسته‌بندی، و اجاره خودرو در مسقط است. تیم ما با تجربه‌ی بین‌المللی در کنار شماست.',
+      bodyEn: 'Tohid Dayhami Services covers export & market-entry consulting, brand & packaging design, and car rental in Muscat. Our internationally experienced team is here for you.',
+      images: [`${CF}/hf_20260515_160750_2669ecb7-f9ab-472f-a053-aaca6be06b3d.png`],
+    },
+  ],
   products: [
     { id: 'ss1', name: 'Export Market-Entry Consulting', sku: 'SVC-CONSULT-EXP', group: 'Consulting', description: 'One-on-one strategic consulting session for entering GCC & global markets: pricing, logistics, certifications.', images: [`${CF}/hf_20260515_160822_b37cc5a5-15ca-4401-91d4-eb896a48fc09.png`], active: true, currency: 'OMR', price: 45, unit: 'session', priceUnit: 'per session', features: [{ label: 'Duration', value: '90 minutes' }, { label: 'Format', value: 'Online / In-person' }] },
     { id: 'ss2', name: 'Brand & Packaging Design', sku: 'SVC-DESIGN-PKG', group: 'Design', description: 'Print-ready Adobe Illustrator packaging design + professional mockups. Includes 3 revisions.', images: [`${CF}/hf_20260515_160807_15f8d67c-56ed-4a12-9962-063b8be3924a.png`], active: true, currency: 'OMR', price: 120, unit: 'project', priceUnit: 'per project', features: [{ label: 'Deliverables', value: 'AI files + mockups' }, { label: 'Timeline', value: '~20 days' }, { label: 'Revisions', value: '3 included' }] },

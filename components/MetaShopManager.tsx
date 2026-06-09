@@ -96,7 +96,26 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
       text: cc.textColor || base.theme.text,
     },
     products,
+    pages: buildPagesFromCatalog(cc),
   };
+};
+
+// Map a catalog-project catalogConfig into MetaShop pages (About / Gallery / custom pages)
+const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
+  const out: import('../types').MetaShopPage[] = [];
+  if (cc.aboutUsText) out.push({ id: `pg-${Date.now()}-a`, label: cc.aboutUsTabLabel || 'About Us', labelEn: 'About Us', type: 'text', body: cc.aboutUsText, images: Array.isArray(cc.aboutUsImages) ? cc.aboutUsImages.filter((x: any) => typeof x === 'string') : [] });
+  if (Array.isArray(cc.companyPhotos) && cc.companyPhotos.length) out.push({ id: `pg-${Date.now()}-g`, label: 'Company Gallery', labelEn: 'Company Gallery', type: 'gallery', images: cc.companyPhotos.filter((x: any) => typeof x === 'string') });
+  const customs = [...(Array.isArray(cc.customPages) ? cc.customPages : []), ...(Array.isArray(cc.sections) ? cc.sections : [])];
+  customs.forEach((p: any, i: number) => {
+    if (!p) return;
+    const items = p.items || p.cards;
+    if (Array.isArray(items) && items.length) {
+      out.push({ id: `pg-${Date.now()}-c${i}`, label: p.title || 'Page', type: 'cards', description: p.content || p.description || '', cards: items.map((it: any, j: number) => ({ id: `c-${Date.now()}-${i}-${j}`, image: it.image || it.logo || it.img, name: it.name || it.title, desc: it.desc || it.description })) });
+    } else {
+      out.push({ id: `pg-${Date.now()}-t${i}`, label: p.title || 'Page', type: 'text', body: p.content || p.description || '', images: Array.isArray(p.images) ? p.images.filter((x: any) => typeof x === 'string') : [] });
+    }
+  });
+  return out;
 };
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, readonly = false }) => {
@@ -124,6 +143,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
     name: T ? 'نام فروشگاه' : 'Shop name', slug: T ? 'شناسه لینک (slug)' : 'Link slug', type: T ? 'نوع' : 'Type',
     typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', currency: T ? 'واحد پول' : 'Currency',
+    defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
+    pagesT: T ? 'صفحات و تب‌ها' : 'Pages & Tabs', pagesHint: T ? 'تب‌های اضافی فروشگاه مثل «درباره ما» یا «گواهینامه‌ها». تب «محصولات/خدمات» همیشه هست.' : 'Extra shop tabs like About Us or Certifications. The products tab is always present.',
+    addPage: T ? 'افزودن صفحه' : 'Add page', noPages: T ? 'صفحه‌ای اضافه نشده است.' : 'No pages added.',
+    pgLabel: T ? 'عنوان تب (فارسی)' : 'Tab label (FA)', pgLabelEn: T ? 'عنوان تب (انگلیسی)' : 'Tab label (EN)', pgType: T ? 'نوع صفحه' : 'Page type',
+    pgText: T ? 'متن + تصویر' : 'Text + images', pgGallery: T ? 'گالری عکس' : 'Photo gallery', pgCards: T ? 'کارت‌ها (گواهینامه/شرکا)' : 'Cards (certs/partners)',
+    pgBody: T ? 'متن (فارسی)' : 'Body (FA)', pgBodyEn: T ? 'متن (انگلیسی)' : 'Body (EN)', pgDesc: T ? 'توضیح (فارسی)' : 'Description (FA)', pgDescEn: T ? 'توضیح (انگلیسی)' : 'Description (EN)',
+    pgImages: T ? 'تصاویر' : 'Images', pgAddImg: T ? 'افزودن تصویر' : 'Add image', pgCardsList: T ? 'کارت‌ها' : 'Cards', pgAddCard: T ? 'افزودن کارت' : 'Add card',
+    cardName: T ? 'عنوان (فارسی)' : 'Name (FA)', cardNameEn: T ? 'عنوان (انگلیسی)' : 'Name (EN)', cardDesc: T ? 'توضیح (فارسی)' : 'Desc (FA)', cardDescEn: T ? 'توضیح (انگلیسی)' : 'Desc (EN)',
+    productsTabLabel: T ? 'عنوان تب محصولات (فارسی)' : 'Products tab label (FA)', productsTabLabelEn: T ? 'عنوان تب محصولات (انگلیسی)' : 'Products tab label (EN)',
+    moveUp: T ? 'بالا' : 'Up', moveDown: T ? 'پایین' : 'Down',
     primary: T ? 'رنگ اصلی' : 'Primary', coverC: T ? 'رنگ کاور' : 'Cover', coverText: T ? 'متن کاور' : 'Cover text', bg: T ? 'پس‌زمینه' : 'Background',
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
     coverImg: T ? 'تصویر کاور' : 'Cover image', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
@@ -175,6 +204,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addProduct = () => upd({ products: [...(draft!.products || []), { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency }] });
   const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
+
+  // ── Pages editing ──
+  const pages = () => draft?.pages || [];
+  const addPage = () => upd({ pages: [...pages(), { id: `pg-${Date.now()}`, label: T ? 'صفحه جدید' : 'New Page', type: 'text', body: '', images: [], cards: [] }] });
+  const updPage = (idx: number, patch: Partial<import('../types').MetaShopPage>) => setDraft(d => { if (!d) return d; const ps = [...(d.pages || [])]; ps[idx] = { ...ps[idx], ...patch }; return { ...d, pages: ps }; });
+  const removePage = (idx: number) => setDraft(d => d ? { ...d, pages: (d.pages || []).filter((_, i) => i !== idx) } : d);
+  const movePage = (idx: number, dir: -1 | 1) => setDraft(d => { if (!d) return d; const ps = [...(d.pages || [])]; const j = idx + dir; if (j < 0 || j >= ps.length) return d; [ps[idx], ps[j]] = [ps[j], ps[idx]]; return { ...d, pages: ps }; });
+  const addPageImage = (idx: number, url: string) => updPage(idx, { images: [...((draft!.pages || [])[idx].images || []), url] });
+  const removePageImage = (idx: number, imgIdx: number) => updPage(idx, { images: ((draft!.pages || [])[idx].images || []).filter((_, i) => i !== imgIdx) });
+  const addCard = (idx: number) => updPage(idx, { cards: [...((draft!.pages || [])[idx].cards || []), { id: `c-${Date.now()}` }] });
+  const updCard = (idx: number, cIdx: number, patch: Partial<import('../types').MetaShopPageCard>) => { const card = ((draft!.pages || [])[idx].cards || []); const next = [...card]; next[cIdx] = { ...next[cIdx], ...patch }; updPage(idx, { cards: next }); };
+  const removeCard = (idx: number, cIdx: number) => updPage(idx, { cards: ((draft!.pages || [])[idx].cards || []).filter((_, i) => i !== cIdx) });
 
   const doImport = () => {
     try { setDraft(d => importFromJson(importText, d || blankShop())); setImportOpen(false); setImportText(''); setMode('editor'); }
@@ -344,6 +385,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <div><label className={lbl}>{t.slug}</label><input className={fld + ' dir-ltr'} value={draft.slug} onChange={e => upd({ slug: slugify(e.target.value) })} placeholder="my-shop" /></div>
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option></select></div>
           <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
+          <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || 'fa'} onChange={e => upd({ defaultLang: e.target.value as 'fa' | 'en' })}><option value="fa">{t.langFa}</option><option value="en">{t.langEn}</option></select></div>
+          <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : 'محصولات'} /></div>
+          <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : 'Product List'} /></div>
         </div>
         <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
       </div>
@@ -460,7 +504,120 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         )}
       </div>
 
+      {/* Pages & Tabs */}
+      <div className={card}>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-bold text-gray-700">{t.pagesT} <span className="text-xs text-gray-400">({pages().length})</span></h4>
+          <button onClick={addPage} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addPage}</button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">{t.pagesHint}</p>
+        {pages().length === 0 ? <p className="text-sm text-gray-400 text-center py-4">{t.noPages}</p> : (
+          <div className="space-y-4">
+            {pages().map((pg, idx) => (
+              <div key={pg.id} className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => movePage(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 text-xs px-1">▲</button>
+                    <button onClick={() => movePage(idx, 1)} disabled={idx === pages().length - 1} className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 text-xs px-1">▼</button>
+                  </div>
+                  <select className={fld + ' bg-white max-w-[200px]'} value={pg.type} onChange={e => updPage(idx, { type: e.target.value as any })}>
+                    <option value="text">{t.pgText}</option><option value="gallery">{t.pgGallery}</option><option value="cards">{t.pgCards}</option>
+                  </select>
+                  <button onClick={() => removePage(idx)} className="text-red-400 hover:text-red-600 ml-auto"><IconTrash className="w-4 h-4" /></button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                  <input className={fld} placeholder={t.pgLabel} value={pg.label} onChange={e => updPage(idx, { label: e.target.value })} />
+                  <input className={fld + ' dir-ltr'} placeholder={t.pgLabelEn} value={pg.labelEn || ''} onChange={e => updPage(idx, { labelEn: e.target.value })} />
+                </div>
+
+                {pg.type === 'text' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <textarea className={fld} rows={5} placeholder={t.pgBody} value={pg.body || ''} onChange={e => updPage(idx, { body: e.target.value })} />
+                    <textarea className={fld + ' dir-ltr'} rows={5} placeholder={t.pgBodyEn} value={pg.bodyEn || ''} onChange={e => updPage(idx, { bodyEn: e.target.value })} />
+                  </div>
+                )}
+                {(pg.type === 'gallery' || pg.type === 'cards') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                    <input className={fld} placeholder={t.pgDesc} value={pg.description || ''} onChange={e => updPage(idx, { description: e.target.value })} />
+                    <input className={fld + ' dir-ltr'} placeholder={t.pgDescEn} value={pg.descriptionEn || ''} onChange={e => updPage(idx, { descriptionEn: e.target.value })} />
+                  </div>
+                )}
+
+                {/* images (text + gallery) */}
+                {(pg.type === 'text' || pg.type === 'gallery') && (
+                  <div className="mt-2">
+                    <label className="text-[11px] font-semibold text-gray-500">{t.pgImages}</label>
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                      {(pg.images || []).map((src, i) => (
+                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
+                          <img src={src} className="w-full h-full object-cover" />
+                          <button onClick={() => removePageImage(idx, i)} className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 leading-none opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
+                      ))}
+                      <PageImageUploader onUpload={url => addPageImage(idx, url)} />
+                    </div>
+                  </div>
+                )}
+
+                {/* cards */}
+                {pg.type === 'cards' && (
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-semibold text-gray-500">{t.pgCardsList} ({(pg.cards || []).length})</label>
+                      <button onClick={() => addCard(idx)} className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.pgAddCard}</button>
+                    </div>
+                    <div className="space-y-2">
+                      {(pg.cards || []).map((c, cIdx) => (
+                        <div key={c.id} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2 bg-gray-50/50">
+                          <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} />
+                          <div className="flex-1 grid grid-cols-2 gap-1.5">
+                            <input className={fld} placeholder={t.cardName} value={c.name || ''} onChange={e => updCard(idx, cIdx, { name: e.target.value })} />
+                            <input className={fld + ' dir-ltr'} placeholder={t.cardNameEn} value={c.nameEn || ''} onChange={e => updCard(idx, cIdx, { nameEn: e.target.value })} />
+                            <textarea className={fld} rows={1} placeholder={t.cardDesc} value={c.desc || ''} onChange={e => updCard(idx, cIdx, { desc: e.target.value })} />
+                            <textarea className={fld + ' dir-ltr'} rows={1} placeholder={t.cardDescEn} value={c.descEn || ''} onChange={e => updCard(idx, cIdx, { descEn: e.target.value })} />
+                          </div>
+                          <button onClick={() => removeCard(idx, cIdx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {importModalEl()}
+    </div>
+  );
+};
+
+// Page image uploader (adds to a list)
+const PageImageUploader: React.FC<{ onUpload: (url: string) => void }> = ({ onUpload }) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const [up, setUp] = useState(false);
+  return (
+    <>
+      <div onClick={() => !up && ref.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
+        {up ? <span className="text-[9px]">...</span> : <IconUpload className="w-4 h-4" />}
+      </div>
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, url => { onUpload(url); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
+    </>
+  );
+};
+
+// Card image uploader (single image)
+const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void }> = ({ image, onUpload, onClear }) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const [up, setUp] = useState(false);
+  return (
+    <div className="shrink-0">
+      <div onClick={() => !up && ref.current?.click()} className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
+        {image ? <img src={image} className="w-full h-full object-contain" /> : (up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3.5 h-3.5" />)}
+      </div>
+      {image && <button onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>}
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, url => { onUpload(url); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
     </div>
   );
 };

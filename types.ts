@@ -529,6 +529,21 @@ export interface MetaShopTheme {
 
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
+// A custom content page shown as an extra tab in the shop (About Us, Certifications, etc.)
+export interface MetaShopPageCard { id: string; image?: string; name?: string; nameEn?: string; desc?: string; descEn?: string; }
+export interface MetaShopPage {
+  id: string;
+  label: string;            // tab label (default language)
+  labelEn?: string;         // tab label when the shop is viewed in English
+  type: 'text' | 'gallery' | 'cards';
+  body?: string;            // text page: paragraphs separated by blank lines
+  bodyEn?: string;
+  description?: string;     // cards page: intro paragraph
+  descriptionEn?: string;
+  images?: string[];        // text page side images OR gallery photos
+  cards?: MetaShopPageCard[]; // cards page (partners, certifications, ...)
+}
+
 export interface MetaShopProduct {
   id: string;
   name: string;
@@ -561,6 +576,10 @@ export interface MetaShop {
   type: MetaShopType;
   isActive: boolean;
   theme: MetaShopTheme;
+  defaultLang?: 'fa' | 'en';   // language the shop opens in (visitor can still toggle)
+  pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
+  productsTabLabel?: string;   // label for the built-in products tab (default localized)
+  productsTabLabelEn?: string;
   // hero / cover
   collectionText?: string;
   title?: string;
