@@ -22,13 +22,14 @@ const CartIcon = ({ s = 18 }: { s?: number }) => (
 
 export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup }) => {
   const isServices = shop.type === 'services';
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
   const [galIdx, setGalIdx] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [step, setStep] = useState<'cart' | 'review'>('cart');
+  const [chosenOpt, setChosenOpt] = useState<Record<string, string>>({}); // productId -> selected rate option id
   useEffect(() => { setGalIdx(0); }, [detail]);
 
   // Resolve a product video URL into an embeddable form
@@ -126,17 +127,34 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     });
   }, [products, activeCat, search]);
 
+  // ── Rate options (up to 3 named rates per product) ──
+  const optionsOf = (p: MetaShopProduct) => p.priceOptions || [];
+  const selOptId = (p: MetaShopProduct): string | undefined => {
+    const opts = optionsOf(p); if (!opts.length) return undefined;
+    return cart[p.id]?.optionId || chosenOpt[p.id] || opts[0].id;
+  };
+  const unitPrice = (p: MetaShopProduct, optId?: string): number => {
+    const opts = optionsOf(p);
+    if (opts.length) { const o = opts.find(x => x.id === optId) || opts[0]; return o?.price ?? 0; }
+    return p.price ?? 0;
+  };
+  const optLabel = (p: MetaShopProduct, optId?: string): string => { const o = optionsOf(p).find(x => x.id === optId); return o ? L(o.label, o.labelEn) : ''; };
+  const selectOption = (p: MetaShopProduct, optId: string) => {
+    setChosenOpt(ch => ({ ...ch, [p.id]: optId }));
+    setCart(c => c[p.id] ? { ...c, [p.id]: { ...c[p.id], optionId: optId } } : c);
+  };
+
   const cartItems = useMemo(() => Object.keys(cart).map(id => {
     const p = products.find(x => x.id === id); if (!p) return null;
-    const qty = cart[id]; const rate = p.price || 0;
-    return { p, qty, rate, line: rate * qty };
-  }).filter(Boolean) as { p: MetaShopProduct; qty: number; rate: number; line: number }[], [cart, products]);
+    const { qty, optionId } = cart[id]; const rate = unitPrice(p, optionId);
+    return { p, qty, optionId, rate, line: rate * qty, optionText: optLabel(p, optionId) };
+  }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string }[], [cart, products, uiLang]);
 
   const cartCount = Object.keys(cart).length;
   const grandTotal = cartItems.reduce((a, c) => a + c.line, 0);
 
-  const addToCart = (p: MetaShopProduct) => { setCart(c => ({ ...c, [p.id]: (c[p.id] || 0) + 1 })); };
-  const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = q; return n; });
+  const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } })); };
+  const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
 
   const submit = async () => {
     if (!form.customerName.trim() || !form.phone.trim()) { setError(t.incomplete); return; }
@@ -148,7 +166,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         phone: form.phone.trim(), email: form.email.trim() || undefined,
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
-        items: cartItems.map(c => ({ productId: c.p.id, name: c.p.name, sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
+        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${c.p.name} — ${c.optionText}` : c.p.name, sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
         total: grandTotal, currency: shop.currency,
       });
       setTracking(code);
@@ -170,18 +188,47 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     ['--ms-heading' as any]: theme.heading, ['--ms-text' as any]: theme.text,
   };
 
-  const PriceBlock = ({ p }: { p: MetaShopProduct }) => (
-    <div className="ms-prices">
-      {p.price != null && (
-        <div className="ms-price-row">
-          <span className="ms-price-amt">{money(p.price)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
+  // Price + rate options + quantity stepper / add button (used on cards and in the detail modal)
+  const Buy = ({ p, big = false }: { p: MetaShopProduct; big?: boolean }) => {
+    const opts = optionsOf(p);
+    const selId = selOptId(p);
+    const qty = cart[p.id]?.qty || 0;
+    const curPrice = unitPrice(p, selId);
+    return (
+      <div className="ms-buy">
+        {opts.length > 0 && (
+          <div className="ms-opts">
+            {opts.map(o => (
+              <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
+                <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
+                <span className="ms-opt-price">{money(o.price)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ms-prices">
+          {(curPrice != null) && (
+            <div className="ms-price-row">
+              <span className="ms-price-amt">{money(curPrice)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
+            </div>
+          )}
+          {!isServices && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && (
+            <div className="ms-price-row"><span className="ms-price-amt ms-pack">{money(p.packPrice)} <span className="ms-price-unit">{t.perPack}</span></span></div>
+          )}
         </div>
-      )}
-      {!isServices && p.packPrice != null && p.packPrice > 0 && (
-        <div className="ms-price-row"><span className="ms-price-amt ms-pack">{money(p.packPrice)} <span className="ms-price-unit">{t.perPack}</span></span></div>
-      )}
-    </div>
-  );
+        {qty > 0 ? (
+          <div className={`ms-card-qty ${big ? 'big' : ''}`}>
+            <button onClick={() => setQty(p.id, qty - 1)}>−</button>
+            <span className="ms-card-qnum">{qty}</span>
+            <button onClick={() => setQty(p.id, qty + 1)}>+</button>
+            <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
+          </div>
+        ) : (
+          <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="ms-root" dir={T ? 'rtl' : 'ltr'} style={cssVars}>
@@ -245,7 +292,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {filtered.length === 0 ? <p className="ms-empty">{t.empty}</p> : (
           <div className="ms-grid">
             {filtered.map(p => {
-              const inCart = cart[p.id] > 0;
               return (
                 <article className="ms-card" key={p.id}>
                   <div className="ms-card-img" onClick={() => setDetail(p)}>
@@ -269,8 +315,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                         {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
                       </div>
                     )}
-                    <PriceBlock p={p} />
-                    <button className={`ms-add ${inCart ? 'in' : ''}`} onClick={() => addToCart(p)}>{inCart ? `${t.added} (${cart[p.id]})` : t.add}</button>
+                    <Buy p={p} />
                   </div>
                 </article>
               );
@@ -360,8 +405,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               {!isServices && (detail.pack || detail.moq) && (
                 <div className="ms-meta">{detail.pack != null && <span>{t.pack}: <b>{detail.pack} {detail.unit}</b></span>}{detail.moq && <span>{t.moq}: <b>{detail.moq}</b></span>}</div>
               )}
-              <PriceBlock p={detail} />
-              <button className="ms-add lg" onClick={() => { addToCart(detail); setDetail(null); }}>{t.add}</button>
+              <Buy p={detail} big />
             </div>
           </div>
         </div>
@@ -376,11 +420,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {step === 'cart' && (
           <>
             <div className="ms-drawer-body">
-              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line }) => (
+              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, optionText }) => (
                 <div className="ms-citem" key={p.id}>
                   {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
                   <div className="ms-citem-info">
                     <div className="ms-citem-name">{p.name}</div>
+                    {optionText && <div className="ms-citem-opt">{optionText}</div>}
                     {p.sku && <div className="ms-citem-sku">{p.sku}</div>}
                     <div className="ms-citem-row">
                       <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
@@ -413,9 +458,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <table className="ms-inv-table">
                   <thead><tr><th>{t.colItem}</th><th className="c">{t.colQty}</th><th className="r">{t.colUnit}</th><th className="r">{t.colLine}</th></tr></thead>
                   <tbody>
-                    {cartItems.map(({ p, qty, rate, line }) => (
+                    {cartItems.map(({ p, qty, rate, line, optionText }) => (
                       <tr key={p.id}>
-                        <td>{p.name}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
+                        <td>{p.name}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
                         <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
                         <td className="r">{p.price != null ? money(rate) : '—'}</td>
                         <td className="r b">{p.price != null ? money(line) : '—'}</td>
@@ -599,10 +644,24 @@ const MS_CSS = `
 .ms-price-amt { font-weight:800; font-size:15px; color:#0f172a; }
 .ms-price-amt.ms-pack { font-size:13px; color:#475569; font-weight:700; }
 .ms-price-unit { font-size:10px; font-weight:400; color:#94a3b8; }
+.ms-buy { margin-top:auto; }
+.ms-opts { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+.ms-opt { display:flex; flex-direction:column; align-items:flex-start; gap:1px; border:1.5px solid #e2e8f0; background:#fff; border-radius:9px; padding:4px 9px; cursor:pointer; transition:all .15s; min-width:0; }
+.ms-opt.on { border-color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 8%, #fff); }
+.ms-opt-label { font-size:10px; font-weight:700; color:#475569; line-height:1.2; }
+.ms-opt.on .ms-opt-label { color:var(--ms-primary); }
+.ms-opt-price { font-size:11px; font-weight:800; color:#0f172a; }
 .ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); }
 .ms-add.in { background:#10b981; }
-.ms-add.lg { margin-top:18px; padding:13px; font-size:14px; }
+.ms-add.lg { margin-top:8px; padding:13px; font-size:14px; }
 .ms-add:active { transform:scale(.98); }
+.ms-card-qty { margin-top:10px; display:flex; align-items:center; gap:8px; }
+.ms-card-qty.big { margin-top:8px; }
+.ms-card-qty > button { width:34px; height:34px; border:1.5px solid var(--ms-primary); background:#fff; color:var(--ms-primary); border-radius:9px; font-size:18px; font-weight:700; cursor:pointer; line-height:1; }
+.ms-card-qty .ms-card-qnum { min-width:28px; text-align:center; font-weight:800; font-size:15px; color:#0f172a; }
+.ms-card-qty .ms-card-rm { width:30px; height:30px; border:none; background:transparent; color:#ef4444; font-size:13px; cursor:pointer; margin-inline-start:auto; }
+.ms-citem-opt { font-size:11px; font-weight:700; color:var(--ms-primary); margin-top:1px; }
+.ms-inv-opt { color:var(--ms-primary); font-weight:600; }
 .ms-colors { display:flex; flex-wrap:wrap; gap:7px; }
 .ms-color-chip { display:inline-flex; align-items:center; gap:5px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:999px; padding:3px 9px 3px 4px; font-size:11px; font-weight:700; color:#475569; }
 .ms-color-chip i { width:15px; height:15px; border-radius:50%; border:1px solid rgba(15,23,42,.18); }

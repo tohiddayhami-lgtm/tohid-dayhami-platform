@@ -164,6 +164,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     pName: T ? 'نام' : 'Name', pSku: T ? 'کد (SKU)' : 'SKU', pGroup: T ? 'دسته' : 'Category', pPrice: T ? 'قیمت' : 'Price', pPack: T ? 'قیمت بسته' : 'Pack price',
     pUnit: T ? 'واحد' : 'Unit', pPackSize: T ? 'تعداد در بسته' : 'Pack size', pMoq: T ? 'حداقل سفارش' : 'MOQ', pStock: T ? 'وضعیت موجودی' : 'Stock label', pDesc: T ? 'توضیحات' : 'Description', pImg: T ? 'تصویر' : 'Image',
     pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
+    rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
+    rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
+    addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
     ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
@@ -205,6 +208,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addProduct = () => upd({ products: [...(draft!.products || []), { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency }] });
   const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
+
+  // ── Product rate options (max 3) ──
+  const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
+  const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
+  const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
 
   // ── Pages editing ──
   const pages = () => draft?.pages || [];
@@ -499,6 +507,26 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
                     <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 self-center mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>
+                </div>
+
+                {/* Rate options (max 3) */}
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-gray-600">{t.rateOptions}</label>
+                    {(p.priceOptions || []).length < 3 && <button onClick={() => addRate(idx)} className="text-[11px] px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addRate}</button>}
+                  </div>
+                  {(p.priceOptions || []).length === 0 ? <p className="text-[11px] text-gray-400">{t.rateHint}</p> : (
+                    <div className="space-y-1.5">
+                      {(p.priceOptions || []).map((o, oIdx) => (
+                        <div key={o.id} className="flex items-center gap-1.5">
+                          <input className={fld} placeholder={t.optLabel} value={o.label} onChange={e => updRate(idx, oIdx, { label: e.target.value })} />
+                          <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updRate(idx, oIdx, { labelEn: e.target.value })} />
+                          <input className={fld + ' max-w-[110px]'} type="number" placeholder={t.optPrice} value={o.price ?? ''} onChange={e => updRate(idx, oIdx, { price: parseFloat(e.target.value) || 0 })} />
+                          <button onClick={() => removeRate(idx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-4 h-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

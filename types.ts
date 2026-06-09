@@ -557,7 +557,9 @@ export interface MetaShopProduct {
   active?: boolean;
   // pricing
   currency?: string;       // overrides shop currency if set
-  price?: number;          // primary price (per unit / per service)
+  price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
+  // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
+  priceOptions?: { id: string; label: string; labelEn?: string; price: number }[];
   packPrice?: number;      // optional pack price (products)
   unit?: string;           // kg, pcs, day, hour, session ...
   priceUnit?: string;      // services: "per day", "per session"
