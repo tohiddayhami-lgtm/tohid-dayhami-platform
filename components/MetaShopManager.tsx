@@ -155,7 +155,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     moveUp: T ? 'بالا' : 'Up', moveDown: T ? 'پایین' : 'Down',
     primary: T ? 'رنگ اصلی' : 'Primary', coverC: T ? 'رنگ کاور' : 'Cover', coverText: T ? 'متن کاور' : 'Cover text', bg: T ? 'پس‌زمینه' : 'Background',
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
-    coverImg: T ? 'تصویر کاور' : 'Cover image', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
+    coverImg: T ? 'تصویر کاور (پس‌زمینه)' : 'Cover image (background)', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
+    orLink: T ? 'یا لینک تصویر' : 'or image URL', addLink: T ? 'افزودن لینک' : 'Add URL', imgUrlPh: T ? 'https://...  (لینک عکس)' : 'https://...  (image URL)',
     phone: T ? 'تلفن' : 'Phone', email: T ? 'ایمیل' : 'Email', website: T ? 'وب‌سایت' : 'Website', address: T ? 'آدرس' : 'Address', footer: T ? 'متن فوتر' : 'Footer text',
     thanksTxt: T ? 'متن تشکر پس از سفارش' : 'Order thank-you text', cartBtn: T ? 'متن دکمه سفارش' : 'Order button text',
     routeHint: T ? 'سفارش‌های این فروشگاه به کارتابل چه کسانی برود؟' : 'Whose cartable should orders go to?',
@@ -419,20 +420,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <div><label className={lbl}>{t.heroTitle}</label><input className={fld} value={draft.title || ''} onChange={e => upd({ title: e.target.value })} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.heroSub}</label><input className={fld} value={draft.subtitle || ''} onChange={e => upd({ subtitle: e.target.value })} /></div>
           <div><label className={lbl}>{t.coverImg}</label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               {draft.coverImage && <img src={draft.coverImage} className="w-14 h-10 object-cover rounded border" />}
               <button onClick={() => coverInputRef.current?.click()} className="px-3 py-2 rounded-lg border border-gray-300 text-sm flex items-center gap-1"><IconUpload className="w-4 h-4" />{t.upload}</button>
               {draft.coverImage && <button onClick={() => upd({ coverImage: '' })} className="text-red-400"><IconTrash className="w-4 h-4" /></button>}
               <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ coverImage: url })); }} />
             </div>
+            <input className={fld + ' dir-ltr text-xs'} placeholder={t.orLink} value={draft.coverImage || ''} onChange={e => upd({ coverImage: e.target.value })} />
           </div>
           <div><label className={lbl}>{t.logo}</label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-2">
               {draft.logo && <img src={draft.logo} className="w-10 h-10 object-contain rounded border" />}
               <button onClick={() => logoInputRef.current?.click()} className="px-3 py-2 rounded-lg border border-gray-300 text-sm flex items-center gap-1"><IconUpload className="w-4 h-4" />{t.upload}</button>
               {draft.logo && <button onClick={() => upd({ logo: '' })} className="text-red-400"><IconTrash className="w-4 h-4" /></button>}
               <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ logo: url })); }} />
             </div>
+            <input className={fld + ' dir-ltr text-xs'} placeholder={t.orLink} value={draft.logo || ''} onChange={e => upd({ logo: e.target.value })} />
           </div>
           <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld} value={draft.orderThankYouText || ''} onChange={e => upd({ orderThankYouText: e.target.value })} /></div>
@@ -623,39 +626,47 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   );
 };
 
-// Page image uploader (adds to a list)
+// Page image adder (upload OR paste URL)
 const PageImageUploader: React.FC<{ onUpload: (url: string) => void }> = ({ onUpload }) => {
   const ref = useRef<HTMLInputElement>(null);
   const [up, setUp] = useState(false);
+  const [url, setUrl] = useState('');
   return (
-    <>
+    <div className="flex flex-col gap-1 w-16">
       <div onClick={() => !up && ref.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
         {up ? <span className="text-[9px]">...</span> : <IconUpload className="w-4 h-4" />}
       </div>
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, url => { onUpload(url); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
-    </>
-  );
-};
-
-// Card image uploader (single image)
-const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void }> = ({ image, onUpload, onClear }) => {
-  const ref = useRef<HTMLInputElement>(null);
-  const [up, setUp] = useState(false);
-  return (
-    <div className="shrink-0">
-      <div onClick={() => !up && ref.current?.click()} className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
-        {image ? <img src={image} className="w-full h-full object-contain" /> : (up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3.5 h-3.5" />)}
+      <div className="flex gap-0.5">
+        <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (url.trim()) { onUpload(url.trim()); setUrl(''); } } }} />
+        <button onClick={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
       </div>
-      {image && <button onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>}
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, url => { onUpload(url); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
     </div>
   );
 };
 
-// Multi-image gallery uploader for a product (add several, remove any, first = main)
+// Card image (upload OR paste URL)
+const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void }> = ({ image, onUpload, onClear }) => {
+  const ref = useRef<HTMLInputElement>(null);
+  const [up, setUp] = useState(false);
+  const [url, setUrl] = useState('');
+  return (
+    <div className="shrink-0 w-12">
+      <div onClick={() => !up && ref.current?.click()} className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
+        {image ? <img src={image} className="w-full h-full object-contain" /> : (up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3.5 h-3.5" />)}
+      </div>
+      {image ? <button onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
+        : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && url.trim()) { e.preventDefault(); onUpload(url.trim()); setUrl(''); } }} onBlur={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} />}
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
+    </div>
+  );
+};
+
+// Multi-image gallery uploader for a product (upload several OR paste image URLs; first = main)
 const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) => void; lang: Language }> = ({ images, onChange, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
   const [up, setUp] = useState(false);
+  const [url, setUrl] = useState('');
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
@@ -663,11 +674,12 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
     let remaining = arr.length;
     const collected: string[] = [];
     const done = () => { if (--remaining === 0) { onChange([...images, ...collected]); setUp(false); } };
-    arr.forEach(f => uploadFileWithProgress(f, () => {}, url => { collected.push(url); done(); }, err => { alert(err.message); done(); }, 'images'));
+    arr.forEach(f => uploadFileWithProgress(f, () => {}, u => { collected.push(u); done(); }, err => { alert(err.message); done(); }, 'images'));
   };
+  const addUrl = () => { const u = url.trim(); if (!u) return; onChange([...images, u]); setUrl(''); };
   return (
-    <div className="shrink-0 w-[74px]">
-      <div className="grid grid-cols-2 gap-1">
+    <div className="shrink-0 w-[150px]">
+      <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
           <div key={i} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
             <img src={src} className="w-full h-full object-cover" />
@@ -675,9 +687,13 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
             <button onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>
         ))}
-        <div onClick={() => !up && ref.current?.click()} className="w-[34px] h-[34px] rounded border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
+        <div onClick={() => !up && ref.current?.click()} className="w-[34px] h-[34px] rounded border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300" title={lang === 'fa' ? 'آپلود' : 'Upload'}>
           {up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3 h-3" />}
         </div>
+      </div>
+      <div className="flex gap-1 mt-1">
+        <input className="flex-1 min-w-0 px-1.5 py-1 rounded border border-gray-200 text-[10px] outline-none dir-ltr" placeholder={lang === 'fa' ? 'لینک عکس' : 'image URL'} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
+        <button onClick={addUrl} disabled={!url.trim()} className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500 shrink-0"><IconPlus className="w-3 h-3" /></button>
       </div>
       <input type="file" ref={ref} className="hidden" accept="image/*" multiple onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
     </div>
