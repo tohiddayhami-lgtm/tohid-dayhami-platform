@@ -129,6 +129,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
+  const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
 
@@ -144,6 +145,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     name: T ? 'نام فروشگاه' : 'Shop name', slug: T ? 'شناسه لینک (slug)' : 'Link slug', type: T ? 'نوع' : 'Type',
     typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', currency: T ? 'واحد پول' : 'Currency',
     defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
+    langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند. کد مثل en، fa، zh، ar. ترجمه‌ی محتوا (نام/توضیحات محصول) را در همان محصول وارد کنید.' : 'Languages the customer can switch between. Code like en, fa, zh, ar. Enter content translations on each product.',
+    langCode: T ? 'کد' : 'Code', langName: T ? 'نام نمایشی' : 'Display name', langRtl: T ? 'راست‌چین' : 'RTL', addLang: T ? 'افزودن زبان' : 'Add language',
+    transBtn: T ? 'ترجمه‌ها' : 'Translations', transFor: T ? 'ترجمه برای' : 'Translation for',
     pagesT: T ? 'صفحات و تب‌ها' : 'Pages & Tabs', pagesHint: T ? 'تب‌های اضافی فروشگاه مثل «درباره ما» یا «گواهینامه‌ها». تب «محصولات/خدمات» همیشه هست.' : 'Extra shop tabs like About Us or Certifications. The products tab is always present.',
     addPage: T ? 'افزودن صفحه' : 'Add page', noPages: T ? 'صفحه‌ای اضافه نشده است.' : 'No pages added.',
     pgLabel: T ? 'عنوان تب (فارسی)' : 'Tab label (FA)', pgLabelEn: T ? 'عنوان تب (انگلیسی)' : 'Tab label (EN)', pgType: T ? 'نوع صفحه' : 'Page type',
@@ -222,6 +226,19 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addProduct = () => upd({ products: [...(draft!.products || []), { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency }] });
   const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
+  const updProductI18n = (idx: number, code: string, field: string, val: string) => {
+    const p = draft!.products[idx];
+    const i18n: Record<string, Record<string, string>> = { ...(p.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: val };
+    updProduct(idx, { i18n });
+  };
+
+  // ── Languages ──
+  const shopLangs = () => draft?.languages || [];
+  const addLang = () => upd({ languages: [...shopLangs(), { code: '', name: '' }] });
+  const updLang = (idx: number, patch: Partial<import('../types').MetaShopLang>) => setDraft(d => { if (!d) return d; const ls = [...(d.languages || [])]; ls[idx] = { ...ls[idx], ...patch }; return { ...d, languages: ls }; });
+  const removeLang = (idx: number) => setDraft(d => d ? { ...d, languages: (d.languages || []).filter((_, i) => i !== idx) } : d);
+  const langOptions = (): { code: string; name: string }[] => { const ls = shopLangs().filter(l => l.code); return ls.length ? ls : [{ code: 'fa', name: 'فارسی' }, { code: 'en', name: 'English' }]; };
 
   // ── Product rate options (max 3) ──
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
@@ -422,9 +439,29 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <div><label className={lbl}>{t.slug}</label><input className={fld + ' dir-ltr'} value={draft.slug} onChange={e => upd({ slug: slugify(e.target.value) })} placeholder="my-shop" /></div>
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option></select></div>
           <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
-          <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || 'fa'} onChange={e => upd({ defaultLang: e.target.value as 'fa' | 'en' })}><option value="fa">{t.langFa}</option><option value="en">{t.langEn}</option></select></div>
+          <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
           <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : 'محصولات'} /></div>
           <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : 'Product List'} /></div>
+        </div>
+
+        {/* Languages */}
+        <div className="border-t border-gray-100 pt-4 mt-4">
+          <div className="flex items-center justify-between mb-1">
+            <h5 className="text-sm font-bold text-gray-700">{t.langsT}</h5>
+            <button onClick={addLang} className="text-xs px-2.5 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addLang}</button>
+          </div>
+          <p className="text-xs text-gray-500 mb-2">{t.langsHint}</p>
+          <div className="flex flex-wrap gap-2">
+            {shopLangs().length === 0 && <span className="text-xs text-gray-400">fa، en {T ? '(پیش‌فرض)' : '(default)'}</span>}
+            {shopLangs().map((lg, idx) => (
+              <div key={idx} className="flex items-center gap-1 border border-gray-200 rounded-lg p-1.5 bg-gray-50/60">
+                <input className="w-12 px-1.5 py-1 rounded border border-gray-200 text-xs outline-none dir-ltr text-center" placeholder={t.langCode} value={lg.code} onChange={e => updLang(idx, { code: e.target.value.trim().toLowerCase() })} />
+                <input className="w-24 px-1.5 py-1 rounded border border-gray-200 text-xs outline-none" placeholder={t.langName} value={lg.name} onChange={e => updLang(idx, { name: e.target.value })} />
+                <label className="flex items-center gap-1 text-[10px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={!!lg.rtl} onChange={e => updLang(idx, { rtl: e.target.checked })} />{t.langRtl}</label>
+                <button onClick={() => removeLang(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+          </div>
         </div>
         <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
       </div>
@@ -623,11 +660,25 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <textarea className={fld + ' col-span-2 md:col-span-4'} rows={1} placeholder={t.pDesc} value={p.description || ''} onChange={e => updProduct(idx, { description: e.target.value })} />
                     <input className={fld + ' col-span-2 md:col-span-4 dir-ltr'} placeholder={t.pVideo} value={p.videoUrl || ''} onChange={e => updProduct(idx, { videoUrl: e.target.value })} />
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 items-center">
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
-                    <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 self-center mt-1"><IconTrash className="w-4 h-4" /></button>
+                    {shopLangs().length > 0 && <button onClick={() => setTransOpen(s => ({ ...s, [p.id]: !s[p.id] }))} className={`text-[10px] px-1.5 py-0.5 rounded mt-1 ${transOpen[p.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title={t.transBtn}>🌐 {t.transBtn}</button>}
+                    <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>
                 </div>
+
+                {/* Per-language translations */}
+                {transOpen[p.id] && shopLangs().length > 0 && (
+                  <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                    {shopLangs().filter(l => l.code).map(lg => (
+                      <div key={lg.code} className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-gray-500 w-20 shrink-0">{t.transFor} {lg.name || lg.code}</span>
+                        <input className={fld} placeholder={t.pName} value={p.i18n?.[lg.code]?.name || ''} onChange={e => updProductI18n(idx, lg.code, 'name', e.target.value)} />
+                        <input className={fld} placeholder={t.pDesc} value={p.i18n?.[lg.code]?.description || ''} onChange={e => updProductI18n(idx, lg.code, 'description', e.target.value)} />
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Rate options (max 3) */}
                 <div className="mt-3 border-t border-gray-100 pt-3">

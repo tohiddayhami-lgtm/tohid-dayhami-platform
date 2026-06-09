@@ -529,6 +529,9 @@ export interface MetaShopTheme {
 
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
+// A language a shop can be displayed in (beyond the default fa/en)
+export interface MetaShopLang { code: string; name: string; rtl?: boolean; }
+
 // A discount code the customer can enter at checkout
 export interface MetaShopDiscount {
   id: string;
@@ -554,7 +557,7 @@ export interface MetaShopFee {
 }
 
 // A custom content page shown as an extra tab in the shop (About Us, Certifications, etc.)
-export interface MetaShopPageCard { id: string; image?: string; name?: string; nameEn?: string; desc?: string; descEn?: string; }
+export interface MetaShopPageCard { id: string; image?: string; name?: string; nameEn?: string; desc?: string; descEn?: string; i18n?: Record<string, Record<string, string>>; }
 export interface MetaShopPage {
   id: string;
   label: string;            // tab label (default language)
@@ -566,6 +569,7 @@ export interface MetaShopPage {
   descriptionEn?: string;
   images?: string[];        // text page side images OR gallery photos
   cards?: MetaShopPageCard[]; // cards page (partners, certifications, ...)
+  i18n?: Record<string, Record<string, string>>; // per-language: { zh: { label, body, description } }
 }
 
 export interface MetaShopProduct {
@@ -578,6 +582,7 @@ export interface MetaShopProduct {
   description?: string;
   images: string[];
   videoUrl?: string;       // optional product video (YouTube / Vimeo / direct mp4 link)
+  i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description } }
   active?: boolean;
   // pricing
   currency?: string;       // overrides shop currency if set
@@ -603,7 +608,9 @@ export interface MetaShop {
   type: MetaShopType;
   isActive: boolean;
   theme: MetaShopTheme;
-  defaultLang?: 'fa' | 'en';   // language the shop opens in (visitor can still toggle)
+  defaultLang?: string;        // language code the shop opens in (visitor can still toggle)
+  languages?: MetaShopLang[];  // supported display languages (defaults to fa + en when absent)
+  i18n?: Record<string, Record<string, string>>; // shop-level per-language: { zh: { title, subtitle, collectionText } }
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)
   productsTabLabelEn?: string;

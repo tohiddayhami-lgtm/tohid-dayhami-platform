@@ -66,69 +66,86 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [lookupPhone, setLookupPhone] = useState('');
   const [lookupResults, setLookupResults] = useState<MetaShopOrder[] | null>(null);
   const [copied, setCopied] = useState(false);
-  const [uiLang, setUiLang] = useState<Language>(shop.defaultLang || lang);
+  // Supported languages (defaults to FA + EN). Visitor can switch; default from shop.defaultLang.
+  const langs: import('../types').MetaShopLang[] = (shop.languages && shop.languages.length)
+    ? shop.languages
+    : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
+  const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
+  const isRtl = (code: string) => { const l = langs.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
+  const [uiLang, setUiLang] = useState<string>(shop.defaultLang || langs[0]?.code || lang);
   const [tab, setTab] = useState<string>('products');
 
   const T = uiLang === 'fa';
+  const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
+  const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
   const pages = shop.pages || [];
-  // pick the right language for a bilingual field
-  const L = (fa?: string, en?: string) => (uiLang === 'en' ? (en || fa) : fa) || '';
-  const t = {
-    cartBtn: shop.cartButtonText || (T ? 'ثبت سفارش' : 'Place Order'),
-    add: isServices ? (T ? 'افزودن به درخواست' : 'Add to request') : (T ? 'افزودن به سبد' : 'Add to cart'),
-    added: T ? 'افزوده شد ✓' : 'Added ✓',
-    all: T ? 'همه' : 'All',
-    searchPh: shop.searchPlaceholder || (T ? 'جستجوی محصولات...' : 'Search products...'),
-    empty: T ? 'موردی یافت نشد.' : 'No items found.',
-    cartTitle: T ? 'سبد سفارش شما' : 'Your Order',
-    cartEmpty: T ? 'هنوز موردی اضافه نشده است.' : 'No items yet.',
-    qty: T ? 'تعداد' : 'Qty',
-    remove: T ? 'حذف' : 'Remove',
-    total: T ? 'جمع کل' : 'Total',
-    yourInfo: T ? 'اطلاعات شما' : 'Your Information',
-    name: T ? 'نام و نام خانوادگی' : 'Full Name',
-    company: T ? 'شرکت' : 'Company',
-    phone: T ? 'موبایل / واتس‌اپ' : 'Mobile / WhatsApp',
-    email: T ? 'ایمیل' : 'Email',
-    country: T ? 'کشور' : 'Country',
-    city: T ? 'شهر / مقصد' : 'City / Destination',
-    notes: T ? 'توضیحات و درخواست‌های ویژه' : 'Notes / Special requests',
-    submit: shop.cartButtonText || (T ? 'ثبت نهایی سفارش' : 'Submit Order'),
-    submitting: T ? 'در حال ثبت...' : 'Submitting...',
-    incomplete: T ? 'لطفاً نام و شماره موبایل را وارد کنید.' : 'Please enter your name and phone.',
-    err: T ? 'خطا در ثبت سفارش. دوباره تلاش کنید.' : 'Failed to submit. Please try again.',
-    thanksTitle: T ? 'سفارش شما ثبت شد!' : 'Order received!',
-    thanksDesc: shop.orderThankYouText || (T ? 'سفارش شما با موفقیت ثبت شد. کد رهگیری زیر را نزد خود نگه دارید؛ به‌زودی با شما تماس می‌گیریم.' : 'Your order has been received. Keep your tracking code below — we will contact you shortly.'),
-    trackingCode: T ? 'کد رهگیری سفارش' : 'Order tracking code',
-    copy: T ? 'کپی' : 'Copy', copied: T ? 'کپی شد' : 'Copied',
-    close: T ? 'بستن' : 'Close',
-    trackMy: T ? 'پیگیری سفارش‌های من' : 'Track my orders',
-    trackBtn: T ? 'مشاهده' : 'View',
-    noOrders: T ? 'سفارشی با این شماره یافت نشد.' : 'No orders found for this number.',
-    moq: T ? 'حداقل سفارش' : 'MOQ',
-    pack: T ? 'بسته' : 'Pack',
-    statusNew: T ? 'جدید' : 'New', statusProg: T ? 'در حال انجام' : 'In progress', statusDone: T ? 'انجام شد' : 'Done', statusCanc: T ? 'لغو شد' : 'Cancelled',
-    perPack: T ? '/ بسته' : '/ pack',
-    review: T ? 'ادامه و پیش‌نمایش فاکتور' : 'Continue to invoice preview',
-    invoiceTitle: T ? 'پیش‌نمایش فاکتور' : 'Invoice preview',
-    editCart: T ? 'ویرایش سبد' : 'Edit cart',
-    colItem: T ? 'شرح' : 'Item',
-    colQty: T ? 'تعداد' : 'Qty',
-    colUnit: T ? 'قیمت واحد' : 'Unit price',
-    colLine: T ? 'مبلغ' : 'Amount',
-    invHint: T ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.' : 'This is a proforma preview; the final amount is confirmed after review.',
-    confirm: T ? 'ثبت نهایی سفارش' : 'Confirm & submit order',
-    productsTab: isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Product List'),
-    subtotalLabel: T ? 'جمع اقلام' : 'Items subtotal',
-    feesLabel: T ? 'هزینه‌های اضافی' : 'Additional fees',
-    optionalFee: T ? '(اختیاری)' : '(optional)',
-    discountTitle: T ? 'کد تخفیف' : 'Discount code',
-    discountPh: T ? 'کد تخفیف را وارد کنید' : 'Enter discount code',
-    apply: T ? 'اعمال' : 'Apply',
-    discountLine: T ? 'تخفیف' : 'Discount',
-    taxIncl: T ? 'شامل مالیات' : 'incl. tax',
-    taxExcl: T ? 'مالیات' : 'Tax',
+
+  // Legacy bilingual fallback (fa base / en variant); for other languages → en||fa
+  const L = (faVal?: string, enVal?: string) => (uiLang === 'fa' ? faVal : (enVal || faVal)) || (faVal || enVal || '');
+  // Content translation: item.i18n[lang][key] if present, else the legacy value
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
+
+  // ── UI chrome strings per language (en is the fallback for any missing key/language) ──
+  const STRINGS: Record<string, Record<string, string>> = {
+    en: {
+      cartBtn: 'Place Order', addProduct: 'Add to cart', addService: 'Add to request', added: 'Added ✓', all: 'All',
+      searchPh: 'Search products...', empty: 'No items found.', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
+      qty: 'Qty', remove: 'Remove', total: 'Total', yourInfo: 'Your Information', name: 'Full Name', company: 'Company',
+      phone: 'Mobile / WhatsApp', email: 'Email', country: 'Country', city: 'City / Destination', notes: 'Notes / Special requests',
+      submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
+      thanksTitle: 'Order received!', thanksDesc: 'Your order has been received. Keep your tracking code below — we will contact you shortly.',
+      trackingCode: 'Order tracking code', copy: 'Copy', copied: 'Copied', close: 'Close', trackMy: 'Track my orders', trackBtn: 'View',
+      noOrders: 'No orders found for this number.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
+      perPack: '/ pack', review: 'Continue to invoice preview', invoiceTitle: 'Invoice preview', editCart: 'Edit cart',
+      colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
+      confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
+      feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
+      discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
+    },
+    fa: {
+      cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
+      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
+      qty: 'تعداد', remove: 'حذف', total: 'جمع کل', yourInfo: 'اطلاعات شما', name: 'نام و نام خانوادگی', company: 'شرکت',
+      phone: 'موبایل / واتس‌اپ', email: 'ایمیل', country: 'کشور', city: 'شهر / مقصد', notes: 'توضیحات و درخواست‌های ویژه',
+      submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
+      thanksTitle: 'سفارش شما ثبت شد!', thanksDesc: 'سفارش شما با موفقیت ثبت شد. کد رهگیری زیر را نزد خود نگه دارید؛ به‌زودی با شما تماس می‌گیریم.',
+      trackingCode: 'کد رهگیری سفارش', copy: 'کپی', copied: 'کپی شد', close: 'بستن', trackMy: 'پیگیری سفارش‌های من', trackBtn: 'مشاهده',
+      noOrders: 'سفارشی با این شماره یافت نشد.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
+      perPack: '/ بسته', review: 'ادامه و پیش‌نمایش فاکتور', invoiceTitle: 'پیش‌نمایش فاکتور', editCart: 'ویرایش سبد',
+      colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
+      confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
+      feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
+      discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
+    },
+    zh: {
+      cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
+      searchPh: '搜索商品...', empty: '未找到商品。', cartTitle: '您的订单', cartEmpty: '购物车为空。',
+      qty: '数量', remove: '移除', total: '合计', yourInfo: '您的信息', name: '姓名', company: '公司',
+      phone: '手机 / WhatsApp', email: '邮箱', country: '国家', city: '城市 / 目的地', notes: '备注 / 特殊要求',
+      submit: '提交订单', submitting: '提交中...', incomplete: '请填写姓名和电话。', err: '提交失败，请重试。',
+      thanksTitle: '订单已收到！', thanksDesc: '您的订单已收到。请保存下方的追踪码，我们会尽快与您联系。',
+      trackingCode: '订单追踪码', copy: '复制', copied: '已复制', close: '关闭', trackMy: '查询我的订单', trackBtn: '查看',
+      noOrders: '未找到该号码的订单。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
+      perPack: '/ 包', review: '继续并预览发票', invoiceTitle: '发票预览', editCart: '编辑购物车',
+      colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
+      confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
+      feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
+      discountLine: '折扣', taxIncl: '含税', taxExcl: '税', footPhone: '电话：', footEmail: '邮箱：', footWebsite: '网站：',
+    },
   };
+  const dict = STRINGS[uiLang] || STRINGS.en;
+  const S = (k: string) => dict[k] ?? STRINGS.en[k] ?? STRINGS.fa[k] ?? k;
+  const t: Record<string, string> = {};
+  Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
+  t.add = isServices ? S('addService') : S('addProduct');
+  t.productsTab = isServices ? S('tabServices') : S('tabProducts');
+  if (shop.cartButtonText) { t.cartBtn = shop.cartButtonText; t.submit = shop.cartButtonText; }
+  if (shop.searchPlaceholder) t.searchPh = shop.searchPlaceholder;
+  if (shop.orderThankYouText) t.thanksDesc = shop.orderThankYouText;
+
+  // Content helpers (use per-product/shop i18n with legacy fallback)
+  const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
+  const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
 
   const theme = shop.theme;
   const money = (n?: number) => n == null ? '' : `${shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
@@ -226,7 +243,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         phone: form.phone.trim(), email: form.email.trim() || undefined,
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
-        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${c.p.name} — ${c.optionText}` : c.p.name, sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
+        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
         fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
@@ -298,7 +315,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   return (
-    <div className="ms-root" dir={T ? 'rtl' : 'ltr'} style={cssVars}>
+    <div className="ms-root" dir={dir} style={cssVars}>
       <style>{MS_CSS}</style>
 
       {/* Topbar */}
@@ -309,10 +326,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <span className="ms-name">{shop.name}</span>
           </div>
           <div className="ms-top-actions">
-            <div className="ms-lang">
-              <button className={uiLang === 'fa' ? 'on' : ''} onClick={() => setUiLang('fa')}>FA</button>
-              <button className={uiLang === 'en' ? 'on' : ''} onClick={() => setUiLang('en')}>EN</button>
-            </div>
+            {langs.length > 1 && (
+              <div className="ms-lang">
+                {langs.map(lg => <button key={lg.code} className={uiLang === lg.code ? 'on' : ''} onClick={() => setUiLang(lg.code)}>{lg.name}</button>)}
+              </div>
+            )}
             <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
               <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
             </button>
@@ -323,9 +341,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       {/* Cover */}
       <header className="ms-cover" style={shop.coverImage ? { backgroundImage: `linear-gradient(160deg, rgba(0,0,0,.33), rgba(0,0,0,.5)), url(${shop.coverImage})` } : undefined}>
         <div className="ms-cover-inner">
-          {shop.collectionText && <p className="ms-collection">{shop.collectionText}</p>}
-          <h1>{shop.title || shop.name}</h1>
-          {shop.subtitle && <p className="ms-subtitle">{shop.subtitle}</p>}
+          {(TR(shop.i18n, 'collectionText', shop.collectionText || '')) && <p className="ms-collection">{TR(shop.i18n, 'collectionText', shop.collectionText || '')}</p>}
+          <h1>{TR(shop.i18n, 'title', shop.title || shop.name)}</h1>
+          {(TR(shop.i18n, 'subtitle', shop.subtitle || '')) && <p className="ms-subtitle">{TR(shop.i18n, 'subtitle', shop.subtitle || '')}</p>}
         </div>
       </header>
 
@@ -334,7 +352,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {pages.length > 0 && (
           <nav className="ms-tabs">
             <button className={`ms-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>{L(shop.productsTabLabel, shop.productsTabLabelEn) || t.productsTab}</button>
-            {pages.map(pg => <button key={pg.id} className={`ms-tab ${tab === pg.id ? 'active' : ''}`} onClick={() => setTab(pg.id)}>{L(pg.label, pg.labelEn)}</button>)}
+            {pages.map(pg => <button key={pg.id} className={`ms-tab ${tab === pg.id ? 'active' : ''}`} onClick={() => setTab(pg.id)}>{TR(pg.i18n, 'label', L(pg.label, pg.labelEn))}</button>)}
           </nav>
         )}
 
@@ -362,7 +380,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               return (
                 <article className="ms-card" key={p.id}>
                   <div className="ms-card-img" onClick={() => setDetail(p)}>
-                    {p.images && p.images[0] ? <img src={p.images[0]} alt={p.name} loading="lazy" /> : <div className="ms-noimg">{p.name.charAt(0)}</div>}
+                    {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
                     {p.group && <span className="ms-group-badge">{p.group}</span>}
                     <div className="ms-media-badges">
                       {p.images && p.images.length > 1 && <span className="ms-media-badge">🖼 {p.images.length}</span>}
@@ -370,12 +388,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     </div>
                   </div>
                   <div className="ms-card-body">
-                    <h3 className="ms-pname" onClick={() => setDetail(p)}>{p.name}</h3>
+                    <h3 className="ms-pname" onClick={() => setDetail(p)}>{pName(p)}</h3>
                     <div className="ms-badges">
                       {p.sku && <span className="ms-sku">{p.sku}</span>}
                       {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
                     </div>
-                    {p.description && <p className="ms-desc">{p.description}</p>}
+                    {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
                     {!isServices && (p.pack || p.moq) && (
                       <div className="ms-meta">
                         {p.pack != null && <span>{t.pack}: <b>{p.pack} {p.unit}</b></span>}
@@ -404,7 +422,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                   : <div className="ms-track-list">{lookupResults.map(o => (
                       <div key={o.id} className="ms-track-item">
                         <div><b>{o.trackingCode}</b> · {o.shopName}</div>
-                        <div className="ms-track-sub">{new Date(o.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')} · {money(o.total)} · <span className="ms-status">{statusLabel(o.status)}</span></div>
+                        <div className="ms-track-sub">{new Date(o.createdAt).toLocaleString(locale)} · {money(o.total)} · <span className="ms-status">{statusLabel(o.status)}</span></div>
                       </div>))}
                     </div>)}
               </div>
@@ -419,9 +437,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
       <footer className="ms-footer">
         <div className="ms-foot-grid">
-          {shop.phone && <div><b>{T ? 'تلفن:' : 'Phone:'}</b> <span dir="ltr">{shop.phone}</span></div>}
-          {shop.email && <div><b>{T ? 'ایمیل:' : 'Email:'}</b> {shop.email}</div>}
-          {shop.website && <div><b>{T ? 'وب‌سایت:' : 'Website:'}</b> {shop.website}</div>}
+          {shop.phone && <div><b>{t.footPhone}</b> <span dir="ltr">{shop.phone}</span></div>}
+          {shop.email && <div><b>{t.footEmail}</b> {shop.email}</div>}
+          {shop.website && <div><b>{t.footWebsite}</b> {shop.website}</div>}
           {shop.address && <div>{shop.address}</div>}
         </div>
         {shop.footerText && <p className="ms-foot-text">{shop.footerText}</p>}
@@ -439,7 +457,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 return (
                   <>
                     <div className="ms-gal-main">
-                      {main ? <img src={main} alt={detail.name} /> : <div className="ms-noimg lg">{detail.name.charAt(0)}</div>}
+                      {main ? <img src={main} alt={pName(detail)} /> : <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>}
                       {imgs.length > 1 && <>
                         <button className="ms-gal-nav prev" onClick={() => setGalIdx((galIdx - 1 + imgs.length) % imgs.length)}>‹</button>
                         <button className="ms-gal-nav next" onClick={() => setGalIdx((galIdx + 1) % imgs.length)}>›</button>
@@ -453,9 +471,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               })()}
             </div>
             <div className="ms-modal-info">
-              <h2>{detail.name}</h2>
+              <h2>{pName(detail)}</h2>
               <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{detail.stockLabel && <span className="ms-stock">{detail.stockLabel}</span>}</div>
-              {detail.description && <p className="ms-modal-desc">{detail.description}</p>}
+              {pDesc(detail) && <p className="ms-modal-desc">{pDesc(detail)}</p>}
               {(() => {
                 const v = videoEmbed(detail.videoUrl);
                 if (!v) return null;
@@ -491,7 +509,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <div className="ms-citem" key={p.id}>
                   {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
                   <div className="ms-citem-info">
-                    <div className="ms-citem-name">{p.name}</div>
+                    <div className="ms-citem-name">{pName(p)}</div>
                     {optionText && <div className="ms-citem-opt">{optionText}</div>}
                     {p.sku && <div className="ms-citem-sku">{p.sku}</div>}
                     <div className="ms-citem-row">
@@ -527,7 +545,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                   <tbody>
                     {cartItems.map(({ p, qty, rate, line, optionText }) => (
                       <tr key={p.id}>
-                        <td>{p.name}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
+                        <td>{pName(p)}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
                         <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
                         <td className="r">{p.price != null ? money(rate) : '—'}</td>
                         <td className="r b">{p.price != null ? money(line) : '—'}</td>
@@ -632,10 +650,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 };
 
 // Custom content page (About Us, Certifications, Gallery, ...)
-const PageView: React.FC<{ page: MetaShopPage; uiLang: Language; L: (fa?: string, en?: string) => string }> = ({ page, L }) => {
-  const title = L(page.label, page.labelEn);
-  const desc = L(page.description, page.descriptionEn);
-  const paras = (L(page.body, page.bodyEn) || '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, en?: string) => string }> = ({ page, uiLang, L }) => {
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
+  const title = TR(page.i18n, 'label', L(page.label, page.labelEn));
+  const desc = TR(page.i18n, 'description', L(page.description, page.descriptionEn));
+  const paras = (TR(page.i18n, 'body', L(page.body, page.bodyEn)) || '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
   const imgs = page.images || [];
 
   if (page.type === 'gallery') {
@@ -656,8 +675,8 @@ const PageView: React.FC<{ page: MetaShopPage; uiLang: Language; L: (fa?: string
           {(page.cards || []).map(c => (
             <div key={c.id} className="ms-pcard">
               {c.image && <div className="ms-pcard-imgwrap"><img src={c.image} alt="" loading="lazy" /></div>}
-              <div className="ms-pcard-name">{L(c.name, c.nameEn)}</div>
-              {(c.desc || c.descEn) && <div className="ms-pcard-desc">{L(c.desc, c.descEn)}</div>}
+              <div className="ms-pcard-name">{TR(c.i18n, 'name', L(c.name, c.nameEn))}</div>
+              {(c.desc || c.descEn || (c.i18n && c.i18n[uiLang] && c.i18n[uiLang].desc)) && <div className="ms-pcard-desc">{TR(c.i18n, 'desc', L(c.desc, c.descEn))}</div>}
             </div>
           ))}
         </div>
