@@ -27,6 +27,7 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
+import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
 export type Language = 'fa' | 'en';
@@ -1115,15 +1116,17 @@ const App: React.FC = () => {
     if (publicShop && publicShop.isActive !== false) {
       return <MetaShopView shop={publicShop} lang={lang} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
     }
+    // Still resolving the shop → show the "raising the shutter" loader (no artificial delay)
+    if (shopLoading || (metaShops.length === 0 && shopSlug)) {
+      return <ShopShutterLoader lang={lang} />;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
-        {shopLoading || (metaShops.length === 0 && shopSlug)
-          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
-          : <div className="text-center text-gray-400">
-              <p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'فروشگاه یافت نشد' : 'Shop not found'}</p>
-              <p className="text-sm">{lang === 'fa' ? 'این فروشگاه وجود ندارد یا غیرفعال است.' : 'This shop does not exist or is inactive.'}</p>
-              <button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back to home'}</button>
-            </div>}
+        <div className="text-center text-gray-400">
+          <p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'فروشگاه یافت نشد' : 'Shop not found'}</p>
+          <p className="text-sm">{lang === 'fa' ? 'این فروشگاه وجود ندارد یا غیرفعال است.' : 'This shop does not exist or is inactive.'}</p>
+          <button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back to home'}</button>
+        </div>
       </div>
     );
   }
