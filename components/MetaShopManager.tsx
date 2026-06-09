@@ -163,6 +163,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     addProduct: T ? 'افزودن مورد' : 'Add item', noProducts: T ? 'موردی اضافه نشده است.' : 'No items added.',
     pName: T ? 'نام' : 'Name', pSku: T ? 'کد (SKU)' : 'SKU', pGroup: T ? 'دسته' : 'Category', pPrice: T ? 'قیمت' : 'Price', pPack: T ? 'قیمت بسته' : 'Pack price',
     pUnit: T ? 'واحد' : 'Unit', pPackSize: T ? 'تعداد در بسته' : 'Pack size', pMoq: T ? 'حداقل سفارش' : 'MOQ', pStock: T ? 'وضعیت موجودی' : 'Stock label', pDesc: T ? 'توضیحات' : 'Description', pImg: T ? 'تصویر' : 'Image',
+    pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
     ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
@@ -480,7 +481,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             {draft.products.map((p, idx) => (
               <div key={p.id} className="border border-gray-200 rounded-xl p-3">
                 <div className="flex items-start gap-3">
-                  <ProductImage product={p} onUpload={(url) => updProduct(idx, { images: [url, ...(p.images || []).slice(1)] })} onClear={() => updProduct(idx, { images: [] })} lang={lang} />
+                  <ProductGallery images={p.images || []} onChange={imgs => updProduct(idx, { images: imgs })} lang={lang} />
                   <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
                     <input className={fld + ' col-span-2'} placeholder={t.pName} value={p.name} onChange={e => updProduct(idx, { name: e.target.value })} />
                     <input className={fld + ' dir-ltr'} placeholder={t.pSku} value={p.sku || ''} onChange={e => updProduct(idx, { sku: e.target.value })} />
@@ -492,6 +493,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     {!isServices && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}
                     <input className={fld} placeholder={t.pStock} value={p.stockLabel || ''} onChange={e => updProduct(idx, { stockLabel: e.target.value })} />
                     <textarea className={fld + ' col-span-2 md:col-span-4'} rows={1} placeholder={t.pDesc} value={p.description || ''} onChange={e => updProduct(idx, { description: e.target.value })} />
+                    <input className={fld + ' col-span-2 md:col-span-4 dir-ltr'} placeholder={t.pVideo} value={p.videoUrl || ''} onChange={e => updProduct(idx, { videoUrl: e.target.value })} />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
@@ -622,18 +624,34 @@ const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => v
   );
 };
 
-// Small product-image uploader
-const ProductImage: React.FC<{ product: MetaShopProduct; onUpload: (url: string) => void; onClear: () => void; lang: Language }> = ({ product, onUpload, onClear, lang }) => {
+// Multi-image gallery uploader for a product (add several, remove any, first = main)
+const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) => void; lang: Language }> = ({ images, onChange, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
   const [up, setUp] = useState(false);
-  const img = product.images && product.images[0];
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    setUp(true);
+    let remaining = arr.length;
+    const collected: string[] = [];
+    const done = () => { if (--remaining === 0) { onChange([...images, ...collected]); setUp(false); } };
+    arr.forEach(f => uploadFileWithProgress(f, () => {}, url => { collected.push(url); done(); }, err => { alert(err.message); done(); }, 'images'));
+  };
   return (
-    <div className="shrink-0">
-      <div onClick={() => !up && ref.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
-        {img ? <img src={img} className="w-full h-full object-cover" /> : (up ? <span className="text-[9px]">...</span> : <IconUpload className="w-4 h-4" />)}
+    <div className="shrink-0 w-[74px]">
+      <div className="grid grid-cols-2 gap-1">
+        {images.map((src, i) => (
+          <div key={i} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
+            <img src={src} className="w-full h-full object-cover" />
+            {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{lang === 'fa' ? 'اصلی' : 'main'}</span>}
+            <button onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
+          </div>
+        ))}
+        <div onClick={() => !up && ref.current?.click()} className="w-[34px] h-[34px] rounded border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
+          {up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3 h-3" />}
+        </div>
       </div>
-      {img && <button onClick={onClear} className="text-[10px] text-red-400 mt-1 w-full text-center">{lang === 'fa' ? 'حذف' : 'clear'}</button>}
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, url => { onUpload(url); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } }} />
+      <input type="file" ref={ref} className="hidden" accept="image/*" multiple onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
     </div>
   );
 };

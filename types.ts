@@ -553,6 +553,7 @@ export interface MetaShopProduct {
   subcategory?: string;
   description?: string;
   images: string[];
+  videoUrl?: string;       // optional product video (YouTube / Vimeo / direct mp4 link)
   active?: boolean;
   // pricing
   currency?: string;       // overrides shop currency if set

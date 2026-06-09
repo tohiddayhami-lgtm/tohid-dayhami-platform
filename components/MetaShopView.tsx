@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { Language } from '../App';
 
@@ -26,8 +26,22 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [activeCat, setActiveCat] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
+  const [galIdx, setGalIdx] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [step, setStep] = useState<'cart' | 'review'>('cart');
+  useEffect(() => { setGalIdx(0); }, [detail]);
+
+  // Resolve a product video URL into an embeddable form
+  const videoEmbed = (url?: string): { type: 'iframe' | 'video' | 'link'; src: string } | null => {
+    if (!url || !url.trim()) return null;
+    const u = url.trim();
+    const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/);
+    if (yt) return { type: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}` };
+    const vm = u.match(/vimeo\.com\/(\d+)/);
+    if (vm) return { type: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}` };
+    if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(u)) return { type: 'video', src: u };
+    return { type: 'link', src: u };
+  };
   const [form, setForm] = useState({ customerName: '', company: '', phone: '', email: '', country: '', city: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [tracking, setTracking] = useState<string | null>(null);
@@ -237,6 +251,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                   <div className="ms-card-img" onClick={() => setDetail(p)}>
                     {p.images && p.images[0] ? <img src={p.images[0]} alt={p.name} loading="lazy" /> : <div className="ms-noimg">{p.name.charAt(0)}</div>}
                     {p.group && <span className="ms-group-badge">{p.group}</span>}
+                    <div className="ms-media-badges">
+                      {p.images && p.images.length > 1 && <span className="ms-media-badge">🖼 {p.images.length}</span>}
+                      {p.videoUrl && <span className="ms-media-badge">▶</span>}
+                    </div>
                   </div>
                   <div className="ms-card-body">
                     <h3 className="ms-pname" onClick={() => setDetail(p)}>{p.name}</h3>
@@ -302,11 +320,37 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         <div className="ms-modal-ov" onClick={() => setDetail(null)}>
           <div className="ms-modal" onClick={e => e.stopPropagation()}>
             <button className="ms-modal-x" onClick={() => setDetail(null)}>✕</button>
-            <div className="ms-modal-gal">{detail.images && detail.images[0] ? <img src={detail.images[0]} alt={detail.name} /> : <div className="ms-noimg lg">{detail.name.charAt(0)}</div>}</div>
+            <div className="ms-modal-gal">
+              {(() => {
+                const imgs = detail.images || [];
+                const main = imgs[galIdx] || imgs[0];
+                return (
+                  <>
+                    <div className="ms-gal-main">
+                      {main ? <img src={main} alt={detail.name} /> : <div className="ms-noimg lg">{detail.name.charAt(0)}</div>}
+                      {imgs.length > 1 && <>
+                        <button className="ms-gal-nav prev" onClick={() => setGalIdx((galIdx - 1 + imgs.length) % imgs.length)}>‹</button>
+                        <button className="ms-gal-nav next" onClick={() => setGalIdx((galIdx + 1) % imgs.length)}>›</button>
+                      </>}
+                    </div>
+                    {imgs.length > 1 && (
+                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" /></button>)}</div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
             <div className="ms-modal-info">
               <h2>{detail.name}</h2>
               <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{detail.stockLabel && <span className="ms-stock">{detail.stockLabel}</span>}</div>
               {detail.description && <p className="ms-modal-desc">{detail.description}</p>}
+              {(() => {
+                const v = videoEmbed(detail.videoUrl);
+                if (!v) return null;
+                if (v.type === 'iframe') return <div className="ms-video"><iframe src={v.src} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="video" /></div>;
+                if (v.type === 'video') return <div className="ms-video"><video src={v.src} controls /></div>;
+                return <a className="ms-video-link" href={v.src} target="_blank" rel="noreferrer">▶ {T ? 'تماشای ویدئو' : 'Watch video'}</a>;
+              })()}
               {detail.colors && detail.colors.length > 0 && (
                 <div className="ms-colors">{detail.colors.map((c, i) => <span key={i} className="ms-color-chip"><i style={{ background: c.hex2 ? `linear-gradient(135deg, ${c.hex}, ${c.hex2})` : c.hex }} />{c.name}</span>)}</div>
               )}
@@ -574,8 +618,21 @@ const MS_CSS = `
 .ms-modal-ov { position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:16px; }
 .ms-modal { background:#fff; border-radius:20px; width:100%; max-width:820px; max-height:90vh; display:flex; overflow:hidden; position:relative; }
 .ms-modal-x { position:absolute; top:12px; inset-inline-end:12px; z-index:10; width:36px; height:36px; border-radius:50%; border:none; background:rgba(15,23,42,.08); color:#475569; cursor:pointer; font-size:14px; }
-.ms-modal-gal { width:46%; background:#f8fafc; display:flex; align-items:center; justify-content:center; }
-.ms-modal-gal img { width:100%; height:100%; max-height:90vh; object-fit:contain; }
+.ms-modal-gal { width:46%; background:#f8fafc; display:flex; flex-direction:column; }
+.ms-gal-main { position:relative; flex:1; min-height:240px; display:flex; align-items:center; justify-content:center; background:#f8fafc; }
+.ms-gal-main img { width:100%; height:100%; max-height:62vh; object-fit:contain; }
+.ms-gal-nav { position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; border:none; background:rgba(255,255,255,.9); color:#334155; font-size:22px; line-height:1; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center; }
+.ms-gal-nav.prev { inset-inline-start:8px; } .ms-gal-nav.next { inset-inline-end:8px; }
+.ms-thumbs { display:flex; gap:6px; padding:8px; overflow-x:auto; background:#fff; border-top:1px solid #eef0f3; scrollbar-width:none; }
+.ms-thumbs::-webkit-scrollbar { display:none; }
+.ms-thumb { flex-shrink:0; width:48px; height:48px; border-radius:8px; overflow:hidden; border:2px solid transparent; background:#f1f5f9; cursor:pointer; padding:0; }
+.ms-thumb.on { border-color:var(--ms-primary); }
+.ms-thumb img { width:100%; height:100%; object-fit:cover; }
+.ms-video { position:relative; width:100%; aspect-ratio:16/9; border-radius:12px; overflow:hidden; background:#000; }
+.ms-video iframe, .ms-video video { width:100%; height:100%; border:0; display:block; }
+.ms-video-link { display:inline-flex; align-items:center; gap:6px; color:var(--ms-primary); font-weight:700; font-size:13px; text-decoration:underline; }
+.ms-media-badges { position:absolute; bottom:8px; inset-inline-end:8px; display:flex; gap:5px; }
+.ms-media-badge { background:rgba(15,23,42,.7); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; backdrop-filter:blur(4px); }
 .ms-modal-info { flex:1; overflow-y:auto; padding:28px 24px; display:flex; flex-direction:column; gap:12px; }
 .ms-modal-info h2 { font-size:22px; font-weight:800; color:var(--ms-heading,#1f2a18); }
 .ms-modal-desc { font-size:14px; line-height:1.75; color:var(--ms-text); white-space:pre-line; }
