@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -22,8 +22,11 @@ import {
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
+  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug,
+  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders,
   getTicketById,
 } from './services/firebaseService';
+import { MetaShopView } from './components/MetaShopView';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
 export type Language = 'fa' | 'en';
@@ -158,6 +161,18 @@ const extractFormId = (): string | null => {
   return null;
 };
 
+// Extracts a Meta Shop slug from ?shop=... (or ?c=... — short share links) or #/shop/...
+const extractShopSlug = (): string | null => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const s = p.get('shop') || p.get('c');
+    if (s) return s;
+  } catch {}
+  const h = window.location.hash;
+  if (h.startsWith('#/shop/')) return h.replace('#/shop/', '').split('?')[0] || null;
+  return null;
+};
+
 // Extracts a pre-selected service ID from ?service=... — used by per-service share links (?page=form&service=<id>)
 const extractServiceId = (): string | null => {
   try {
@@ -177,8 +192,10 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
+    if (p.get('shop') || p.get('c')) return 'metashop';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
+  if (hash.startsWith('#/shop/'))             return 'metashop';
   if (hash === '#/form' || hash === '#form')  return 'new-ticket';
   if (hash === '#/tracking')                  return 'tracking';
   if (hash.startsWith('#/news'))              return 'news';
@@ -212,6 +229,11 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<InternalMessage[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
+  const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
+  const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
+  const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
+  const [shopLoading, setShopLoading] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -229,7 +251,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=',
   };
 
   const openFormWithService = (serviceId: string) => {
@@ -298,7 +320,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -331,6 +353,7 @@ const App: React.FC = () => {
       if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
       const fid = extractFormId();
       if (v === 'custom-form' && fid) setCustomFormId(fid);
+      if (v === 'metashop') setShopSlug(extractShopSlug());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
@@ -420,7 +443,9 @@ const App: React.FC = () => {
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
     const unsubProcesses = subscribeToProcesses(setProcesses);
     const unsubInvoices = subscribeToInvoices(setInvoices);
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); };
+    const unsubMetaShops = subscribeToMetaShops(setMetaShops);
+    const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -986,6 +1011,80 @@ const App: React.FC = () => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
+  // ── Meta Shop: resolve public shop by slug (from subscription, else direct fetch) ──
+  useEffect(() => {
+    if (view !== 'metashop' || !shopSlug) { setPublicShop(null); return; }
+    const local = metaShops.find(s => s.slug === shopSlug);
+    if (local) { setPublicShop(local); return; }
+    if (metaShops.length === 0) {
+      // subscription not warm yet — fetch directly
+      let cancelled = false;
+      setShopLoading(true);
+      getMetaShopBySlug(shopSlug).then(s => { if (!cancelled) { setPublicShop(s); setShopLoading(false); } });
+      return () => { cancelled = true; };
+    }
+    setPublicShop(null); // subscription warm but no match → not found
+  }, [view, shopSlug, metaShops]);
+
+  // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
+  const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; total: number; currency: string; }): Promise<string> => {
+    const phoneRaw = data.phone.trim();
+    const phone = normalizePhone(phoneRaw);
+    // Tracking code, e.g. SHP-1234-AB7C
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const trackingCode = `SHP-${phone.slice(-4)}-${rand}`;
+
+    // Recognize / create customer by phone
+    let customerId: string | undefined;
+    const existing = customers.find(c => normalizePhone(c.phoneNumber) === phone);
+    if (existing) {
+      customerId = existing.id;
+      await saveCustomerToCloud({ ...existing, fullName: data.customerName || existing.fullName, companyName: data.company || existing.companyName });
+    } else {
+      const newCustomer: Customer = {
+        id: `C-${Date.now()}`, fullName: data.customerName, companyName: data.company, location: [data.city, data.country].filter(Boolean).join(', '),
+        phoneNumber: phoneRaw, whatsappNumber: phoneRaw, email: data.email, firstContact: new Date().toISOString(), totalTickets: 0, source: `Meta Shop: ${shop.name}`,
+      };
+      customerId = newCustomer.id;
+      await saveCustomerToCloud(newCustomer);
+    }
+
+    const order: MetaShopOrder = {
+      id: `mso-${Date.now()}`, shopId: shop.id, shopName: shop.name, shopType: shop.type,
+      trackingCode, customerName: data.customerName, company: data.company, phone, email: data.email,
+      country: data.country, city: data.city, notes: data.notes, items: data.items, total: data.total,
+      currency: data.currency, status: 'new', createdAt: new Date().toISOString(), customerId,
+    };
+    await saveMetaShopOrderToCloud(order);
+
+    // Route to the کارتابل of assigned personnel / department (as an internal message)
+    let recipients: Personnel[] = [];
+    if (shop.assignType === 'department' && shop.assignedDepartmentId) {
+      const dept = (appConfig.departments || []).find(d => d.id === shop.assignedDepartmentId);
+      if (dept) recipients = personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
+    } else if (shop.assignType === 'personnel' && shop.assignedPersonnelIds?.length) {
+      recipients = personnel.filter(p => shop.assignedPersonnelIds!.includes(p.id));
+    }
+    if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
+
+    const itemsText = data.items.map((it, i) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
+    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
+    const msg: InternalMessage = {
+      id: `shopmsg-${Date.now()}`, senderId: '', senderName: data.customerName,
+      recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),
+      subject: `سفارش ${shop.name} — ${data.customerName} (${trackingCode})`, body,
+      createdAt: new Date().toISOString(), readBy: [],
+      isCustomerContact: true, contactName: data.customerName, contactPhone: phone,
+      contactDepartmentName: shop.name, contactTrackingCode: trackingCode, customerId, replies: [],
+    };
+    await sendInternalMessage(msg);
+    return trackingCode;
+  };
+
+  const handleMetaShopLookup = async (phone: string): Promise<MetaShopOrder[]> => {
+    return lookupMetaShopOrders(normalizePhone(phone));
+  };
+
   const handleCustomerAddComment = async (ticketId: string, commentText: string, files?: AttachedFile[]) => {
     const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket || !currentCustomerUser) return;
@@ -1000,6 +1099,24 @@ const App: React.FC = () => {
     };
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
+
+  // ── Public Meta Shop page (full-screen takeover) ──
+  if (view === 'metashop') {
+    if (publicShop && publicShop.isActive !== false) {
+      return <MetaShopView shop={publicShop} lang={lang} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+        {shopLoading || (metaShops.length === 0 && shopSlug)
+          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
+          : <div className="text-center text-gray-400">
+              <p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'فروشگاه یافت نشد' : 'Shop not found'}</p>
+              <p className="text-sm">{lang === 'fa' ? 'این فروشگاه وجود ندارد یا غیرفعال است.' : 'This shop does not exist or is inactive.'}</p>
+              <button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back to home'}</button>
+            </div>}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
@@ -1415,6 +1532,12 @@ const App: React.FC = () => {
                     invoices={invoices}
                     onSaveInvoice={async (inv) => { await saveInvoiceToCloud(inv); }}
                     onDeleteInvoice={async (id) => { await deleteInvoiceFromCloud(id); }}
+                    metaShops={metaShops}
+                    metaShopOrders={metaShopOrders}
+                    onSaveMetaShop={async (s) => { await saveMetaShopToCloud(s); }}
+                    onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
+                    onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
+                    shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
                   />
                 )}
               </>

@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -746,6 +746,61 @@ export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) => 
         invoices.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
         callback(invoices);
     }, (e) => {});
+};
+
+// ── Meta Shops (online catalogs/shops) ──
+export const saveMetaShopToCloud = async (shop: MetaShop) => {
+    await setDoc(doc(db, "metaShops", shop.id), sanitizeData(shop));
+    logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shop.name} ذخیره شد`, 'Master', shop.id);
+};
+export const deleteMetaShopFromCloud = async (id: string) => {
+    const ref = doc(db, "metaShops", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
+};
+export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) => {
+    const q = query(collection(db, "metaShops"));
+    return onSnapshot(q, (snapshot) => {
+        const shops = snapshot.docs.map(d => d.data() as MetaShop);
+        shops.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(shops);
+    }, (e) => {});
+};
+// Fetch a single shop directly (public view, before the subscription warms up)
+export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> => {
+    try {
+        const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
+        const snap = await getDocs(q);
+        if (snap.empty) return null;
+        return snap.docs[0].data() as MetaShop;
+    } catch { return null; }
+};
+
+// ── Meta Shop Orders ──
+export const saveMetaShopOrderToCloud = async (order: MetaShopOrder) => {
+    await setDoc(doc(db, "metaShopOrders", order.id), sanitizeData(order));
+    logSystemAction('CREATE', 'MetaShopOrder', `سفارش جدید از ${order.customerName} (${order.shopName})`, order.customerName, order.id);
+};
+export const updateMetaShopOrderInCloud = async (id: string, updates: Partial<MetaShopOrder>) => {
+    await updateDoc(doc(db, "metaShopOrders", id), sanitizeData(updates));
+};
+export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) => {
+    const q = query(collection(db, "metaShopOrders"));
+    return onSnapshot(q, (snapshot) => {
+        const orders = snapshot.docs.map(d => d.data() as MetaShopOrder);
+        orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(orders);
+    }, (e) => {});
+};
+// Customer order lookup by phone (public, no auth)
+export const lookupMetaShopOrders = async (phone: string): Promise<MetaShopOrder[]> => {
+    try {
+        const q = query(collection(db, "metaShopOrders"), where("phone", "==", phone));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaShopOrder).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch { return []; }
 };
 
 export const saveTaskToCloud = async (task: Task) => {

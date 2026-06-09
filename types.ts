@@ -492,7 +492,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder';
   entityId?: string;
   details: string;
   actorName: string;
@@ -513,7 +513,111 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop';
+
+// ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
+export type MetaShopType = 'products' | 'services';
+
+export interface MetaShopTheme {
+  primary: string;     // accent: buttons, prices, active states
+  cover: string;       // cover/hero background
+  coverText: string;   // text on the cover
+  bg: string;          // page background
+  heading: string;     // headings
+  text: string;        // body text
+}
+
+export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
+
+export interface MetaShopProduct {
+  id: string;
+  name: string;
+  sku?: string;
+  hsCode?: string;
+  group?: string;          // category (filter pill)
+  subcategory?: string;
+  description?: string;
+  images: string[];
+  active?: boolean;
+  // pricing
+  currency?: string;       // overrides shop currency if set
+  price?: number;          // primary price (per unit / per service)
+  packPrice?: number;      // optional pack price (products)
+  unit?: string;           // kg, pcs, day, hour, session ...
+  priceUnit?: string;      // services: "per day", "per session"
+  pack?: number;           // items per pack (products)
+  moq?: string;            // MOQ label (products)
+  stockLabel?: string;
+  // rich attributes
+  colors?: MetaShopColorOption[];
+  origin?: { name: string; flagUrl?: string };
+  features?: { label: string; value: string }[];
+}
+
+export interface MetaShop {
+  id: string;
+  slug: string;            // public link key (?shop=<slug>)
+  name: string;
+  type: MetaShopType;
+  isActive: boolean;
+  theme: MetaShopTheme;
+  // hero / cover
+  collectionText?: string;
+  title?: string;
+  subtitle?: string;
+  coverImage?: string;
+  logo?: string;
+  currency: string;
+  // contact / footer
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  footerText?: string;
+  // catalog
+  categories?: string[];   // ordered category list (falls back to product groups)
+  products: MetaShopProduct[];
+  // order routing → کارتابل (cartable)
+  assignType?: 'personnel' | 'department';
+  assignedPersonnelIds?: string[];
+  assignedDepartmentId?: string;
+  // labels
+  cartButtonText?: string;
+  orderThankYouText?: string;
+  searchPlaceholder?: string;
+  createdAt?: string;
+}
+
+export interface MetaShopOrderItem {
+  productId: string;
+  name: string;
+  sku?: string;
+  unit?: string;
+  qty: number;
+  unitPrice?: number;
+  lineTotal?: number;
+}
+
+export interface MetaShopOrder {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopType?: MetaShopType;
+  trackingCode: string;    // customer-facing tracking code
+  customerName: string;
+  company?: string;
+  phone: string;
+  email?: string;
+  country?: string;
+  city?: string;
+  notes?: string;
+  items: MetaShopOrderItem[];
+  total: number;
+  currency: string;
+  status: 'new' | 'in_progress' | 'done' | 'cancelled';
+  createdAt: string;
+  customerId?: string;     // linked customer-bank record (by phone)
+}
 
 export interface NewsArticle {
   id: string;
