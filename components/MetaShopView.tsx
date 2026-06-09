@@ -36,8 +36,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [lookupPhone, setLookupPhone] = useState('');
   const [lookupResults, setLookupResults] = useState<MetaShopOrder[] | null>(null);
   const [copied, setCopied] = useState(false);
+  const [uiLang, setUiLang] = useState<Language>(lang);
 
-  const T = lang === 'fa';
+  const T = uiLang === 'fa';
   const t = {
     cartBtn: shop.cartButtonText || (T ? 'ثبت سفارش' : 'Place Order'),
     add: isServices ? (T ? 'افزودن به درخواست' : 'Add to request') : (T ? 'افزودن به سبد' : 'Add to cart'),
@@ -174,9 +175,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             {shop.logo && <img src={shop.logo} alt="" className="ms-logo" />}
             <span className="ms-name">{shop.name}</span>
           </div>
-          <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
-            <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
-          </button>
+          <div className="ms-top-actions">
+            <div className="ms-lang">
+              <button className={uiLang === 'fa' ? 'on' : ''} onClick={() => setUiLang('fa')}>FA</button>
+              <button className={uiLang === 'en' ? 'on' : ''} onClick={() => setUiLang('en')}>EN</button>
+            </div>
+            <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
+              <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -413,6 +420,10 @@ const MS_CSS = `
 .ms-name { font-size:15px; font-weight:800; color:var(--ms-heading,#1f2a18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; }
 .ms-badge { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 7px; font-size:11px; font-weight:800; }
+.ms-top-actions { display:flex; align-items:center; gap:10px; }
+.ms-lang { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+.ms-lang button { padding:5px 9px; font-size:11px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; }
+.ms-lang button.on { background:var(--ms-primary); color:#fff; }
 .ms-cover { background:var(--ms-cover,#2d4a1a); color:var(--ms-cover-text,#fff); padding:64px 24px; text-align:center; background-size:cover; background-position:center; min-height:240px; display:flex; align-items:center; justify-content:center; }
 .ms-cover-inner { max-width:740px; }
 .ms-collection { font-size:13px; letter-spacing:.35em; text-transform:uppercase; opacity:.8; margin-bottom:18px; }
@@ -482,8 +493,9 @@ const MS_CSS = `
 .ms-cart-ov { position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(4px); z-index:1100; opacity:0; pointer-events:none; transition:opacity .25s; }
 .ms-cart-ov.open { opacity:1; pointer-events:auto; }
 .ms-drawer { position:fixed; top:0; inset-inline-end:0; height:100%; width:min(440px,100vw); background:#fff; z-index:1200; transform:translateX(100%); transition:transform .3s; display:flex; flex-direction:column; box-shadow:-20px 0 40px rgba(0,0,0,.2); }
-html[dir="rtl"] .ms-drawer { transform:translateX(-100%); }
+.ms-root[dir="rtl"] .ms-drawer { transform:translateX(-100%); }
 .ms-drawer.open { transform:translateX(0); }
+.ms-root[dir="rtl"] .ms-drawer.open { transform:translateX(0); }
 .ms-drawer-head { flex-shrink:0; padding:18px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:var(--ms-primary); color:#fff; }
 .ms-drawer-head h2 { font-size:17px; font-weight:800; }
 .ms-drawer-head button { background:rgba(255,255,255,.15); border:none; color:#fff; width:32px; height:32px; border-radius:50%; font-size:16px; cursor:pointer; }
