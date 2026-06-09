@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -722,6 +722,29 @@ export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void)
         const msgs = snapshot.docs.map(d => d.data() as InternalMessage);
         msgs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         callback(msgs);
+    }, (e) => {});
+};
+
+// ── Standalone Invoices (Invoices archive) ──
+export const saveInvoiceToCloud = async (invoice: Invoice) => {
+    await setDoc(doc(db, "invoices", invoice.id), sanitizeData(invoice));
+    logSystemAction('CREATE', 'Invoice', `فاکتور ${invoice.number} ذخیره شد`, invoice.issuedBy, invoice.id);
+};
+
+export const deleteInvoiceFromCloud = async (id: string) => {
+    const ref = doc(db, "invoices", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'Invoice', `فاکتور حذف شد`, 'Master', id, data, 'invoices');
+};
+
+export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) => {
+    const q = query(collection(db, "invoices"));
+    return onSnapshot(q, (snapshot) => {
+        const invoices = snapshot.docs.map(d => d.data() as Invoice);
+        invoices.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+        callback(invoices);
     }, (e) => {});
 };
 

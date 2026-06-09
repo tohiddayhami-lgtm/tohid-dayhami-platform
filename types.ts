@@ -147,6 +147,11 @@ export interface Invoice {
   dueDate?: string;
   customerName: string;
   companyName?: string;
+  // ── Customer snapshot (for standalone invoices in the Invoices archive) ──
+  customerId?: string;        // linked customer-bank record, if picked from the bank
+  customerAddress?: string;
+  customerPhone?: string;
+  customerEmail?: string;
   items: InvoiceItem[];
   currency: Currency;
   subTotal: number;
@@ -156,6 +161,11 @@ export interface Invoice {
   total: number;
   note?: string;
   issuedBy: string;
+  status?: 'draft' | 'issued' | 'paid';  // archive status
+  createdAt?: string;                      // when first created (for sorting the archive)
+  type?: string;                           // invoice type, e.g. "Services" (shown in header, drives number prefix)
+  paymentTerms?: string;                   // payment terms box (defaults from template)
+  vatInclusive?: boolean;                  // true => VAT is included in the line amounts
 }
 
 export interface ProjectMilestone {
@@ -482,7 +492,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice';
   entityId?: string;
   details: string;
   actorName: string;
@@ -553,6 +563,20 @@ export interface InvoiceTemplate {
   termsConditions: string;
   defaultTaxRate: number;
   colorTheme: string;
+  // ── Extended company / header fields (match the official invoice layout) ──
+  crNumber?: string;          // CR No.
+  email?: string;
+  // ── Bank / payment details block ──
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  swiftCode?: string;
+  iban?: string;
+  // ── Defaults reused on every new invoice ──
+  defaultPaymentTerms?: string;   // e.g. "Advance Payment: 80% to start / 20% upon completion."
+  defaultNotes?: string;          // NOTES / TERMS box default content
+  vatInclusive?: boolean;         // VAT is inclusive in the unit prices (default behaviour)
+  invoicePrefix?: string;         // invoice-number prefix (default "SVC")
 }
 
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';

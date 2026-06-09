@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -21,6 +21,7 @@ import {
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
+  subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   getTicketById,
 } from './services/firebaseService';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -111,7 +112,28 @@ const INITIAL_CONFIG: AppConfig = {
     { id: 'f7', key: 'businessType', label: 'نوع کسب‌وکار', labelEn: 'Business Type', type: 'select', required: true, options: ['تولیدی', 'بازرگانی', 'صنایع دستی', 'کشاورزی', 'خدماتی', 'دانش‌بنیان', 'سایر'], optionsEn: ['Manufacturing', 'Trading', 'Handicrafts', 'Agriculture', 'Services', 'Knowledge-Based', 'Other'], order: 8, isSystem: true },
     { id: 'f8', key: 'description', label: 'اطلاعات محصول', labelEn: 'Product Information', type: 'textarea', required: false, placeholder: 'نوع محصول یا خدمتی که ارائه می‌دهید را توضیح دهید...', placeholderEn: 'Describe the type of product or service you offer...', order: 9, isSystem: true },
   ],
-  assignmentConfig: { mode: 'manual', targetType: 'role', serviceRoleMap: {}, servicePersonnelMap: {} }
+  assignmentConfig: { mode: 'manual', targetType: 'role', serviceRoleMap: {}, servicePersonnelMap: {} },
+  invoiceTemplate: {
+    companyName: 'Tohid Dayhami Business Solutions',
+    address: 'Unit A09, New Work, First Floor, Avenues Mall, Muscat, Sultanate of Oman',
+    crNumber: '1617064',
+    phone: '+968 98 1030 64',
+    email: 'info@tohiddayhami.com',
+    website: 'www.tohiddayhami.com',
+    bankName: 'Bank Muscat',
+    accountHolder: 'Tohid Abbas Dayhami',
+    accountNumber: '0325064426130011',
+    swiftCode: 'BMUSOMRXXXX',
+    iban: 'OM0402703250644426130011',
+    defaultPaymentTerms: 'Advance Payment: 80% to start the project / 20% upon completion.',
+    defaultNotes: 'Project Details & Timeline\n• Deliverables: High-quality design files (Print-ready Adobe Illustrator files) and professional mockups for presentation.\n• Estimated Timeline: Approximately 20 days.\n• Included: 3 revisions and Minor changes in the future\n\nThank you for choosing our services. We look forward to delivering a world-class design for your brand.',
+    footerText: 'Thank you for choosing our services.',
+    termsConditions: 'Advance Payment: 80% to start the project / 20% upon completion.',
+    defaultTaxRate: 5,
+    vatInclusive: true,
+    invoicePrefix: 'SVC',
+    colorTheme: '#0f766e',
+  }
 };
 
 const STORAGE_KEYS = { USER: 'crm_session_user', VIEW: 'crm_last_view', LAST_ACTIVE: 'crm_last_active' };
@@ -189,6 +211,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [messages, setMessages] = useState<InternalMessage[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -396,7 +419,8 @@ const App: React.FC = () => {
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
     const unsubProcesses = subscribeToProcesses(setProcesses);
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); };
+    const unsubInvoices = subscribeToInvoices(setInvoices);
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1388,6 +1412,9 @@ const App: React.FC = () => {
                     processes={processes}
                     onSaveProcess={async (proc) => { await saveProcess(proc); }}
                     onDeleteProcess={async (id) => { await deleteProcess(id); }}
+                    invoices={invoices}
+                    onSaveInvoice={async (inv) => { await saveInvoiceToCloud(inv); }}
+                    onDeleteInvoice={async (id) => { await deleteInvoiceFromCloud(id); }}
                   />
                 )}
               </>
