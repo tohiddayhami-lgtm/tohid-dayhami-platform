@@ -27,6 +27,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [step, setStep] = useState<'cart' | 'review'>('cart');
   const [form, setForm] = useState({ customerName: '', company: '', phone: '', email: '', country: '', city: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [tracking, setTracking] = useState<string | null>(null);
@@ -73,6 +74,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     pack: T ? 'بسته' : 'Pack',
     statusNew: T ? 'جدید' : 'New', statusProg: T ? 'در حال انجام' : 'In progress', statusDone: T ? 'انجام شد' : 'Done', statusCanc: T ? 'لغو شد' : 'Cancelled',
     perPack: T ? '/ بسته' : '/ pack',
+    review: T ? 'ادامه و پیش‌نمایش فاکتور' : 'Continue to invoice preview',
+    invoiceTitle: T ? 'پیش‌نمایش فاکتور' : 'Invoice preview',
+    editCart: T ? 'ویرایش سبد' : 'Edit cart',
+    colItem: T ? 'شرح' : 'Item',
+    colQty: T ? 'تعداد' : 'Qty',
+    colUnit: T ? 'قیمت واحد' : 'Unit price',
+    colLine: T ? 'مبلغ' : 'Amount',
+    invHint: T ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.' : 'This is a proforma preview; the final amount is confirmed after review.',
+    confirm: T ? 'ثبت نهایی سفارش' : 'Confirm & submit order',
   };
 
   const theme = shop.theme;
@@ -164,7 +174,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             {shop.logo && <img src={shop.logo} alt="" className="ms-logo" />}
             <span className="ms-name">{shop.name}</span>
           </div>
-          <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => setCartOpen(true)}>
+          <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
             <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
           </button>
         </div>
@@ -291,43 +301,82 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       {/* Cart drawer */}
       <div className={`ms-cart-ov ${cartOpen ? 'open' : ''}`} onClick={() => setCartOpen(false)} />
       <aside className={`ms-drawer ${cartOpen ? 'open' : ''}`}>
-        <header className="ms-drawer-head"><h2>{t.cartTitle}</h2><button onClick={() => setCartOpen(false)}>✕</button></header>
-        <div className="ms-drawer-body">
-          {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line }) => (
-            <div className="ms-citem" key={p.id}>
-              {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
-              <div className="ms-citem-info">
-                <div className="ms-citem-name">{p.name}</div>
-                {p.sku && <div className="ms-citem-sku">{p.sku}</div>}
-                <div className="ms-citem-row">
-                  <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
-                  <button className="ms-rm" onClick={() => setQty(p.id, 0)}>{t.remove}</button>
+        <header className="ms-drawer-head"><h2>{step === 'review' ? t.invoiceTitle : t.cartTitle}</h2><button onClick={() => setCartOpen(false)}>✕</button></header>
+
+        {/* STEP 1 — cart items */}
+        {step === 'cart' && (
+          <>
+            <div className="ms-drawer-body">
+              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line }) => (
+                <div className="ms-citem" key={p.id}>
+                  {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
+                  <div className="ms-citem-info">
+                    <div className="ms-citem-name">{p.name}</div>
+                    {p.sku && <div className="ms-citem-sku">{p.sku}</div>}
+                    <div className="ms-citem-row">
+                      <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
+                      <button className="ms-rm" onClick={() => setQty(p.id, 0)}>{t.remove}</button>
+                    </div>
+                    {p.price != null && <div className="ms-citem-price">{money(line)}</div>}
+                  </div>
                 </div>
-                {p.price != null && <div className="ms-citem-price">{money(line)}</div>}
+              ))}
+            </div>
+            {cartItems.length > 0 && (
+              <div className="ms-checkout-bar">
+                <div className="ms-summary"><span>{t.total}</span><b>{money(grandTotal)}</b></div>
+                <button className="ms-submit" onClick={() => { setError(''); setStep('review'); }}>{t.review} →</button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* STEP 2 — invoice preview + customer info */}
+        {step === 'review' && (
+          <>
+            <div className="ms-drawer-body">
+              <button className="ms-back" onClick={() => setStep('cart')}>← {t.editCart}</button>
+              <div className="ms-invoice">
+                <div className="ms-inv-head">
+                  {shop.logo && <img src={shop.logo} alt="" className="ms-inv-logo" />}
+                  <div><div className="ms-inv-shop">{shop.name}</div>{shop.phone && <div className="ms-inv-sub" dir="ltr">{shop.phone}</div>}</div>
+                </div>
+                <table className="ms-inv-table">
+                  <thead><tr><th>{t.colItem}</th><th className="c">{t.colQty}</th><th className="r">{t.colUnit}</th><th className="r">{t.colLine}</th></tr></thead>
+                  <tbody>
+                    {cartItems.map(({ p, qty, rate, line }) => (
+                      <tr key={p.id}>
+                        <td>{p.name}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
+                        <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
+                        <td className="r">{p.price != null ? money(rate) : '—'}</td>
+                        <td className="r b">{p.price != null ? money(line) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="ms-inv-total"><span>{t.total}</span><b>{money(grandTotal)}</b></div>
+                <p className="ms-inv-hint">{t.invHint}</p>
+              </div>
+              <div className="ms-form embedded">
+                <h3>{t.yourInfo}</h3>
+                <div className="ms-grid2">
+                  <input placeholder={`${t.name} *`} value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
+                  <input placeholder={t.company} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
+                </div>
+                <div className="ms-grid2">
+                  <input placeholder={`${t.phone} *`} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} dir="ltr" />
+                  <input placeholder={t.email} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} dir="ltr" />
+                </div>
+                <div className="ms-grid2">
+                  <input placeholder={t.country} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
+                  <input placeholder={t.city} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
+                </div>
+                <textarea rows={2} placeholder={t.notes} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+                {error && <p className="ms-err">{error}</p>}
               </div>
             </div>
-          ))}
-        </div>
-        {cartItems.length > 0 && (
-          <>
-            <div className="ms-summary"><span>{t.total}</span><b>{money(grandTotal)}</b></div>
-            <div className="ms-form">
-              <h3>{t.yourInfo}</h3>
-              <div className="ms-grid2">
-                <input placeholder={`${t.name} *`} value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} />
-                <input placeholder={t.company} value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} />
-              </div>
-              <div className="ms-grid2">
-                <input placeholder={`${t.phone} *`} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} dir="ltr" />
-                <input placeholder={t.email} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} dir="ltr" />
-              </div>
-              <div className="ms-grid2">
-                <input placeholder={t.country} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
-                <input placeholder={t.city} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
-              </div>
-              <textarea rows={2} placeholder={t.notes} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-              {error && <p className="ms-err">{error}</p>}
-              <button className="ms-submit" disabled={submitting} onClick={submit}>{submitting ? t.submitting : t.submit}</button>
+            <div className="ms-checkout-bar">
+              <button className="ms-submit" disabled={submitting} onClick={submit}>{submitting ? t.submitting : t.confirm}</button>
             </div>
           </>
         )}
@@ -461,6 +510,22 @@ html[dir="rtl"] .ms-drawer { transform:translateX(-100%); }
 .ms-err { color:#ef4444; font-size:12px; margin-bottom:8px; }
 .ms-submit { width:100%; padding:12px; background:var(--ms-primary); color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 6px 16px rgba(0,0,0,.15); }
 .ms-submit:disabled { opacity:.6; cursor:not-allowed; }
+.ms-checkout-bar { flex-shrink:0; padding:12px 16px; border-top:1px solid #e2e8f0; background:#fff; }
+.ms-checkout-bar .ms-summary { background:transparent; border:0; padding:0 0 10px; }
+.ms-back { background:none; border:none; color:#64748b; font-size:13px; cursor:pointer; margin-bottom:10px; }
+.ms-form.embedded { padding:14px 0 0; border:0; background:transparent; max-height:none; }
+.ms-invoice { border:1px solid #e2e8f0; border-radius:14px; padding:14px; background:#fff; }
+.ms-inv-head { display:flex; align-items:center; gap:10px; padding-bottom:10px; border-bottom:2px solid var(--ms-primary); margin-bottom:10px; }
+.ms-inv-logo { height:34px; object-fit:contain; }
+.ms-inv-shop { font-weight:800; color:var(--ms-heading,#0f172a); font-size:14px; }
+.ms-inv-sub { font-size:11px; color:#94a3b8; }
+.ms-inv-table { width:100%; border-collapse:collapse; font-size:12px; }
+.ms-inv-table th { text-align:start; color:#94a3b8; font-weight:600; font-size:10px; text-transform:uppercase; padding:4px 4px; border-bottom:1px solid #f1f5f9; }
+.ms-inv-table td { padding:7px 4px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:top; }
+.ms-inv-table .c { text-align:center; } .ms-inv-table .r { text-align:end; } .ms-inv-table .b { font-weight:800; color:#0f172a; }
+.ms-inv-sku { color:#94a3b8; font-size:10px; }
+.ms-inv-total { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:2px solid var(--ms-primary); font-size:15px; font-weight:800; color:#0f172a; }
+.ms-inv-hint { font-size:10px; color:#94a3b8; margin-top:8px; line-height:1.4; }
 /* track link */
 .ms-track-link { text-align:center; padding:0 0 48px; }
 .ms-track-link > button { background:none; border:none; color:var(--ms-primary); font-weight:700; font-size:13px; cursor:pointer; text-decoration:underline; }

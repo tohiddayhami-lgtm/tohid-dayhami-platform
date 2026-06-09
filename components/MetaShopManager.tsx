@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
+import { downloadSample } from './metaShopSamples';
 import { Language } from '../App';
 
 interface Props {
@@ -30,9 +31,20 @@ const blankShop = (): MetaShop => ({
 // Tolerant importer: accepts our MetaShop JSON OR a catalog-project JSON (data.products[]).
 const importFromJson = (raw: string, base: MetaShop): MetaShop => {
   const json = JSON.parse(raw);
-  // Already a MetaShop?
-  if (json.products && Array.isArray(json.products) && json.theme) {
-    return { ...base, ...json, id: base.id, createdAt: base.createdAt };
+  // Native MetaShop format (top-level products[]) — import everything, normalize products.
+  if (json.products && Array.isArray(json.products)) {
+    return {
+      ...base, ...json,
+      id: base.id, createdAt: base.createdAt,
+      theme: { ...DEFAULT_THEME, ...(json.theme || {}) },
+      type: (json.type === 'services' ? 'services' : 'products') as MetaShopType,
+      products: json.products.map((p: any, i: number) => ({
+        ...p,
+        id: p.id || `p-${Date.now()}-${i}`,
+        images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
+        active: p.active !== false,
+      })),
+    };
   }
   const data = json.data || json;
   const cc = data.catalogConfig || {};
@@ -97,6 +109,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const [importText, setImportText] = useState('');
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const jsonFileRef = useRef<HTMLInputElement>(null);
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
 
@@ -168,6 +181,51 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     catch { alert(t.importErr); }
   };
 
+  const handleJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const shop = importFromJson(String(ev.target?.result || ''), blankShop());
+        setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor');
+      } catch { alert(t.importErr); }
+    };
+    r.readAsText(f); e.target.value = '';
+  };
+
+  // Reusable import dialog (file upload + sample downloads + optional paste)
+  const importModalEl = () => importOpen ? (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setImportOpen(false)}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
+        <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconUpload className="w-4 h-4" />{t.importJson}</h3>
+        <p className="text-xs text-gray-500 mb-3">{t.importHint}</p>
+
+        {/* Sample downloads */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <span className="text-xs text-gray-400 self-center">{T ? 'نمونه:' : 'Samples:'}</span>
+          <button onClick={() => downloadSample('products')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه محصولات' : 'Products sample'}</button>
+          <button onClick={() => downloadSample('services')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه خدمات' : 'Services sample'}</button>
+        </div>
+
+        {/* File upload (primary) */}
+        <button onClick={() => jsonFileRef.current?.click()} className="w-full py-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-700 font-bold text-sm hover:bg-indigo-50 flex items-center justify-center gap-2">
+          <IconUpload className="w-5 h-5" />{T ? 'انتخاب فایل JSON و ساخت فروشگاه' : 'Choose JSON file & build shop'}
+        </button>
+        <input type="file" ref={jsonFileRef} className="hidden" accept=".json,application/json" onChange={handleJsonFile} />
+
+        {/* Optional paste */}
+        <details className="mt-3">
+          <summary className="text-xs text-gray-500 cursor-pointer">{T ? 'یا چسباندن متن JSON' : 'or paste JSON text'}</summary>
+          <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={6} className={fld + ' font-mono text-xs mt-2'} placeholder='{ "type": "products", "products": [ ... ] }' />
+          <div className="flex justify-end gap-2 mt-2">
+            <button onClick={() => setImportOpen(false)} className="px-3 py-2 text-sm text-gray-500">{t.cancel}</button>
+            <button onClick={doImport} disabled={!importText.trim()} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-lg disabled:opacity-50">{t.importBtn}</button>
+          </div>
+        </details>
+      </div>
+    </div>
+  ) : null;
+
   const statusLabel = (s: MetaShopOrder['status']) => s === 'done' ? t.sDone : s === 'in_progress' ? t.sProg : s === 'cancelled' ? t.sCanc : t.sNew;
   const statusCls = (s: MetaShopOrder['status']) => s === 'done' ? 'bg-emerald-100 text-emerald-700' : s === 'in_progress' ? 'bg-blue-100 text-blue-700' : s === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
 
@@ -223,19 +281,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
         )}
 
-        {importOpen && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setImportOpen(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
-              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconUpload className="w-4 h-4" />{t.importJson}</h3>
-              <p className="text-xs text-gray-500 mb-3">{t.importHint}</p>
-              <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={10} className={fld + ' font-mono text-xs'} placeholder='{ "data": { "products": [ ... ] } }' />
-              <div className="flex justify-end gap-2 mt-3">
-                <button onClick={() => setImportOpen(false)} className="px-3 py-2 text-sm text-gray-500">{t.cancel}</button>
-                <button onClick={doImport} disabled={!importText.trim()} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-lg disabled:opacity-50">{t.importBtn}</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {importModalEl()}
       </div>
     );
   }
@@ -414,19 +460,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         )}
       </div>
 
-      {importOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setImportOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconUpload className="w-4 h-4" />{t.importJson}</h3>
-            <p className="text-xs text-gray-500 mb-3">{t.importHint}</p>
-            <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={10} className={fld + ' font-mono text-xs'} placeholder='{ "data": { "products": [ ... ] } }' />
-            <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => setImportOpen(false)} className="px-3 py-2 text-sm text-gray-500">{t.cancel}</button>
-              <button onClick={doImport} disabled={!importText.trim()} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-lg disabled:opacity-50">{t.importBtn}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {importModalEl()}
     </div>
   );
 };
