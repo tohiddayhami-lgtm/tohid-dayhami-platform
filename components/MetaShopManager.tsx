@@ -157,6 +157,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     feesHint: T ? 'این هزینه‌ها در صفحه سفارش به مشتری نشان داده می‌شوند. اگر «الزامی» باشد همیشه به جمع اضافه می‌شود؛ در غیر این صورت مشتری انتخاب می‌کند.' : 'Shown to the customer at checkout. If "required" it is always added; otherwise the customer chooses.',
     addFee: T ? 'افزودن هزینه' : 'Add fee', feeLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', feeLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', feeAmount: T ? 'مبلغ' : 'Amount',
     feeRequired: T ? 'الزامی' : 'Required', feeDefaultOn: T ? 'پیش‌فعال' : 'Pre-checked', noFees: T ? 'هزینه‌ای تعریف نشده است.' : 'No fees defined.',
+    taxT: T ? 'مالیات (VAT)' : 'Tax (VAT)', taxRate: T ? 'درصد مالیات' : 'Tax rate (%)', taxMode: T ? 'حالت' : 'Mode',
+    taxIncl: T ? 'تجمیعی (داخل قیمت) — Inclusive' : 'Inclusive (in prices)', taxExcl: T ? 'افزوده به جمع — Exclusive' : 'Exclusive (added on top)',
+    taxLabelF: T ? 'عنوان مالیات (فارسی)' : 'Tax label (FA)', taxLabelEnF: T ? 'عنوان مالیات (انگلیسی)' : 'Tax label (EN)',
+    taxHint: T ? 'اگر درصد بگذاری، در صفحه سفارش نمایش داده می‌شود. تجمیعی یعنی داخل قیمت‌هاست؛ افزوده یعنی روی جمع اضافه می‌شود.' : 'If set, shown at checkout. Inclusive = already in prices; Exclusive = added on top.',
+    discT: T ? 'کدهای تخفیف' : 'Discount codes', discHint: T ? 'مشتری کد را در صفحه سفارش وارد می‌کند. می‌توانی کد دلخواه بنویسی یا تولید کنی، نوع درصدی/عددی، و دامنه‌ی اعمال (کل سفارش، محصولات خاص، یا دسته‌ها) را تعیین کنی.' : 'Customer enters the code at checkout. Use a custom code or generate one; percent/fixed; scope (whole order, specific products, or categories).',
+    addDisc: T ? 'افزودن کد' : 'Add code', noDisc: T ? 'کد تخفیفی تعریف نشده است.' : 'No discount codes.', gen: T ? 'تولید کد' : 'Generate',
+    discCode: T ? 'کد' : 'Code', discTypePercent: T ? 'درصدی (٪)' : 'Percent (%)', discTypeFixed: T ? 'عددی (مبلغ)' : 'Fixed amount', discValue: T ? 'مقدار' : 'Value',
+    discScope: T ? 'دامنه اعمال' : 'Applies to', scopeAll: T ? 'کل سفارش' : 'Whole order', scopeProducts: T ? 'محصولات انتخابی' : 'Selected products', scopeCats: T ? 'دسته‌های انتخابی' : 'Selected categories',
+    discMin: T ? 'حداقل مبلغ سفارش (اختیاری)' : 'Min order (optional)', selectProducts: T ? 'محصولات مشمول:' : 'Eligible products:', selectCats: T ? 'دسته‌های مشمول:' : 'Eligible categories:',
     primary: T ? 'رنگ اصلی' : 'Primary', coverC: T ? 'رنگ کاور' : 'Cover', coverText: T ? 'متن کاور' : 'Cover text', bg: T ? 'پس‌زمینه' : 'Background',
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
     coverImg: T ? 'تصویر کاور (پس‌زمینه)' : 'Cover image (background)', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
@@ -218,6 +227,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
   const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
+
+  // ── Discount codes ──
+  const discounts = () => draft?.discounts || [];
+  const genCode = () => { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 7; i++) s += c[Math.floor(Math.random() * c.length)]; return s; };
+  const addDiscount = () => upd({ discounts: [...discounts(), { id: `disc-${Date.now()}`, code: genCode(), type: 'percent', value: 10, scope: 'all', active: true }] });
+  const updDiscount = (idx: number, patch: Partial<import('../types').MetaShopDiscount>) => setDraft(d => { if (!d) return d; const ds = [...(d.discounts || [])]; ds[idx] = { ...ds[idx], ...patch }; return { ...d, discounts: ds }; });
+  const removeDiscount = (idx: number) => setDraft(d => d ? { ...d, discounts: (d.discounts || []).filter((_, i) => i !== idx) } : d);
+  const draftCategories = (): string[] => { const s: string[] = []; (draft?.products || []).forEach(p => { if (p.group && !s.includes(p.group)) s.push(p.group); }); return s; };
 
   // ── Default checkout fees ──
   const fees = () => draft?.extraFees || [];
@@ -366,7 +383,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <tr key={o.id} className="hover:bg-gray-50/60 align-top">
                     <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}</td>
                     <td className="px-4 py-3"><div className="font-medium text-gray-800">{o.customerName}</div><div className="text-xs text-gray-400" dir="ltr">{o.phone}</div>{o.company && <div className="text-xs text-gray-400">{o.company}</div>}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}</div>)}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}</div>)}{o.discountAmount ? <div className="text-[11px] text-rose-600">− {o.currency} {o.discountAmount.toLocaleString()} ({o.discountCode})</div> : null}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.taxAmount ? <div className="text-[11px] text-gray-500">{o.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {o.taxRate}%: {o.currency} {o.taxAmount.toLocaleString()}</div> : null}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
                     <td className="px-4 py-3 font-bold text-gray-800">{o.currency} {o.total.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs" dir="ltr">{new Date(o.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
                     <td className="px-4 py-3">
@@ -505,6 +522,73 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                 <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" className="accent-indigo-600" checked={!!f.required} onChange={e => updFee(idx, { required: e.target.checked })} />{t.feeRequired}</label>
                 <label className={`flex items-center gap-1 text-xs text-gray-600 ${f.required ? 'opacity-40 pointer-events-none' : ''}`}><input type="checkbox" className="accent-indigo-600" checked={!!f.defaultOn} onChange={e => updFee(idx, { defaultOn: e.target.checked })} />{t.feeDefaultOn}</label>
                 <button onClick={() => removeFee(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tax (VAT) */}
+        <div className="border-t border-gray-100 pt-4 mt-4">
+          <h4 className="font-bold text-gray-700 mb-1">{t.taxT}</h4>
+          <p className="text-xs text-gray-500 mb-3">{t.taxHint}</p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div><label className={lbl}>{t.taxRate}</label><input className={fld} type="number" value={draft.taxRate ?? ''} onChange={e => upd({ taxRate: parseFloat(e.target.value) || 0 })} placeholder="0" /></div>
+            <div><label className={lbl}>{t.taxMode}</label><select className={fld + ' bg-white'} value={draft.taxInclusive ? 'incl' : 'excl'} onChange={e => upd({ taxInclusive: e.target.value === 'incl' })}><option value="excl">{t.taxExcl}</option><option value="incl">{t.taxIncl}</option></select></div>
+            <div><label className={lbl}>{t.taxLabelF}</label><input className={fld} value={draft.taxLabel || ''} onChange={e => upd({ taxLabel: e.target.value })} placeholder={T ? 'مالیات بر ارزش افزوده' : ''} /></div>
+            <div><label className={lbl}>{t.taxLabelEnF}</label><input className={fld + ' dir-ltr'} value={draft.taxLabelEn || ''} onChange={e => upd({ taxLabelEn: e.target.value })} placeholder="VAT" /></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Discount codes */}
+      <div className={card}>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-bold text-gray-700">{t.discT} <span className="text-xs text-gray-400">({discounts().length})</span></h4>
+          <button onClick={addDiscount} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addDisc}</button>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">{t.discHint}</p>
+        {discounts().length === 0 ? <p className="text-sm text-gray-400 text-center py-3">{t.noDisc}</p> : (
+          <div className="space-y-3">
+            {discounts().map((d, idx) => (
+              <div key={d.id} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-stretch">
+                    <input className={fld + ' dir-ltr rounded-e-none uppercase font-bold w-36'} placeholder={t.discCode} value={d.code} onChange={e => updDiscount(idx, { code: e.target.value.toUpperCase() })} />
+                    <button onClick={() => updDiscount(idx, { code: genCode() })} className="px-2 rounded-s-none rounded-lg border border-s-0 border-gray-300 bg-gray-50 hover:bg-gray-100 text-[11px] text-gray-600 whitespace-nowrap" title={t.gen}>{t.gen}</button>
+                  </div>
+                  <select className={fld + ' bg-white w-auto'} value={d.type} onChange={e => updDiscount(idx, { type: e.target.value as any })}>
+                    <option value="percent">{t.discTypePercent}</option><option value="fixed">{t.discTypeFixed}</option>
+                  </select>
+                  <input className={fld + ' w-24'} type="number" placeholder={t.discValue} value={d.value ?? ''} onChange={e => updDiscount(idx, { value: parseFloat(e.target.value) || 0 })} />
+                  <span className="text-xs text-gray-400">{d.type === 'percent' ? '٪' : draft.currency}</span>
+                  <label className="flex items-center gap-1 text-xs text-gray-600 ms-auto"><input type="checkbox" className="accent-indigo-600" checked={d.active !== false} onChange={e => updDiscount(idx, { active: e.target.checked })} />{t.active}</label>
+                  <button onClick={() => removeDiscount(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-500">{t.discScope}:</span>
+                  <select className={fld + ' bg-white w-auto'} value={d.scope} onChange={e => updDiscount(idx, { scope: e.target.value as any })}>
+                    <option value="all">{t.scopeAll}</option><option value="products">{t.scopeProducts}</option><option value="categories">{t.scopeCats}</option>
+                  </select>
+                  <input className={fld + ' w-40'} type="number" placeholder={t.discMin} value={d.minOrder ?? ''} onChange={e => updDiscount(idx, { minOrder: parseFloat(e.target.value) || undefined })} />
+                </div>
+                {d.scope === 'products' && (
+                  <div><p className="text-[11px] text-gray-500 mb-1">{t.selectProducts}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {draft.products.map(p => { const on = (d.productIds || []).includes(p.id); return (
+                        <button key={p.id} onClick={() => updDiscount(idx, { productIds: on ? (d.productIds || []).filter(id => id !== p.id) : [...(d.productIds || []), p.id] })} className={`px-2 py-1 rounded-full text-[11px] border ${on ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200'}`}>{p.name || p.sku || '—'}</button>
+                      ); })}
+                    </div>
+                  </div>
+                )}
+                {d.scope === 'categories' && (
+                  <div><p className="text-[11px] text-gray-500 mb-1">{t.selectCats}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {draftCategories().length === 0 ? <span className="text-[11px] text-gray-400">—</span> : draftCategories().map(cat => { const on = (d.categories || []).includes(cat); return (
+                        <button key={cat} onClick={() => updDiscount(idx, { categories: on ? (d.categories || []).filter(c => c !== cat) : [...(d.categories || []), cat] })} className={`px-2 py-1 rounded-full text-[11px] border ${on ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200'}`}>{cat}</button>
+                      ); })}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -8,6 +8,11 @@ interface OrderData {
   items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number }[];
   fees?: { label: string; amount: number }[];
   itemsTotal?: number;
+  discountCode?: string;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  taxInclusive?: boolean;
   total: number; currency: string;
 }
 
@@ -37,6 +42,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     (shop.extraFees || []).forEach(f => { init[f.id] = f.required ? true : !!f.defaultOn; });
     return init;
   });
+  const [discountInput, setDiscountInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
+  const [discountErr, setDiscountErr] = useState('');
   useEffect(() => { setGalIdx(0); }, [detail]);
 
   // Resolve a product video URL into an embeddable form
@@ -114,6 +122,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     subtotalLabel: T ? 'جمع اقلام' : 'Items subtotal',
     feesLabel: T ? 'هزینه‌های اضافی' : 'Additional fees',
     optionalFee: T ? '(اختیاری)' : '(optional)',
+    discountTitle: T ? 'کد تخفیف' : 'Discount code',
+    discountPh: T ? 'کد تخفیف را وارد کنید' : 'Enter discount code',
+    apply: T ? 'اعمال' : 'Apply',
+    discountLine: T ? 'تخفیف' : 'Discount',
+    taxIncl: T ? 'شامل مالیات' : 'incl. tax',
+    taxExcl: T ? 'مالیات' : 'Tax',
   };
 
   const theme = shop.theme;
@@ -165,8 +179,39 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const shopFees = shop.extraFees || [];
   const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
   const feesTotal = activeFees.reduce((a, f) => a + (f.amount || 0), 0);
-  const finalTotal = grandTotal + feesTotal;
   const toggleFee = (id: string) => setSelectedFees(s => ({ ...s, [id]: !s[id] }));
+
+  // ── Discount code ──
+  const applicableSubtotal = (d: import('../types').MetaShopDiscount): number => {
+    if (d.scope === 'products') return cartItems.filter(c => (d.productIds || []).includes(c.p.id)).reduce((a, c) => a + c.line, 0);
+    if (d.scope === 'categories') return cartItems.filter(c => c.p.group && (d.categories || []).includes(c.p.group)).reduce((a, c) => a + c.line, 0);
+    return grandTotal;
+  };
+  const computeDiscount = (d: import('../types').MetaShopDiscount | null): number => {
+    if (!d) return 0;
+    const base = applicableSubtotal(d);
+    if (base <= 0) return 0;
+    const raw = d.type === 'percent' ? base * (d.value || 0) / 100 : Math.min(d.value || 0, base);
+    return Math.round(raw * 100) / 100;
+  };
+  const discountAmount = computeDiscount(appliedDiscount);
+  // ── Tax (inclusive or exclusive) ──
+  const taxRate = shop.taxRate || 0;
+  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
+  const taxInclusive = !!shop.taxInclusive;
+  const taxAmount = taxRate > 0 ? (taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * taxRate / 100) : 0;
+  const finalTotal = taxInclusive ? taxBase : taxBase + taxAmount;
+
+  const applyDiscount = () => {
+    const code = discountInput.trim();
+    if (!code) return;
+    const d = (shop.discounts || []).find(x => x.active !== false && x.code.trim().toLowerCase() === code.toLowerCase());
+    if (!d) { setAppliedDiscount(null); setDiscountErr(T ? 'کد تخفیف نامعتبر است.' : 'Invalid discount code.'); return; }
+    if (d.minOrder && grandTotal < d.minOrder) { setAppliedDiscount(null); setDiscountErr(T ? `حداقل مبلغ سفارش برای این کد ${shop.currency} ${d.minOrder.toLocaleString()} است.` : `Minimum order for this code is ${shop.currency} ${d.minOrder.toLocaleString()}.`); return; }
+    if (computeDiscount(d) <= 0) { setAppliedDiscount(null); setDiscountErr(T ? 'این کد برای اقلام سبد شما اعمال نمی‌شود.' : 'This code does not apply to your cart items.'); return; }
+    setAppliedDiscount(d); setDiscountErr('');
+  };
+  const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
 
   const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } })); };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
@@ -184,6 +229,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${c.p.name} — ${c.optionText}` : c.p.name, sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
         fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
         itemsTotal: grandTotal,
+        discountCode: appliedDiscount ? appliedDiscount.code : undefined,
+        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        taxRate: taxRate > 0 ? taxRate : undefined,
+        taxAmount: taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
+        taxInclusive: taxRate > 0 ? taxInclusive : undefined,
         total: finalTotal, currency: shop.currency,
       });
       setTracking(code);
@@ -485,26 +535,53 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     ))}
                   </tbody>
                 </table>
-                {shopFees.length > 0 ? (
+                {(shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
                   <>
                     <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal)}</b></div>
-                    <div className="ms-fees">
-                      <div className="ms-fees-title">{t.feesLabel}</div>
-                      {shopFees.map(f => {
-                        const on = f.required || selectedFees[f.id];
-                        return (
-                          <label key={f.id} className={`ms-fee ${on ? 'on' : ''} ${f.required ? 'req' : ''}`}>
-                            <span className="ms-fee-left">
-                              {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
-                              <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
-                            </span>
-                            <span className="ms-fee-amt">+ {money(f.amount)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                    {(shop.discounts || []).length > 0 && (
+                      <div className="ms-disc">
+                        <div className="ms-disc-title">{t.discountTitle}</div>
+                        {appliedDiscount ? (
+                          <div className="ms-disc-applied">
+                            <span className="ms-disc-code">{appliedDiscount.code} {appliedDiscount.type === 'percent' ? `(${appliedDiscount.value}%)` : ''}</span>
+                            <span className="ms-disc-amt">− {money(discountAmount)}</span>
+                            <button className="ms-disc-rm" onClick={removeDiscount}>✕</button>
+                          </div>
+                        ) : (
+                          <div className="ms-disc-row">
+                            <input value={discountInput} onChange={e => { setDiscountInput(e.target.value); setDiscountErr(''); }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyDiscount(); } }} placeholder={t.discountPh} dir="ltr" />
+                            <button onClick={applyDiscount}>{t.apply}</button>
+                          </div>
+                        )}
+                        {discountErr && <p className="ms-disc-err">{discountErr}</p>}
+                      </div>
+                    )}
+                    {shopFees.length > 0 && (
+                      <div className="ms-fees">
+                        <div className="ms-fees-title">{t.feesLabel}</div>
+                        {shopFees.map(f => {
+                          const on = f.required || selectedFees[f.id];
+                          return (
+                            <label key={f.id} className={`ms-fee ${on ? 'on' : ''} ${f.required ? 'req' : ''}`}>
+                              <span className="ms-fee-left">
+                                {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
+                                <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
+                              </span>
+                              <span className="ms-fee-amt">+ {money(f.amount)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 ) : null}
+                {discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount)}</span></div>}
+                {taxRate > 0 && (
+                  <div className="ms-inv-tax">
+                    <span>{(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%{taxInclusive ? ` · ${t.taxIncl}` : ''})</span>
+                    <span>{taxInclusive ? '' : '+ '}{money(taxAmount)}</span>
+                  </div>
+                )}
                 <div className="ms-inv-total"><span>{t.total}</span><b>{money(finalTotal)}</b></div>
                 <p className="ms-inv-hint">{t.invHint}</p>
               </div>
@@ -791,6 +868,19 @@ const MS_CSS = `
 .ms-fee em { font-style:normal; font-size:10px; color:#94a3b8; }
 .ms-fee.on { color:#0f172a; }
 .ms-fee-amt { font-weight:700; color:#334155; white-space:nowrap; }
+.ms-disc { margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px; }
+.ms-disc-title { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; margin-bottom:5px; }
+.ms-disc-row { display:flex; gap:6px; }
+.ms-disc-row input { flex:1; min-width:0; padding:8px 10px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; text-transform:uppercase; }
+.ms-disc-row input:focus { border-color:var(--ms-primary); }
+.ms-disc-row button { padding:8px 16px; background:var(--ms-primary); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; }
+.ms-disc-applied { display:flex; align-items:center; gap:8px; background:#ecfdf5; border:1px solid #bbf7d0; border-radius:8px; padding:7px 10px; }
+.ms-disc-code { font-weight:800; color:#047857; font-size:13px; letter-spacing:.03em; }
+.ms-disc-amt { color:#047857; font-weight:700; margin-inline-start:auto; }
+.ms-disc-rm { background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; }
+.ms-disc-err { color:#ef4444; font-size:11px; margin-top:5px; }
+.ms-inv-discount { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#047857; font-weight:700; }
+.ms-inv-tax { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#64748b; }
 .ms-inv-total { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:2px solid var(--ms-primary); font-size:15px; font-weight:800; color:#0f172a; }
 .ms-inv-hint { font-size:10px; color:#94a3b8; margin-top:8px; line-height:1.4; }
 /* track link */

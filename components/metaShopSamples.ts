@@ -43,6 +43,14 @@ export const PRODUCTS_SAMPLE: MetaShop = {
     { id: 'fee-ship', label: 'هزینه ارسال', labelEn: 'Shipping fee', amount: 2, required: false, defaultOn: true },
     { id: 'fee-pack', label: 'هزینه بسته‌بندی ویژه', labelEn: 'Special packaging', amount: 1, required: false, defaultOn: false },
   ],
+  discounts: [
+    { id: 'disc-nowruz', code: 'NOWRUZ', type: 'percent', value: 10, scope: 'all', active: true, label: 'Nowruz 10% off everything' },
+    { id: 'disc-pistachio', code: 'PISTACHIO5', type: 'fixed', value: 5, scope: 'products', productIds: ['sp1'], active: true, label: '$5 off pistachios' },
+  ],
+  taxRate: 9,
+  taxInclusive: false,
+  taxLabel: 'مالیات بر ارزش افزوده',
+  taxLabelEn: 'VAT',
   pages: [
     {
       id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',
@@ -111,6 +119,13 @@ export const SERVICES_SAMPLE: MetaShop = {
   extraFees: [
     { id: 'fee-delivery', label: 'هزینه تحویل در محل', labelEn: 'On-site delivery', amount: 3, required: false, defaultOn: false },
   ],
+  discounts: [
+    { id: 'disc-rent', code: 'RENT10', type: 'percent', value: 10, scope: 'categories', categories: ['Car Rental'], active: true, label: '10% off car rentals' },
+  ],
+  taxRate: 5,
+  taxInclusive: true,
+  taxLabel: 'مالیات بر ارزش افزوده',
+  taxLabelEn: 'VAT',
   pages: [
     {
       id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',

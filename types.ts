@@ -529,6 +529,20 @@ export interface MetaShopTheme {
 
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
+// A discount code the customer can enter at checkout
+export interface MetaShopDiscount {
+  id: string;
+  code: string;                          // code the customer types (case-insensitive), e.g. "NOWRUZ"
+  type: 'percent' | 'fixed';             // percentage off, or a fixed amount off
+  value: number;                         // percent (e.g. 10) or fixed amount in shop currency
+  scope: 'all' | 'products' | 'categories'; // applies to whole order, specific products, or categories
+  productIds?: string[];                 // when scope = 'products'
+  categories?: string[];                 // when scope = 'categories' (product group names)
+  active?: boolean;
+  label?: string;                        // optional internal note
+  minOrder?: number;                     // optional minimum items subtotal to qualify
+}
+
 // A predefined extra fee added at checkout (shipping, packaging, ...)
 export interface MetaShopFee {
   id: string;
@@ -610,6 +624,11 @@ export interface MetaShop {
   categories?: string[];   // ordered category list (falls back to product groups)
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
+  discounts?: MetaShopDiscount[]; // discount codes
+  taxRate?: number;          // VAT/tax percentage (0 or undefined = no tax)
+  taxInclusive?: boolean;    // true = tax already included in prices; false = added on top
+  taxLabel?: string;         // e.g. "مالیات بر ارزش افزوده"
+  taxLabelEn?: string;       // e.g. "VAT"
   // order routing → کارتابل (cartable)
   assignType?: 'personnel' | 'department';
   assignedPersonnelIds?: string[];
@@ -646,8 +665,13 @@ export interface MetaShopOrder {
   notes?: string;
   items: MetaShopOrderItem[];
   fees?: { label: string; amount: number }[]; // applied extra fees (shipping, packaging, ...)
-  itemsTotal?: number;                          // sum of line items before fees
-  total: number;                                // grand total (items + fees)
+  itemsTotal?: number;                          // sum of line items before discount/fees
+  discountCode?: string;                        // applied discount code
+  discountAmount?: number;                      // discount value subtracted
+  taxRate?: number;                             // tax percentage applied
+  taxAmount?: number;                           // tax value
+  taxInclusive?: boolean;                       // whether tax was inclusive
+  total: number;                                // grand total (items − discount + fees + tax if exclusive)
   currency: string;
   status: 'new' | 'in_progress' | 'done' | 'cancelled';
   createdAt: string;

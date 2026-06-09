@@ -25,6 +25,13 @@
   "extraFees": [
     { "id": "fee-delivery", "label": "هزینه تحویل در محل", "labelEn": "On-site delivery", "amount": 3, "required": false, "defaultOn": false }
   ],
+  "discounts": [
+    { "id": "disc-rent", "code": "RENT10", "type": "percent", "value": 10, "scope": "categories", "categories": ["Car Rental"], "active": true, "label": "10% off car rentals" }
+  ],
+  "taxRate": 5,
+  "taxInclusive": true,
+  "taxLabel": "مالیات بر ارزش افزوده",
+  "taxLabelEn": "VAT",
   "pages": [
     {
       "id": "pg-about", "label": "درباره ما", "labelEn": "About Us", "type": "text",
