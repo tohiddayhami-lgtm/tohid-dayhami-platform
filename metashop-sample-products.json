@@ -22,6 +22,10 @@
   "defaultLang": "en",
   "productsTabLabel": "فهرست محصولات",
   "productsTabLabelEn": "Product List",
+  "extraFees": [
+    { "id": "fee-ship", "label": "هزینه ارسال", "labelEn": "Shipping fee", "amount": 2, "required": false, "defaultOn": true },
+    { "id": "fee-pack", "label": "هزینه بسته‌بندی ویژه", "labelEn": "Special packaging", "amount": 1, "required": false, "defaultOn": false }
+  ],
   "pages": [
     {
       "id": "pg-about", "label": "درباره ما", "labelEn": "About Us", "type": "text",

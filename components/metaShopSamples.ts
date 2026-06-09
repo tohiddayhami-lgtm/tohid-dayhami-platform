@@ -39,6 +39,10 @@ export const PRODUCTS_SAMPLE: MetaShop = {
   productsTabLabelEn: 'Product List',
   assignType: undefined,
   assignedPersonnelIds: [],
+  extraFees: [
+    { id: 'fee-ship', label: 'هزینه ارسال', labelEn: 'Shipping fee', amount: 2, required: false, defaultOn: true },
+    { id: 'fee-pack', label: 'هزینه بسته‌بندی ویژه', labelEn: 'Special packaging', amount: 1, required: false, defaultOn: false },
+  ],
   pages: [
     {
       id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',
@@ -104,6 +108,9 @@ export const SERVICES_SAMPLE: MetaShop = {
   productsTabLabelEn: 'Services',
   assignType: undefined,
   assignedPersonnelIds: [],
+  extraFees: [
+    { id: 'fee-delivery', label: 'هزینه تحویل در محل', labelEn: 'On-site delivery', amount: 3, required: false, defaultOn: false },
+  ],
   pages: [
     {
       id: 'pg-about', label: 'درباره ما', labelEn: 'About Us', type: 'text',

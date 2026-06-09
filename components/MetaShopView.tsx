@@ -6,6 +6,8 @@ interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
   country?: string; city?: string; notes?: string;
   items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number }[];
+  fees?: { label: string; amount: number }[];
+  itemsTotal?: number;
   total: number; currency: string;
 }
 
@@ -30,6 +32,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [cartOpen, setCartOpen] = useState(false);
   const [step, setStep] = useState<'cart' | 'review'>('cart');
   const [chosenOpt, setChosenOpt] = useState<Record<string, string>>({}); // productId -> selected rate option id
+  const [selectedFees, setSelectedFees] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    (shop.extraFees || []).forEach(f => { init[f.id] = f.required ? true : !!f.defaultOn; });
+    return init;
+  });
   useEffect(() => { setGalIdx(0); }, [detail]);
 
   // Resolve a product video URL into an embeddable form
@@ -104,6 +111,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     invHint: T ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.' : 'This is a proforma preview; the final amount is confirmed after review.',
     confirm: T ? 'ثبت نهایی سفارش' : 'Confirm & submit order',
     productsTab: isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Product List'),
+    subtotalLabel: T ? 'جمع اقلام' : 'Items subtotal',
+    feesLabel: T ? 'هزینه‌های اضافی' : 'Additional fees',
+    optionalFee: T ? '(اختیاری)' : '(optional)',
   };
 
   const theme = shop.theme;
@@ -151,7 +161,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string }[], [cart, products, uiLang]);
 
   const cartCount = Object.keys(cart).length;
-  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0);
+  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0); // items only
+  const shopFees = shop.extraFees || [];
+  const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
+  const feesTotal = activeFees.reduce((a, f) => a + (f.amount || 0), 0);
+  const finalTotal = grandTotal + feesTotal;
+  const toggleFee = (id: string) => setSelectedFees(s => ({ ...s, [id]: !s[id] }));
 
   const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } })); };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
@@ -167,7 +182,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
         items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${c.p.name} — ${c.optionText}` : c.p.name, sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
-        total: grandTotal, currency: shop.currency,
+        fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
+        itemsTotal: grandTotal,
+        total: finalTotal, currency: shop.currency,
       });
       setTracking(code);
       setCart({}); setCartOpen(false);
@@ -468,7 +485,27 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     ))}
                   </tbody>
                 </table>
-                <div className="ms-inv-total"><span>{t.total}</span><b>{money(grandTotal)}</b></div>
+                {shopFees.length > 0 ? (
+                  <>
+                    <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal)}</b></div>
+                    <div className="ms-fees">
+                      <div className="ms-fees-title">{t.feesLabel}</div>
+                      {shopFees.map(f => {
+                        const on = f.required || selectedFees[f.id];
+                        return (
+                          <label key={f.id} className={`ms-fee ${on ? 'on' : ''} ${f.required ? 'req' : ''}`}>
+                            <span className="ms-fee-left">
+                              {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
+                              <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
+                            </span>
+                            <span className="ms-fee-amt">+ {money(f.amount)}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
+                <div className="ms-inv-total"><span>{t.total}</span><b>{money(finalTotal)}</b></div>
                 <p className="ms-inv-hint">{t.invHint}</p>
               </div>
               <div className="ms-form embedded">
@@ -743,6 +780,17 @@ const MS_CSS = `
 .ms-inv-table td { padding:7px 4px; border-bottom:1px solid #f1f5f9; color:#334155; vertical-align:top; }
 .ms-inv-table .c { text-align:center; } .ms-inv-table .r { text-align:end; } .ms-inv-table .b { font-weight:800; color:#0f172a; }
 .ms-inv-sku { color:#94a3b8; font-size:10px; }
+.ms-inv-subtotal { display:flex; justify-content:space-between; align-items:center; padding-top:8px; margin-top:4px; border-top:1px solid #f1f5f9; font-size:12px; color:#475569; }
+.ms-inv-subtotal b { color:#0f172a; }
+.ms-fees { margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px; }
+.ms-fees-title { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; margin-bottom:5px; }
+.ms-fee { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 0; font-size:12px; color:#475569; cursor:pointer; }
+.ms-fee.req { cursor:default; }
+.ms-fee-left { display:flex; align-items:center; gap:7px; }
+.ms-fee-left input { width:15px; height:15px; accent-color:var(--ms-primary); }
+.ms-fee em { font-style:normal; font-size:10px; color:#94a3b8; }
+.ms-fee.on { color:#0f172a; }
+.ms-fee-amt { font-weight:700; color:#334155; white-space:nowrap; }
 .ms-inv-total { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:2px solid var(--ms-primary); font-size:15px; font-weight:800; color:#0f172a; }
 .ms-inv-hint { font-size:10px; color:#94a3b8; margin-top:8px; line-height:1.4; }
 /* track link */

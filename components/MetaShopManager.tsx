@@ -153,6 +153,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     cardName: T ? 'عنوان (فارسی)' : 'Name (FA)', cardNameEn: T ? 'عنوان (انگلیسی)' : 'Name (EN)', cardDesc: T ? 'توضیح (فارسی)' : 'Desc (FA)', cardDescEn: T ? 'توضیح (انگلیسی)' : 'Desc (EN)',
     productsTabLabel: T ? 'عنوان تب محصولات (فارسی)' : 'Products tab label (FA)', productsTabLabelEn: T ? 'عنوان تب محصولات (انگلیسی)' : 'Products tab label (EN)',
     moveUp: T ? 'بالا' : 'Up', moveDown: T ? 'پایین' : 'Down',
+    feesT: T ? 'هزینه‌های پیش‌فرض (ارسال، بسته‌بندی، ...)' : 'Default fees (shipping, packaging, ...)',
+    feesHint: T ? 'این هزینه‌ها در صفحه سفارش به مشتری نشان داده می‌شوند. اگر «الزامی» باشد همیشه به جمع اضافه می‌شود؛ در غیر این صورت مشتری انتخاب می‌کند.' : 'Shown to the customer at checkout. If "required" it is always added; otherwise the customer chooses.',
+    addFee: T ? 'افزودن هزینه' : 'Add fee', feeLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', feeLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', feeAmount: T ? 'مبلغ' : 'Amount',
+    feeRequired: T ? 'الزامی' : 'Required', feeDefaultOn: T ? 'پیش‌فعال' : 'Pre-checked', noFees: T ? 'هزینه‌ای تعریف نشده است.' : 'No fees defined.',
     primary: T ? 'رنگ اصلی' : 'Primary', coverC: T ? 'رنگ کاور' : 'Cover', coverText: T ? 'متن کاور' : 'Cover text', bg: T ? 'پس‌زمینه' : 'Background',
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
     coverImg: T ? 'تصویر کاور (پس‌زمینه)' : 'Cover image (background)', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
@@ -214,6 +218,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
   const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
+
+  // ── Default checkout fees ──
+  const fees = () => draft?.extraFees || [];
+  const addFee = () => upd({ extraFees: [...fees(), { id: `fee-${Date.now()}`, label: '', amount: 0 }] });
+  const updFee = (idx: number, patch: Partial<import('../types').MetaShopFee>) => setDraft(d => { if (!d) return d; const fs = [...(d.extraFees || [])]; fs[idx] = { ...fs[idx], ...patch }; return { ...d, extraFees: fs }; });
+  const removeFee = (idx: number) => setDraft(d => d ? { ...d, extraFees: (d.extraFees || []).filter((_, i) => i !== idx) } : d);
 
   // ── Pages editing ──
   const pages = () => draft?.pages || [];
@@ -356,7 +366,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <tr key={o.id} className="hover:bg-gray-50/60 align-top">
                     <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}</td>
                     <td className="px-4 py-3"><div className="font-medium text-gray-800">{o.customerName}</div><div className="text-xs text-gray-400" dir="ltr">{o.phone}</div>{o.company && <div className="text-xs text-gray-400">{o.company}</div>}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}</div>)}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}</div>)}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
                     <td className="px-4 py-3 font-bold text-gray-800">{o.currency} {o.total.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs" dir="ltr">{new Date(o.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
                     <td className="px-4 py-3">
@@ -475,6 +485,29 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <option value="">{T ? '— انتخاب دپارتمان —' : '— Select department —'}</option>
             {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
+        )}
+      </div>
+
+      {/* Default checkout fees */}
+      <div className={card}>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-bold text-gray-700">{t.feesT} <span className="text-xs text-gray-400">({fees().length})</span></h4>
+          <button onClick={addFee} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addFee}</button>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">{t.feesHint}</p>
+        {fees().length === 0 ? <p className="text-sm text-gray-400 text-center py-3">{t.noFees}</p> : (
+          <div className="space-y-2">
+            {fees().map((f, idx) => (
+              <div key={f.id} className="flex items-center gap-2 flex-wrap border border-gray-100 rounded-lg p-2 bg-gray-50/50">
+                <input className={fld + ' flex-1 min-w-[120px]'} placeholder={t.feeLabel} value={f.label} onChange={e => updFee(idx, { label: e.target.value })} />
+                <input className={fld + ' flex-1 min-w-[120px] dir-ltr'} placeholder={t.feeLabelEn} value={f.labelEn || ''} onChange={e => updFee(idx, { labelEn: e.target.value })} />
+                <input className={fld + ' w-28'} type="number" placeholder={t.feeAmount} value={f.amount ?? ''} onChange={e => updFee(idx, { amount: parseFloat(e.target.value) || 0 })} />
+                <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" className="accent-indigo-600" checked={!!f.required} onChange={e => updFee(idx, { required: e.target.checked })} />{t.feeRequired}</label>
+                <label className={`flex items-center gap-1 text-xs text-gray-600 ${f.required ? 'opacity-40 pointer-events-none' : ''}`}><input type="checkbox" className="accent-indigo-600" checked={!!f.defaultOn} onChange={e => updFee(idx, { defaultOn: e.target.checked })} />{t.feeDefaultOn}</label>
+                <button onClick={() => removeFee(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

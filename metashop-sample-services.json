@@ -22,6 +22,9 @@
   "defaultLang": "fa",
   "productsTabLabel": "خدمات",
   "productsTabLabelEn": "Services",
+  "extraFees": [
+    { "id": "fee-delivery", "label": "هزینه تحویل در محل", "labelEn": "On-site delivery", "amount": 3, "required": false, "defaultOn": false }
+  ],
   "pages": [
     {
       "id": "pg-about", "label": "درباره ما", "labelEn": "About Us", "type": "text",

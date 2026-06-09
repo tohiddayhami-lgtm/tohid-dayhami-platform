@@ -529,6 +529,16 @@ export interface MetaShopTheme {
 
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
+// A predefined extra fee added at checkout (shipping, packaging, ...)
+export interface MetaShopFee {
+  id: string;
+  label: string;            // e.g. "هزینه ارسال"
+  labelEn?: string;
+  amount: number;           // in the shop currency
+  required?: boolean;       // always applied (customer cannot remove)
+  defaultOn?: boolean;      // optional fees: pre-checked at checkout
+}
+
 // A custom content page shown as an extra tab in the shop (About Us, Certifications, etc.)
 export interface MetaShopPageCard { id: string; image?: string; name?: string; nameEn?: string; desc?: string; descEn?: string; }
 export interface MetaShopPage {
@@ -599,6 +609,7 @@ export interface MetaShop {
   // catalog
   categories?: string[];   // ordered category list (falls back to product groups)
   products: MetaShopProduct[];
+  extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   // order routing → کارتابل (cartable)
   assignType?: 'personnel' | 'department';
   assignedPersonnelIds?: string[];
@@ -634,7 +645,9 @@ export interface MetaShopOrder {
   city?: string;
   notes?: string;
   items: MetaShopOrderItem[];
-  total: number;
+  fees?: { label: string; amount: number }[]; // applied extra fees (shipping, packaging, ...)
+  itemsTotal?: number;                          // sum of line items before fees
+  total: number;                                // grand total (items + fees)
   currency: string;
   status: 'new' | 'in_progress' | 'done' | 'cancelled';
   createdAt: string;

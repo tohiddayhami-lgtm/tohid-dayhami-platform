@@ -1029,7 +1029,7 @@ const App: React.FC = () => {
   }, [view, shopSlug, metaShops]);
 
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
-  const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; total: number; currency: string; }): Promise<string> => {
+  const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; total: number; currency: string; }): Promise<string> => {
     const phoneRaw = data.phone.trim();
     const phone = normalizePhone(phoneRaw);
     // Tracking code, e.g. SHP-1234-AB7C
@@ -1054,7 +1054,8 @@ const App: React.FC = () => {
     const order: MetaShopOrder = {
       id: `mso-${Date.now()}`, shopId: shop.id, shopName: shop.name, shopType: shop.type,
       trackingCode, customerName: data.customerName, company: data.company, phone, email: data.email,
-      country: data.country, city: data.city, notes: data.notes, items: data.items, total: data.total,
+      country: data.country, city: data.city, notes: data.notes, items: data.items,
+      fees: data.fees, itemsTotal: data.itemsTotal, total: data.total,
       currency: data.currency, status: 'new', createdAt: new Date().toISOString(), customerId,
     };
     await saveMetaShopOrderToCloud(order);
@@ -1072,7 +1073,9 @@ const App: React.FC = () => {
     if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
 
     const itemsText = data.items.map((it, i) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
-    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
+    const feesText = (data.fees && data.fees.length) ? `\n\nهزینه‌های اضافی:\n${data.fees.map(f => `• ${f.label}: ${data.currency} ${(f.amount || 0).toLocaleString()}`).join('\n')}` : '';
+    const subtotalText = (data.fees && data.fees.length && data.itemsTotal != null) ? `\nجمع اقلام: ${data.currency} ${data.itemsTotal.toLocaleString()}` : '';
+    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${feesText}${subtotalText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
     const msg: InternalMessage = {
       id: `shopmsg-${Date.now()}`, senderId: '', senderName: data.customerName,
       recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),
