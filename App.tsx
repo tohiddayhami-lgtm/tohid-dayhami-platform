@@ -964,7 +964,9 @@ const App: React.FC = () => {
     let recipients = targetPosition
       ? personnel.filter(p => (p.roles || []).includes(targetPosition))
       : personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
-    if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
+    // The master ALWAYS receives a copy of every customer correspondence
+    const masterUser = personnel.find(p => p.username === 'master');
+    if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
 
     // Human-friendly tracking code for the correspondence (e.g. MK-1234-AB7C)
     const trackingRandom = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -1065,7 +1067,9 @@ const App: React.FC = () => {
     } else if (shop.assignType === 'personnel' && shop.assignedPersonnelIds?.length) {
       recipients = personnel.filter(p => shop.assignedPersonnelIds!.includes(p.id));
     }
-    if (recipients.length === 0) recipients = personnel.filter(p => p.username === 'master');
+    // The master ALWAYS receives a copy of every shop order
+    const masterUser = personnel.find(p => p.username === 'master');
+    if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
 
     const itemsText = data.items.map((it, i) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
     const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;

@@ -168,18 +168,22 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     if (recipientIds.length === 0 || !subject.trim() || !body.trim()) return;
     setIsSending(true);
     try {
-      const recipientNames = recipientIds.map(id => personnel.find(p => p.id === id)?.fullName || 'Unknown');
+      // The master always receives a copy of every correspondence
+      const masterId = personnel.find(p => p.username === 'master')?.id;
+      const finalRecipientIds = (masterId && masterId !== currentUser.id && !recipientIds.includes(masterId))
+        ? [...recipientIds, masterId] : recipientIds;
+      const recipientNames = finalRecipientIds.map(id => personnel.find(p => p.id === id)?.fullName || 'Unknown');
       const newMessage: InternalMessage = {
         id: `msg-${Date.now()}`,
         senderId: currentUser.id,
         senderName: currentUser.fullName,
-        recipientIds, recipientNames, subject, body,
+        recipientIds: finalRecipientIds, recipientNames, subject, body,
         files: attachments.filter(f => f.status === 'success'),
         createdAt: new Date().toISOString(),
         readBy: [],
       };
       await sendInternalMessage(newMessage);
-      onAfterSend?.(recipientIds, currentUser.fullName, subject);
+      onAfterSend?.(finalRecipientIds, currentUser.fullName, subject);
       setIsComposeOpen(false);
       setRecipientIds([]); setRecipientCode(''); setRecipientError(''); setSubject(''); setBody(''); setAttachments([]);
       setActiveTab('sent');
@@ -249,8 +253,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     try {
       const nameOf = (id: string) => personnel.find(p => p.id === id)?.fullName || 'Unknown';
       const referredNames = referredIds.map(nameOf);
-      // Merge referred personnel into the message recipients so it lands in their کارتابل
-      const newRecipientIds = Array.from(new Set([...(selectedMessage.recipientIds || []), ...referredIds]));
+      // Merge referred personnel into the message recipients so it lands in their کارتابل (master always kept)
+      const masterId = personnel.find(p => p.username === 'master')?.id;
+      const newRecipientIds = Array.from(new Set([...(selectedMessage.recipientIds || []), ...referredIds, ...(masterId ? [masterId] : [])]));
       const newRecipientNames = newRecipientIds.map(nameOf);
       const referral: MessageReferral = {
         id: `ref-${Date.now()}`,
