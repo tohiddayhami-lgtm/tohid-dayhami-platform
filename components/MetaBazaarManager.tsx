@@ -1,17 +1,30 @@
 import React, { useState, useRef } from 'react';
-import { MetaBazaar } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck } from './Icons';
+import { MetaBazaar, MetaBazaarNode, MetaShop } from '../types';
+import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
 import { downloadSample } from './metaShopSamples';
 import { Language } from '../App';
 
 interface Props {
   bazaars: MetaBazaar[];
+  shops: MetaShop[];
   lang: Language;
   shopBaseUrl: string;
   onSave: (b: MetaBazaar) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   readonly?: boolean;
 }
+
+let _nid = 0;
+const newNodeId = () => `n-${Date.now().toString(36)}-${_nid++}`;
+// Immutable recursive tree helpers
+const updateNodeIn = (nodes: MetaBazaarNode[], id: string, patch: Partial<MetaBazaarNode>): MetaBazaarNode[] =>
+  nodes.map(n => n.id === id ? { ...n, ...patch } : { ...n, children: n.children ? updateNodeIn(n.children, id, patch) : n.children });
+const addChildIn = (nodes: MetaBazaarNode[], parentId: string | null, child: MetaBazaarNode): MetaBazaarNode[] => {
+  if (parentId === null) return [...nodes, child];
+  return nodes.map(n => n.id === parentId ? { ...n, children: [...(n.children || []), child] } : { ...n, children: n.children ? addChildIn(n.children, parentId, child) : n.children });
+};
+const deleteNodeIn = (nodes: MetaBazaarNode[], id: string): MetaBazaarNode[] =>
+  nodes.filter(n => n.id !== id).map(n => ({ ...n, children: n.children ? deleteNodeIn(n.children, id) : n.children }));
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `bazaar-${Date.now().toString(36)}`;
 const blank = (): MetaBazaar => ({ id: `bz-${Date.now()}`, slug: '', name: '', isActive: true, defaultLang: 'en', theme: { primary: '#2d4a1a', cover: '#1f2a18' }, levelLabels: [], tree: [], createdAt: new Date().toISOString() });
@@ -27,13 +40,15 @@ const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
   };
 };
 
-export const MetaBazaarManager: React.FC<Props> = ({ bazaars, lang, shopBaseUrl, onSave, onDelete, readonly = false }) => {
+export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopBaseUrl, onSave, onDelete, readonly = false }) => {
   const [draft, setDraft] = useState<MetaBazaar | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const newFileRef = useRef<HTMLInputElement>(null);
   const updFileRef = useRef<HTMLInputElement>(null);
   const [updTarget, setUpdTarget] = useState<MetaBazaar | null>(null);
+  const [shopPanelFor, setShopPanelFor] = useState<string | null>(null);
+  const [shopSearch, setShopSearch] = useState('');
   const T = lang === 'fa';
 
   const t = {
@@ -49,6 +64,14 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, lang, shopBaseUrl,
     treeNote: T ? 'دسته‌بندی چندسطحی (کشور ← شهر ← گروه کالایی ← …) و انتساب فروشگاه‌ها از طریق فایل JSON مدیریت می‌شود: دکمه «دانلود JSON» را بزنید، درخت را ویرایش کنید و دوباره «به‌روزرسانی از JSON» کنید.' : 'The multi-level tree (Country → City → Product group → …) and shop assignment is managed via JSON: click “Download JSON”, edit the tree, then “Update from JSON”.',
     nodes: T ? 'تعداد گره‌ها' : 'nodes', deleteConfirm: T ? 'این بازارچه حذف شود؟' : 'Delete this bazaar?', invalid: T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.',
     levels: T ? 'سطوح' : 'Levels',
+    structure: T ? 'ساختار دسته‌بندی' : 'Category structure',
+    structureHint: T ? 'دسته‌ها را اضافه/ویرایش/حذف کنید و فروشگاه‌ها را به هر گره وصل کنید.' : 'Add/edit/delete categories and attach shops to any node.',
+    levelNames: T ? 'نام سطوح' : 'Level names', addLevel: T ? 'افزودن سطح' : 'Add level',
+    addRoot: T ? 'افزودن دسته اصلی' : 'Add top category', addChild: T ? 'زیرمجموعه' : 'Subcategory', delNode: T ? 'حذف' : 'Delete',
+    shopsBtn: T ? 'فروشگاه‌ها' : 'Shops', noTree: T ? 'هنوز دسته‌ای اضافه نشده. «افزودن دسته اصلی» را بزنید.' : 'No categories yet. Click “Add top category”.',
+    nodeFa: T ? 'نام (فارسی)' : 'Name (FA)', nodeEn: T ? 'نام (انگلیسی)' : 'Name (EN)',
+    searchShop: T ? 'جستجوی فروشگاه...' : 'Search shop...', noShops: T ? 'فروشگاهی موجود نیست. ابتدا در تب «فروشگاه‌ها» بسازید.' : 'No shops. Create some in the Shops tab first.',
+    newCatFa: T ? 'دسته جدید' : 'New category',
   };
 
   const url = (b: MetaBazaar) => `${shopBaseUrl}?bazaar=${encodeURIComponent(b.slug)}`;
@@ -88,6 +111,59 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, lang, shopBaseUrl,
 
   const upd = (patch: Partial<MetaBazaar>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updCat = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => setDraft(d => d ? { ...d, [field]: { ...(d[field] || {}), [which]: val } } : d);
+  // Tree editing
+  const setTree = (fn: (tree: MetaBazaarNode[]) => MetaBazaarNode[]) => setDraft(d => d ? { ...d, tree: fn(d.tree || []) } : d);
+  const addRoot = () => setTree(tr => addChildIn(tr, null, { id: newNodeId(), label: { fa: t.newCatFa, en: 'New category' }, children: [], shopSlugs: [] }));
+  const addChild = (parentId: string) => setTree(tr => addChildIn(tr, parentId, { id: newNodeId(), label: { fa: t.newCatFa, en: 'New category' }, children: [], shopSlugs: [] }));
+  const setNodeLabel = (id: string, which: 'fa' | 'en', val: string) => setDraft(d => { if (!d) return d; const upd2 = (nodes: MetaBazaarNode[]): MetaBazaarNode[] => nodes.map(n => n.id === id ? { ...n, label: { ...n.label, [which]: val } } : { ...n, children: n.children ? upd2(n.children) : n.children }); return { ...d, tree: upd2(d.tree || []) }; });
+  const delNode = (id: string) => setTree(tr => deleteNodeIn(tr, id));
+  const toggleShop = (id: string, slug: string) => setDraft(d => { if (!d) return d; const tog = (nodes: MetaBazaarNode[]): MetaBazaarNode[] => nodes.map(n => { if (n.id === id) { const cur = n.shopSlugs || []; return { ...n, shopSlugs: cur.includes(slug) ? cur.filter(s => s !== slug) : [...cur, slug] }; } return { ...n, children: n.children ? tog(n.children) : n.children }; }); return { ...d, tree: tog(d.tree || []) }; });
+  // Level labels
+  const setLevelLabel = (i: number, which: 'fa' | 'en', val: string) => setDraft(d => { if (!d) return d; const arr = [...(d.levelLabels || [])]; while (arr.length <= i) arr.push({}); arr[i] = { ...arr[i], [which]: val }; return { ...d, levelLabels: arr }; });
+  const addLevel = () => setDraft(d => d ? { ...d, levelLabels: [...(d.levelLabels || []), {}] } : d);
+  const removeLevel = (i: number) => setDraft(d => d ? { ...d, levelLabels: (d.levelLabels || []).filter((_, j) => j !== i) } : d);
+
+  // Recursive visual node editor
+  const NodeEditor: React.FC<{ node: MetaBazaarNode; depth: number }> = ({ node, depth }) => {
+    const levelName = T ? (draft?.levelLabels?.[depth]?.fa || draft?.levelLabels?.[depth]?.en) : (draft?.levelLabels?.[depth]?.en || draft?.levelLabels?.[depth]?.fa);
+    const count = (node.shopSlugs || []).length;
+    const open = shopPanelFor === node.id;
+    const q = shopSearch.trim().toLowerCase();
+    const filteredShops = q ? shops.filter(s => `${s.name} ${s.slug}`.toLowerCase().includes(q)) : shops;
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-2.5 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {levelName && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 shrink-0">{levelName}</span>}
+          <input className="px-2 py-1.5 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500 flex-1 min-w-[110px]" value={node.label?.fa || ''} onChange={e => setNodeLabel(node.id, 'fa', e.target.value)} placeholder={t.nodeFa} />
+          <input className="px-2 py-1.5 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500 flex-1 min-w-[110px] dir-ltr" value={node.label?.en || ''} onChange={e => setNodeLabel(node.id, 'en', e.target.value)} placeholder={t.nodeEn} />
+          <button onClick={() => { setShopPanelFor(open ? null : node.id); setShopSearch(''); }} className={`text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 ${open ? 'bg-indigo-600 text-white border-indigo-600' : count ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>🛍 {t.shopsBtn}{count > 0 ? ` (${count})` : ''}</button>
+          <button onClick={() => addChild(node.id)} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addChild}</button>
+          <button onClick={() => { if (confirm(T ? 'این گره و همه زیرمجموعه‌هایش حذف شود؟' : 'Delete this node and its children?')) delNode(node.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-4 h-4" /></button>
+        </div>
+
+        {open && (
+          <div className="mt-2 border-t border-gray-100 pt-2">
+            {shops.length === 0 ? <p className="text-xs text-gray-400 py-2">{t.noShops}</p> : (
+              <>
+                <div className="relative mb-2 max-w-xs"><IconSearch className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-gray-400" /><input value={shopSearch} onChange={e => setShopSearch(e.target.value)} placeholder={t.searchShop} className="w-full ltr:pl-8 rtl:pr-8 px-2 py-1.5 rounded-lg border border-gray-200 text-xs outline-none" /></div>
+                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                  {filteredShops.map(s => { const on = (node.shopSlugs || []).includes(s.slug); return (
+                    <button key={s.id} onClick={() => toggleShop(node.id, s.slug)} className={`text-xs px-2.5 py-1 rounded-full border ${on ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`} title={s.slug}>{on ? '✓ ' : ''}{s.name}</button>
+                  ); })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {node.children && node.children.length > 0 && (
+          <div className="mt-2 ms-3 ps-2 border-s-2 border-dashed border-gray-200">
+            {node.children.map(ch => <NodeEditor key={ch.id} node={ch} depth={depth + 1} />)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // ── EDITOR ──
   if (draft) {
@@ -118,10 +194,41 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, lang, shopBaseUrl,
             <div><label className={lbl}>{t.primary}</label><div className="flex gap-2"><input type="color" value={draft.theme?.primary || '#2d4a1a'} onChange={e => upd({ theme: { ...(draft.theme || {}), primary: e.target.value } })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={draft.theme?.primary || ''} onChange={e => upd({ theme: { ...(draft.theme || {}), primary: e.target.value } })} /></div></div>
             <div><label className={lbl}>{t.cover}</label><div className="flex gap-2"><input type="color" value={draft.theme?.cover || '#1f2a18'} onChange={e => upd({ theme: { ...(draft.theme || {}), cover: e.target.value } })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={draft.theme?.cover || ''} onChange={e => upd({ theme: { ...(draft.theme || {}), cover: e.target.value } })} /></div></div>
           </div>
-          <div className="mt-4 text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg p-3">
-            <p className="mb-1"><b>{t.levels}:</b> {(draft.levelLabels || []).map(l => (T ? l.fa : l.en) || (l.en || l.fa)).filter(Boolean).join(' ← ') || '—'} · <b>{countNodes(draft.tree)}</b> {t.nodes}</p>
-            {t.treeNote}
+        </div>
+
+        {/* ── Visual category structure editor ── */}
+        <div className={card}>
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+            <h4 className="font-bold text-gray-700">{t.structure} <span className="text-xs text-gray-400">({countNodes(draft.tree)} {t.nodes})</span></h4>
+            {!readonly && <button onClick={addRoot} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addRoot}</button>}
           </div>
+          <p className="text-xs text-gray-500 mb-3">{t.structureHint}</p>
+
+          {/* Level names */}
+          <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-600">{t.levelNames}</span>
+              {!readonly && <button onClick={addLevel} className="text-[11px] px-2 py-1 rounded bg-white border border-gray-200 hover:bg-gray-50 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addLevel}</button>}
+            </div>
+            <div className="space-y-1.5">
+              {(draft.levelLabels || []).map((l, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-400 w-5 text-center">{i + 1}</span>
+                  <input className="px-2 py-1 rounded border border-gray-200 text-xs outline-none flex-1" value={l.fa || ''} onChange={e => setLevelLabel(i, 'fa', e.target.value)} placeholder={T ? 'مثلا: کشور' : 'e.g. Country'} />
+                  <input className="px-2 py-1 rounded border border-gray-200 text-xs outline-none flex-1 dir-ltr" value={l.en || ''} onChange={e => setLevelLabel(i, 'en', e.target.value)} placeholder="e.g. Country" />
+                  <button onClick={() => removeLevel(i)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              {(draft.levelLabels || []).length === 0 && <p className="text-[11px] text-gray-400">{T ? 'بدون نام سطح (اختیاری).' : 'No level names (optional).'}</p>}
+            </div>
+          </div>
+
+          {/* Tree */}
+          {(draft.tree || []).length === 0
+            ? <p className="text-sm text-gray-400 text-center py-6">{t.noTree}</p>
+            : (draft.tree || []).map(n => <NodeEditor key={n.id} node={n} depth={0} />)}
+
+          <p className="mt-3 text-[11px] text-gray-400">{t.treeNote}</p>
         </div>
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />
       </div>

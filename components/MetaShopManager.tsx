@@ -399,7 +399,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     return (
       <div className="space-y-4 animate-fade-in">
         {sectionToggle}
-        <MetaBazaarManager bazaars={metaBazaars} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
+        <MetaBazaarManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
       </div>
     );
   }
