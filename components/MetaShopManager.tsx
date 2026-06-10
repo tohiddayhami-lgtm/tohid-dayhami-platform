@@ -142,6 +142,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     edit: T ? 'ویرایش' : 'Edit', del: T ? 'حذف' : 'Delete', open: T ? 'باز کردن' : 'Open', copy: T ? 'کپی لینک' : 'Copy link', copied: T ? 'کپی شد ✓' : 'Copied ✓',
     orders: T ? 'سفارش‌ها' : 'Orders', active: T ? 'فعال' : 'Active', inactive: T ? 'غیرفعال' : 'Inactive',
     downloadJson: T ? 'دانلود فایل JSON این فروشگاه' : 'Download this shop as JSON', updateJson: T ? 'به‌روزرسانی از فایل JSON' : 'Update from JSON file',
+    dirT: T ? 'دسته‌بندی در بازارچه (لینک همه فروشگاه‌ها)' : 'Bazaar category (all-shops page)',
+    dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته/زیردسته نمایش داده می‌شود.' : 'This shop appears under this category/subcategory on the all-shops page.',
+    dirCat: T ? 'دسته' : 'Category', dirSub: T ? 'زیردسته' : 'Subcategory', shopNo: T ? 'شماره مغازه (پلاک)' : 'Shop number (plate)',
+    allShopsLink: T ? 'لینک همه فروشگاه‌ها' : 'All-shops link', allShopsCopied: T ? 'کپی شد ✓' : 'Copied ✓', openBazaar: T ? 'بازارچه' : 'Bazaar',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
@@ -365,10 +369,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconTag className="w-5 h-5" /></div>
             <div><h3 className="text-lg font-bold text-gray-800">{t.title}</h3><p className="text-xs text-gray-400">{t.subtitle} ({metaShops.length})</p></div>
           </div>
-          {!readonly && <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <a href={`${shopBaseUrl}?shops=1`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconGlobe className="w-4 h-4" />{t.openBazaar}</a>
+            <button onClick={() => { navigator.clipboard.writeText(`${shopBaseUrl}?shops=1`); setCopiedId('__bazaar__'); setTimeout(() => setCopiedId(null), 1800); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5">{copiedId === '__bazaar__' ? t.allShopsCopied : <><IconLink className="w-4 h-4" />{t.allShopsLink}</>}</button>
+          {!readonly && <>
             <button onClick={() => { setImportOpen(true); setImportText(''); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconUpload className="w-4 h-4" />{t.importJson}</button>
             <button onClick={startNew} className="px-3 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newShop}</button>
-          </div>}
+          </>}
+          </div>
         </div>
 
         {metaShops.length === 0 ? (
@@ -475,6 +483,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
           <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : 'محصولات'} /></div>
           <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : 'Product List'} /></div>
+        </div>
+        <div className="border-t border-gray-100 pt-4 mt-4">
+          <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dirT}</h5>
+          <p className="text-xs text-gray-500 mb-3">{t.dirHint}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><label className={lbl}>{t.dirCat}</label><input className={fld} value={draft.directoryCategory || ''} onChange={e => upd({ directoryCategory: e.target.value })} list="msd-dir-cats" placeholder={T ? 'مثلا: مواد غذایی' : 'e.g. Food'} /></div>
+            <div><label className={lbl}>{t.dirSub}</label><input className={fld} value={draft.directorySubcategory || ''} onChange={e => upd({ directorySubcategory: e.target.value })} list="msd-dir-subs" placeholder={T ? 'مثلا: زعفران' : 'e.g. Saffron'} /></div>
+            <div><label className={lbl}>{t.shopNo}</label><input className={fld + ' dir-ltr'} value={draft.shopNumber || ''} onChange={e => upd({ shopNumber: e.target.value })} placeholder={T ? 'مثلا: 12' : 'e.g. 12'} /></div>
+          </div>
+          <datalist id="msd-dir-cats">{Array.from(new Set(metaShops.map(s => s.directoryCategory).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
+          <datalist id="msd-dir-subs">{Array.from(new Set(metaShops.map(s => s.directorySubcategory).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
         </div>
 
         {/* Languages */}

@@ -513,7 +513,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services';
@@ -611,6 +611,10 @@ export interface MetaShop {
   defaultLang?: string;        // language code the shop opens in (visitor can still toggle)
   languages?: MetaShopLang[];  // supported display languages (defaults to fa + en when absent)
   i18n?: Record<string, Record<string, string>>; // shop-level per-language: { zh: { title, subtitle, collectionText } }
+  // ── Directory / bazaar grouping (the "all shops" page) ──
+  directoryCategory?: string;     // e.g. "مواد غذایی" / "Food"
+  directorySubcategory?: string;  // e.g. "زعفران" / "Saffron"
+  shopNumber?: string;            // number shown on the storefront shutter (e.g. "12")
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)
   productsTabLabelEn?: string;

@@ -27,6 +27,7 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
+import { MetaShopDirectory } from './components/MetaShopDirectory';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
@@ -193,9 +194,11 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
+    if (p.has('shops')) return 'shopsdir';
     if (p.get('shop') || p.get('c')) return 'metashop';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
+  if (hash === '#/shops')                     return 'shopsdir';
   if (hash.startsWith('#/shop/'))             return 'metashop';
   if (hash === '#/form' || hash === '#form')  return 'new-ticket';
   if (hash === '#/tracking')                  return 'tracking';
@@ -252,7 +255,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1',
   };
 
   const openFormWithService = (serviceId: string) => {
@@ -321,7 +324,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -1110,6 +1113,17 @@ const App: React.FC = () => {
     };
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
+
+  // ── Public "all shops" bazaar/directory (full-screen takeover) ──
+  if (view === 'shopsdir') {
+    return (
+      <MetaShopDirectory
+        shops={metaShops}
+        lang={lang}
+        onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+      />
+    );
+  }
 
   // ── Public Meta Shop page (full-screen takeover) ──
   if (view === 'metashop') {
