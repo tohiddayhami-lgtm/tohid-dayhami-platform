@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department, MetaBazaar } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { downloadSample, downloadSampleBazaar } from './metaShopSamples';
+import { downloadSample } from './metaShopSamples';
 import { Language } from '../App';
 
 interface Props {
@@ -139,9 +139,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const [section, setSection] = useState<'shops' | 'bazaars'>('shops');
   const [bzDraft, setBzDraft] = useState<MetaBazaar | null>(null);
   const [bzCopied, setBzCopied] = useState<string | null>(null);
-  const bzNewFileRef = useRef<HTMLInputElement>(null);
-  const bzUpdateFileRef = useRef<HTMLInputElement>(null);
-  const [bzUpdateTarget, setBzUpdateTarget] = useState<MetaBazaar | null>(null);
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
@@ -165,8 +162,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     bzHint: T ? 'یک صفحه‌ی مستقل با لینک اختصاصی که فروشگاه‌های انتخابی را نمایش می‌دهد (مثلاً نمایشگاه شهری/کشوری یا تخصصی).' : 'A standalone page with its own link showing the selected shops (e.g. a city/country or specialized exhibition).',
     cityFa: T ? 'شهر (فارسی)' : 'City (FA)', cityEn: T ? 'شهر (انگلیسی)' : 'City (EN)', countryFa: T ? 'کشور (فارسی)' : 'Country (FA)', countryEn: T ? 'کشور (انگلیسی)' : 'Country (EN)',
     geoT: T ? 'شهر و کشور (برای نمایشگاه‌های شهری/کشوری)' : 'City & country (for city/country exhibitions)',
-    bzImport: T ? 'ساخت از JSON' : 'Import JSON', bzSampleCity: T ? 'نمونه شهری' : 'City sample', bzSampleCountry: T ? 'نمونه کشوری' : 'Country sample', bzSampleSpecial: T ? 'نمونه تخصصی' : 'Specialty sample',
-    bzChooseFile: T ? 'انتخاب فایل JSON و ساخت بازارچه' : 'Choose JSON file & build bazaar', bzImportHint: T ? 'فایل JSON بازارچه را وارد کنید. می‌توانید فروشگاه‌ها را با slug در فیلد shopSlugs مشخص کنید (برای نمایشگاه تخصصی) یا includeAll بگذارید.' : 'Import a bazaar JSON. Reference shops by slug via shopSlugs (specialty expo) or set includeAll.',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
@@ -269,45 +264,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     if (metaBazaars.some(b => b.id !== bzDraft.id && b.slug === slug)) { alert(T ? 'این شناسه لینک قبلاً استفاده شده.' : 'This slug is already used.'); return; }
     await onSaveMetaBazaar({ ...bzDraft, slug });
     setBzDraft(null);
-  };
-  // Parse a bazaar JSON; resolve shopSlugs → shopIds against existing shops
-  const parseBazaarJson = (raw: string, base: MetaBazaar): MetaBazaar => {
-    const j = JSON.parse(raw);
-    const fromSlugs = Array.isArray(j.shopSlugs) ? metaShops.filter(s => j.shopSlugs.includes(s.slug)).map(s => s.id) : [];
-    const shopIds = Array.from(new Set([...(Array.isArray(j.shopIds) ? j.shopIds : []), ...fromSlugs]));
-    return {
-      ...base,
-      titleFa: j.titleFa ?? base.titleFa, titleEn: j.titleEn ?? base.titleEn,
-      subtitleFa: j.subtitleFa ?? base.subtitleFa, subtitleEn: j.subtitleEn ?? base.subtitleEn,
-      isActive: j.isActive !== false,
-      defaultLang: (j.defaultLang === 'fa' ? 'fa' : 'en'),
-      includeAll: !!j.includeAll,
-      shopIds,
-      groupBy: ['category', 'city', 'country'].includes(j.groupBy) ? j.groupBy : 'category',
-      coverColor: j.coverColor || base.coverColor,
-    };
-  };
-  const downloadBazaarJson = (b: MetaBazaar) => {
-    const out = { ...b }; delete (out as any).shopSlugs;
-    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = `metashop-bazaar-${b.slug || b.id}.json`; a.click(); URL.revokeObjectURL(url);
-  };
-  const handleBazaarNewFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => { try { setBzDraft(parseBazaarJson(String(ev.target?.result || ''), blankBazaar())); } catch { alert(T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.'); } };
-    r.readAsText(f); e.target.value = '';
-  };
-  const handleBazaarUpdateFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f || !bzUpdateTarget) { e.target.value = ''; return; }
-    const target = bzUpdateTarget;
-    const r = new FileReader();
-    r.onload = async ev => {
-      try { const merged = parseBazaarJson(String(ev.target?.result || ''), target); await onSaveMetaBazaar?.({ ...merged, id: target.id, slug: target.slug, createdAt: target.createdAt }); alert(T ? 'بازارچه به‌روزرسانی شد.' : 'Bazaar updated.'); }
-      catch { alert(T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.'); }
-    };
-    r.readAsText(f); e.target.value = ''; setBzUpdateTarget(null);
   };
 
   const startNew = () => { setDraft(blankShop()); setMode('editor'); };
@@ -469,8 +425,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <button onClick={() => setBzDraft(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
             <div className="flex items-center gap-2">
               <a href={bzDraft.slug ? bazaarUrl(bzDraft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!bzDraft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
-              <button onClick={() => downloadBazaarJson(bzDraft)} title={t.downloadJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
-              {!readonly && <button onClick={() => bzNewFileRef.current?.click()} title={t.bzImport} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
               {!readonly && <button onClick={saveBazaar} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.bzSaveB}</button>}
             </div>
           </div>
@@ -503,7 +457,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
               </div>
             )}
           </div>
-          <input type="file" ref={bzNewFileRef} className="hidden" accept=".json,application/json" onChange={handleBazaarNewFile} />
         </div>
       );
     }
@@ -512,21 +465,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
       <div className="space-y-5 animate-fade-in">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconTag className="w-5 h-5" /></div><div><h3 className="text-lg font-bold text-gray-800">{t.tabBazaars}</h3><p className="text-xs text-gray-400">{metaBazaars.length}</p></div></div>
-          <div className="flex items-center gap-2 flex-wrap">{sectionTabs}{!readonly && <>
-            <button onClick={() => bzNewFileRef.current?.click()} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconUpload className="w-4 h-4" />{t.bzImport}</button>
-            <button onClick={startNewBazaar} className="px-3 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newBazaar}</button>
-          </>}</div>
+          <div className="flex items-center gap-2">{sectionTabs}{!readonly && <button onClick={startNewBazaar} className="px-3 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newBazaar}</button>}</div>
         </div>
-        {!readonly && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-            <span>{T ? 'دانلود نمونه:' : 'Download sample:'}</span>
-            <button onClick={() => downloadSampleBazaar('city')} className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50">{t.bzSampleCity}</button>
-            <button onClick={() => downloadSampleBazaar('country')} className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50">{t.bzSampleCountry}</button>
-            <button onClick={() => downloadSampleBazaar('special')} className="px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-50">{t.bzSampleSpecial}</button>
-          </div>
-        )}
-        <input type="file" ref={bzNewFileRef} className="hidden" accept=".json,application/json" onChange={handleBazaarNewFile} />
-        <input type="file" ref={bzUpdateFileRef} className="hidden" accept=".json,application/json" onChange={handleBazaarUpdateFile} />
         {metaBazaars.length === 0 ? <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.noBazaars}</div> : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {metaBazaars.map(b => (
@@ -541,8 +481,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <a href={bazaarUrl(b)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
                     <button onClick={() => { navigator.clipboard.writeText(bazaarUrl(b)); setBzCopied(b.id); setTimeout(() => setBzCopied(null), 1800); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{bzCopied === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
-                    <button onClick={() => downloadBazaarJson(b)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
-                    {!readonly && <button onClick={() => { setBzUpdateTarget(b); bzUpdateFileRef.current?.click(); }} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
                     {!readonly && <button onClick={() => startEditBazaar(b)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
                     {!readonly && onDeleteMetaBazaar && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaBazaar(b.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                   </div>

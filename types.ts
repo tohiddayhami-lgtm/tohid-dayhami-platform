@@ -710,7 +710,6 @@ export interface MetaBazaar {
   defaultLang?: 'fa' | 'en';
   includeAll?: boolean;         // include every active shop (ignore shopIds)
   shopIds?: string[];           // curated shops in this bazaar
-  shopSlugs?: string[];         // import helper: shop slugs resolved to shopIds on import
   groupBy?: 'category' | 'city' | 'country';  // primary grouping dimension (default category)
   coverColor?: string;          // hero background color
   createdAt?: string;

@@ -1,4 +1,4 @@
-import { MetaShop, MetaBazaar } from '../types';
+import { MetaShop } from '../types';
 
 // Full sample shops in the native MetaShop import format.
 // Importing either one builds a complete shop (theme, cover/background image, logo,
@@ -155,68 +155,6 @@ export const downloadSample = (kind: 'products' | 'services') => {
   const a = document.createElement('a');
   a.href = url;
   a.download = `metashop-sample-${kind}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-// ── Bazaar / exhibition samples ──
-// `shopSlugs` is resolved to shop IDs on import; `includeAll:true` ignores it.
-export const BAZAAR_CITY_SAMPLE: MetaBazaar = {
-  id: 'sample-bazaar-city',
-  slug: 'muscat-expo',
-  titleFa: 'نمایشگاه شهری مسقط',
-  titleEn: 'Muscat City Expo',
-  subtitleFa: 'فروشگاه‌ها بر اساس شهر گروه‌بندی شده‌اند',
-  subtitleEn: 'Shops grouped by city',
-  isActive: true,
-  defaultLang: 'en',
-  includeAll: true,
-  shopIds: [],
-  groupBy: 'city',
-  coverColor: '#0f766e',
-  createdAt: new Date(0).toISOString(),
-};
-
-export const BAZAAR_COUNTRY_SAMPLE: MetaBazaar = {
-  id: 'sample-bazaar-country',
-  slug: 'oman-national-expo',
-  titleFa: 'نمایشگاه ملی عمان',
-  titleEn: 'Oman National Exhibition',
-  subtitleFa: 'فروشگاه‌ها بر اساس کشور گروه‌بندی شده‌اند',
-  subtitleEn: 'Shops grouped by country',
-  isActive: true,
-  defaultLang: 'en',
-  includeAll: true,
-  shopIds: [],
-  groupBy: 'country',
-  coverColor: '#1f2a18',
-  createdAt: new Date(0).toISOString(),
-};
-
-export const BAZAAR_SPECIAL_SAMPLE: MetaBazaar = {
-  id: 'sample-bazaar-special',
-  slug: 'saffron-specialty',
-  titleFa: 'بازارچه تخصصی زعفران و خشکبار',
-  titleEn: 'Saffron & Dried Fruit Specialty Bazaar',
-  subtitleFa: 'فقط فروشگاه‌های منتخب، گروه‌بندی بر اساس دسته',
-  subtitleEn: 'Curated shops only, grouped by category',
-  isActive: true,
-  defaultLang: 'en',
-  includeAll: false,
-  shopIds: [],
-  shopSlugs: ['iranian-fresh-produce'], // resolved to IDs on import
-  groupBy: 'category',
-  coverColor: '#7c2d12',
-  createdAt: new Date(0).toISOString(),
-};
-
-export const downloadSampleBazaar = (kind: 'city' | 'country' | 'special') => {
-  const data = kind === 'city' ? BAZAAR_CITY_SAMPLE : kind === 'country' ? BAZAAR_COUNTRY_SAMPLE : BAZAAR_SPECIAL_SAMPLE;
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `metashop-bazaar-${kind}.json`;
   a.click();
   URL.revokeObjectURL(url);
 };
