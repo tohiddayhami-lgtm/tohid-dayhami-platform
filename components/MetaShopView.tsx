@@ -297,7 +297,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   // Price + rate options + quantity stepper / add button (used on cards and in the detail modal)
-  const Buy = ({ p, big = false }: { p: MetaShopProduct; big?: boolean }) => {
+  const buyBlock = (p: MetaShopProduct, big = false) => {
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
@@ -440,7 +440,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                         {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
                       </div>
                     )}
-                    <Buy p={p} />
+                    {buyBlock(p)}
                   </div>
                 </article>
               );
@@ -530,7 +530,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               {!isServices && (detail.pack || detail.moq) && (
                 <div className="ms-meta">{detail.pack != null && <span>{t.pack}: <b>{detail.pack} {detail.unit}</b></span>}{detail.moq && <span>{t.moq}: <b>{detail.moq}</b></span>}</div>
               )}
-              <Buy p={detail} big />
+              {buyBlock(detail, true)}
             </div>
           </div>
         </div>
