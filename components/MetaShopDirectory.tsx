@@ -21,6 +21,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
   const T = uiLang === 'fa';
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<string>('all');
+  const [bazaarPath, setBazaarPath] = useState<string[]>([]); // selected node id per level (bazaar drill-down)
 
   const OTHER = T ? 'سایر' : 'Other';
   const live = useMemo(() => shops.filter(s => s.isActive !== false), [shops]);
@@ -141,23 +142,32 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const bLbl = (c?: { fa?: string; en?: string }) => c ? (T ? (c.fa || c.en) : (c.en || c.fa)) || '' : '';
     const accentCover = bazaar.theme?.cover || '#1f2a18';
 
-    // Recursive node renderer; returns null if nothing (after search) to show
-    const renderNode = (node: MetaBazaarNode, depth: number): React.ReactNode => {
-      const nodeShops = (node.shopSlugs || []).map(sl => shopBySlug[sl]).filter(Boolean).filter(shopMatches) as MetaShop[];
-      const childEls = (node.children || []).map(ch => renderNode(ch, depth + 1)).filter(Boolean);
-      if (nodeShops.length === 0 && childEls.length === 0) return null;
-      const levelName = bLbl(bazaar.levelLabels?.[depth]);
-      const HeadTag = depth === 0 ? 'h2' : 'h3';
-      return (
-        <section key={node.id} className={`msd-node msd-depth-${Math.min(depth, 3)}`}>
-          {levelName && <span className="msd-level">{levelName}</span>}
-          <HeadTag className={depth === 0 ? 'msd-cat-title' : 'msd-sub-title'}>{depth === 0 ? <><span>{bLbl(node.label)}</span><i /></> : <>‹ {bLbl(node.label)} ›</>}</HeadTag>
-          {nodeShops.length > 0 && <div className="msd-grid">{nodeShops.map(s => <Storefront key={`${node.id}-${s.id}`} shop={s} />)}</div>}
-          {childEls.length > 0 && <div className="msd-children">{childEls}</div>}
-        </section>
-      );
+    // Collect all shops under a node (itself + all descendants), de-duplicated, filtered by search
+    const collectShops = (node: MetaBazaarNode): MetaShop[] => {
+      const acc: MetaShop[] = [];
+      const seen = new Set<string>();
+      const walk = (n: MetaBazaarNode) => {
+        (n.shopSlugs || []).forEach(sl => { const s = shopBySlug[sl]; if (s && !seen.has(s.id) && shopMatches(s)) { seen.add(s.id); acc.push(s); } });
+        (n.children || []).forEach(walk);
+      };
+      walk(node);
+      return acc;
     };
-    const rendered = (bazaar.tree || []).map(n => renderNode(n, 0)).filter(Boolean);
+
+    // Build the breadcrumb levels from the selected path (auto-selecting the first node at each level)
+    const levels: { depth: number; nodes: MetaBazaarNode[]; selectedId: string }[] = [];
+    let cursor: MetaBazaarNode[] = bazaar.tree || [];
+    for (let depth = 0; cursor && cursor.length > 0; depth++) {
+      const selId = bazaarPath[depth] && cursor.some(n => n.id === bazaarPath[depth]) ? bazaarPath[depth] : cursor[0].id;
+      levels.push({ depth, nodes: cursor, selectedId: selId });
+      cursor = cursor.find(n => n.id === selId)?.children || [];
+    }
+    const deepestNode = levels.length ? levels[levels.length - 1].nodes.find(n => n.id === levels[levels.length - 1].selectedId) : undefined;
+    const gridShops = q
+      ? (() => { const acc: MetaShop[] = []; const seen = new Set<string>(); (bazaar.tree || []).forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; })()
+      : (deepestNode ? collectShops(deepestNode) : []);
+
+    const selectAt = (depth: number, id: string) => setBazaarPath(prev => [...prev.slice(0, depth), id]);
 
     return (
       <div className="msd-root" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
@@ -178,7 +188,22 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} />
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
           </div>
-          {rendered.length === 0 ? <p className="msd-empty">{t.empty}</p> : rendered}
+
+          {/* Tabbed drill-down: one clean pill row per level (Country / City / Group ...) */}
+          {!q && levels.map(lvl => (
+            <div key={lvl.depth} className="msd-levelbar">
+              {bLbl(bazaar.levelLabels?.[lvl.depth]) && <span className="msd-levelbar-label">{bLbl(bazaar.levelLabels?.[lvl.depth])}</span>}
+              <div className="msd-levelbar-pills">
+                {lvl.nodes.map(n => (
+                  <button key={n.id} className={`msd-cat ${lvl.selectedId === n.id ? 'on' : ''}`} onClick={() => selectAt(lvl.depth, n.id)}>{bLbl(n.label)}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {gridShops.length === 0
+            ? <p className="msd-empty">{t.empty}</p>
+            : <div className="msd-grid" style={{ marginTop: 18 }}>{gridShops.map(s => <Storefront key={s.id} shop={s} />)}</div>}
         </div>
       </div>
     );
@@ -268,6 +293,11 @@ const MSD_CSS = `
 .msd-cat-title { display:flex; align-items:center; gap:14px; font-size:18px; font-weight:900; color:#1f2a18; margin:18px 0 16px; }
 .msd-cat-title span { background:#fff; border:1px solid #e6dfce; padding:6px 16px; border-radius:999px; box-shadow:0 4px 10px rgba(31,42,24,.06); }
 .msd-cat-title i { flex:1; height:2px; background:repeating-linear-gradient(90deg,#d8cfb8 0 8px,transparent 8px 14px); }
+.msd-levelbar { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #efe9da; }
+.msd-levelbar:last-of-type { border-bottom:0; }
+.msd-levelbar-label { flex-shrink:0; min-width:96px; font-size:12px; font-weight:800; color:#8a7f63; }
+.msd-levelbar-pills { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:2px; }
+.msd-levelbar-pills::-webkit-scrollbar { display:none; }
 .msd-node { margin-bottom:22px; }
 .msd-children { margin-top:8px; padding-inline-start:14px; border-inline-start:2px dashed #e0d8c4; }
 .msd-depth-0 > .msd-children { border-inline-start:0; padding-inline-start:0; }
