@@ -131,7 +131,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
-  const [dirCatInput, setDirCatInput] = useState('');
+  const [dirCatFa, setDirCatFa] = useState('');
+  const [dirCatEn, setDirCatEn] = useState('');
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
@@ -144,7 +145,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     orders: T ? 'سفارش‌ها' : 'Orders', active: T ? 'فعال' : 'Active', inactive: T ? 'غیرفعال' : 'Inactive',
     downloadJson: T ? 'دانلود فایل JSON این فروشگاه' : 'Download this shop as JSON', updateJson: T ? 'به‌روزرسانی از فایل JSON' : 'Update from JSON file',
     dirT: T ? 'دسته‌بندی در بازارچه (لینک همه فروشگاه‌ها)' : 'Bazaar category (all-shops page)',
-    dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته/زیردسته نمایش داده می‌شود.' : 'This shop appears under this category/subcategory on the all-shops page.',
+    dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته‌ها نمایش داده می‌شود. دسته‌ها دوزبانه‌اند (فارسی و انگلیسی).' : 'This shop appears under these categories on the all-shops page. Categories are bilingual (FA & EN).',
     dirCat: T ? 'دسته‌ها' : 'Categories', dirCatMulti: T ? '(می‌توانید چند دسته اضافه کنید)' : '(add several)', dirSub: T ? 'زیردسته' : 'Subcategory', shopNo: T ? 'شماره مغازه (پلاک)' : 'Shop number (plate)',
     allShopsLink: T ? 'لینک همه فروشگاه‌ها' : 'All-shops link', allShopsCopied: T ? 'کپی شد ✓' : 'Copied ✓', openBazaar: T ? 'بازارچه' : 'Bazaar',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
@@ -240,10 +241,23 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updTheme = (patch: Partial<MetaShop['theme']>) => setDraft(d => d ? { ...d, theme: { ...d.theme, ...patch } } : d);
-  // Directory categories (multi): a shop can appear under several bazaar categories
-  const dirCats = (): string[] => (draft?.directoryCategories && draft.directoryCategories.length) ? draft!.directoryCategories! : (draft?.directoryCategory ? [draft.directoryCategory] : []);
-  const addDirCat = (val: string) => { const v = val.trim(); if (!v) { setDirCatInput(''); return; } const cur = dirCats(); if (!cur.includes(v)) { const next = [...cur, v]; upd({ directoryCategories: next, directoryCategory: next[0] }); } setDirCatInput(''); };
-  const removeDirCat = (v: string) => { const next = dirCats().filter(c => c !== v); upd({ directoryCategories: next, directoryCategory: next[0] || '' }); };
+  // Directory categories (bilingual, multi): a shop can appear under several bazaar categories
+  const dirCats = (): import('../types').MetaShopDirCat[] => {
+    if (draft?.directoryCats && draft.directoryCats.length) return draft.directoryCats;
+    if (draft?.directoryCategories && draft.directoryCategories.length) return draft.directoryCategories.map(c => ({ fa: c, en: c }));
+    if (draft?.directoryCategory) return [{ fa: draft.directoryCategory, en: draft.directoryCategory }];
+    return [];
+  };
+  const syncLegacyCats = (cats: import('../types').MetaShopDirCat[]) => ({ directoryCats: cats, directoryCategories: cats.map(c => (c.en || c.fa || '').trim()).filter(Boolean), directoryCategory: (cats[0]?.en || cats[0]?.fa || '') });
+  const addDirCat = () => {
+    const fa = dirCatFa.trim(), en = dirCatEn.trim();
+    if (!fa && !en) return;
+    const cur = dirCats();
+    const key = (en || fa).toLowerCase();
+    if (!cur.some(c => ((c.en || c.fa || '').toLowerCase()) === key)) upd(syncLegacyCats([...cur, { fa, en }]));
+    setDirCatFa(''); setDirCatEn('');
+  };
+  const removeDirCat = (idx: number) => upd(syncLegacyCats(dirCats().filter((_, i) => i !== idx)));
 
   const save = async () => {
     if (!draft) return;
@@ -492,19 +506,25 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <div className="border-t border-gray-100 pt-4 mt-4">
           <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dirT}</h5>
           <p className="text-xs text-gray-500 mb-3">{t.dirHint}</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-1">
-              <label className={lbl}>{t.dirCat} <span className="text-gray-400 font-normal">{t.dirCatMulti}</span></label>
-              <div className="flex flex-wrap gap-1.5 mb-1.5">
-                {dirCats().map(c => <span key={c} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 text-xs font-medium">{c}<button onClick={() => removeDirCat(c)} className="text-indigo-400 hover:text-red-500">✕</button></span>)}
-              </div>
-              <input className={fld} value={dirCatInput} onChange={e => setDirCatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addDirCat(dirCatInput); } }} onBlur={() => addDirCat(dirCatInput)} list="msd-dir-cats" placeholder={T ? 'دسته را بنویس و Enter بزن…' : 'Type a category, press Enter…'} />
+          <div>
+            <label className={lbl}>{t.dirCat} <span className="text-gray-400 font-normal">{t.dirCatMulti}</span></label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {dirCats().map((c, i) => <span key={i} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 text-xs font-medium">{(c.fa || '—')} <span className="text-indigo-300">/</span> {(c.en || '—')}<button onClick={() => removeDirCat(i)} className="text-indigo-400 hover:text-red-500 ml-1">✕</button></span>)}
+              {dirCats().length === 0 && <span className="text-xs text-gray-400">{T ? 'هنوز دسته‌ای اضافه نشده.' : 'No categories yet.'}</span>}
             </div>
-            <div><label className={lbl}>{t.dirSub}</label><input className={fld} value={draft.directorySubcategory || ''} onChange={e => upd({ directorySubcategory: e.target.value })} list="msd-dir-subs" placeholder={T ? 'مثلا: زعفران' : 'e.g. Saffron'} /></div>
+            <div className="flex gap-2 flex-wrap">
+              <input className={fld + ' flex-1 min-w-[120px]'} value={dirCatFa} onChange={e => setDirCatFa(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDirCat(); } }} placeholder={T ? 'دسته (فارسی)' : 'Category (FA)'} list="msd-dir-cats-fa" />
+              <input className={fld + ' flex-1 min-w-[120px] dir-ltr'} value={dirCatEn} onChange={e => setDirCatEn(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDirCat(); } }} placeholder={T ? 'دسته (انگلیسی)' : 'Category (EN)'} list="msd-dir-cats-en" />
+              <button onClick={addDirCat} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700">{T ? 'افزودن' : 'Add'}</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div><label className={lbl}>{t.dirSub} ({T ? 'فارسی' : 'FA'})</label><input className={fld} value={draft.directorySub?.fa ?? draft.directorySubcategory ?? ''} onChange={e => upd({ directorySub: { ...(draft.directorySub || {}), fa: e.target.value }, directorySubcategory: e.target.value })} placeholder={T ? 'مثلا: زعفران' : 'e.g. زعفران'} /></div>
+            <div><label className={lbl}>{t.dirSub} ({T ? 'انگلیسی' : 'EN'})</label><input className={fld + ' dir-ltr'} value={draft.directorySub?.en ?? ''} onChange={e => upd({ directorySub: { ...(draft.directorySub || {}), en: e.target.value } })} placeholder="e.g. Saffron" /></div>
             <div><label className={lbl}>{t.shopNo}</label><input className={fld + ' dir-ltr'} value={draft.shopNumber || ''} onChange={e => upd({ shopNumber: e.target.value })} placeholder={T ? 'مثلا: 12' : 'e.g. 12'} /></div>
           </div>
-          <datalist id="msd-dir-cats">{Array.from(new Set(metaShops.flatMap(s => [...(s.directoryCategories || []), s.directoryCategory]).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
-          <datalist id="msd-dir-subs">{Array.from(new Set(metaShops.map(s => s.directorySubcategory).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
+          <datalist id="msd-dir-cats-fa">{Array.from(new Set(metaShops.flatMap(s => [...(s.directoryCats || []).map(c => c.fa), ...(s.directoryCategories || []), s.directoryCategory]).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
+          <datalist id="msd-dir-cats-en">{Array.from(new Set(metaShops.flatMap(s => (s.directoryCats || []).map(c => c.en)).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
         </div>
 
         {/* Languages */}

@@ -24,13 +24,28 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
   const OTHER = T ? 'سایر' : 'Other';
   const live = useMemo(() => shops.filter(s => s.isActive !== false), [shops]);
 
-  // All categories a shop belongs to (multi-category aware, with legacy fallback)
-  const catsOf = (s: MetaShop): string[] => {
-    const list = [...(s.directoryCategories || []), ...(s.directoryCategory ? [s.directoryCategory] : [])]
-      .map(c => (c || '').trim()).filter(Boolean);
-    const uniq = Array.from(new Set(list));
-    return uniq.length ? uniq : [OTHER];
+  type Pair = { key: string; fa: string; en: string };
+  const nz = (s?: string) => (s || '').trim();
+  const mkPair = (fa?: string, en?: string): Pair | null => {
+    const f = nz(fa), e = nz(en); if (!f && !e) return null;
+    return { key: (e || f).toLowerCase(), fa: f || e, en: e || f };
   };
+  // All categories a shop belongs to (bilingual + multi, with legacy fallbacks)
+  const catPairsOf = (s: MetaShop): Pair[] => {
+    let pairs: (Pair | null)[] = [];
+    if (s.directoryCats && s.directoryCats.length) pairs = s.directoryCats.map(c => mkPair(c.fa, c.en));
+    else if (s.directoryCategories && s.directoryCategories.length) pairs = s.directoryCategories.map(c => mkPair(c, c));
+    else if (s.directoryCategory) pairs = [mkPair(s.directoryCategory, s.directoryCategory)];
+    const out = pairs.filter(Boolean) as Pair[];
+    return out.length ? out : [{ key: '__other__', fa: 'سایر', en: 'Other' }];
+  };
+  const subPairOf = (s: MetaShop): Pair | null => {
+    if (s.directorySub) return mkPair(s.directorySub.fa, s.directorySub.en);
+    if (s.directorySubcategory) return mkPair(s.directorySubcategory, s.directorySubcategory);
+    return null;
+  };
+  const lbl = (p: Pair) => T ? p.fa : p.en;
+  const catsOf = (s: MetaShop) => catPairsOf(s).map(lbl); // for search
   // Stable number per shop (by position), so a shop shown in 2 categories keeps one number
   const numberOf = useMemo(() => {
     const m: Record<string, string> = {};
@@ -48,28 +63,30 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     });
   }, [live, search]);
 
-  // Categories present (a shop can contribute to several)
+  // Distinct categories present (by key), keeping a representative bilingual pair
   const categories = useMemo(() => {
-    const set: string[] = [];
-    live.forEach(s => catsOf(s).forEach(c => { if (!set.includes(c)) set.push(c); }));
-    return set;
-  }, [live, OTHER]);
+    const m: Record<string, Pair> = {};
+    live.forEach(s => catPairsOf(s).forEach(p => { if (!m[p.key]) m[p.key] = p; }));
+    return Object.values(m);
+  }, [live, uiLang]);
 
-  // Group: category -> subcategory -> shops (a shop appears under each of its categories)
+  // Group by category key → subcategory key → shops (a shop appears under each of its categories)
   const grouped = useMemo(() => {
-    const byCat: Record<string, Record<string, MetaShop[]>> = {};
+    const cats: Record<string, { pair: Pair; subs: Record<string, { pair: Pair | null; shops: MetaShop[] }> }> = {};
     matched.forEach(s => {
-      const sub = s.directorySubcategory?.trim() || '';
-      catsOf(s).forEach(c => {
-        if (activeCat !== 'all' && c !== activeCat) return;
-        (byCat[c] = byCat[c] || {});
-        (byCat[c][sub] = byCat[c][sub] || []).push(s);
+      const sp = subPairOf(s);
+      const subKey = sp ? sp.key : '';
+      catPairsOf(s).forEach(cp => {
+        if (activeCat !== 'all' && cp.key !== activeCat) return;
+        const c = cats[cp.key] = cats[cp.key] || { pair: cp, subs: {} };
+        const sub = c.subs[subKey] = c.subs[subKey] || { pair: sp, shops: [] };
+        sub.shops.push(s);
       });
     });
-    return byCat;
-  }, [matched, activeCat, OTHER]);
+    return cats;
+  }, [matched, activeCat, uiLang]);
 
-  const catOrder = (cats: string[]) => cats.sort((a, b) => (a === OTHER ? 1 : b === OTHER ? -1 : a.localeCompare(b)));
+  const keyOrder = (keys: string[]) => keys.sort((a, b) => (a === '__other__' ? 1 : b === '__other__' ? -1 : a.localeCompare(b)));
 
   const t = {
     title: title || (T ? 'بازارچه فروشگاه‌ها' : 'Shops Bazaar'),
@@ -140,24 +157,29 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
         {categories.length > 1 && (
           <div className="msd-cats">
             <button className={`msd-cat ${activeCat === 'all' ? 'on' : ''}`} onClick={() => setActiveCat('all')}>{t.all}</button>
-            {catOrder([...categories]).map(c => <button key={c} className={`msd-cat ${activeCat === c ? 'on' : ''}`} onClick={() => setActiveCat(c)}>{c}</button>)}
+            {[...categories].sort((a, b) => (a.key === '__other__' ? 1 : b.key === '__other__' ? -1 : lbl(a).localeCompare(lbl(b)))).map(c => (
+              <button key={c.key} className={`msd-cat ${activeCat === c.key ? 'on' : ''}`} onClick={() => setActiveCat(c.key)}>{lbl(c)}</button>
+            ))}
           </div>
         )}
 
-        {matched.length === 0 ? <p className="msd-empty">{t.empty}</p> : catOrder(Object.keys(grouped)).map(cat => {
-          const subs = grouped[cat];
-          const subKeys = Object.keys(subs).sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
+        {matched.length === 0 ? <p className="msd-empty">{t.empty}</p> : keyOrder(Object.keys(grouped)).map(catKey => {
+          const cat = grouped[catKey];
+          const subKeys = Object.keys(cat.subs).sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
           return (
-            <section key={cat} className="msd-section">
-              <h2 className="msd-cat-title"><span>{cat}</span><i /></h2>
-              {subKeys.map(sub => (
-                <div key={sub || '_'} className="msd-subsection">
-                  {sub && <h3 className="msd-sub-title">‹ {sub} ›</h3>}
-                  <div className="msd-grid">
-                    {subs[sub].map(s => <Storefront key={`${cat}-${sub}-${s.id}`} shop={s} />)}
+            <section key={catKey} className="msd-section">
+              <h2 className="msd-cat-title"><span>{lbl(cat.pair)}</span><i /></h2>
+              {subKeys.map(subKey => {
+                const sub = cat.subs[subKey];
+                return (
+                  <div key={subKey || '_'} className="msd-subsection">
+                    {sub.pair && <h3 className="msd-sub-title">‹ {lbl(sub.pair)} ›</h3>}
+                    <div className="msd-grid">
+                      {sub.shops.map(s => <Storefront key={`${catKey}-${subKey}-${s.id}`} shop={s} />)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
           );
         })}

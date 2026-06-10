@@ -529,6 +529,9 @@ export interface MetaShopTheme {
 
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
+// Bilingual bazaar category / subcategory label
+export interface MetaShopDirCat { fa?: string; en?: string; }
+
 // A language a shop can be displayed in (beyond the default fa/en)
 export interface MetaShopLang { code: string; name: string; rtl?: boolean; }
 
@@ -612,9 +615,12 @@ export interface MetaShop {
   languages?: MetaShopLang[];  // supported display languages (defaults to fa + en when absent)
   i18n?: Record<string, Record<string, string>>; // shop-level per-language: { zh: { title, subtitle, collectionText } }
   // ── Directory / bazaar grouping (the "all shops" page) ──
-  directoryCategory?: string;        // legacy single category (kept for backward compatibility)
-  directoryCategories?: string[];    // a shop can appear under several categories, e.g. ["Food", "Gifts"]
-  directorySubcategory?: string;     // e.g. "زعفران" / "Saffron"
+  directoryCats?: MetaShopDirCat[];  // bilingual bazaar categories (a shop can appear under several)
+  directorySub?: MetaShopDirCat;     // bilingual subcategory
+  // legacy single-language fields (kept for backward compatibility / import)
+  directoryCategory?: string;
+  directoryCategories?: string[];
+  directorySubcategory?: string;
   shopNumber?: string;               // number shown on the storefront shutter (e.g. "12")
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)
