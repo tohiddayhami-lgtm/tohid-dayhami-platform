@@ -170,7 +170,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const selectAt = (depth: number, id: string) => setBazaarPath(prev => [...prev.slice(0, depth), id]);
 
     return (
-      <div className="msd-root" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
+      <div className="msd-root msd-compact" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
         <style>{MSD_CSS}</style>
         <header className="msd-cover" style={{ background: bazaar.coverImage ? `linear-gradient(rgba(0,0,0,.4),rgba(0,0,0,.5)), url(${bazaar.coverImage}) center/cover` : `linear-gradient(135deg, ${accentCover}, #2d4a1a)` }}>
           <div className="msd-lang">
@@ -329,4 +329,32 @@ const MSD_CSS = `
 .msd-samples { list-style:none; margin:2px 0 0; padding:0; font-size:10px; color:#9aa394; line-height:1.5; max-height:46px; overflow:hidden; }
 .msd-enter { margin-top:6px; display:inline-flex; align-items:center; gap:5px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; padding:6px 14px; border-radius:999px; }
 @media (hover: none) { .msd-shutter { transform:translateY(-101%); } }
+
+/* ── Compact / minimal (bazaar) ── */
+.msd-compact .msd-cover { padding:30px 20px 26px; }
+.msd-compact .msd-cover h1 { font-size:clamp(19px,3vw,28px); }
+.msd-compact .msd-cover p { font-size:13px; margin-top:4px; }
+.msd-compact .msd-bazaar-emoji { font-size:30px; }
+.msd-compact .msd-container { max-width:1080px; }
+.msd-compact .msd-search { margin:-18px auto 14px; max-width:440px; }
+.msd-compact .msd-search input { padding:10px 40px 10px 16px; font-size:13px; }
+.msd-compact .msd-levelbar { gap:10px; padding:6px 0; }
+.msd-compact .msd-levelbar-label { min-width:78px; font-size:11px; }
+.msd-compact .msd-cat { padding:5px 13px; font-size:12px; border-width:1.5px; }
+.msd-compact .msd-grid { gap:12px; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); }
+/* smaller storefront */
+.msd-compact .msd-shop { height:150px; border-radius:11px 11px 8px 8px; box-shadow:0 5px 14px rgba(31,42,24,.10); }
+.msd-compact .msd-shop:hover { transform:translateY(-4px); box-shadow:0 14px 30px rgba(31,42,24,.18); }
+.msd-compact .msd-awning { height:32px; }
+.msd-compact .msd-shop-name { font-size:10.5px; max-height:24px; }
+.msd-compact .msd-shutter { top:32px; padding-bottom:14px; }
+.msd-compact .msd-shutter-grip { bottom:7px; height:5px; }
+.msd-compact .msd-plate { font-size:11px; padding:3px 10px; border-width:1.5px; }
+.msd-compact .msd-interior { top:32px; gap:3px; padding:8px; }
+.msd-compact .msd-logo { max-width:42px; max-height:30px; }
+.msd-compact .msd-logo-fallback { width:32px; height:32px; font-size:15px; border-radius:9px; }
+.msd-compact .msd-type { font-size:9.5px; }
+.msd-compact .msd-tags { display:none; }
+.msd-compact .msd-samples { display:none; }
+.msd-compact .msd-enter { margin-top:3px; font-size:9.5px; padding:4px 11px; }
 `;
