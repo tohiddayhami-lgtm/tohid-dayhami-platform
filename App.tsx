@@ -1112,7 +1112,7 @@ const App: React.FC = () => {
     const masterUser = personnel.find(p => p.username === 'master');
     if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
 
-    const itemsText = data.items.map((it, i) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
+    const itemsText = data.items.map((it: any, i: number) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${it.currency || data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
     const feesText = (data.fees && data.fees.length) ? `\n\nهزینه‌های اضافی:\n${data.fees.map(f => `• ${f.label}: ${data.currency} ${(f.amount || 0).toLocaleString()}`).join('\n')}` : '';
     const subtotalText = ((data.fees && data.fees.length) || data.discountAmount || data.taxAmount) && data.itemsTotal != null ? `\nجمع اقلام: ${data.currency} ${data.itemsTotal.toLocaleString()}` : '';
     const discountText = data.discountAmount ? `\nتخفیف (${data.discountCode || ''}): − ${data.currency} ${data.discountAmount.toLocaleString()}` : '';

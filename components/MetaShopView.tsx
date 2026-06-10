@@ -6,7 +6,7 @@ import { Language } from '../App';
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
   country?: string; city?: string; notes?: string;
-  items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number }[];
+  items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number; currency?: string; optionLabel?: string }[];
   fees?: { label: string; amount: number }[];
   itemsTotal?: number;
   discountCode?: string;
@@ -150,7 +150,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
 
   const theme = shop.theme;
-  const money = (n?: number) => n == null ? '' : `${shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
+  const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   const categories = useMemo(() => {
@@ -183,6 +183,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
   // ── Rate options (up to 3 named rates per product) ──
   const optionsOf = (p: MetaShopProduct) => p.priceOptions || [];
+  // Effective currency for a product/option (option currency wins, then product, then shop)
+  const curOf = (p: MetaShopProduct, optId?: string): string => {
+    const o = optionsOf(p).find(x => x.id === optId);
+    return (o?.currency && o.currency.trim()) || (p.currency && p.currency.trim()) || shop.currency;
+  };
   const selOptId = (p: MetaShopProduct): string | undefined => {
     const opts = optionsOf(p); if (!opts.length) return undefined;
     return cart[p.id]?.optionId || chosenOpt[p.id] || opts[0].id;
@@ -201,11 +206,17 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const cartItems = useMemo(() => Object.keys(cart).map(id => {
     const p = products.find(x => x.id === id); if (!p) return null;
     const { qty, optionId } = cart[id]; const rate = unitPrice(p, optionId);
-    return { p, qty, optionId, rate, line: rate * qty, optionText: optLabel(p, optionId) };
-  }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string }[], [cart, products, uiLang]);
+    return { p, qty, optionId, rate, line: rate * qty, optionText: optLabel(p, optionId), cur: curOf(p, optionId) };
+  }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string; cur: string }[], [cart, products, uiLang]);
 
   const cartCount = Object.keys(cart).length;
-  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0); // items only
+  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0); // items only (numeric sum)
+  // Per-currency subtotals (a cart may mix currencies, e.g. a money-exchange shop)
+  const totalsByCurrency = useMemo(() => { const m: Record<string, number> = {}; cartItems.forEach(c => { m[c.cur] = (m[c.cur] || 0) + c.line; }); return m; }, [cartItems]);
+  const currencyList = Object.keys(totalsByCurrency);
+  const multiCur = currencyList.length > 1;
+  const displayCur = currencyList[0] || shop.currency;
+  const fmtTotals = (extra = 0) => currencyList.map((cur, i) => money(totalsByCurrency[cur] + (i === 0 ? extra : 0), cur)).join('  ·  ');
   const shopFees = shop.extraFees || [];
   const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
   const feesTotal = activeFees.reduce((a, f) => a + (f.amount || 0), 0);
@@ -256,7 +267,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         phone: form.phone.trim(), email: form.email.trim() || undefined,
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
-        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line })),
+        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line, currency: c.cur, optionLabel: c.optionText || undefined })),
         fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
@@ -298,7 +309,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             {opts.map(o => (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
-                <span className="ms-opt-price">{money(o.price)}</span>
+                <span className="ms-opt-price">{money(o.price, curOf(p, o.id))}</span>
               </button>
             ))}
           </div>
@@ -306,11 +317,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         <div className="ms-prices">
           {(curPrice != null) && (
             <div className="ms-price-row">
-              <span className="ms-price-amt">{money(curPrice)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
+              <span className="ms-price-amt">{money(curPrice, curOf(p, selId))} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
             </div>
           )}
           {!isServices && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && (
-            <div className="ms-price-row"><span className="ms-price-amt ms-pack">{money(p.packPrice)} <span className="ms-price-unit">{t.perPack}</span></span></div>
+            <div className="ms-price-row"><span className="ms-price-amt ms-pack">{money(p.packPrice, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span></div>
           )}
         </div>
         {qty > 0 ? (
@@ -528,7 +539,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {step === 'cart' && (
           <>
             <div className="ms-drawer-body">
-              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, optionText }) => (
+              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, optionText, cur }) => {
+                const showPrice = optionsOf(p).length > 0 || p.price != null;
+                return (
                 <div className="ms-citem" key={p.id}>
                   {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
                   <div className="ms-citem-info">
@@ -539,14 +552,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                       <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
                       <button className="ms-rm" onClick={() => setQty(p.id, 0)}>{t.remove}</button>
                     </div>
-                    {p.price != null && <div className="ms-citem-price">{money(line)}</div>}
+                    {showPrice && <div className="ms-citem-price">{money(line, cur)}</div>}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {cartItems.length > 0 && (
               <div className="ms-checkout-bar">
-                <div className="ms-summary"><span>{t.total}</span><b>{money(grandTotal)}</b></div>
+                <div className="ms-summary"><span>{t.total}</span><b>{multiCur ? fmtTotals() : money(grandTotal, displayCur)}</b></div>
                 <button className="ms-submit" onClick={() => { setError(''); setStep('review'); }}>{t.review} →</button>
               </div>
             )}
@@ -566,26 +580,29 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <table className="ms-inv-table">
                   <thead><tr><th>{t.colItem}</th><th className="c">{t.colQty}</th><th className="r">{t.colUnit}</th><th className="r">{t.colLine}</th></tr></thead>
                   <tbody>
-                    {cartItems.map(({ p, qty, rate, line, optionText }) => (
+                    {cartItems.map(({ p, qty, rate, line, optionText, cur }) => {
+                      const showPrice = optionsOf(p).length > 0 || p.price != null;
+                      return (
                       <tr key={p.id}>
                         <td>{pName(p)}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
                         <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
-                        <td className="r">{p.price != null ? money(rate) : '—'}</td>
-                        <td className="r b">{p.price != null ? money(line) : '—'}</td>
+                        <td className="r">{showPrice ? money(rate, cur) : '—'}</td>
+                        <td className="r b">{showPrice ? money(line, cur) : '—'}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
-                {(shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
+                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
                   <>
-                    <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal)}</b></div>
+                    <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal, displayCur)}</b></div>
                     {(shop.discounts || []).length > 0 && (
                       <div className="ms-disc">
                         <div className="ms-disc-title">{t.discountTitle}</div>
                         {appliedDiscount ? (
                           <div className="ms-disc-applied">
                             <span className="ms-disc-code">{appliedDiscount.code} {appliedDiscount.type === 'percent' ? `(${appliedDiscount.value}%)` : ''}</span>
-                            <span className="ms-disc-amt">− {money(discountAmount)}</span>
+                            <span className="ms-disc-amt">− {money(discountAmount, displayCur)}</span>
                             <button className="ms-disc-rm" onClick={removeDiscount}>✕</button>
                           </div>
                         ) : (
@@ -608,7 +625,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                                 {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
                                 <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
                               </span>
-                              <span className="ms-fee-amt">+ {money(f.amount)}</span>
+                              <span className="ms-fee-amt">+ {money(f.amount, displayCur)}</span>
                             </label>
                           );
                         })}
@@ -616,14 +633,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     )}
                   </>
                 ) : null}
-                {discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount)}</span></div>}
-                {taxRate > 0 && (
+                {!multiCur && discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount, displayCur)}</span></div>}
+                {!multiCur && taxRate > 0 && (
                   <div className="ms-inv-tax">
                     <span>{(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%{taxInclusive ? ` · ${t.taxIncl}` : ''})</span>
-                    <span>{taxInclusive ? '' : '+ '}{money(taxAmount)}</span>
+                    <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
                   </div>
                 )}
-                <div className="ms-inv-total"><span>{t.total}</span><b>{money(finalTotal)}</b></div>
+                <div className="ms-inv-total"><span>{t.total}</span><b>{multiCur ? fmtTotals() : money(finalTotal, displayCur)}</b></div>
                 <p className="ms-inv-hint">{t.invHint}</p>
               </div>
               <div className="ms-form embedded">

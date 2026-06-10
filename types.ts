@@ -614,7 +614,8 @@ export interface MetaShopProduct {
   currency?: string;       // overrides shop currency if set
   price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
   // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
-  priceOptions?: { id: string; label: string; labelEn?: string; price: number }[];
+  // Each rate option may carry its OWN currency (e.g. a money-exchange buy/sell rate in different currencies)
+  priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string }[];
   packPrice?: number;      // optional pack price (products)
   unit?: string;           // kg, pcs, day, hour, session ...
   priceUnit?: string;      // services: "per day", "per session"
@@ -694,6 +695,8 @@ export interface MetaShopOrderItem {
   qty: number;
   unitPrice?: number;
   lineTotal?: number;
+  currency?: string;       // per-line currency (may differ from the order currency)
+  optionLabel?: string;    // chosen rate option (e.g. "Buy" / "Sell")
 }
 
 export interface MetaShopOrder {

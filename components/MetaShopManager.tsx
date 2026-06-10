@@ -199,6 +199,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     routePersonnel: T ? 'پرسنل مشخص' : 'Specific personnel', routeDept: T ? 'یک دپارتمان' : 'A department', routeNone: T ? 'پیش‌فرض (مستر)' : 'Default (master)',
     addProduct: T ? 'افزودن مورد' : 'Add item', noProducts: T ? 'موردی اضافه نشده است.' : 'No items added.',
     pName: T ? 'نام' : 'Name', pSku: T ? 'کد (SKU)' : 'SKU', pGroup: T ? 'دسته' : 'Category', pSubcat: T ? 'زیردسته' : 'Subcategory', pPrice: T ? 'قیمت' : 'Price', pPack: T ? 'قیمت بسته' : 'Pack price',
+    pCurrency: T ? 'ارز محصول' : 'Currency', optCur: T ? 'ارز' : 'Cur',
     pUnit: T ? 'واحد' : 'Unit', pPackSize: T ? 'تعداد در بسته' : 'Pack size', pMoq: T ? 'حداقل سفارش' : 'MOQ', pStock: T ? 'وضعیت موجودی' : 'Stock label', pDesc: T ? 'توضیحات' : 'Description', pImg: T ? 'تصویر' : 'Image',
     pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
@@ -305,7 +306,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
 
   // ── Product rate options (max 3) ──
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
-  const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
+  const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number; currency: string }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
 
   // ── Discount codes ──
@@ -788,6 +789,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <input className={fld} placeholder={t.pGroup} value={p.group || ''} onChange={e => updProduct(idx, { group: e.target.value })} list={`ms-cats-${draft.id}`} />
                     <input className={fld} placeholder={t.pSubcat} value={p.subcategory || ''} onChange={e => updProduct(idx, { subcategory: e.target.value })} />
                     <input className={fld} type="number" placeholder={t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
+                    <input className={fld + ' dir-ltr'} placeholder={`${t.pCurrency} (${draft.currency})`} value={p.currency || ''} onChange={e => updProduct(idx, { currency: e.target.value.toUpperCase() })} />
                     {!isServices && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => updProduct(idx, { packPrice: parseFloat(e.target.value) || 0 })} />}
                     <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />
                     {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} />}
@@ -828,7 +830,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                         <div key={o.id} className="flex items-center gap-1.5">
                           <input className={fld} placeholder={t.optLabel} value={o.label} onChange={e => updRate(idx, oIdx, { label: e.target.value })} />
                           <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updRate(idx, oIdx, { labelEn: e.target.value })} />
-                          <input className={fld + ' max-w-[110px]'} type="number" placeholder={t.optPrice} value={o.price ?? ''} onChange={e => updRate(idx, oIdx, { price: parseFloat(e.target.value) || 0 })} />
+                          <input className={fld + ' max-w-[100px]'} type="number" placeholder={t.optPrice} value={o.price ?? ''} onChange={e => updRate(idx, oIdx, { price: parseFloat(e.target.value) || 0 })} />
+                          <input className={fld + ' max-w-[78px] dir-ltr'} placeholder={t.optCur} value={o.currency || ''} onChange={e => updRate(idx, oIdx, { currency: e.target.value.toUpperCase() })} />
                           <button onClick={() => removeRate(idx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-4 h-4" /></button>
                         </div>
                       ))}
