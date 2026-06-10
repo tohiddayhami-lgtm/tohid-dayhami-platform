@@ -29,6 +29,7 @@ import {
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
+import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
@@ -1255,8 +1256,17 @@ const App: React.FC = () => {
             </button>
           </nav>
 
-          {/* Right side: lang toggle + staff login icon */}
+          {/* Right side: search + lang toggle + staff login icon */}
           <div className="flex items-center gap-2">
+            <GlobalSearch
+              news={news}
+              services={services}
+              shops={metaShops}
+              lang={lang}
+              onOpenNews={(id) => setView('news', id)}
+              onOpenService={(id) => openFormWithService(id)}
+              onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+            />
             <div className="flex border border-gray-200 rounded-lg overflow-hidden text-xs">
               <button onClick={() => setLang('fa')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'fa' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>FA</button>
               <button onClick={() => setLang('en')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'en' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>EN</button>
