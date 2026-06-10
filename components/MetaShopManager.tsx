@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department, MetaBazaar } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
@@ -15,9 +15,6 @@ interface Props {
   onSaveMetaShop: (shop: MetaShop) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
-  metaBazaars?: MetaBazaar[];
-  onSaveMetaBazaar?: (bazaar: MetaBazaar) => Promise<void>;
-  onDeleteMetaBazaar?: (id: string) => Promise<void>;
   readonly?: boolean;
 }
 
@@ -121,7 +118,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, readonly = false }) => {
   const [mode, setMode] = useState<'list' | 'editor' | 'orders'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
@@ -136,9 +133,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
   const [dirCatFa, setDirCatFa] = useState('');
   const [dirCatEn, setDirCatEn] = useState('');
-  const [section, setSection] = useState<'shops' | 'bazaars'>('shops');
-  const [bzDraft, setBzDraft] = useState<MetaBazaar | null>(null);
-  const [bzCopied, setBzCopied] = useState<string | null>(null);
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
@@ -154,14 +148,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته‌ها نمایش داده می‌شود. دسته‌ها دوزبانه‌اند (فارسی و انگلیسی).' : 'This shop appears under these categories on the all-shops page. Categories are bilingual (FA & EN).',
     dirCat: T ? 'دسته‌ها' : 'Categories', dirCatMulti: T ? '(می‌توانید چند دسته اضافه کنید)' : '(add several)', dirSub: T ? 'زیردسته' : 'Subcategory', shopNo: T ? 'شماره مغازه (پلاک)' : 'Shop number (plate)',
     allShopsLink: T ? 'لینک همه فروشگاه‌ها' : 'All-shops link', allShopsCopied: T ? 'کپی شد ✓' : 'Copied ✓', openBazaar: T ? 'بازارچه' : 'Bazaar',
-    tabShops: T ? 'فروشگاه‌ها' : 'Shops', tabBazaars: T ? 'بازارچه‌ها / نمایشگاه‌ها' : 'Bazaars / Exhibitions',
-    newBazaar: T ? 'بازارچه جدید' : 'New bazaar', noBazaars: T ? 'هنوز بازارچه‌ای نساخته‌اید.' : 'No bazaars yet.',
-    bzTitleFa: T ? 'عنوان (فارسی)' : 'Title (FA)', bzTitleEn: T ? 'عنوان (انگلیسی)' : 'Title (EN)', bzSubFa: T ? 'زیرعنوان (فارسی)' : 'Subtitle (FA)', bzSubEn: T ? 'زیرعنوان (انگلیسی)' : 'Subtitle (EN)',
-    bzSlug: T ? 'شناسه لینک' : 'Link slug', bzGroupBy: T ? 'گروه‌بندی بر اساس' : 'Group by', bzByCat: T ? 'دسته‌بندی' : 'Category', bzByCity: T ? 'شهر' : 'City', bzByCountry: T ? 'کشور' : 'Country',
-    bzIncludeAll: T ? 'شامل همه‌ی فروشگاه‌های فعال' : 'Include all active shops', bzPickShops: T ? 'انتخاب فروشگاه‌ها' : 'Pick shops', bzCover: T ? 'رنگ کاور' : 'Cover color', bzSaveB: T ? 'ذخیره بازارچه' : 'Save bazaar',
-    bzHint: T ? 'یک صفحه‌ی مستقل با لینک اختصاصی که فروشگاه‌های انتخابی را نمایش می‌دهد (مثلاً نمایشگاه شهری/کشوری یا تخصصی).' : 'A standalone page with its own link showing the selected shops (e.g. a city/country or specialized exhibition).',
-    cityFa: T ? 'شهر (فارسی)' : 'City (FA)', cityEn: T ? 'شهر (انگلیسی)' : 'City (EN)', countryFa: T ? 'کشور (فارسی)' : 'Country (FA)', countryEn: T ? 'کشور (انگلیسی)' : 'Country (EN)',
-    geoT: T ? 'شهر و کشور (برای نمایشگاه‌های شهری/کشوری)' : 'City & country (for city/country exhibitions)',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
@@ -250,21 +236,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     r.readAsText(file);
   };
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
-
-  // ── Bazaars (named exhibitions) ──
-  const blankBazaar = (): MetaBazaar => ({ id: `bz-${Date.now()}`, slug: '', titleFa: '', titleEn: '', subtitleFa: '', subtitleEn: '', isActive: true, defaultLang: 'en', includeAll: true, shopIds: [], groupBy: 'category', coverColor: '#1f2a18', createdAt: new Date().toISOString() });
-  const bazaarUrl = (b: MetaBazaar) => `${shopBaseUrl}?bazaar=${encodeURIComponent(b.slug)}`;
-  const startNewBazaar = () => setBzDraft(blankBazaar());
-  const startEditBazaar = (b: MetaBazaar) => setBzDraft(JSON.parse(JSON.stringify(b)));
-  const updBz = (patch: Partial<MetaBazaar>) => setBzDraft(d => d ? { ...d, ...patch } : d);
-  const toggleBzShop = (id: string) => setBzDraft(d => { if (!d) return d; const ids = d.shopIds || []; return { ...d, shopIds: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id] }; });
-  const saveBazaar = async () => {
-    if (!bzDraft || !onSaveMetaBazaar) return;
-    const slug = (bzDraft.slug || '').trim() || slugify(bzDraft.titleEn || bzDraft.titleFa || 'bazaar');
-    if (metaBazaars.some(b => b.id !== bzDraft.id && b.slug === slug)) { alert(T ? 'این شناسه لینک قبلاً استفاده شده.' : 'This slug is already used.'); return; }
-    await onSaveMetaBazaar({ ...bzDraft, slug });
-    setBzDraft(null);
-  };
 
   const startNew = () => { setDraft(blankShop()); setMode('editor'); };
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
@@ -408,91 +379,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const lbl = 'block text-[13px] font-semibold text-gray-700 mb-1.5';
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 
-  const sectionTabs = (
-    <div className="inline-flex bg-gray-100 rounded-lg p-0.5 text-sm">
-      <button onClick={() => { setSection('shops'); setBzDraft(null); }} className={section === 'shops' ? 'bg-white shadow-sm rounded-md px-3 py-1.5 font-bold text-gray-800' : 'px-3 py-1.5 text-gray-500'}>{t.tabShops}</button>
-      <button onClick={() => setSection('bazaars')} className={section === 'bazaars' ? 'bg-white shadow-sm rounded-md px-3 py-1.5 font-bold text-gray-800' : 'px-3 py-1.5 text-gray-500'}>{t.tabBazaars}</button>
-    </div>
-  );
-
-  // ════════════ BAZAARS ════════════
-  if (section === 'bazaars') {
-    // ── Bazaar editor ──
-    if (bzDraft) {
-      return (
-        <div className="space-y-5 animate-fade-in pb-10">
-          <div className="flex items-center justify-between gap-2">
-            <button onClick={() => setBzDraft(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
-            <div className="flex items-center gap-2">
-              <a href={bzDraft.slug ? bazaarUrl(bzDraft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!bzDraft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
-              {!readonly && <button onClick={saveBazaar} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.bzSaveB}</button>}
-            </div>
-          </div>
-          <div className={card}>
-            <p className="text-xs text-gray-500 mb-4">{t.bzHint}</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className={lbl}>{t.bzTitleFa}</label><input className={fld} value={bzDraft.titleFa || ''} onChange={e => updBz({ titleFa: e.target.value, slug: bzDraft.slug || slugify(bzDraft.titleEn || e.target.value) })} placeholder="مثلا: نمایشگاه مسقط ۲۰۲۶" /></div>
-              <div><label className={lbl}>{t.bzTitleEn}</label><input className={fld + ' dir-ltr'} value={bzDraft.titleEn || ''} onChange={e => updBz({ titleEn: e.target.value, slug: bzDraft.slug || slugify(e.target.value) })} placeholder="e.g. Muscat Expo 2026" /></div>
-              <div><label className={lbl}>{t.bzSubFa}</label><input className={fld} value={bzDraft.subtitleFa || ''} onChange={e => updBz({ subtitleFa: e.target.value })} /></div>
-              <div><label className={lbl}>{t.bzSubEn}</label><input className={fld + ' dir-ltr'} value={bzDraft.subtitleEn || ''} onChange={e => updBz({ subtitleEn: e.target.value })} /></div>
-              <div><label className={lbl}>{t.bzSlug}</label><input className={fld + ' dir-ltr'} value={bzDraft.slug} onChange={e => updBz({ slug: slugify(e.target.value) })} placeholder="muscat-expo" /></div>
-              <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={bzDraft.defaultLang || 'en'} onChange={e => updBz({ defaultLang: e.target.value as 'fa' | 'en' })}><option value="en">English</option><option value="fa">فارسی</option></select></div>
-              <div><label className={lbl}>{t.bzGroupBy}</label><select className={fld + ' bg-white'} value={bzDraft.groupBy || 'category'} onChange={e => updBz({ groupBy: e.target.value as any })}><option value="category">{t.bzByCat}</option><option value="city">{t.bzByCity}</option><option value="country">{t.bzByCountry}</option></select></div>
-              <div><label className={lbl}>{t.bzCover}</label><div className="flex items-center gap-2"><input type="color" value={bzDraft.coverColor || '#1f2a18'} onChange={e => updBz({ coverColor: e.target.value })} className="w-10 h-9 rounded border border-gray-300 cursor-pointer" /><input className={fld + ' dir-ltr'} value={bzDraft.coverColor || ''} onChange={e => updBz({ coverColor: e.target.value })} /></div></div>
-            </div>
-            <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={bzDraft.isActive} onChange={e => updBz({ isActive: e.target.checked })} />{t.active}</label>
-            <label className="flex items-center gap-2 mt-2 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={!!bzDraft.includeAll} onChange={e => updBz({ includeAll: e.target.checked })} />{t.bzIncludeAll}</label>
-            {!bzDraft.includeAll && (
-              <div className="mt-4">
-                <label className={lbl}>{t.bzPickShops} ({(bzDraft.shopIds || []).length})</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-72 overflow-y-auto border border-gray-100 rounded-xl p-2">
-                  {metaShops.map(s => { const on = (bzDraft.shopIds || []).includes(s.id); return (
-                    <label key={s.id} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-sm ${on ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
-                      <input type="checkbox" className="accent-indigo-600" checked={on} onChange={() => toggleBzShop(s.id)} />
-                      <span className="truncate">{s.name}</span><span className="text-[10px] text-gray-400 ml-auto">{(s.products || []).length}</span>
-                    </label>
-                  ); })}
-                  {metaShops.length === 0 && <p className="text-xs text-gray-400 p-3">{t.empty}</p>}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-    // ── Bazaar list ──
-    return (
-      <div className="space-y-5 animate-fade-in">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconTag className="w-5 h-5" /></div><div><h3 className="text-lg font-bold text-gray-800">{t.tabBazaars}</h3><p className="text-xs text-gray-400">{metaBazaars.length}</p></div></div>
-          <div className="flex items-center gap-2">{sectionTabs}{!readonly && <button onClick={startNewBazaar} className="px-3 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newBazaar}</button>}</div>
-        </div>
-        {metaBazaars.length === 0 ? <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.noBazaars}</div> : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {metaBazaars.map(b => (
-              <div key={b.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                <div className="h-16 flex items-center justify-center text-white font-bold px-3 text-center text-sm relative" style={{ background: `linear-gradient(135deg, ${b.coverColor || '#1f2a18'}, #0f172a)` }}>
-                  {b.titleEn || b.titleFa || b.slug}
-                  <span className={`absolute top-2 ${T ? 'left-2' : 'right-2'} text-[10px] px-2 py-0.5 rounded-full font-bold ${b.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`}>{b.isActive ? t.active : t.inactive}</span>
-                </div>
-                <div className="p-4 flex-1 flex flex-col gap-2">
-                  <div className="text-[11px] text-gray-400">{b.includeAll ? (T ? 'همه فروشگاه‌ها' : 'All shops') : `${(b.shopIds || []).length} ${T ? 'فروشگاه' : 'shops'}`} · {b.groupBy === 'city' ? t.bzByCity : b.groupBy === 'country' ? t.bzByCountry : t.bzByCat}</div>
-                  <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px] text-gray-500 truncate" dir="ltr"><IconLink className="w-3 h-3 shrink-0" /><span className="truncate">?bazaar={b.slug}</span></div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                    <a href={bazaarUrl(b)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
-                    <button onClick={() => { navigator.clipboard.writeText(bazaarUrl(b)); setBzCopied(b.id); setTimeout(() => setBzCopied(null), 1800); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{bzCopied === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
-                    {!readonly && <button onClick={() => startEditBazaar(b)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
-                    {!readonly && onDeleteMetaBazaar && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaBazaar(b.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // ════════════ LIST ════════════
   if (mode === 'list') {
     return (
@@ -503,7 +389,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <div><h3 className="text-lg font-bold text-gray-800">{t.title}</h3><p className="text-xs text-gray-400">{t.subtitle} ({metaShops.length})</p></div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {sectionTabs}
             <a href={`${shopBaseUrl}?shops=1`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconGlobe className="w-4 h-4" />{t.openBazaar}</a>
             <button onClick={() => { navigator.clipboard.writeText(`${shopBaseUrl}?shops=1`); setCopiedId('__bazaar__'); setTimeout(() => setCopiedId(null), 1800); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5">{copiedId === '__bazaar__' ? t.allShopsCopied : <><IconLink className="w-4 h-4" />{t.allShopsLink}</>}</button>
           {!readonly && <>
@@ -640,15 +525,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
           <datalist id="msd-dir-cats-fa">{Array.from(new Set(metaShops.flatMap(s => [...(s.directoryCats || []).map(c => c.fa), ...(s.directoryCategories || []), s.directoryCategory]).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
           <datalist id="msd-dir-cats-en">{Array.from(new Set(metaShops.flatMap(s => (s.directoryCats || []).map(c => c.en)).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
-          <div className="border-t border-gray-100 pt-4 mt-4">
-            <h5 className="text-sm font-bold text-gray-700 mb-3">{t.geoT}</h5>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div><label className={lbl}>{t.cityFa}</label><input className={fld} value={draft.city?.fa || ''} onChange={e => upd({ city: { ...(draft.city || {}), fa: e.target.value } })} placeholder="مثلا: مسقط" /></div>
-              <div><label className={lbl}>{t.cityEn}</label><input className={fld + ' dir-ltr'} value={draft.city?.en || ''} onChange={e => upd({ city: { ...(draft.city || {}), en: e.target.value } })} placeholder="e.g. Muscat" /></div>
-              <div><label className={lbl}>{t.countryFa}</label><input className={fld} value={draft.country?.fa || ''} onChange={e => upd({ country: { ...(draft.country || {}), fa: e.target.value } })} placeholder="مثلا: عمان" /></div>
-              <div><label className={lbl}>{t.countryEn}</label><input className={fld + ' dir-ltr'} value={draft.country?.en || ''} onChange={e => upd({ country: { ...(draft.country || {}), en: e.target.value } })} placeholder="e.g. Oman" /></div>
-            </div>
-          </div>
         </div>
 
         {/* Languages */}

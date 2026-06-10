@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -24,7 +24,6 @@ import {
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders,
-  subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
@@ -195,11 +194,11 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
-    if (p.has('shops') || p.get('bazaar')) return 'shopsdir';
+    if (p.has('shops')) return 'shopsdir';
     if (p.get('shop') || p.get('c')) return 'metashop';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
-  if (hash === '#/shops' || hash.startsWith('#/bazaar/')) return 'shopsdir';
+  if (hash === '#/shops')                     return 'shopsdir';
   if (hash.startsWith('#/shop/'))             return 'metashop';
   if (hash === '#/form' || hash === '#form')  return 'new-ticket';
   if (hash === '#/tracking')                  return 'tracking';
@@ -239,9 +238,6 @@ const App: React.FC = () => {
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
-  const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
-  const [bazaarSlug, setBazaarSlug] = useState<string | null>(() => { try { return new URLSearchParams(window.location.search).get('bazaar'); } catch { return null; } });
-  const [publicBazaar, setPublicBazaar] = useState<MetaBazaar | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -362,7 +358,6 @@ const App: React.FC = () => {
       const fid = extractFormId();
       if (v === 'custom-form' && fid) setCustomFormId(fid);
       if (v === 'metashop') setShopSlug(extractShopSlug());
-      if (v === 'shopsdir') { try { setBazaarSlug(new URLSearchParams(window.location.search).get('bazaar')); } catch {} }
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
@@ -454,8 +449,7 @@ const App: React.FC = () => {
     const unsubInvoices = subscribeToInvoices(setInvoices);
     const unsubMetaShops = subscribeToMetaShops(setMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
-    const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
+    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1038,19 +1032,6 @@ const App: React.FC = () => {
     setPublicShop(null); // subscription warm but no match → not found
   }, [view, shopSlug, metaShops]);
 
-  // ── Resolve the public bazaar by slug (?bazaar=<slug>) ──
-  useEffect(() => {
-    if (view !== 'shopsdir' || !bazaarSlug) { setPublicBazaar(null); return; }
-    const local = metaBazaars.find(b => b.slug === bazaarSlug);
-    if (local) { setPublicBazaar(local); return; }
-    if (metaBazaars.length === 0) {
-      let cancelled = false;
-      getMetaBazaarBySlug(bazaarSlug).then(b => { if (!cancelled) setPublicBazaar(b); });
-      return () => { cancelled = true; };
-    }
-    setPublicBazaar(null);
-  }, [view, bazaarSlug, metaBazaars]);
-
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
   const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; discountCode?: string; discountAmount?: number; taxRate?: number; taxAmount?: number; taxInclusive?: boolean; total: number; currency: string; }): Promise<string> => {
     const phoneRaw = data.phone.trim();
@@ -1133,25 +1114,12 @@ const App: React.FC = () => {
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
 
-  // ── Public bazaar / directory (full-screen takeover) ──
+  // ── Public "all shops" bazaar/directory (full-screen takeover) ──
   if (view === 'shopsdir') {
-    // Named bazaar (?bazaar=) → curated shops + custom title/grouping; else all active shops
-    const bz = bazaarSlug ? publicBazaar : null;
-    if (bazaarSlug && !bz) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          {metaBazaars.length === 0
-            ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
-            : <p className="text-gray-400 text-sm">{lang === 'fa' ? 'بازارچه یافت نشد یا غیرفعال است.' : 'Bazaar not found or inactive.'}</p>}
-        </div>
-      );
-    }
-    const dirShops = bz && !bz.includeAll ? metaShops.filter(s => (bz.shopIds || []).includes(s.id)) : metaShops;
     return (
       <MetaShopDirectory
-        shops={dirShops}
+        shops={metaShops}
         lang={lang}
-        bazaar={bz || undefined}
         onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
       />
     );
@@ -1597,9 +1565,6 @@ const App: React.FC = () => {
                     onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
-                    metaBazaars={metaBazaars}
-                    onSaveMetaBazaar={async (b) => { await saveMetaBazaarToCloud(b); }}
-                    onDeleteMetaBazaar={async (id) => { await deleteMetaBazaarFromCloud(id); }}
                   />
                 )}
               </>

@@ -492,7 +492,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder';
   entityId?: string;
   details: string;
   actorName: string;
@@ -622,8 +622,6 @@ export interface MetaShop {
   directoryCategories?: string[];
   directorySubcategory?: string;
   shopNumber?: string;               // number shown on the storefront shutter (e.g. "12")
-  city?: MetaShopDirCat;             // bilingual city (for city-grouped bazaars)
-  country?: MetaShopDirCat;          // bilingual country (for country-grouped bazaars)
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)
   productsTabLabelEn?: string;
@@ -696,23 +694,6 @@ export interface MetaShopOrder {
   status: 'new' | 'in_progress' | 'done' | 'cancelled';
   createdAt: string;
   customerId?: string;     // linked customer-bank record (by phone)
-}
-
-// A named bazaar / exhibition: a public page grouping a curated set of meta shops
-export interface MetaBazaar {
-  id: string;
-  slug: string;                 // public link key (?bazaar=<slug>)
-  titleFa?: string;
-  titleEn?: string;
-  subtitleFa?: string;
-  subtitleEn?: string;
-  isActive: boolean;
-  defaultLang?: 'fa' | 'en';
-  includeAll?: boolean;         // include every active shop (ignore shopIds)
-  shopIds?: string[];           // curated shops in this bazaar
-  groupBy?: 'category' | 'city' | 'country';  // primary grouping dimension (default category)
-  coverColor?: string;          // hero background color
-  createdAt?: string;
 }
 
 export interface NewsArticle {
