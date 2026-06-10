@@ -156,21 +156,21 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     // The grid shows the AGGREGATE of the active node's whole subtree, so a node never looks empty
     // just because its first child is empty — selecting a country shows all its shops.
     const tree = bazaar.tree || [];
+    const allTreeShops = (): MetaShop[] => { const acc: MetaShop[] = []; const seen = new Set<string>(); tree.forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; };
     const levels: { depth: number; nodes: MetaBazaarNode[]; selectedId?: string }[] = [];
     let cursor: MetaBazaarNode[] = tree;
     let activeNode: MetaBazaarNode | undefined;
     for (let depth = 0; cursor && cursor.length > 0; depth++) {
+      // No auto-selection: an empty selection at a level means "All" (show everything at that level)
       const explicit = bazaarPath[depth] && cursor.some(n => n.id === bazaarPath[depth]) ? bazaarPath[depth] : undefined;
-      const selId = depth === 0 ? (explicit || cursor[0].id) : explicit; // auto-select only the first ROOT
-      levels.push({ depth, nodes: cursor, selectedId: selId });
-      const sel = selId ? cursor.find(n => n.id === selId) : undefined;
-      if (!sel) break;            // this level is shown as choices; stop descending until the user picks
-      activeNode = sel;
-      cursor = sel.children || [];
+      levels.push({ depth, nodes: cursor, selectedId: explicit });
+      if (!explicit) break;       // "All" at this level → show the active node's full subtree
+      activeNode = cursor.find(n => n.id === explicit);
+      cursor = activeNode?.children || [];
     }
     const gridShops = q
-      ? (() => { const acc: MetaShop[] = []; const seen = new Set<string>(); tree.forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; })()
-      : (activeNode ? collectShops(activeNode) : []);
+      ? allTreeShops()
+      : (activeNode ? collectShops(activeNode) : allTreeShops());
 
     const selectAt = (depth: number, id: string) => setBazaarPath(prev => prev[depth] === id ? prev : [...prev.slice(0, depth), id]);
 
@@ -199,6 +199,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             <div key={lvl.depth} className="msd-levelbar">
               {bLbl(bazaar.levelLabels?.[lvl.depth]) && <span className="msd-levelbar-label">{bLbl(bazaar.levelLabels?.[lvl.depth])}</span>}
               <div className="msd-levelbar-pills">
+                <button className={`msd-cat ${!lvl.selectedId ? 'on' : ''}`} onClick={() => setBazaarPath(prev => prev.slice(0, lvl.depth))}>{t.all}</button>
                 {lvl.nodes.map(n => { const cnt = collectShops(n).length; return (
                   <button key={n.id} className={`msd-cat ${lvl.selectedId === n.id ? 'on' : ''}`} onClick={() => selectAt(lvl.depth, n.id)}>{bLbl(n.label)}{cnt > 0 && <span className="msd-cat-count">{cnt}</span>}</button>
                 ); })}
