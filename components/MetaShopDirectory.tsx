@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode } from '../types';
+import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 
 interface Props {
@@ -48,19 +49,12 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
   };
   const lbl = (p: Pair) => T ? p.fa : p.en;
   const catsOf = (s: MetaShop) => catPairsOf(s).map(lbl); // for search
-  // Stable number per shop (by position), so a shop shown in 2 categories keeps one number
-  const numberOf = useMemo(() => {
-    const m: Record<string, string> = {};
-    live.forEach((s, i) => { m[s.id] = (s.shopNumber && s.shopNumber.trim()) || String(i + 1).padStart(2, '0'); });
-    return m;
-  }, [live]);
-
-  // Search filter
+  // Search filter (matches name, code, categories and products)
   const matched = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return live;
     return live.filter(s => {
-      const hay = `${s.name} ${s.title || ''} ${catsOf(s).join(' ')} ${s.directorySubcategory || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase();
+      const hay = `${s.name} ${s.title || ''} ${shopCodeOf(s)} ${catsOf(s).join(' ')} ${s.directorySubcategory || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase();
       return hay.includes(q);
     });
   }, [live, search]);
@@ -93,7 +87,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
   const t = {
     title: title || (T ? 'بازارچه فروشگاه‌ها' : 'Shops Bazaar'),
     subtitle: subtitle || (T ? 'فروشگاه موردنظر را پیدا کنید و وارد شوید' : 'Find a shop and step inside'),
-    search: T ? 'جستجوی فروشگاه یا محصول...' : 'Search shops or products...',
+    search: T ? 'جستجوی فروشگاه، کد یا محصول...' : 'Search shop, code or product...',
     all: T ? 'همه' : 'All',
     enter: T ? 'ورود به مغازه' : 'Enter shop',
     items: T ? 'مورد' : 'items',
@@ -105,7 +99,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
   const Storefront: React.FC<{ shop: MetaShop }> = ({ shop }) => {
     const accent = shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
-    const num = numberOf[shop.id] || (shop.shopNumber || '').trim();
+    const num = shopCodeOf(shop);
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
@@ -116,7 +110,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
         {/* Shutter (rolls up on hover) */}
         <div className="msd-shutter">
           <div className="msd-shutter-grip" />
-          <div className="msd-plate">{t.shopNo} {num}</div>
+          <div className="msd-plate" dir="ltr">{num}</div>
         </div>
 
         {/* Interior revealed under the shutter */}
@@ -138,7 +132,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const shopBySlug: Record<string, MetaShop> = {};
     live.forEach(s => { shopBySlug[s.slug] = s; });
     const q = search.trim().toLowerCase();
-    const shopMatches = (s: MetaShop) => !q || `${s.name} ${s.title || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase().includes(q);
+    const shopMatches = (s: MetaShop) => !q || `${s.name} ${s.title || ''} ${shopCodeOf(s)} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase().includes(q);
     const bLbl = (c?: { fa?: string; en?: string }) => c ? (T ? (c.fa || c.en) : (c.en || c.fa)) || '' : '';
     const accentCover = bazaar.theme?.cover || '#1f2a18';
 

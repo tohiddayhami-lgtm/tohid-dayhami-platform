@@ -5,6 +5,7 @@ import { uploadFileWithProgress } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaBazaar } from '../types';
+import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { Language } from '../App';
 
 interface Props {
@@ -158,6 +159,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
     name: T ? 'نام فروشگاه' : 'Shop name', slug: T ? 'شناسه لینک (slug)' : 'Link slug', type: T ? 'نوع' : 'Type',
+    code: T ? 'کد فروشگاه' : 'Shop code', regen: T ? 'کد جدید' : 'New code', copyCode: T ? 'کپی کد' : 'Copy code', codeCopied: T ? 'کپی شد ✓' : 'Copied ✓',
     typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', currency: T ? 'واحد پول' : 'Currency',
     defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
     langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند. کد مثل en، fa، zh، ar. ترجمه‌ی محتوا (نام/توضیحات محصول) را در همان محصول وارد کنید.' : 'Languages the customer can switch between. Code like en, fa, zh, ar. Enter content translations on each product.',
@@ -243,7 +245,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   };
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
 
-  const startNew = () => { setDraft(blankShop()); setMode('editor'); };
+  const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updTheme = (patch: Partial<MetaShop['theme']>) => setDraft(d => d ? { ...d, theme: { ...d.theme, ...patch } } : d);
@@ -271,8 +273,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     // ensure unique slug
     if (metaShops.some(s => s.id !== draft.id && s.slug === slug)) { alert(T ? 'این شناسه لینک قبلاً استفاده شده. شناسه دیگری بگذارید.' : 'This slug is already used. Choose another.'); return; }
+    // ensure a unique shop code exists
+    const code = (draft.code && draft.code.trim()) ? draft.code.trim().toUpperCase() : uniqueShopCode(metaShops);
     setSaving(true);
-    try { await onSaveMetaShop({ ...draft, slug }); setMode('list'); setDraft(null); }
+    try { await onSaveMetaShop({ ...draft, slug, code }); setMode('list'); setDraft(null); }
     catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); }
     finally { setSaving(false); }
   };
@@ -329,7 +333,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const removeCard = (idx: number, cIdx: number) => updPage(idx, { cards: ((draft!.pages || [])[idx].cards || []).filter((_, i) => i !== cIdx) });
 
   const doImport = () => {
-    try { setDraft(d => importFromJson(importText, d || blankShop())); setImportOpen(false); setImportText(''); setMode('editor'); }
+    try { const shop = importFromJson(importText, blankShop()); if (!shop.code) shop.code = uniqueShopCode(metaShops); setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor'); }
     catch { alert(t.importErr); }
   };
 
@@ -339,6 +343,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     r.onload = ev => {
       try {
         const shop = importFromJson(String(ev.target?.result || ''), blankShop());
+        if (!shop.code) shop.code = uniqueShopCode(metaShops);
         setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor');
       } catch { alert(t.importErr); }
     };
@@ -437,7 +442,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   </div>
                   <div className="p-4 flex-1 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-bold text-gray-800 text-sm truncate">{s.name}</h4>
+                      <h4 className="font-bold text-gray-800 text-sm truncate flex items-center gap-1.5">{s.name}<span className="text-[10px] font-mono font-bold bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr">{shopCodeOf(s)}</span></h4>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{s.type === 'services' ? t.typeServices : t.typeProducts}</span>
                     </div>
                     <div className="text-[11px] text-gray-400">{(s.products || []).length} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
@@ -522,6 +527,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><label className={lbl}>{t.name}</label><input className={fld} value={draft.name} onChange={e => upd({ name: e.target.value, slug: draft.slug || slugify(e.target.value) })} /></div>
           <div><label className={lbl}>{t.slug}</label><input className={fld + ' dir-ltr'} value={draft.slug} onChange={e => upd({ slug: slugify(e.target.value) })} placeholder="my-shop" /></div>
+          <div><label className={lbl}>{t.code}</label>
+            <div className="flex gap-2">
+              <input className={fld + ' dir-ltr font-mono font-bold tracking-widest uppercase'} maxLength={4} value={draft.code || ''} onChange={e => upd({ code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) })} placeholder={shopCodeOf(draft)} />
+              <button type="button" onClick={() => upd({ code: uniqueShopCode(metaShops.filter(s => s.id !== draft.id)) })} className="px-3 py-2 rounded-lg border border-gray-300 text-xs whitespace-nowrap hover:bg-gray-50">{t.regen}</button>
+            </div>
+          </div>
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option></select></div>
           <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>

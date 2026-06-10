@@ -20,7 +20,7 @@
   "orderThankYouText": "Thank you! Your service request has been received. Our team will contact you shortly. Keep your tracking code below.",
   "searchPlaceholder": "Search services...",
   "defaultLang": "fa",
-  "directoryCats": [{ "fa": "خدمات", "en": "Services" }, { "fa": "صادراتی", "en": "Export" }], "directorySub": { "fa": "اجاره و مشاوره", "en": "Rental & Consulting" }, "shopNumber": "02",
+  "directoryCats": [{ "fa": "خدمات", "en": "Services" }, { "fa": "صادراتی", "en": "Export" }], "directorySub": { "fa": "اجاره و مشاوره", "en": "Rental & Consulting" }, "code": "SRVC",
   "languages": [
     { "code": "fa", "name": "فارسی", "rtl": true },
     { "code": "en", "name": "English" },

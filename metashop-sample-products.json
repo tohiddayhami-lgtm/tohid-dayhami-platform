@@ -20,7 +20,7 @@
   "orderThankYouText": "Thank you! Your fresh produce inquiry has been received. We will prepare a proforma invoice with FOB Sohar / CIF pricing within 24 hours. Keep your tracking code below.",
   "searchPlaceholder": "Search all products...",
   "defaultLang": "en",
-  "directoryCats": [{ "fa": "مواد غذایی", "en": "Food" }, { "fa": "صادراتی", "en": "Export" }], "directorySub": { "fa": "خشکبار و میوه", "en": "Nuts & Dried Fruit" }, "shopNumber": "01",
+  "directoryCats": [{ "fa": "مواد غذایی", "en": "Food" }, { "fa": "صادراتی", "en": "Export" }], "directorySub": { "fa": "خشکبار و میوه", "en": "Nuts & Dried Fruit" }, "code": "FRSH",
   "languages": [
     { "code": "en", "name": "English" },
     { "code": "zh", "name": "中文" }

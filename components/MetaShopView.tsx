@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
+import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 
 interface OrderData {
@@ -336,6 +337,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           <div className="ms-brand">
             {shop.logo && <img src={shop.logo} alt="" className="ms-logo" />}
             <span className="ms-name">{shop.name}</span>
+            <span className="ms-code" dir="ltr">{shopCodeOf(shop)}</span>
           </div>
           <div className="ms-top-actions">
             {langs.length > 1 && (
@@ -724,6 +726,7 @@ const MS_CSS = `
 .ms-brand { display:flex; align-items:center; gap:12px; min-width:0; }
 .ms-logo { max-height:34px; width:auto; object-fit:contain; }
 .ms-name { font-size:15px; font-weight:800; color:var(--ms-heading,#1f2a18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ms-code { font-size:10px; font-family:ui-monospace,monospace; font-weight:800; letter-spacing:.08em; background:var(--ms-primary); color:#fff; padding:2px 7px; border-radius:6px; flex-shrink:0; }
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; }
 .ms-badge { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 7px; font-size:11px; font-weight:800; }
 .ms-top-actions { display:flex; align-items:center; gap:10px; }

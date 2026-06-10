@@ -644,7 +644,8 @@ export interface MetaShop {
   directoryCategory?: string;
   directoryCategories?: string[];
   directorySubcategory?: string;
-  shopNumber?: string;               // number shown on the storefront shutter (e.g. "12")
+  code?: string;                     // unique 4-char alphanumeric code (searchable; shown on the storefront)
+  shopNumber?: string;               // (legacy) number that used to show on the storefront shutter
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)
   productsTabLabelEn?: string;
