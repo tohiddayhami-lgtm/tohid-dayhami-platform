@@ -302,6 +302,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
     const curPrice = unitPrice(p, selId);
+    const cur = curOf(p, selId);
     return (
       <div className="ms-buy">
         {opts.length > 0 && (
@@ -325,12 +326,17 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           )}
         </div>
         {qty > 0 ? (
-          <div className={`ms-card-qty ${big ? 'big' : ''}`}>
-            <button onClick={() => setQty(p.id, qty - 1)}>−</button>
-            <span className="ms-card-qnum">{qty}</span>
-            <button onClick={() => setQty(p.id, qty + 1)}>+</button>
-            <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
-          </div>
+          <>
+            <div className={`ms-card-qty ${big ? 'big' : ''}`}>
+              <button onClick={() => setQty(p.id, qty - 1)}>−</button>
+              <input className="ms-card-qinp" value={qty} inputMode="numeric" onChange={e => setQty(p.id, parseInt(e.target.value.replace(/[^\d]/g, '')) || 0)} onFocus={e => e.target.select()} />
+              <button onClick={() => setQty(p.id, qty + 1)}>+</button>
+              <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
+            </div>
+            {curPrice != null && curPrice > 0 && (
+              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
+            )}
+          </>
         ) : (
           <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
         )}
@@ -839,7 +845,11 @@ const MS_CSS = `
 .ms-card-qty.big { margin-top:8px; }
 .ms-card-qty > button { width:34px; height:34px; border:1.5px solid var(--ms-primary); background:#fff; color:var(--ms-primary); border-radius:9px; font-size:18px; font-weight:700; cursor:pointer; line-height:1; }
 .ms-card-qty .ms-card-qnum { min-width:28px; text-align:center; font-weight:800; font-size:15px; color:#0f172a; }
+.ms-card-qty .ms-card-qinp { width:64px; text-align:center; font-weight:800; font-size:15px; color:#0f172a; border:1.5px solid #e2e8f0; border-radius:8px; padding:5px 4px; outline:none; }
+.ms-card-qty .ms-card-qinp:focus { border-color:var(--ms-primary); }
 .ms-card-qty .ms-card-rm { width:30px; height:30px; border:none; background:transparent; color:#ef4444; font-size:13px; cursor:pointer; margin-inline-start:auto; }
+.ms-card-calc { margin-top:7px; font-size:12px; color:#64748b; text-align:center; background:#f8fafc; border:1px solid #eef0f3; border-radius:8px; padding:5px 8px; }
+.ms-card-calc b { color:var(--ms-primary); font-weight:800; }
 .ms-citem-opt { font-size:11px; font-weight:700; color:var(--ms-primary); margin-top:1px; }
 .ms-inv-opt { color:var(--ms-primary); font-weight:600; }
 .ms-colors { display:flex; flex-wrap:wrap; gap:7px; }
