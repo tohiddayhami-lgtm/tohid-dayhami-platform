@@ -723,19 +723,24 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const filteredTickets = [...tickets].filter(t => {
       const isArchived = t.status === TicketStatus.COMPLETED || t.status === TicketStatus.CANCELLED;
-      
-      if (filterMode === 'history') {
-          if (!isArchived) return false;
+      const mine = t.assignedTo === currentUser.id || t.projectData?.teamMemberIds?.includes(currentUser.id);
+
+      // Non-privileged users only ever see their own cases (applies in every mode)
+      if (!canViewAllTickets && !mine) return false;
+
+      if (showFlaggedOnly) {
+          // The flag view shows EVERY flagged case (active or archived, any status) so nothing gets hidden
+          if (!t.isFlagged) return false;
       } else {
-          if (isArchived) return false;
-          
-          if (!canViewAllTickets || filterMode === 'my') {
-             if (!(t.assignedTo === currentUser.id || t.projectData?.teamMemberIds?.includes(currentUser.id))) return false;
+          if (filterMode === 'history') {
+              if (!isArchived) return false;
+          } else {
+              if (isArchived) return false;
+              if (filterMode === 'my' && !mine) return false;
           }
+          if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       }
 
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-      if (showFlaggedOnly && !t.isFlagged) return false;
       if (labelFilter && !(t.labelIds || []).includes(labelFilter)) return false;
       if (globalSearch.trim()) {
           const term = globalSearch.toLowerCase();
@@ -1064,7 +1069,7 @@ export const AdminDashboard: React.FC<Props> = ({
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => onUpdateTicket(selectedTicket.id, { isFlagged: !selectedTicket.isFlagged }, currentUser.displayName || currentUser.username)} title={selectedTicket.isFlagged ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${selectedTicket.isFlagged ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
+                        <button onClick={() => onUpdateTicket(selectedTicket.id, { isFlagged: !selectedTicket.isFlagged }, currentUser.fullName || currentUser.username)} title={selectedTicket.isFlagged ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${selectedTicket.isFlagged ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
                             <IconStar className={`w-4 h-4 ${selectedTicket.isFlagged ? 'fill-yellow-400' : ''}`} />
                         </button>
                         <button onClick={() => setSelectedTicketId(null)} className="bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-full border border-gray-200 transition-colors shadow-sm w-8 h-8 flex items-center justify-center">✕</button>
@@ -1307,7 +1312,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                                 <button key={lbl.id} onClick={() => {
                                                     const curr = selectedTicket.labelIds || [];
                                                     const next = isAssigned ? curr.filter(id => id !== lbl.id) : [...curr, lbl.id];
-                                                    onUpdateTicket(selectedTicket.id, { labelIds: next }, currentUser.displayName || currentUser.username);
+                                                    onUpdateTicket(selectedTicket.id, { labelIds: next }, currentUser.fullName || currentUser.username);
                                                 }} className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium border transition-all ${isAssigned ? colors[lbl.color] || colors.gray : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>
                                                     <IconTag className="w-2.5 h-2.5" />{lbl.name}
                                                 </button>
@@ -1983,7 +1988,7 @@ export const AdminDashboard: React.FC<Props> = ({
                             <td className="px-4 py-3">
                                 <div className="flex flex-col">
                                     <div className="flex items-center gap-1.5">
-                                        <button onClick={e => { e.stopPropagation(); onUpdateTicket(ticket.id, { isFlagged: !ticket.isFlagged }, currentUser.displayName || currentUser.username); }} title={ticket.isFlagged ? 'حذف فلگ' : 'فلگ کردن'} className="flex-shrink-0">
+                                        <button onClick={e => { e.stopPropagation(); onUpdateTicket(ticket.id, { isFlagged: !ticket.isFlagged }, currentUser.fullName || currentUser.username); }} title={ticket.isFlagged ? 'حذف فلگ' : 'فلگ کردن'} className="flex-shrink-0">
                                             <IconStar className={`w-4 h-4 transition-colors ${ticket.isFlagged ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} />
                                         </button>
                                         <span className="font-mono text-[10px] text-gray-400">{ticket.id}</span>
