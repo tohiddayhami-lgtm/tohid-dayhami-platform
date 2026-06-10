@@ -185,6 +185,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
     rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
+    optGroups: T ? 'گزینه‌های انتخابی (مثل نفرات هتل، کودک، صبحانه)' : 'Selectable options (hotel guests, child, breakfast...)',
+    optGroupsHint: T ? 'برای هر گروه، نوع را مشخص کن: «انتخاب یکی»، «چندانتخابی» یا «شمارنده». قیمت هر گزینه به مبلغ پایه اضافه می‌شود.' : 'For each group choose a type: single-select, multi-select, or counter. Each option price is added on top of the base price.',
+    addGroup: T ? 'افزودن گروه' : 'Add group', gLabel: T ? 'عنوان گروه (فارسی)' : 'Group label (FA)', gLabelEn: T ? 'عنوان گروه (انگلیسی)' : 'Group label (EN)',
+    gType: T ? 'نوع' : 'Type', gtSelect: T ? 'انتخاب یکی' : 'Single-select', gtCheckbox: T ? 'چندانتخابی' : 'Multi-select', gtCounter: T ? 'شمارنده' : 'Counter',
+    gRequired: T ? 'اجباری' : 'Required', addOpt: T ? 'افزودن گزینه' : 'Add option', oDelta: T ? 'اضافه قیمت' : '+Price', gMin: T ? 'حداقل' : 'Min', gMax: T ? 'حداکثر' : 'Max', gUnitPrice: T ? 'قیمت هر واحد' : 'Per-unit price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
     ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
@@ -244,6 +249,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
   const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
+
+  // ── Option groups (occupancy/extras) ──
+  type OG = import('../types').MetaShopOptionGroup;
+  const groupsOf = (idx: number): OG[] => draft!.products[idx].optionGroups || [];
+  const setGroups = (idx: number, gs: OG[]) => updProduct(idx, { optionGroups: gs.length ? gs : undefined });
+  const addGroup = (idx: number) => setGroups(idx, [...groupsOf(idx), { id: `g-${Date.now()}`, label: '', type: 'select', options: [{ id: `o-${Date.now()}`, label: '', priceDelta: 0 }] }]);
+  const updGroup = (idx: number, gIdx: number, patch: Partial<OG>) => { const gs = [...groupsOf(idx)]; gs[gIdx] = { ...gs[gIdx], ...patch }; setGroups(idx, gs); };
+  const removeGroup = (idx: number, gIdx: number) => setGroups(idx, groupsOf(idx).filter((_, i) => i !== gIdx));
+  const addGroupOpt = (idx: number, gIdx: number) => { const g = groupsOf(idx)[gIdx]; updGroup(idx, gIdx, { options: [...(g.options || []), { id: `o-${Date.now()}`, label: '', priceDelta: 0 }] }); };
+  const updGroupOpt = (idx: number, gIdx: number, oIdx: number, patch: Partial<import('../types').MetaShopOption>) => { const g = groupsOf(idx)[gIdx]; const opts = [...(g.options || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updGroup(idx, gIdx, { options: opts }); };
+  const removeGroupOpt = (idx: number, gIdx: number, oIdx: number) => { const g = groupsOf(idx)[gIdx]; updGroup(idx, gIdx, { options: (g.options || []).filter((_, i) => i !== oIdx) }); };
 
   // ── Discount codes ──
   const discounts = () => draft?.discounts || [];
@@ -694,6 +710,50 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                           <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updRate(idx, oIdx, { labelEn: e.target.value })} />
                           <input className={fld + ' max-w-[110px]'} type="number" placeholder={t.optPrice} value={o.price ?? ''} onChange={e => updRate(idx, oIdx, { price: parseFloat(e.target.value) || 0 })} />
                           <button onClick={() => removeRate(idx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-4 h-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Option groups (occupancy / extras) */}
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-gray-600">{t.optGroups}</label>
+                    <button onClick={() => addGroup(idx)} className="text-[11px] px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addGroup}</button>
+                  </div>
+                  {groupsOf(idx).length === 0 ? <p className="text-[11px] text-gray-400">{t.optGroupsHint}</p> : (
+                    <div className="space-y-2">
+                      {groupsOf(idx).map((g, gIdx) => (
+                        <div key={g.id} className="border border-gray-200 rounded-lg p-2 bg-gray-50/50">
+                          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                            <input className={fld + ' max-w-[140px]'} placeholder={t.gLabel} value={g.label} onChange={e => updGroup(idx, gIdx, { label: e.target.value })} />
+                            <input className={fld + ' max-w-[140px] dir-ltr'} placeholder={t.gLabelEn} value={g.labelEn || ''} onChange={e => updGroup(idx, gIdx, { labelEn: e.target.value })} />
+                            <select className={fld + ' max-w-[130px] bg-white'} value={g.type} onChange={e => updGroup(idx, gIdx, { type: e.target.value as any })}>
+                              <option value="select">{t.gtSelect}</option><option value="checkbox">{t.gtCheckbox}</option><option value="counter">{t.gtCounter}</option>
+                            </select>
+                            <label className="flex items-center gap-1 text-[10px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={!!g.required} onChange={e => updGroup(idx, gIdx, { required: e.target.checked })} />{t.gRequired}</label>
+                            <button onClick={() => removeGroup(idx, gIdx)} className="text-red-400 hover:text-red-600 ml-auto"><IconTrash className="w-4 h-4" /></button>
+                          </div>
+                          {g.type === 'counter' ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <input className={fld + ' max-w-[80px]'} type="number" placeholder={t.gMin} value={g.min ?? ''} onChange={e => updGroup(idx, gIdx, { min: parseInt(e.target.value) || 0 })} />
+                              <input className={fld + ' max-w-[80px]'} type="number" placeholder={t.gMax} value={g.max ?? ''} onChange={e => updGroup(idx, gIdx, { max: parseInt(e.target.value) || undefined })} />
+                              <input className={fld + ' max-w-[120px]'} type="number" placeholder={t.gUnitPrice} value={g.unitPrice ?? ''} onChange={e => updGroup(idx, gIdx, { unitPrice: parseFloat(e.target.value) || 0 })} />
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {(g.options || []).map((o, oIdx) => (
+                                <div key={o.id} className="flex items-center gap-1.5">
+                                  <input className={fld} placeholder={t.optLabel} value={o.label} onChange={e => updGroupOpt(idx, gIdx, oIdx, { label: e.target.value })} />
+                                  <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updGroupOpt(idx, gIdx, oIdx, { labelEn: e.target.value })} />
+                                  <input className={fld + ' max-w-[100px]'} type="number" placeholder={t.oDelta} value={o.priceDelta ?? ''} onChange={e => updGroupOpt(idx, gIdx, oIdx, { priceDelta: parseFloat(e.target.value) || 0 })} />
+                                  <button onClick={() => removeGroupOpt(idx, gIdx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-3.5 h-3.5" /></button>
+                                </div>
+                              ))}
+                              <button onClick={() => addGroupOpt(idx, gIdx)} className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addOpt}</button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
