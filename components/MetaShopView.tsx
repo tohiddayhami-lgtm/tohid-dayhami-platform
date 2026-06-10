@@ -29,7 +29,7 @@ const CartIcon = ({ s = 18 }: { s?: number }) => (
 
 export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup }) => {
   const isServices = shop.type === 'services';
-  const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string; groups?: Record<string, { optionIds?: string[]; count?: number }> }>>({});
+  const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
@@ -37,7 +37,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [cartOpen, setCartOpen] = useState(false);
   const [step, setStep] = useState<'cart' | 'review'>('cart');
   const [chosenOpt, setChosenOpt] = useState<Record<string, string>>({}); // productId -> selected rate option id
-  const [groupSel, setGroupSel] = useState<Record<string, Record<string, { optionIds?: string[]; count?: number }>>>({}); // productId -> groupId -> selection
   const [selectedFees, setSelectedFees] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
     (shop.extraFees || []).forEach(f => { init[f.id] = f.required ? true : !!f.defaultOn; });
@@ -102,7 +101,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
       discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
-      configure: 'Select options', options: 'Options',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -118,7 +116,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
       discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
-      configure: 'انتخاب گزینه‌ها', options: 'گزینه‌ها',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -134,7 +131,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
       discountLine: '折扣', taxIncl: '含税', taxExcl: '税', footPhone: '电话：', footEmail: '邮箱：', footWebsite: '网站：',
-      configure: '选择选项', options: '选项',
     },
   };
   const dict = STRINGS[uiLang] || STRINGS.en;
@@ -189,51 +185,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     setCart(c => c[p.id] ? { ...c, [p.id]: { ...c[p.id], optionId: optId } } : c);
   };
 
-  // ── Option groups (occupancy, extras, ...) ──
-  type GroupSel = Record<string, { optionIds?: string[]; count?: number }>;
-  const defaultGroupSel = (p: MetaShopProduct): GroupSel => {
-    const sel: GroupSel = {};
-    (p.optionGroups || []).forEach(g => {
-      if (g.type === 'counter') sel[g.id] = { count: g.min || 0 };
-      else if (g.type === 'select' && g.required && g.options?.length) sel[g.id] = { optionIds: [g.options[0].id] };
-      else sel[g.id] = { optionIds: [] };
-    });
-    return sel;
-  };
-  const currentGroupSel = (p: MetaShopProduct): GroupSel => cart[p.id]?.groups || groupSel[p.id] || defaultGroupSel(p);
-  const updateGroupSel = (p: MetaShopProduct, groupId: string, val: { optionIds?: string[]; count?: number }) => {
-    setGroupSel(gs => { const cur = gs[p.id] || defaultGroupSel(p); const next = { ...cur, [groupId]: { ...cur[groupId], ...val } }; return { ...gs, [p.id]: next }; });
-    setCart(c => { if (!c[p.id]) return c; const cur = c[p.id].groups || defaultGroupSel(p); return { ...c, [p.id]: { ...c[p.id], groups: { ...cur, [groupId]: { ...cur[groupId], ...val } } } }; });
-  };
-  const groupsDelta = (p: MetaShopProduct, sel: GroupSel): number => {
-    let d = 0;
-    (p.optionGroups || []).forEach(g => {
-      const s = sel[g.id]; if (!s) return;
-      if (g.type === 'counter') d += (s.count || 0) * (g.unitPrice || 0);
-      else (s.optionIds || []).forEach(oid => { const o = (g.options || []).find(x => x.id === oid); if (o) d += o.priceDelta || 0; });
-    });
-    return d;
-  };
-  const groupsText = (p: MetaShopProduct, sel: GroupSel): string => {
-    const parts: string[] = [];
-    (p.optionGroups || []).forEach(g => {
-      const s = sel[g.id]; if (!s) return;
-      const gl = L(g.label, g.labelEn);
-      if (g.type === 'counter') { if (s.count) parts.push(`${gl}: ${s.count}`); }
-      else { const names = (s.optionIds || []).map(oid => { const o = (g.options || []).find(x => x.id === oid); return o ? L(o.label, o.labelEn) : ''; }).filter(Boolean); if (names.length) parts.push(`${gl}: ${names.join('، ')}`); }
-    });
-    return parts.join(' • ');
-  };
-
   const cartItems = useMemo(() => Object.keys(cart).map(id => {
     const p = products.find(x => x.id === id); if (!p) return null;
-    const { qty, optionId, groups } = cart[id];
-    const gSel = groups || {};
-    const rate = unitPrice(p, optionId) + groupsDelta(p, gSel);
-    const gTxt = groupsText(p, gSel);
-    const optTxt = optLabel(p, optionId);
-    const optionText = [optTxt, gTxt].filter(Boolean).join(' • ');
-    return { p, qty, optionId, rate, line: rate * qty, optionText };
+    const { qty, optionId } = cart[id]; const rate = unitPrice(p, optionId);
+    return { p, qty, optionId, rate, line: rate * qty, optionText: optLabel(p, optionId) };
   }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string }[], [cart, products, uiLang]);
 
   const cartCount = Object.keys(cart).length;
@@ -275,7 +230,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
   const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
 
-  const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); const groups = currentGroupSel(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId, groups } })); };
+  const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } })); };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
 
   const submit = async () => {
@@ -322,9 +277,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
-    const groups = p.optionGroups || [];
-    const gSel = currentGroupSel(p);
-    const curPrice = unitPrice(p, selId) + groupsDelta(p, gSel);
+    const curPrice = unitPrice(p, selId);
     return (
       <div className="ms-buy">
         {opts.length > 0 && (
@@ -335,38 +288,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <span className="ms-opt-price">{money(o.price)}</span>
               </button>
             ))}
-          </div>
-        )}
-        {/* Option groups (occupancy, extras, ...) — shown in the detail modal */}
-        {big && groups.length > 0 && (
-          <div className="ms-groups">
-            {groups.map(g => {
-              const s = gSel[g.id] || {};
-              return (
-                <div className="ms-group" key={g.id}>
-                  <div className="ms-group-label">{L(g.label, g.labelEn)}{g.required && <span className="ms-req">*</span>}</div>
-                  {g.type === 'counter' ? (
-                    <div className="ms-counter">
-                      <button onClick={() => updateGroupSel(p, g.id, { count: Math.max(g.min || 0, (s.count || 0) - 1) })}>−</button>
-                      <span>{s.count || 0}</span>
-                      <button onClick={() => updateGroupSel(p, g.id, { count: Math.min(g.max ?? 99, (s.count || 0) + 1) })}>+</button>
-                      {g.unitPrice ? <span className="ms-group-hint">+{money(g.unitPrice)}/ {L(g.label, g.labelEn)}</span> : null}
-                    </div>
-                  ) : (
-                    <div className="ms-group-opts">
-                      {(g.options || []).map(o => {
-                        const on = (s.optionIds || []).includes(o.id);
-                        const choose = () => {
-                          if (g.type === 'select') updateGroupSel(p, g.id, { optionIds: [o.id] });
-                          else updateGroupSel(p, g.id, { optionIds: on ? (s.optionIds || []).filter(x => x !== o.id) : [...(s.optionIds || []), o.id] });
-                        };
-                        return <button key={o.id} className={`ms-gopt ${on ? 'on' : ''}`} onClick={choose}>{L(o.label, o.labelEn)}{o.priceDelta ? <span className="ms-gopt-price"> +{money(o.priceDelta)}</span> : null}</button>;
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
         )}
         <div className="ms-prices">
@@ -387,10 +308,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
           </div>
         ) : (
-          // Products with option groups must be configured in the modal first
-          (!big && groups.length > 0)
-            ? <button className="ms-add" onClick={() => setDetail(p)}>{t.configure}</button>
-            : <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
+          <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
         )}
       </div>
     );
@@ -866,18 +784,6 @@ const MS_CSS = `
 .ms-opt-label { font-size:10px; font-weight:700; color:#475569; line-height:1.2; }
 .ms-opt.on .ms-opt-label { color:var(--ms-primary); }
 .ms-opt-price { font-size:11px; font-weight:800; color:#0f172a; }
-/* option groups (occupancy / extras) */
-.ms-groups { display:flex; flex-direction:column; gap:10px; margin:6px 0 10px; padding:10px; background:#f8fafc; border:1px solid #eef0f3; border-radius:12px; }
-.ms-group-label { font-size:12px; font-weight:700; color:var(--ms-heading,#1f2a18); margin-bottom:5px; }
-.ms-req { color:#ef4444; margin-inline-start:3px; }
-.ms-group-opts { display:flex; flex-wrap:wrap; gap:6px; }
-.ms-gopt { border:1.5px solid #e2e8f0; background:#fff; border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; color:#475569; cursor:pointer; transition:all .15s; }
-.ms-gopt.on { border-color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 10%, #fff); color:var(--ms-primary); }
-.ms-gopt-price { font-size:11px; font-weight:800; }
-.ms-counter { display:inline-flex; align-items:center; gap:10px; }
-.ms-counter button { width:30px; height:30px; border-radius:8px; border:1.5px solid #e2e8f0; background:#fff; font-size:18px; font-weight:700; color:#475569; cursor:pointer; line-height:1; }
-.ms-counter > span { min-width:24px; text-align:center; font-weight:800; color:#0f172a; }
-.ms-group-hint { font-size:11px; color:#94a3b8; font-weight:600; }
 .ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); }
 .ms-add.in { background:#10b981; }
 .ms-add.lg { margin-top:8px; padding:13px; font-size:14px; }

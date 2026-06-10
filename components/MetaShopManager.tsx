@@ -129,9 +129,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
-  const editorImportRef = useRef<HTMLInputElement>(null);   // import a JSON onto the shop being edited
-  const replaceFileRef = useRef<HTMLInputElement>(null);    // import a JSON onto a shop from the list
-  const [replaceTargetId, setReplaceTargetId] = useState<string | null>(null);
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
@@ -141,9 +138,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     newShop: T ? 'فروشگاه جدید' : 'New Shop', importJson: T ? 'ساخت از JSON' : 'Import from JSON',
     empty: T ? 'هنوز فروشگاهی نساخته‌اید.' : 'No shops yet.',
     edit: T ? 'ویرایش' : 'Edit', del: T ? 'حذف' : 'Delete', open: T ? 'باز کردن' : 'Open', copy: T ? 'کپی لینک' : 'Copy link', copied: T ? 'کپی شد ✓' : 'Copied ✓',
-    exportJson: T ? 'خروجی JSON' : 'Export JSON', importToThis: T ? 'ایمپورت روی این شاپ' : 'Import into this shop',
-    replaceConfirm: T ? 'محتوای این فروشگاه با فایل JSON جایگزین شود؟ (لینک و شناسه حفظ می‌شود)' : 'Replace this shop\'s content from the JSON file? (link & id are kept)',
-    importedOk: T ? 'وارد شد — برای ثبت نهایی ذخیره کنید.' : 'Imported — Save to persist.',
     orders: T ? 'سفارش‌ها' : 'Orders', active: T ? 'فعال' : 'Active', inactive: T ? 'غیرفعال' : 'Inactive',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
@@ -191,11 +185,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
     rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
-    optGroups: T ? 'گزینه‌های انتخابی (مثل نفرات هتل، کودک، صبحانه)' : 'Selectable options (hotel guests, child, breakfast...)',
-    optGroupsHint: T ? 'برای هر گروه، نوع را مشخص کن: «انتخاب یکی»، «چندانتخابی» یا «شمارنده». قیمت هر گزینه به مبلغ پایه اضافه می‌شود.' : 'For each group choose a type: single-select, multi-select, or counter. Each option price is added on top of the base price.',
-    addGroup: T ? 'افزودن گروه' : 'Add group', gLabel: T ? 'عنوان گروه (فارسی)' : 'Group label (FA)', gLabelEn: T ? 'عنوان گروه (انگلیسی)' : 'Group label (EN)',
-    gType: T ? 'نوع' : 'Type', gtSelect: T ? 'انتخاب یکی' : 'Single-select', gtCheckbox: T ? 'چندانتخابی' : 'Multi-select', gtCounter: T ? 'شمارنده' : 'Counter',
-    gRequired: T ? 'اجباری' : 'Required', addOpt: T ? 'افزودن گزینه' : 'Add option', oDelta: T ? 'اضافه قیمت' : '+Price', gMin: T ? 'حداقل' : 'Min', gMax: T ? 'حداکثر' : 'Max', gUnitPrice: T ? 'قیمت هر واحد' : 'Per-unit price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
     ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
@@ -213,46 +202,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
 
   const shopUrl = (shop: MetaShop) => `${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`;
   const copyLink = (shop: MetaShop) => { navigator.clipboard.writeText(shopUrl(shop)); setCopiedId(shop.id); setTimeout(() => setCopiedId(null), 1800); };
-
-  // Export a shop as a downloadable JSON file
-  const exportShop = (shop: MetaShop) => {
-    const blob = new Blob([JSON.stringify(shop, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `metashop-${shop.slug || shop.id}.json`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Import a JSON file onto an EXISTING shop from the list (keeps id, slug, createdAt)
-  const handleReplaceFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; const target = metaShops.find(s => s.id === replaceTargetId);
-    e.target.value = '';
-    if (!f || !target) { setReplaceTargetId(null); return; }
-    const r = new FileReader();
-    r.onload = async ev => {
-      try {
-        const merged = importFromJson(String(ev.target?.result || ''), target);
-        await onSaveMetaShop({ ...merged, id: target.id, slug: target.slug, createdAt: target.createdAt });
-      } catch { alert(t.importErr); }
-      finally { setReplaceTargetId(null); }
-    };
-    r.readAsText(f);
-  };
-
-  // Import a JSON file into the shop currently open in the editor (keeps id, slug, createdAt)
-  const handleEditorImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; e.target.value = '';
-    if (!f || !draft) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      try {
-        const merged = importFromJson(String(ev.target?.result || ''), draft);
-        setDraft({ ...merged, id: draft.id, slug: draft.slug || merged.slug, createdAt: draft.createdAt });
-        alert(t.importedOk);
-      } catch { alert(t.importErr); }
-    };
-    r.readAsText(f);
-  };
 
   const startNew = () => { setDraft(blankShop()); setMode('editor'); };
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
@@ -295,17 +244,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
   const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
-
-  // ── Option groups (occupancy/extras) ──
-  type OG = import('../types').MetaShopOptionGroup;
-  const groupsOf = (idx: number): OG[] => draft!.products[idx].optionGroups || [];
-  const setGroups = (idx: number, gs: OG[]) => updProduct(idx, { optionGroups: gs.length ? gs : undefined });
-  const addGroup = (idx: number) => setGroups(idx, [...groupsOf(idx), { id: `g-${Date.now()}`, label: '', type: 'select', options: [{ id: `o-${Date.now()}`, label: '', priceDelta: 0 }] }]);
-  const updGroup = (idx: number, gIdx: number, patch: Partial<OG>) => { const gs = [...groupsOf(idx)]; gs[gIdx] = { ...gs[gIdx], ...patch }; setGroups(idx, gs); };
-  const removeGroup = (idx: number, gIdx: number) => setGroups(idx, groupsOf(idx).filter((_, i) => i !== gIdx));
-  const addGroupOpt = (idx: number, gIdx: number) => { const g = groupsOf(idx)[gIdx]; updGroup(idx, gIdx, { options: [...(g.options || []), { id: `o-${Date.now()}`, label: '', priceDelta: 0 }] }); };
-  const updGroupOpt = (idx: number, gIdx: number, oIdx: number, patch: Partial<import('../types').MetaShopOption>) => { const g = groupsOf(idx)[gIdx]; const opts = [...(g.options || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updGroup(idx, gIdx, { options: opts }); };
-  const removeGroupOpt = (idx: number, gIdx: number, oIdx: number) => { const g = groupsOf(idx)[gIdx]; updGroup(idx, gIdx, { options: (g.options || []).filter((_, i) => i !== oIdx) }); };
 
   // ── Discount codes ──
   const discounts = () => draft?.discounts || [];
@@ -428,8 +366,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                       <a href={shopUrl(s)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
                       <button onClick={() => copyLink(s)} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === s.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
-                      <button onClick={() => exportShop(s)} title={t.exportJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
-                      {!readonly && <button onClick={() => { if (confirm(t.replaceConfirm)) { setReplaceTargetId(s.id); setTimeout(() => replaceFileRef.current?.click(), 0); } }} title={t.importToThis} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"><IconUpload className="w-3.5 h-3.5" /></button>}
                       {!readonly && <button onClick={() => startEdit(s)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
                       {!readonly && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaShop(s.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                     </div>
@@ -441,7 +377,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         )}
 
         {importModalEl()}
-        <input type="file" ref={replaceFileRef} className="hidden" accept=".json,application/json" onChange={handleReplaceFile} />
       </div>
     );
   }
@@ -492,10 +427,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <button onClick={() => { setMode('list'); setDraft(null); }} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
         <div className="flex items-center gap-2">
           <a href={draft.slug ? shopUrl(draft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
-          <button onClick={() => exportShop(draft)} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1" title={t.exportJson}>⤓ JSON</button>
-          {!readonly && <button onClick={() => editorImportRef.current?.click()} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1" title={t.importToThis}><IconUpload className="w-3.5 h-3.5" />{t.importJson}</button>}
           {!readonly && <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
-          <input type="file" ref={editorImportRef} className="hidden" accept=".json,application/json" onChange={handleEditorImport} />
         </div>
       </div>
 
@@ -762,50 +694,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                           <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updRate(idx, oIdx, { labelEn: e.target.value })} />
                           <input className={fld + ' max-w-[110px]'} type="number" placeholder={t.optPrice} value={o.price ?? ''} onChange={e => updRate(idx, oIdx, { price: parseFloat(e.target.value) || 0 })} />
                           <button onClick={() => removeRate(idx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-4 h-4" /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Option groups (occupancy / extras) */}
-                <div className="mt-3 border-t border-gray-100 pt-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold text-gray-600">{t.optGroups}</label>
-                    <button onClick={() => addGroup(idx)} className="text-[11px] px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addGroup}</button>
-                  </div>
-                  {groupsOf(idx).length === 0 ? <p className="text-[11px] text-gray-400">{t.optGroupsHint}</p> : (
-                    <div className="space-y-2">
-                      {groupsOf(idx).map((g, gIdx) => (
-                        <div key={g.id} className="border border-gray-200 rounded-lg p-2 bg-gray-50/50">
-                          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                            <input className={fld + ' max-w-[140px]'} placeholder={t.gLabel} value={g.label} onChange={e => updGroup(idx, gIdx, { label: e.target.value })} />
-                            <input className={fld + ' max-w-[140px] dir-ltr'} placeholder={t.gLabelEn} value={g.labelEn || ''} onChange={e => updGroup(idx, gIdx, { labelEn: e.target.value })} />
-                            <select className={fld + ' max-w-[130px] bg-white'} value={g.type} onChange={e => updGroup(idx, gIdx, { type: e.target.value as any })}>
-                              <option value="select">{t.gtSelect}</option><option value="checkbox">{t.gtCheckbox}</option><option value="counter">{t.gtCounter}</option>
-                            </select>
-                            <label className="flex items-center gap-1 text-[10px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={!!g.required} onChange={e => updGroup(idx, gIdx, { required: e.target.checked })} />{t.gRequired}</label>
-                            <button onClick={() => removeGroup(idx, gIdx)} className="text-red-400 hover:text-red-600 ml-auto"><IconTrash className="w-4 h-4" /></button>
-                          </div>
-                          {g.type === 'counter' ? (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <input className={fld + ' max-w-[80px]'} type="number" placeholder={t.gMin} value={g.min ?? ''} onChange={e => updGroup(idx, gIdx, { min: parseInt(e.target.value) || 0 })} />
-                              <input className={fld + ' max-w-[80px]'} type="number" placeholder={t.gMax} value={g.max ?? ''} onChange={e => updGroup(idx, gIdx, { max: parseInt(e.target.value) || undefined })} />
-                              <input className={fld + ' max-w-[120px]'} type="number" placeholder={t.gUnitPrice} value={g.unitPrice ?? ''} onChange={e => updGroup(idx, gIdx, { unitPrice: parseFloat(e.target.value) || 0 })} />
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              {(g.options || []).map((o, oIdx) => (
-                                <div key={o.id} className="flex items-center gap-1.5">
-                                  <input className={fld} placeholder={t.optLabel} value={o.label} onChange={e => updGroupOpt(idx, gIdx, oIdx, { label: e.target.value })} />
-                                  <input className={fld + ' dir-ltr'} placeholder={t.optLabelEn} value={o.labelEn || ''} onChange={e => updGroupOpt(idx, gIdx, oIdx, { labelEn: e.target.value })} />
-                                  <input className={fld + ' max-w-[100px]'} type="number" placeholder={t.oDelta} value={o.priceDelta ?? ''} onChange={e => updGroupOpt(idx, gIdx, oIdx, { priceDelta: parseFloat(e.target.value) || 0 })} />
-                                  <button onClick={() => removeGroupOpt(idx, gIdx, oIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-3.5 h-3.5" /></button>
-                                </div>
-                              ))}
-                              <button onClick={() => addGroupOpt(idx, gIdx)} className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addOpt}</button>
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>

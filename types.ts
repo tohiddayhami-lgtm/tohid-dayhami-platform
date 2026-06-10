@@ -572,18 +572,6 @@ export interface MetaShopPage {
   i18n?: Record<string, Record<string, string>>; // per-language: { zh: { label, body, description } }
 }
 
-// Optional configurable choices per product (e.g. hotel: occupancy/adults/children, extras)
-export interface MetaShopOption { id: string; label: string; labelEn?: string; priceDelta?: number; }
-export interface MetaShopOptionGroup {
-  id: string;
-  label: string; labelEn?: string;
-  type: 'select' | 'checkbox' | 'counter';
-  required?: boolean;
-  options?: MetaShopOption[];   // for 'select' (one choice) and 'checkbox' (many choices)
-  // for 'counter' (e.g. adults / children) — a number the customer increments
-  min?: number; max?: number; unitPrice?: number; // unitPrice added per counted unit
-}
-
 export interface MetaShopProduct {
   id: string;
   name: string;
@@ -611,7 +599,6 @@ export interface MetaShopProduct {
   colors?: MetaShopColorOption[];
   origin?: { name: string; flagUrl?: string };
   features?: { label: string; value: string }[];
-  optionGroups?: MetaShopOptionGroup[]; // configurable add-ons (occupancy, extras, ...)
 }
 
 export interface MetaShop {
