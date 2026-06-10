@@ -160,6 +160,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     contact: T ? 'تماس و فوتر' : 'Contact & footer', routing: T ? 'ارجاع سفارش‌ها' : 'Order routing', productsT: T ? 'محصولات / خدمات' : 'Products / Services',
     name: T ? 'نام فروشگاه' : 'Shop name', slug: T ? 'شناسه لینک (slug)' : 'Link slug', type: T ? 'نوع' : 'Type',
     code: T ? 'کد فروشگاه' : 'Shop code', regen: T ? 'کد جدید' : 'New code', copyCode: T ? 'کپی کد' : 'Copy code', codeCopied: T ? 'کپی شد ✓' : 'Copied ✓',
+    sfTagFa: T ? 'متن نوار ویترین (فارسی)' : 'Storefront banner (FA)', sfTagEn: T ? 'متن نوار ویترین (انگلیسی)' : 'Storefront banner (EN)',
+    sfColor: T ? 'رنگ شاخص ویترین در بازارچه' : 'Storefront color in bazaar', sfColorHint: T ? 'اختیاری — برای متمایز شدن در لیست‌ها' : 'Optional — to stand out in lists', sfClear: T ? 'پیش‌فرض' : 'Default',
     typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', currency: T ? 'واحد پول' : 'Currency',
     defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
     langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند. کد مثل en، fa، zh، ar. ترجمه‌ی محتوا (نام/توضیحات محصول) را در همان محصول وارد کنید.' : 'Languages the customer can switch between. Code like en, fa, zh, ar. Enter content translations on each product.',
@@ -622,6 +624,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
           <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld} value={draft.orderThankYouText || ''} onChange={e => upd({ orderThankYouText: e.target.value })} /></div>
+
+          {/* Storefront banner (bazaar lists) — optional */}
+          <div><label className={lbl}>{t.sfTagFa}</label><input className={fld} value={draft.storefrontTagline || ''} onChange={e => upd({ storefrontTagline: e.target.value })} placeholder={T ? 'مثلا: 🔥 جدید / تخفیف ویژه' : 'e.g. 🔥 New / Special offer'} /></div>
+          <div><label className={lbl}>{t.sfTagEn}</label><input className={fld + ' dir-ltr'} value={draft.storefrontTaglineEn || ''} onChange={e => upd({ storefrontTaglineEn: e.target.value })} placeholder="e.g. 🔥 New" /></div>
+          <div className="md:col-span-2"><label className={lbl}>{t.sfColor} <span className="text-gray-400 font-normal">{t.sfColorHint}</span></label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={draft.storefrontColor || draft.theme?.cover || '#2d4a1a'} onChange={e => upd({ storefrontColor: e.target.value })} className="w-10 h-9 rounded border border-gray-300 cursor-pointer" />
+              <input className={fld + ' dir-ltr flex-1'} value={draft.storefrontColor || ''} onChange={e => upd({ storefrontColor: e.target.value })} placeholder={draft.theme?.cover || '#2d4a1a'} />
+              {draft.storefrontColor && <button type="button" onClick={() => upd({ storefrontColor: '' })} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 whitespace-nowrap">{t.sfClear}</button>}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -645,6 +645,10 @@ export interface MetaShop {
   directoryCategories?: string[];
   directorySubcategory?: string;
   code?: string;                     // unique 4-char alphanumeric code (searchable; shown on the storefront)
+  // Optional storefront banner in the bazaar/directory lists
+  storefrontTagline?: string;        // short text shown on the storefront banner (e.g. "🔥 جدید")
+  storefrontTaglineEn?: string;
+  storefrontColor?: string;          // custom banner/accent color to make this shop stand out in lists
   shopNumber?: string;               // (legacy) number that used to show on the storefront shutter
   pages?: MetaShopPage[];      // extra content tabs (About Us, Certifications, ...)
   productsTabLabel?: string;   // label for the built-in products tab (default localized)

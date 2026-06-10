@@ -98,12 +98,14 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
   };
 
   const Storefront: React.FC<{ shop: MetaShop }> = ({ shop }) => {
-    const accent = shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
+    const accent = (shop.storefrontColor && shop.storefrontColor.trim()) || shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
     const num = shopCodeOf(shop);
+    const tagline = ((T ? shop.storefrontTagline : (shop.storefrontTaglineEn || shop.storefrontTagline)) || '').trim();
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
-      <button className="msd-shop" onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
+      <button className={`msd-shop ${tagline ? 'has-banner' : ''}`} onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
+        {tagline && <div className="msd-banner">{tagline}</div>}
         {/* Awning */}
         <div className="msd-awning"><span className="msd-shop-name">{shop.title || shop.name}</span></div>
 
@@ -311,6 +313,9 @@ const MSD_CSS = `
 .msd-shop { position:relative; height:230px; border:0; padding:0; cursor:pointer; background:#fff; border-radius:14px 14px 10px 10px; overflow:hidden; box-shadow:0 8px 22px rgba(31,42,24,.12); text-align:center; transition:transform .25s, box-shadow .25s; display:block; width:100%; }
 .msd-shop:hover { transform:translateY(-6px); box-shadow:0 20px 44px rgba(31,42,24,.22); }
 .msd-shop:active { transform:translateY(-2px); }
+/* Optional top banner (custom per-shop tagline) */
+.msd-banner { position:absolute; top:0; inset-inline:0; z-index:6; background:var(--accent); color:#fff; font-size:10px; font-weight:800; letter-spacing:.01em; padding:4px 8px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; filter:brightness(.82); }
+.msd-shop.has-banner .msd-awning { padding-top:20px; }
 /* Awning */
 .msd-awning { position:relative; height:46px; background:var(--accent); display:flex; align-items:center; justify-content:center; padding:0 10px; z-index:4; }
 .msd-awning::after { content:''; position:absolute; bottom:-9px; left:0; right:0; height:10px; background:repeating-linear-gradient(90deg, var(--accent) 0 16px, #fff 16px 32px); -webkit-mask:linear-gradient(#000,#000); }
@@ -349,6 +354,8 @@ const MSD_CSS = `
 .msd-compact .msd-shop { height:150px; border-radius:11px 11px 8px 8px; box-shadow:0 5px 14px rgba(31,42,24,.10); }
 .msd-compact .msd-shop:hover { transform:translateY(-4px); box-shadow:0 14px 30px rgba(31,42,24,.18); }
 .msd-compact .msd-awning { height:32px; }
+.msd-compact .msd-banner { font-size:9px; padding:3px 7px; }
+.msd-compact .msd-shop.has-banner .msd-awning { padding-top:16px; }
 .msd-compact .msd-shop-name { font-size:10.5px; max-height:24px; }
 .msd-compact .msd-shutter { top:32px; padding-bottom:14px; }
 .msd-compact .msd-shutter-grip { bottom:7px; height:5px; }
