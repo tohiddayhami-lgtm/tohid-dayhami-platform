@@ -81,8 +81,10 @@ export const ReportManager: React.FC<Props> = ({ currentUser, personnel, lang, c
   }[lang];
 
   const filteredReports = useMemo(() => {
-    return reports.filter(r => r.userId === filterUserId && r.type === activeTab);
-  }, [reports, filterUserId, activeTab]);
+    // Non-master users can only ever see their own reports
+    const uid = isMaster ? filterUserId : currentUser.id;
+    return reports.filter(r => r.userId === uid && r.type === activeTab);
+  }, [reports, filterUserId, activeTab, isMaster, currentUser.id]);
 
   const handleAddTask = () => {
     if (!currentTask.trim()) return;
@@ -215,13 +217,17 @@ export const ReportManager: React.FC<Props> = ({ currentUser, personnel, lang, c
             <div className="flex items-center gap-3">
                 <IconSearch className="w-5 h-5 text-gray-400" />
                 <label className="text-sm font-bold text-gray-700">{t.filterUser}</label>
-                <select 
-                    className="outline-none bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 text-sm"
-                    value={filterUserId}
-                    onChange={(e) => setFilterUserId(e.target.value)}
-                >
-                    {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-                </select>
+                {isMaster ? (
+                    <select
+                        className="outline-none bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 text-sm"
+                        value={filterUserId}
+                        onChange={(e) => setFilterUserId(e.target.value)}
+                    >
+                        {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                    </select>
+                ) : (
+                    <span className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700">{currentUser.fullName}</span>
+                )}
             </div>
             {isMaster && config.topPerformerId && (
                 <div className="flex items-center gap-3 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-100 text-sm font-bold">

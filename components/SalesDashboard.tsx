@@ -379,9 +379,10 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                     <>
                         <button onClick={() => setActiveTab('all_sales')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'all_sales' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>{t.tabs.all}</button>
                         <button onClick={() => setActiveTab('commissions')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'commissions' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>{t.tabs.settings}</button>
+                        {/* Top sellers leaderboard — visible to master only */}
+                        <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'leaderboard' ? 'bg-white shadow text-amber-600' : 'text-gray-500'}`}>{t.tabs.top}</button>
                     </>
                 )}
-                <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'leaderboard' ? 'bg-white shadow text-amber-600' : 'text-gray-500'}`}>{t.tabs.top}</button>
             </div>
         </div>
 
@@ -763,8 +764,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
             </div>
         )}
 
-        {/* Leaderboard */}
-        {activeTab === 'leaderboard' && (
+        {/* Leaderboard — master only */}
+        {activeTab === 'leaderboard' && isMaster && (
             <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
                 <IconTrophy className="absolute top-10 left-10 w-64 h-64 text-white opacity-5 rotate-12" />
                 <h3 className="text-2xl font-black mb-8 relative z-10 text-center text-yellow-400 drop-shadow-md">{t.leaderboard.title}</h3>
