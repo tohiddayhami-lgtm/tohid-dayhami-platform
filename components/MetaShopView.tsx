@@ -729,14 +729,16 @@ const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, 
       </section>
     );
   }
-  // text page (optionally with side images)
+  // text page — text on top, then a tidy square-image gallery below
   return (
     <section className="ms-page">
       <h2 className="ms-page-title">{title}</h2>
-      <div className={`ms-text ${imgs.length ? 'has-img' : ''}`}>
-        {imgs.length > 0 && <div className="ms-text-imgs">{imgs.map((s, i) => <img key={i} src={s} alt="" loading="lazy" />)}</div>}
-        <div className="ms-text-paras">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
-      </div>
+      <div className="ms-text-paras ms-text-narrow">{paras.map((p, i) => <p key={i}>{p}</p>)}</div>
+      {imgs.length > 0 && (
+        <div className="ms-gallery ms-text-gallery">
+          {imgs.map((s, i) => <figure key={i} className="ms-gphoto"><img src={s} alt="" loading="lazy" /></figure>)}
+        </div>
+      )}
     </section>
   );
 };
@@ -780,6 +782,8 @@ const MS_CSS = `
 .ms-text-imgs img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:16px; }
 .ms-text-paras p { font-size:16px; line-height:1.85; color:var(--ms-text); margin-bottom:16px; }
 .ms-text-paras p:first-child { font-size:clamp(17px,2.2vw,20px); font-weight:600; color:var(--ms-heading,#1f2a18); }
+.ms-text-narrow { max-width:760px; margin:0 auto; }
+.ms-text-gallery { margin-top:28px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
 .ms-gallery { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); }
 .ms-gphoto { margin:0; aspect-ratio:1/1; border-radius:18px; overflow:hidden; background:#f1f5f9; border:1px solid #e2e8f0; }
 .ms-gphoto img { width:100%; height:100%; object-fit:cover; }
