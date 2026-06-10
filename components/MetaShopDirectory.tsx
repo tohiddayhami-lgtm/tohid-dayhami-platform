@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { MetaShop } from '../types';
+import { MetaShop, MetaBazaar } from '../types';
 import { Language } from '../App';
 
 interface Props {
   shops: MetaShop[];
   lang: Language;
   onOpenShop: (slug: string) => void;
+  bazaar?: MetaBazaar;
   title?: string;
   subtitle?: string;
 }
@@ -14,10 +15,11 @@ const CartIcon = ({ s = 16 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
 );
 
-export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, title, subtitle }) => {
+export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, bazaar, title, subtitle }) => {
   // Export-focused: default to English; bilingual toggle in the header.
-  const [uiLang, setUiLang] = useState<Language>('en');
+  const [uiLang, setUiLang] = useState<Language>((bazaar?.defaultLang as Language) || 'en');
   const T = uiLang === 'fa';
+  const groupBy = bazaar?.groupBy || 'category';
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<string>('all');
 
@@ -30,8 +32,10 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const f = nz(fa), e = nz(en); if (!f && !e) return null;
     return { key: (e || f).toLowerCase(), fa: f || e, en: e || f };
   };
-  // All categories a shop belongs to (bilingual + multi, with legacy fallbacks)
+  // Primary grouping of a shop: by city / country / category (bilingual + multi, legacy fallbacks)
   const catPairsOf = (s: MetaShop): Pair[] => {
+    if (groupBy === 'city') { const p = mkPair(s.city?.fa, s.city?.en); return p ? [p] : [{ key: '__other__', fa: 'سایر', en: 'Other' }]; }
+    if (groupBy === 'country') { const p = mkPair(s.country?.fa, s.country?.en); return p ? [p] : [{ key: '__other__', fa: 'سایر', en: 'Other' }]; }
     let pairs: (Pair | null)[] = [];
     if (s.directoryCats && s.directoryCats.length) pairs = s.directoryCats.map(c => mkPair(c.fa, c.en));
     else if (s.directoryCategories && s.directoryCategories.length) pairs = s.directoryCategories.map(c => mkPair(c, c));
@@ -88,9 +92,11 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
   const keyOrder = (keys: string[]) => keys.sort((a, b) => (a === '__other__' ? 1 : b === '__other__' ? -1 : a.localeCompare(b)));
 
+  const bzTitle = T ? (bazaar?.titleFa || bazaar?.titleEn) : (bazaar?.titleEn || bazaar?.titleFa);
+  const bzSub = T ? (bazaar?.subtitleFa || bazaar?.subtitleEn) : (bazaar?.subtitleEn || bazaar?.subtitleFa);
   const t = {
-    title: title || (T ? 'بازارچه فروشگاه‌ها' : 'Shops Bazaar'),
-    subtitle: subtitle || (T ? 'فروشگاه موردنظر را پیدا کنید و وارد شوید' : 'Find a shop and step inside'),
+    title: (bzTitle && bzTitle.trim()) || title || (T ? 'بازارچه فروشگاه‌ها' : 'Shops Bazaar'),
+    subtitle: (bzSub && bzSub.trim()) || subtitle || (T ? 'فروشگاه موردنظر را پیدا کنید و وارد شوید' : 'Find a shop and step inside'),
     search: T ? 'جستجوی فروشگاه یا محصول...' : 'Search shops or products...',
     all: T ? 'همه' : 'All',
     enter: T ? 'ورود به مغازه' : 'Enter shop',
@@ -135,7 +141,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     <div className="msd-root" dir={T ? 'rtl' : 'ltr'}>
       <style>{MSD_CSS}</style>
 
-      <header className="msd-cover">
+      <header className="msd-cover" style={bazaar?.coverColor ? { background: `linear-gradient(135deg, ${bazaar.coverColor}, #0f172a)` } : undefined}>
         <div className="msd-lang">
           <button className={uiLang === 'en' ? 'on' : ''} onClick={() => setUiLang('en')}>EN</button>
           <button className={uiLang === 'fa' ? 'on' : ''} onClick={() => setUiLang('fa')}>FA</button>
