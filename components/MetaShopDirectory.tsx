@@ -104,26 +104,28 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
-      <button className={`msd-shop ${tagline ? 'has-banner' : ''}`} onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
-        {tagline && <div className="msd-banner">{tagline}</div>}
-        {/* Awning */}
-        <div className="msd-awning"><span className="msd-shop-name">{shop.title || shop.name}</span></div>
-
-        {/* Shutter (rolls up on hover) */}
-        <div className="msd-shutter">
-          <div className="msd-shutter-grip" />
-          <div className="msd-plate" dir="ltr">{num}</div>
+      <button className="msd-shop" onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
+        {/* Fixed header: optional banner + title (title never moves) */}
+        <div className="msd-head">
+          {tagline && <div className="msd-banner">{tagline}</div>}
+          <div className="msd-awning"><span className="msd-shop-name">{shop.title || shop.name}</span></div>
         </div>
 
-        {/* Interior revealed under the shutter */}
-        <div className="msd-interior">
-          {shop.logo
-            ? <img className="msd-logo" src={shop.logo} alt="" />
-            : <div className="msd-logo-fallback" style={{ background: accent }}>{(shop.name || '?').charAt(0)}</div>}
-          <div className="msd-type">{shop.type === 'services' ? t.services : t.products} · {(shop.products || []).length} {t.items}</div>
-          {cats.length > 0 && <div className="msd-tags">{cats.map((c, i) => <span key={i}>{c}</span>)}</div>}
-          {sampleNames.length > 0 && <ul className="msd-samples">{sampleNames.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-          <span className="msd-enter"><CartIcon s={14} /> {t.enter}</span>
+        {/* Body: shutter (rolls up on hover) over the interior */}
+        <div className="msd-body">
+          <div className="msd-shutter">
+            <div className="msd-shutter-grip" />
+            <div className="msd-plate" dir="ltr">{num}</div>
+          </div>
+          <div className="msd-interior">
+            {shop.logo
+              ? <img className="msd-logo" src={shop.logo} alt="" />
+              : <div className="msd-logo-fallback" style={{ background: accent }}>{(shop.name || '?').charAt(0)}</div>}
+            <div className="msd-type">{shop.type === 'services' ? t.services : t.products} · {(shop.products || []).length} {t.items}</div>
+            {cats.length > 0 && <div className="msd-tags">{cats.map((c, i) => <span key={i}>{c}</span>)}</div>}
+            {sampleNames.length > 0 && <ul className="msd-samples">{sampleNames.map((n, i) => <li key={i}>{n}</li>)}</ul>}
+            <span className="msd-enter"><CartIcon s={14} /> {t.enter}</span>
+          </div>
         </div>
       </button>
     );
@@ -310,23 +312,26 @@ const MSD_CSS = `
 .msd-grid { display:grid; gap:18px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
 
 /* ── Storefront card ── */
-.msd-shop { position:relative; height:230px; border:0; padding:0; cursor:pointer; background:#fff; border-radius:14px 14px 10px 10px; overflow:hidden; box-shadow:0 8px 22px rgba(31,42,24,.12); text-align:center; transition:transform .25s, box-shadow .25s; display:block; width:100%; }
+.msd-shop { position:relative; height:230px; border:0; padding:0; cursor:pointer; background:#fff; border-radius:14px 14px 10px 10px; overflow:hidden; box-shadow:0 8px 22px rgba(31,42,24,.12); text-align:center; transition:transform .25s, box-shadow .25s; display:flex; flex-direction:column; width:100%; }
 .msd-shop:hover { transform:translateY(-6px); box-shadow:0 20px 44px rgba(31,42,24,.22); }
 .msd-shop:active { transform:translateY(-2px); }
-/* Optional top banner (custom per-shop tagline) */
-.msd-banner { position:absolute; top:0; inset-inline:0; z-index:6; background:var(--accent); color:#fff; font-size:10px; font-weight:800; letter-spacing:.01em; padding:4px 8px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; filter:brightness(.82); }
-.msd-shop.has-banner .msd-awning { padding-top:20px; }
-/* Awning */
-.msd-awning { position:relative; height:46px; background:var(--accent); display:flex; align-items:center; justify-content:center; padding:0 10px; z-index:4; }
-.msd-awning::after { content:''; position:absolute; bottom:-9px; left:0; right:0; height:10px; background:repeating-linear-gradient(90deg, var(--accent) 0 16px, #fff 16px 32px); -webkit-mask:linear-gradient(#000,#000); }
+/* Fixed header (title never moves) */
+.msd-head { position:relative; flex-shrink:0; z-index:4; }
+/* Optional top banner (custom per-shop tagline) — fills the area above the title */
+.msd-banner { background:var(--accent); filter:brightness(.78); color:#fff; font-size:14px; font-weight:900; letter-spacing:.01em; padding:8px 8px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 2px rgba(0,0,0,.3); }
+/* Awning (title) */
+.msd-awning { position:relative; height:46px; background:var(--accent); display:flex; align-items:center; justify-content:center; padding:0 10px; }
+.msd-awning::after { content:''; position:absolute; bottom:-9px; left:0; right:0; height:10px; background:repeating-linear-gradient(90deg, var(--accent) 0 16px, #fff 16px 32px); -webkit-mask:linear-gradient(#000,#000); z-index:5; }
 .msd-shop-name { color:#fff; font-size:13px; font-weight:800; line-height:1.15; max-height:34px; overflow:hidden; text-shadow:0 1px 2px rgba(0,0,0,.25); }
+/* Body holds the shutter + interior */
+.msd-body { position:relative; flex:1; overflow:hidden; }
 /* Shutter */
-.msd-shutter { position:absolute; top:46px; left:0; right:0; bottom:0; z-index:3; background:repeating-linear-gradient(180deg,#cfd3d6 0 7px,#b9bec2 7px 9px); border-top:2px solid rgba(0,0,0,.08); transition:transform .42s cubic-bezier(.4,.0,.2,1); display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:22px; }
+.msd-shutter { position:absolute; inset:0; z-index:3; background:repeating-linear-gradient(180deg,#cfd3d6 0 7px,#b9bec2 7px 9px); transition:transform .42s cubic-bezier(.4,.0,.2,1); display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:22px; }
 .msd-shop:hover .msd-shutter { transform:translateY(-101%); }
 .msd-shutter-grip { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); width:60%; height:6px; border-radius:4px; background:rgba(0,0,0,.18); }
 .msd-plate { background:#1f2a18; color:#ffd76a; font-weight:900; font-size:15px; letter-spacing:.04em; padding:6px 14px; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.3); border:2px solid #ffd76a; }
 /* Interior */
-.msd-interior { position:absolute; top:46px; left:0; right:0; bottom:0; z-index:2; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:12px; }
+.msd-interior { position:absolute; inset:0; z-index:2; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:12px; }
 .msd-logo { max-width:54px; max-height:46px; object-fit:contain; }
 .msd-logo-fallback { width:46px; height:46px; border-radius:12px; color:#fff; font-size:22px; font-weight:900; display:flex; align-items:center; justify-content:center; }
 .msd-type { font-size:11px; color:#8a7f63; font-weight:700; }
@@ -354,13 +359,12 @@ const MSD_CSS = `
 .msd-compact .msd-shop { height:150px; border-radius:11px 11px 8px 8px; box-shadow:0 5px 14px rgba(31,42,24,.10); }
 .msd-compact .msd-shop:hover { transform:translateY(-4px); box-shadow:0 14px 30px rgba(31,42,24,.18); }
 .msd-compact .msd-awning { height:32px; }
-.msd-compact .msd-banner { font-size:9px; padding:3px 7px; }
-.msd-compact .msd-shop.has-banner .msd-awning { padding-top:16px; }
+.msd-compact .msd-banner { font-size:12px; padding:6px 7px; }
 .msd-compact .msd-shop-name { font-size:10.5px; max-height:24px; }
-.msd-compact .msd-shutter { top:32px; padding-bottom:14px; }
+.msd-compact .msd-shutter { padding-bottom:14px; }
 .msd-compact .msd-shutter-grip { bottom:7px; height:5px; }
 .msd-compact .msd-plate { font-size:11px; padding:3px 10px; border-width:1.5px; }
-.msd-compact .msd-interior { top:32px; gap:3px; padding:8px; }
+.msd-compact .msd-interior { gap:3px; padding:8px; }
 .msd-compact .msd-logo { max-width:42px; max-height:30px; }
 .msd-compact .msd-logo-fallback { width:32px; height:32px; font-size:15px; border-radius:9px; }
 .msd-compact .msd-type { font-size:9.5px; }
