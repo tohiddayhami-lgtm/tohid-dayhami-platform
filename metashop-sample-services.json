@@ -20,7 +20,7 @@
   "orderThankYouText": "Thank you! Your service request has been received. Our team will contact you shortly. Keep your tracking code below.",
   "searchPlaceholder": "Search services...",
   "defaultLang": "fa",
-  "directoryCategory": "خدمات", "directorySubcategory": "اجاره و مشاوره", "shopNumber": "02",
+  "directoryCategories": ["Services", "Export"], "directorySubcategory": "Rental & Consulting", "shopNumber": "02",
   "languages": [
     { "code": "fa", "name": "فارسی", "rtl": true },
     { "code": "en", "name": "English" },

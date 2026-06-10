@@ -131,6 +131,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
+  const [dirCatInput, setDirCatInput] = useState('');
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
@@ -144,7 +145,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     downloadJson: T ? 'دانلود فایل JSON این فروشگاه' : 'Download this shop as JSON', updateJson: T ? 'به‌روزرسانی از فایل JSON' : 'Update from JSON file',
     dirT: T ? 'دسته‌بندی در بازارچه (لینک همه فروشگاه‌ها)' : 'Bazaar category (all-shops page)',
     dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته/زیردسته نمایش داده می‌شود.' : 'This shop appears under this category/subcategory on the all-shops page.',
-    dirCat: T ? 'دسته' : 'Category', dirSub: T ? 'زیردسته' : 'Subcategory', shopNo: T ? 'شماره مغازه (پلاک)' : 'Shop number (plate)',
+    dirCat: T ? 'دسته‌ها' : 'Categories', dirCatMulti: T ? '(می‌توانید چند دسته اضافه کنید)' : '(add several)', dirSub: T ? 'زیردسته' : 'Subcategory', shopNo: T ? 'شماره مغازه (پلاک)' : 'Shop number (plate)',
     allShopsLink: T ? 'لینک همه فروشگاه‌ها' : 'All-shops link', allShopsCopied: T ? 'کپی شد ✓' : 'Copied ✓', openBazaar: T ? 'بازارچه' : 'Bazaar',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره فروشگاه' : 'Save shop', cancel: T ? 'انصراف' : 'Cancel',
     basics: T ? 'اطلاعات پایه' : 'Basics', theme: T ? 'رنگ‌بندی قالب' : 'Theme', cover: T ? 'کاور و معرفی' : 'Cover & intro',
@@ -239,6 +240,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updTheme = (patch: Partial<MetaShop['theme']>) => setDraft(d => d ? { ...d, theme: { ...d.theme, ...patch } } : d);
+  // Directory categories (multi): a shop can appear under several bazaar categories
+  const dirCats = (): string[] => (draft?.directoryCategories && draft.directoryCategories.length) ? draft!.directoryCategories! : (draft?.directoryCategory ? [draft.directoryCategory] : []);
+  const addDirCat = (val: string) => { const v = val.trim(); if (!v) { setDirCatInput(''); return; } const cur = dirCats(); if (!cur.includes(v)) { const next = [...cur, v]; upd({ directoryCategories: next, directoryCategory: next[0] }); } setDirCatInput(''); };
+  const removeDirCat = (v: string) => { const next = dirCats().filter(c => c !== v); upd({ directoryCategories: next, directoryCategory: next[0] || '' }); };
 
   const save = async () => {
     if (!draft) return;
@@ -488,11 +493,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dirT}</h5>
           <p className="text-xs text-gray-500 mb-3">{t.dirHint}</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div><label className={lbl}>{t.dirCat}</label><input className={fld} value={draft.directoryCategory || ''} onChange={e => upd({ directoryCategory: e.target.value })} list="msd-dir-cats" placeholder={T ? 'مثلا: مواد غذایی' : 'e.g. Food'} /></div>
+            <div className="md:col-span-1">
+              <label className={lbl}>{t.dirCat} <span className="text-gray-400 font-normal">{t.dirCatMulti}</span></label>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {dirCats().map(c => <span key={c} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2.5 py-1 text-xs font-medium">{c}<button onClick={() => removeDirCat(c)} className="text-indigo-400 hover:text-red-500">✕</button></span>)}
+              </div>
+              <input className={fld} value={dirCatInput} onChange={e => setDirCatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addDirCat(dirCatInput); } }} onBlur={() => addDirCat(dirCatInput)} list="msd-dir-cats" placeholder={T ? 'دسته را بنویس و Enter بزن…' : 'Type a category, press Enter…'} />
+            </div>
             <div><label className={lbl}>{t.dirSub}</label><input className={fld} value={draft.directorySubcategory || ''} onChange={e => upd({ directorySubcategory: e.target.value })} list="msd-dir-subs" placeholder={T ? 'مثلا: زعفران' : 'e.g. Saffron'} /></div>
             <div><label className={lbl}>{t.shopNo}</label><input className={fld + ' dir-ltr'} value={draft.shopNumber || ''} onChange={e => upd({ shopNumber: e.target.value })} placeholder={T ? 'مثلا: 12' : 'e.g. 12'} /></div>
           </div>
-          <datalist id="msd-dir-cats">{Array.from(new Set(metaShops.map(s => s.directoryCategory).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
+          <datalist id="msd-dir-cats">{Array.from(new Set(metaShops.flatMap(s => [...(s.directoryCategories || []), s.directoryCategory]).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
           <datalist id="msd-dir-subs">{Array.from(new Set(metaShops.map(s => s.directorySubcategory).filter(Boolean))).map(c => <option key={c} value={c as string} />)}</datalist>
         </div>
 

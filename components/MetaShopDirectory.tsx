@@ -15,39 +15,56 @@ const CartIcon = ({ s = 16 }: { s?: number }) => (
 );
 
 export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, title, subtitle }) => {
-  const T = lang === 'fa';
+  // Export-focused: default to English; bilingual toggle in the header.
+  const [uiLang, setUiLang] = useState<Language>('en');
+  const T = uiLang === 'fa';
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<string>('all');
 
   const OTHER = T ? 'سایر' : 'Other';
   const live = useMemo(() => shops.filter(s => s.isActive !== false), [shops]);
 
+  // All categories a shop belongs to (multi-category aware, with legacy fallback)
+  const catsOf = (s: MetaShop): string[] => {
+    const list = [...(s.directoryCategories || []), ...(s.directoryCategory ? [s.directoryCategory] : [])]
+      .map(c => (c || '').trim()).filter(Boolean);
+    const uniq = Array.from(new Set(list));
+    return uniq.length ? uniq : [OTHER];
+  };
+  // Stable number per shop (by position), so a shop shown in 2 categories keeps one number
+  const numberOf = useMemo(() => {
+    const m: Record<string, string> = {};
+    live.forEach((s, i) => { m[s.id] = (s.shopNumber && s.shopNumber.trim()) || String(i + 1).padStart(2, '0'); });
+    return m;
+  }, [live]);
+
   // Search filter
   const matched = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return live;
     return live.filter(s => {
-      const hay = `${s.name} ${s.title || ''} ${s.directoryCategory || ''} ${s.directorySubcategory || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase();
+      const hay = `${s.name} ${s.title || ''} ${catsOf(s).join(' ')} ${s.directorySubcategory || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase();
       return hay.includes(q);
     });
   }, [live, search]);
 
-  // Categories present
+  // Categories present (a shop can contribute to several)
   const categories = useMemo(() => {
     const set: string[] = [];
-    live.forEach(s => { const c = s.directoryCategory?.trim() || OTHER; if (!set.includes(c)) set.push(c); });
+    live.forEach(s => catsOf(s).forEach(c => { if (!set.includes(c)) set.push(c); }));
     return set;
   }, [live, OTHER]);
 
-  // Group: category -> subcategory -> shops
+  // Group: category -> subcategory -> shops (a shop appears under each of its categories)
   const grouped = useMemo(() => {
-    const visible = matched.filter(s => activeCat === 'all' || (s.directoryCategory?.trim() || OTHER) === activeCat);
     const byCat: Record<string, Record<string, MetaShop[]>> = {};
-    visible.forEach(s => {
-      const c = s.directoryCategory?.trim() || OTHER;
+    matched.forEach(s => {
       const sub = s.directorySubcategory?.trim() || '';
-      (byCat[c] = byCat[c] || {});
-      (byCat[c][sub] = byCat[c][sub] || []).push(s);
+      catsOf(s).forEach(c => {
+        if (activeCat !== 'all' && c !== activeCat) return;
+        (byCat[c] = byCat[c] || {});
+        (byCat[c][sub] = byCat[c][sub] || []).push(s);
+      });
     });
     return byCat;
   }, [matched, activeCat, OTHER]);
@@ -67,9 +84,9 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     count: (n: number) => T ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
   };
 
-  const Storefront: React.FC<{ shop: MetaShop; index: number }> = ({ shop, index }) => {
+  const Storefront: React.FC<{ shop: MetaShop }> = ({ shop }) => {
     const accent = shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
-    const num = (shop.shopNumber && shop.shopNumber.trim()) || String(index + 1).padStart(2, '0');
+    const num = numberOf[shop.id] || '';
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
@@ -97,13 +114,15 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     );
   };
 
-  let runningIndex = 0;
-
   return (
     <div className="msd-root" dir={T ? 'rtl' : 'ltr'}>
       <style>{MSD_CSS}</style>
 
       <header className="msd-cover">
+        <div className="msd-lang">
+          <button className={uiLang === 'en' ? 'on' : ''} onClick={() => setUiLang('en')}>EN</button>
+          <button className={uiLang === 'fa' ? 'on' : ''} onClick={() => setUiLang('fa')}>FA</button>
+        </div>
         <div className="msd-cover-inner">
           <div className="msd-bazaar-emoji">🏪</div>
           <h1>{t.title}</h1>
@@ -135,7 +154,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
                 <div key={sub || '_'} className="msd-subsection">
                   {sub && <h3 className="msd-sub-title">‹ {sub} ›</h3>}
                   <div className="msd-grid">
-                    {subs[sub].map(s => <Storefront key={s.id} shop={s} index={runningIndex++} />)}
+                    {subs[sub].map(s => <Storefront key={`${cat}-${sub}-${s.id}`} shop={s} />)}
                   </div>
                 </div>
               ))}
@@ -153,6 +172,9 @@ const MSD_CSS = `
 .msd-cover { background:linear-gradient(135deg,#1f2a18,#2d4a1a); color:#fdfbf6; text-align:center; padding:54px 20px 44px; position:relative; overflow:hidden; }
 .msd-cover::after { content:''; position:absolute; inset:0; background-image:repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 22px, transparent 22px 44px); pointer-events:none; }
 .msd-cover-inner { position:relative; z-index:1; }
+.msd-lang { position:absolute; top:14px; inset-inline-end:16px; z-index:2; display:flex; border:1px solid rgba(255,255,255,.3); border-radius:8px; overflow:hidden; }
+.msd-lang button { padding:5px 11px; font-size:11px; font-weight:800; background:transparent; color:rgba(255,255,255,.75); border:none; cursor:pointer; }
+.msd-lang button.on { background:#fff; color:#1f2a18; }
 .msd-bazaar-emoji { font-size:40px; margin-bottom:6px; }
 .msd-cover h1 { font-size:clamp(24px,4.5vw,40px); font-weight:900; letter-spacing:-.02em; }
 .msd-cover p { opacity:.85; margin-top:6px; font-size:15px; }
