@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -801,6 +801,35 @@ export const lookupMetaShopOrders = async (phone: string): Promise<MetaShopOrder
         const snap = await getDocs(q);
         return snap.docs.map(d => d.data() as MetaShopOrder).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch { return []; }
+};
+
+// ── Meta Bazaars (curated multi-level shop directories) ──
+export const saveMetaBazaarToCloud = async (bazaar: MetaBazaar) => {
+    await setDoc(doc(db, "metaBazaars", bazaar.id), sanitizeData(bazaar));
+    logSystemAction('UPDATE', 'MetaBazaar', `بازارچه ${bazaar.name} ذخیره شد`, 'Master', bazaar.id);
+};
+export const deleteMetaBazaarFromCloud = async (id: string) => {
+    const ref = doc(db, "metaBazaars", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'MetaBazaar', `بازارچه حذف شد`, 'Master', id, data, 'metaBazaars');
+};
+export const subscribeToMetaBazaars = (callback: (bazaars: MetaBazaar[]) => void) => {
+    const q = query(collection(db, "metaBazaars"));
+    return onSnapshot(q, (snapshot) => {
+        const bazaars = snapshot.docs.map(d => d.data() as MetaBazaar);
+        bazaars.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        callback(bazaars);
+    }, (e) => {});
+};
+export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | null> => {
+    try {
+        const q = query(collection(db, "metaBazaars"), where("slug", "==", slug), limit(1));
+        const snap = await getDocs(q);
+        if (snap.empty) return null;
+        return snap.docs[0].data() as MetaBazaar;
+    } catch { return null; }
 };
 
 export const saveTaskToCloud = async (task: Task) => {

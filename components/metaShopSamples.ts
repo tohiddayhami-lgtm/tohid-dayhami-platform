@@ -1,4 +1,4 @@
-import { MetaShop } from '../types';
+import { MetaShop, MetaBazaar } from '../types';
 
 // Full sample shops in the native MetaShop import format.
 // Importing either one builds a complete shop (theme, cover/background image, logo,
@@ -148,13 +148,55 @@ export const SERVICES_SAMPLE: MetaShop = {
   ],
 };
 
-export const downloadSample = (kind: 'products' | 'services') => {
-  const data = kind === 'products' ? PRODUCTS_SAMPLE : SERVICES_SAMPLE;
+// Sample bazaar: a curated, multi-level directory (Country → City → Product group) of shops.
+export const BAZAAR_SAMPLE: MetaBazaar = {
+  id: 'sample-bazaar',
+  slug: 'tohid-bazaar',
+  name: 'Tohid Bazaar',
+  isActive: true,
+  defaultLang: 'en',
+  title: { fa: 'بازارچه توحید دیهمی', en: 'Tohid Dayhami Bazaar' },
+  subtitle: { fa: 'فروشگاه‌ها بر اساس کشور، شهر و گروه کالایی', en: 'Shops by country, city and product group' },
+  coverImage: '',
+  logo: '',
+  theme: { primary: '#2d4a1a', cover: '#1f2a18' },
+  // Optional names for each nesting level (depth 0,1,2,...). Leave empty to hide level labels.
+  levelLabels: [{ fa: 'کشور', en: 'Country' }, { fa: 'شهر', en: 'City' }, { fa: 'گروه کالایی', en: 'Product Group' }],
+  tree: [
+    {
+      id: 'n-iran', label: { fa: 'ایران', en: 'Iran' },
+      children: [
+        {
+          id: 'n-tehran', label: { fa: 'تهران', en: 'Tehran' },
+          children: [
+            { id: 'n-food', label: { fa: 'مواد غذایی', en: 'Food' }, shopSlugs: ['iranian-fresh-produce'] },
+            { id: 'n-services', label: { fa: 'خدمات', en: 'Services' }, shopSlugs: ['tohid-services'] },
+          ],
+        },
+        {
+          id: 'n-mashhad', label: { fa: 'مشهد', en: 'Mashhad' },
+          children: [
+            { id: 'n-saffron', label: { fa: 'زعفران', en: 'Saffron' }, shopSlugs: [] },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'n-oman', label: { fa: 'عمان', en: 'Oman' },
+      children: [
+        { id: 'n-muscat', label: { fa: 'مسقط', en: 'Muscat' }, shopSlugs: ['tohid-services'] },
+      ],
+    },
+  ],
+};
+
+export const downloadSample = (kind: 'products' | 'services' | 'bazaar') => {
+  const data = kind === 'products' ? PRODUCTS_SAMPLE : kind === 'services' ? SERVICES_SAMPLE : BAZAAR_SAMPLE;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `metashop-sample-${kind}.json`;
+  a.download = kind === 'bazaar' ? 'metashop-sample-bazaar.json' : `metashop-sample-${kind}.json`;
   a.click();
   URL.revokeObjectURL(url);
 };

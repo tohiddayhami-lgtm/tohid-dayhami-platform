@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaBazaar } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -68,6 +68,9 @@ interface Props {
   onDeleteMetaShop?: (id: string) => Promise<void>;
   onUpdateMetaShopOrder?: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   shopBaseUrl?: string;
+  metaBazaars?: MetaBazaar[];
+  onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
+  onDeleteMetaBazaar?: (id: string) => Promise<void>;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -109,6 +112,9 @@ export const AdminDashboard: React.FC<Props> = ({
   onDeleteMetaShop,
   onUpdateMetaShopOrder,
   shopBaseUrl = '',
+  metaBazaars = [],
+  onSaveMetaBazaar,
+  onDeleteMetaBazaar,
 }) => {
   const safeRoles = currentUser?.roles || [];
   const isAdmin = safeRoles.includes('مدیر');
@@ -1844,7 +1850,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!(isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices)} />
         )}
         {activeTab === 'metashop' && (isAdmin || isMaster) && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} readonly={!(isAdmin || isMaster)} />
+          <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={metaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!(isAdmin || isMaster)} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />

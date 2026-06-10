@@ -3,6 +3,8 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppC
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
+import { MetaBazaarManager } from './MetaBazaarManager';
+import { MetaBazaar } from '../types';
 import { Language } from '../App';
 
 interface Props {
@@ -15,6 +17,9 @@ interface Props {
   onSaveMetaShop: (shop: MetaShop) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
+  metaBazaars?: MetaBazaar[];
+  onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
+  onDeleteMetaBazaar?: (id: string) => Promise<void>;
   readonly?: boolean;
 }
 
@@ -118,7 +123,8 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, readonly = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false }) => {
+  const [section, setSection] = useState<'shops' | 'bazaars'>('shops');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
@@ -380,9 +386,28 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 
   // ════════════ LIST ════════════
+  // Section toggle (Shops | Bazaars)
+  const sectionToggle = (
+    <div className="inline-flex bg-gray-100 rounded-lg p-1 mb-1">
+      <button onClick={() => setSection('shops')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'shops' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'فروشگاه‌ها' : 'Shops'}</button>
+      <button onClick={() => setSection('bazaars')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'bazaars' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'بازارچه‌ها' : 'Bazaars'}</button>
+    </div>
+  );
+
+  // ════════════ BAZAARS section ════════════
+  if (section === 'bazaars' && onSaveMetaBazaar && onDeleteMetaBazaar) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <MetaBazaarManager bazaars={metaBazaars} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
+      </div>
+    );
+  }
+
   if (mode === 'list') {
     return (
       <div className="space-y-5 animate-fade-in">
+        {sectionToggle}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconTag className="w-5 h-5" /></div>

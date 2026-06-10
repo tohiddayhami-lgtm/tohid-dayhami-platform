@@ -492,7 +492,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar';
   entityId?: string;
   details: string;
   actorName: string;
@@ -513,7 +513,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services';
@@ -531,6 +531,29 @@ export interface MetaShopColorOption { name: string; hex: string; hex2?: string;
 
 // Bilingual bazaar category / subcategory label
 export interface MetaShopDirCat { fa?: string; en?: string; }
+
+// ── Meta Bazaar: a curated, multi-level directory of shops with its own link ──
+export interface MetaBazaarNode {
+  id: string;
+  label: MetaShopDirCat;          // bilingual node label (e.g. {fa:'ایران', en:'Iran'})
+  children?: MetaBazaarNode[];    // nested subcategories — ANY depth (optional)
+  shopSlugs?: string[];           // shops shown at this node
+}
+export interface MetaBazaar {
+  id: string;
+  slug: string;                   // public link key (?bazaar=<slug>)
+  name: string;
+  isActive: boolean;
+  defaultLang?: string;           // 'en' | 'fa' | ... (visitor can toggle)
+  title?: MetaShopDirCat;
+  subtitle?: MetaShopDirCat;
+  coverImage?: string;
+  logo?: string;
+  theme?: Partial<MetaShopTheme>;
+  levelLabels?: MetaShopDirCat[]; // optional names for each depth level (Country, City, Group, ...)
+  tree: MetaBazaarNode[];         // category tree; leaves (or any node) carry shopSlugs
+  createdAt?: string;
+}
 
 // A language a shop can be displayed in (beyond the default fa/en)
 export interface MetaShopLang { code: string; name: string; rtl?: boolean; }

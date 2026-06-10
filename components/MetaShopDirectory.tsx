@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MetaShop } from '../types';
+import { MetaShop, MetaBazaar, MetaBazaarNode } from '../types';
 import { Language } from '../App';
 
 interface Props {
@@ -8,15 +8,16 @@ interface Props {
   onOpenShop: (slug: string) => void;
   title?: string;
   subtitle?: string;
+  bazaar?: MetaBazaar;   // when set, renders this curated multi-level bazaar instead of the auto "all shops" grouping
 }
 
 const CartIcon = ({ s = 16 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
 );
 
-export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, title, subtitle }) => {
+export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, title, subtitle, bazaar }) => {
   // Export-focused: default to English; bilingual toggle in the header.
-  const [uiLang, setUiLang] = useState<Language>('en');
+  const [uiLang, setUiLang] = useState<Language>((bazaar?.defaultLang as Language) || 'en');
   const T = uiLang === 'fa';
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<string>('all');
@@ -103,7 +104,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
   const Storefront: React.FC<{ shop: MetaShop }> = ({ shop }) => {
     const accent = shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
-    const num = numberOf[shop.id] || '';
+    const num = numberOf[shop.id] || (shop.shopNumber || '').trim();
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
@@ -130,6 +131,58 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
       </button>
     );
   };
+
+  // ════════════ BAZAAR MODE (curated multi-level tree) ════════════
+  if (bazaar) {
+    const shopBySlug: Record<string, MetaShop> = {};
+    live.forEach(s => { shopBySlug[s.slug] = s; });
+    const q = search.trim().toLowerCase();
+    const shopMatches = (s: MetaShop) => !q || `${s.name} ${s.title || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase().includes(q);
+    const bLbl = (c?: { fa?: string; en?: string }) => c ? (T ? (c.fa || c.en) : (c.en || c.fa)) || '' : '';
+    const accentCover = bazaar.theme?.cover || '#1f2a18';
+
+    // Recursive node renderer; returns null if nothing (after search) to show
+    const renderNode = (node: MetaBazaarNode, depth: number): React.ReactNode => {
+      const nodeShops = (node.shopSlugs || []).map(sl => shopBySlug[sl]).filter(Boolean).filter(shopMatches) as MetaShop[];
+      const childEls = (node.children || []).map(ch => renderNode(ch, depth + 1)).filter(Boolean);
+      if (nodeShops.length === 0 && childEls.length === 0) return null;
+      const levelName = bLbl(bazaar.levelLabels?.[depth]);
+      const HeadTag = depth === 0 ? 'h2' : 'h3';
+      return (
+        <section key={node.id} className={`msd-node msd-depth-${Math.min(depth, 3)}`}>
+          {levelName && <span className="msd-level">{levelName}</span>}
+          <HeadTag className={depth === 0 ? 'msd-cat-title' : 'msd-sub-title'}>{depth === 0 ? <><span>{bLbl(node.label)}</span><i /></> : <>‹ {bLbl(node.label)} ›</>}</HeadTag>
+          {nodeShops.length > 0 && <div className="msd-grid">{nodeShops.map(s => <Storefront key={`${node.id}-${s.id}`} shop={s} />)}</div>}
+          {childEls.length > 0 && <div className="msd-children">{childEls}</div>}
+        </section>
+      );
+    };
+    const rendered = (bazaar.tree || []).map(n => renderNode(n, 0)).filter(Boolean);
+
+    return (
+      <div className="msd-root" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
+        <style>{MSD_CSS}</style>
+        <header className="msd-cover" style={{ background: bazaar.coverImage ? `linear-gradient(rgba(0,0,0,.4),rgba(0,0,0,.5)), url(${bazaar.coverImage}) center/cover` : `linear-gradient(135deg, ${accentCover}, #2d4a1a)` }}>
+          <div className="msd-lang">
+            <button className={uiLang === 'en' ? 'on' : ''} onClick={() => setUiLang('en')}>EN</button>
+            <button className={uiLang === 'fa' ? 'on' : ''} onClick={() => setUiLang('fa')}>FA</button>
+          </div>
+          <div className="msd-cover-inner">
+            {bazaar.logo ? <img src={bazaar.logo} alt="" style={{ height: 46, margin: '0 auto 8px', objectFit: 'contain' }} /> : <div className="msd-bazaar-emoji">🏬</div>}
+            <h1>{bLbl(bazaar.title) || bazaar.name}</h1>
+            {bLbl(bazaar.subtitle) && <p>{bLbl(bazaar.subtitle)}</p>}
+          </div>
+        </header>
+        <div className="msd-container">
+          <div className="msd-search">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          </div>
+          {rendered.length === 0 ? <p className="msd-empty">{t.empty}</p> : rendered}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="msd-root" dir={T ? 'rtl' : 'ltr'}>
@@ -215,6 +268,10 @@ const MSD_CSS = `
 .msd-cat-title { display:flex; align-items:center; gap:14px; font-size:18px; font-weight:900; color:#1f2a18; margin:18px 0 16px; }
 .msd-cat-title span { background:#fff; border:1px solid #e6dfce; padding:6px 16px; border-radius:999px; box-shadow:0 4px 10px rgba(31,42,24,.06); }
 .msd-cat-title i { flex:1; height:2px; background:repeating-linear-gradient(90deg,#d8cfb8 0 8px,transparent 8px 14px); }
+.msd-node { margin-bottom:22px; }
+.msd-children { margin-top:8px; padding-inline-start:14px; border-inline-start:2px dashed #e0d8c4; }
+.msd-depth-0 > .msd-children { border-inline-start:0; padding-inline-start:0; }
+.msd-level { display:block; text-align:center; font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:#b07b2c; margin-bottom:4px; }
 .msd-subsection { margin-bottom:18px; }
 .msd-sub-title { text-align:center; font-size:13px; font-weight:800; letter-spacing:.06em; color:#8a7f63; margin:6px 0 14px; }
 .msd-grid { display:grid; gap:18px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
