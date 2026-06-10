@@ -317,8 +317,16 @@ const MSD_CSS = `
 .msd-shop:active { transform:translateY(-2px); }
 /* Fixed header (title never moves) */
 .msd-head { position:relative; flex-shrink:0; z-index:4; }
-/* Optional top banner (custom per-shop tagline) — fills the area above the title */
-.msd-banner { background:var(--accent); filter:brightness(.78); color:#fff; font-size:14px; font-weight:900; letter-spacing:.01em; padding:8px 8px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 2px rgba(0,0,0,.3); }
+/* Optional top banner (custom per-shop tagline) — glowing LED-style marquee */
+.msd-banner { position:relative; background:var(--accent); color:#fff; font-size:14px; font-weight:900; letter-spacing:.02em; padding:8px 8px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 7px rgba(255,255,255,.85), 0 1px 2px rgba(0,0,0,.45); animation:msdLed 1.5s ease-in-out infinite; }
+.msd-banner span, .msd-banner { z-index:1; }
+.msd-banner::before { content:''; position:absolute; inset:0; z-index:0; background:linear-gradient(110deg, transparent 28%, rgba(255,255,255,.55) 50%, transparent 72%); transform:translateX(-130%); animation:msdSweep 2.6s linear infinite; pointer-events:none; }
+@keyframes msdLed {
+  0%, 100% { filter:brightness(1); box-shadow:inset 0 0 0 rgba(255,255,255,0); }
+  50% { filter:brightness(1.4) saturate(1.2); box-shadow:0 0 16px 2px var(--accent), inset 0 0 14px rgba(255,255,255,.5); }
+}
+@keyframes msdSweep { 0% { transform:translateX(-130%); } 55%, 100% { transform:translateX(130%); } }
+@media (prefers-reduced-motion: reduce) { .msd-banner { animation:none; } .msd-banner::before { display:none; } }
 /* Awning (title) */
 .msd-awning { position:relative; height:46px; background:var(--accent); display:flex; align-items:center; justify-content:center; padding:0 10px; }
 .msd-awning::after { content:''; position:absolute; bottom:-9px; left:0; right:0; height:10px; background:repeating-linear-gradient(90deg, var(--accent) 0 16px, #fff 16px 32px); -webkit-mask:linear-gradient(#000,#000); z-index:5; }
