@@ -31,6 +31,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const isServices = shop.type === 'services';
   const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
+  const [activeSub, setActiveSub] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
   const [galIdx, setGalIdx] = useState(0);
@@ -158,15 +159,26 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     return set;
   }, [shop.categories, products]);
 
+  // Subcategories available under the active category (derived from products)
+  const subcategories = useMemo(() => {
+    if (activeCat === 'all') return [];
+    const set: string[] = [];
+    products.forEach(p => { if (p.group === activeCat && p.subcategory && !set.includes(p.subcategory)) set.push(p.subcategory); });
+    return set;
+  }, [products, activeCat]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter(p => {
       const matchCat = activeCat === 'all' || p.group === activeCat;
-      const hay = `${p.name} ${p.sku || ''} ${p.description || ''} ${p.group || ''}`.toLowerCase();
+      const matchSub = activeSub === 'all' || p.subcategory === activeSub;
+      const hay = `${p.name} ${p.sku || ''} ${p.description || ''} ${p.group || ''} ${p.subcategory || ''}`.toLowerCase();
       const matchSearch = !q || hay.includes(q);
-      return (q ? matchSearch : matchCat && matchSearch);
+      return (q ? matchSearch : matchCat && matchSub && matchSearch);
     });
-  }, [products, activeCat, search]);
+  }, [products, activeCat, activeSub, search]);
+
+  const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
 
   // ── Rate options (up to 3 named rates per product) ──
   const optionsOf = (p: MetaShopProduct) => p.priceOptions || [];
@@ -368,8 +380,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {/* Category pills */}
         {categories.length > 0 && (
           <div className="ms-filter-bar">
-            <button className={`ms-pill ${activeCat === 'all' ? 'active' : ''}`} onClick={() => setActiveCat('all')}>{t.all}</button>
-            {categories.map(c => <button key={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => setActiveCat(c)}>{c}</button>)}
+            <button className={`ms-pill ${activeCat === 'all' ? 'active' : ''}`} onClick={() => selectCat('all')}>{t.all}</button>
+            {categories.map(c => <button key={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => selectCat(c)}>{c}</button>)}
+          </div>
+        )}
+
+        {/* Subcategory pills (under the active category) */}
+        {subcategories.length > 0 && (
+          <div className="ms-subfilter-bar">
+            <button className={`ms-subpill ${activeSub === 'all' ? 'active' : ''}`} onClick={() => setActiveSub('all')}>{t.all}</button>
+            {subcategories.map(s => <button key={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{s}</button>)}
           </div>
         )}
 
@@ -391,6 +411,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     <h3 className="ms-pname" onClick={() => setDetail(p)}>{pName(p)}</h3>
                     <div className="ms-badges">
                       {p.sku && <span className="ms-sku">{p.sku}</span>}
+                      {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
                       {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
                     </div>
                     {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
@@ -752,6 +773,12 @@ const MS_CSS = `
 .ms-filter-bar::-webkit-scrollbar { display:none; }
 .ms-pill { flex-shrink:0; padding:8px 18px; border-radius:999px; font-size:13px; font-weight:600; border:2px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; white-space:nowrap; }
 .ms-pill.active { background:var(--ms-primary); border-color:var(--ms-primary); color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.15); }
+.ms-subfilter-bar { display:flex; gap:6px; overflow-x:auto; padding:6px 2px 4px; margin-top:2px; scrollbar-width:none; }
+.ms-subfilter-bar::-webkit-scrollbar { display:none; }
+.ms-subpill { flex-shrink:0; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; border-radius:999px; padding:6px 14px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.ms-subpill:hover { color:var(--ms-primary); border-color:var(--ms-primary); background:#fff; }
+.ms-subpill.active { background:rgba(15,23,42,.06); border-color:var(--ms-primary); color:var(--ms-primary); }
+.ms-subcat-badge { display:inline-block; font-size:10px; font-weight:800; padding:2px 7px; background:#ecfeff; color:#0e7490; border:1px solid #cffafe; border-radius:999px; }
 .ms-empty { text-align:center; color:#94a3b8; padding:40px; font-size:14px; }
 .ms-grid { display:grid; gap:16px; grid-template-columns:repeat(2,1fr); padding:14px 0 56px; }
 @media (min-width:768px){ .ms-grid { grid-template-columns:repeat(3,1fr); } }
