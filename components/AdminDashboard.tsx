@@ -131,6 +131,10 @@ export const AdminDashboard: React.FC<Props> = ({
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
   const faviconInputRef = useRef<HTMLInputElement>(null);
+  // Optimistic flag state so the star toggles instantly (independent of the Firestore round-trip)
+  const [flagOverride, setFlagOverride] = useState<Record<string, boolean>>({});
+  const isFlaggedOf = (tk: Ticket) => flagOverride[tk.id] !== undefined ? flagOverride[tk.id] : !!tk.isFlagged;
+  const toggleFlag = (tk: Ticket) => { const next = !isFlaggedOf(tk); setFlagOverride(o => ({ ...o, [tk.id]: next })); onUpdateTicket(tk.id, { isFlagged: next }, currentUser.fullName || currentUser.username); };
   const [heroBgUploading, setHeroBgUploading] = useState(false);
   const [heroBgProgress, setHeroBgProgress] = useState(0);
   const heroBgInputRef = useRef<HTMLInputElement>(null);
@@ -736,7 +740,7 @@ export const AdminDashboard: React.FC<Props> = ({
 
       if (showFlaggedOnly) {
           // The flag view shows EVERY flagged case (active or archived, any status) so nothing gets hidden
-          if (!t.isFlagged) return false;
+          if (!isFlaggedOf(t)) return false;
       } else {
           if (filterMode === 'history') {
               if (!isArchived) return false;
@@ -761,8 +765,9 @@ export const AdminDashboard: React.FC<Props> = ({
       }
       return true;
     }).sort((a, b) => {
-      if (a.isFlagged && !b.isFlagged) return -1;
-      if (!a.isFlagged && b.isFlagged) return 1;
+      const af = isFlaggedOf(a), bf = isFlaggedOf(b);
+      if (af && !bf) return -1;
+      if (!af && bf) return 1;
       if (a.priority === 'High' && b.priority !== 'High') return -1;
       if (a.priority !== 'High' && b.priority === 'High') return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -1075,8 +1080,8 @@ export const AdminDashboard: React.FC<Props> = ({
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => onUpdateTicket(selectedTicket.id, { isFlagged: !selectedTicket.isFlagged }, currentUser.fullName || currentUser.username)} title={selectedTicket.isFlagged ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${selectedTicket.isFlagged ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
-                            <IconStar className={`w-4 h-4 ${selectedTicket.isFlagged ? 'fill-yellow-400' : ''}`} />
+                        <button type="button" onClick={() => toggleFlag(selectedTicket)} title={isFlaggedOf(selectedTicket) ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${isFlaggedOf(selectedTicket) ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
+                            <IconStar className={`w-4 h-4 ${isFlaggedOf(selectedTicket) ? 'fill-yellow-400' : ''}`} />
                         </button>
                         <button onClick={() => setSelectedTicketId(null)} className="bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-full border border-gray-200 transition-colors shadow-sm w-8 h-8 flex items-center justify-center">✕</button>
                     </div>
@@ -1984,7 +1989,7 @@ export const AdminDashboard: React.FC<Props> = ({
                      )}
                      {(() => { const pageIds = paginatedTickets.map(pt => pt.id); const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedTicketIds.has(id)); return (
                      <div className="overflow-x-auto"><table className="w-full text-start"><thead className="bg-gray-50 text-gray-500 text-sm"><tr><th className="px-3 py-3 rounded-tr-lg text-center w-10"><input type="checkbox" className="w-4 h-4 cursor-pointer accent-indigo-600" checked={allPageSelected} onChange={() => setSelectedTicketIds(prev => { const n = new Set(prev); if (allPageSelected) pageIds.forEach(id => n.delete(id)); else pageIds.forEach(id => n.add(id)); return n; })} title={t.selectAll} /></th><th className="px-4 py-3 text-center w-12">{t.row}</th><th className="px-4 py-3">{t.code}</th><th className="px-4 py-3">{t.service}</th><th className="px-4 py-3">{t.status}</th><th className="px-4 py-3">{t.expert}</th><th className="px-4 py-3 text-center rounded-tl-lg">{t.action}</th></tr></thead><tbody className="divide-y divide-gray-100">{paginatedTickets.map((ticket, idx) => (
-                        <tr key={ticket.id} className={`hover:bg-gray-50 transition-colors ${selectedTicketIds.has(ticket.id) ? 'bg-indigo-50/60' : ticket.isFlagged ? 'bg-yellow-50/40' : ''}`}>
+                        <tr key={ticket.id} className={`hover:bg-gray-50 transition-colors ${selectedTicketIds.has(ticket.id) ? 'bg-indigo-50/60' : isFlaggedOf(ticket) ? 'bg-yellow-50/40' : ''}`}>
                             <td className="px-3 py-3 text-center">
                                 <input type="checkbox" className="w-4 h-4 cursor-pointer accent-indigo-600" checked={selectedTicketIds.has(ticket.id)} onChange={() => toggleTicketSelection(ticket.id)} />
                             </td>
@@ -1994,8 +1999,8 @@ export const AdminDashboard: React.FC<Props> = ({
                             <td className="px-4 py-3">
                                 <div className="flex flex-col">
                                     <div className="flex items-center gap-1.5">
-                                        <button onClick={e => { e.stopPropagation(); onUpdateTicket(ticket.id, { isFlagged: !ticket.isFlagged }, currentUser.fullName || currentUser.username); }} title={ticket.isFlagged ? 'حذف فلگ' : 'فلگ کردن'} className="flex-shrink-0">
-                                            <IconStar className={`w-4 h-4 transition-colors ${ticket.isFlagged ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} />
+                                        <button type="button" onClick={e => { e.stopPropagation(); toggleFlag(ticket); }} title={isFlaggedOf(ticket) ? 'حذف فلگ' : 'فلگ کردن'} className="flex-shrink-0">
+                                            <IconStar className={`w-4 h-4 transition-colors ${isFlaggedOf(ticket) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`} />
                                         </button>
                                         <span className="font-mono text-[10px] text-gray-400">{ticket.id}</span>
                                     </div>

@@ -154,20 +154,27 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
       return acc;
     };
 
-    // Build the breadcrumb levels from the selected path (auto-selecting the first node at each level)
-    const levels: { depth: number; nodes: MetaBazaarNode[]; selectedId: string }[] = [];
-    let cursor: MetaBazaarNode[] = bazaar.tree || [];
+    // Drill-down levels: only follow EXPLICIT selections (depth 0 defaults to first root).
+    // The grid shows the AGGREGATE of the active node's whole subtree, so a node never looks empty
+    // just because its first child is empty — selecting a country shows all its shops.
+    const tree = bazaar.tree || [];
+    const levels: { depth: number; nodes: MetaBazaarNode[]; selectedId?: string }[] = [];
+    let cursor: MetaBazaarNode[] = tree;
+    let activeNode: MetaBazaarNode | undefined;
     for (let depth = 0; cursor && cursor.length > 0; depth++) {
-      const selId = bazaarPath[depth] && cursor.some(n => n.id === bazaarPath[depth]) ? bazaarPath[depth] : cursor[0].id;
+      const explicit = bazaarPath[depth] && cursor.some(n => n.id === bazaarPath[depth]) ? bazaarPath[depth] : undefined;
+      const selId = depth === 0 ? (explicit || cursor[0].id) : explicit; // auto-select only the first ROOT
       levels.push({ depth, nodes: cursor, selectedId: selId });
-      cursor = cursor.find(n => n.id === selId)?.children || [];
+      const sel = selId ? cursor.find(n => n.id === selId) : undefined;
+      if (!sel) break;            // this level is shown as choices; stop descending until the user picks
+      activeNode = sel;
+      cursor = sel.children || [];
     }
-    const deepestNode = levels.length ? levels[levels.length - 1].nodes.find(n => n.id === levels[levels.length - 1].selectedId) : undefined;
     const gridShops = q
-      ? (() => { const acc: MetaShop[] = []; const seen = new Set<string>(); (bazaar.tree || []).forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; })()
-      : (deepestNode ? collectShops(deepestNode) : []);
+      ? (() => { const acc: MetaShop[] = []; const seen = new Set<string>(); tree.forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; })()
+      : (activeNode ? collectShops(activeNode) : []);
 
-    const selectAt = (depth: number, id: string) => setBazaarPath(prev => [...prev.slice(0, depth), id]);
+    const selectAt = (depth: number, id: string) => setBazaarPath(prev => prev[depth] === id ? prev : [...prev.slice(0, depth), id]);
 
     return (
       <div className="msd-root msd-compact" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
@@ -194,9 +201,9 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             <div key={lvl.depth} className="msd-levelbar">
               {bLbl(bazaar.levelLabels?.[lvl.depth]) && <span className="msd-levelbar-label">{bLbl(bazaar.levelLabels?.[lvl.depth])}</span>}
               <div className="msd-levelbar-pills">
-                {lvl.nodes.map(n => (
-                  <button key={n.id} className={`msd-cat ${lvl.selectedId === n.id ? 'on' : ''}`} onClick={() => selectAt(lvl.depth, n.id)}>{bLbl(n.label)}</button>
-                ))}
+                {lvl.nodes.map(n => { const cnt = collectShops(n).length; return (
+                  <button key={n.id} className={`msd-cat ${lvl.selectedId === n.id ? 'on' : ''}`} onClick={() => selectAt(lvl.depth, n.id)}>{bLbl(n.label)}{cnt > 0 && <span className="msd-cat-count">{cnt}</span>}</button>
+                ); })}
               </div>
             </div>
           ))}
@@ -341,6 +348,8 @@ const MSD_CSS = `
 .msd-compact .msd-levelbar { gap:10px; padding:6px 0; }
 .msd-compact .msd-levelbar-label { min-width:78px; font-size:11px; }
 .msd-compact .msd-cat { padding:5px 13px; font-size:12px; border-width:1.5px; }
+.msd-cat-count { display:inline-block; margin-inline-start:5px; font-size:10px; font-weight:800; background:rgba(0,0,0,.12); border-radius:999px; padding:0 6px; }
+.msd-cat.on .msd-cat-count { background:rgba(255,255,255,.28); }
 .msd-compact .msd-grid { gap:12px; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); }
 /* smaller storefront */
 .msd-compact .msd-shop { height:150px; border-radius:11px 11px 8px 8px; box-shadow:0 5px 14px rgba(31,42,24,.10); }
