@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, CustomForm } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -16,7 +16,7 @@ import {
   saveAppConfigToCloud,
   saveServicesToCloud,
   savePersonnelToCloud,
-  subscribeToTickets, subscribeToCustomers, subscribeToSettings,
+  subscribeToTickets, subscribeToCustomers, subscribeToSettings, subscribeToCustomForms,
   subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
@@ -269,6 +269,7 @@ const App: React.FC = () => {
   const [customFormId, setCustomFormId] = useState<string | null>(extractFormId);
   const [lang, setLang] = useState<Language>('fa');
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [customForms, setCustomForms] = useState<CustomForm[]>([]);
   const [services, setServices] = useState<ServiceOption[]>(() => readCache<ServiceOption[]>(CACHE_KEYS.SERVICES) ?? []);
   const [isServicesLoaded, setIsServicesLoaded] = useState<boolean>(() => !!readCache(CACHE_KEYS.SERVICES));
   const [personnel, setPersonnel] = useState<Personnel[]>(DEFAULT_PERSONNEL);
@@ -440,6 +441,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
+    const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
     const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
     const unsubMessages = subscribeToMessages((data) => setMessages(data));
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
@@ -504,7 +506,7 @@ const App: React.FC = () => {
     const unsubMetaShops = subscribeToMetaShops(setMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
-    return () => { unsubTickets(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
+    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -746,10 +748,34 @@ const App: React.FC = () => {
     const unassigned = tickets.filter(t => !t.assignedTo && t.status !== TicketStatus.CANCELLED && t.status !== TicketStatus.COMPLETED);
     if (unassigned.length === 0) return;
     const autoMode = !!appConfig.assignmentConfig && appConfig.assignmentConfig.mode !== 'manual';
+    // Custom-form tickets (incl. those filled via the connected Google Form) are written
+    // straight to Firestore and never pass through saveNewTicketToSystem. We resolve their
+    // assignee here using the LIVE form config (looked up by formId) so it always matches
+    // what you set in the form builder — falling back to any assignee embedded in customData.
+    const resolveFormAssignee = (ticket: Ticket): string | undefined => {
+      if (!ticket.serviceId?.startsWith('form:')) return undefined;
+      const formId = ticket.customData?.formId || ticket.serviceId.slice('form:'.length);
+      const form = customForms.find(f => f.id === formId);
+      const directId = form?.assigneePersonnelId || ticket.customData?.__assigneePersonnelId;
+      const roleStr  = form?.assigneeRole       || ticket.customData?.__assigneeRole;
+      if (directId) return directId;
+      if (roleStr) {
+        const normalizedRole = roleStr.trim().toLowerCase();
+        const eligible = personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r.trim().toLowerCase() === normalizedRole));
+        if (eligible.length === 1) return eligible[0].id;
+        if (eligible.length > 1) {
+          const workload = eligible.map(p => ({ id: p.id, count: tickets.filter(t => t.assignedTo === p.id && t.status !== TicketStatus.COMPLETED && t.status !== TicketStatus.CANCELLED).length }));
+          workload.sort((a, b) => a.count - b.count);
+          return workload[0].id;
+        }
+      }
+      return undefined;
+    };
     const processAssignments = async () => {
       for (const ticket of unassigned) {
-        // Service/sub-service routing first; fall back to the global assignment config (if not manual)
-        let assigneeId = resolveServiceRouting(ticket);
+        // Custom-form assignee first, then service/sub-service routing, then the global config
+        let assigneeId = resolveFormAssignee(ticket);
+        if (!assigneeId) assigneeId = resolveServiceRouting(ticket);
         if (!assigneeId && autoMode) assigneeId = calculateAssignee(ticket.serviceId);
         if (assigneeId) {
           const assignee = personnel.find(p => p.id === assigneeId);
@@ -760,7 +786,7 @@ const App: React.FC = () => {
       }
     };
     processAssignments();
-  }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, resolveServiceRouting, personnel]);
+  }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, resolveServiceRouting, personnel, customForms]);
 
   // Returns the best fallback assignee: prefers managers who have WhatsApp notification set up
   const getCeoFallbackId = (): string | undefined => {

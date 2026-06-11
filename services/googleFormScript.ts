@@ -151,6 +151,10 @@ export const buildGoogleFormScript = (form: CustomForm): string => {
   const TITLE = JSON.stringify(form.title || 'فرم');
   const DESC = JSON.stringify(form.description || '');
   const FORM_ID = JSON.stringify(form.id);
+  // Routing config of the form — embedded so the platform can assign the ticket to
+  // the same person/role you set in the form builder (read by App.tsx).
+  const ASSIGNEE_ID = JSON.stringify(form.assigneePersonnelId || '');
+  const ASSIGNEE_ROLE = JSON.stringify(form.assigneeRole || '');
 
   return `/**
  * ═══════════════════════════════════════════════════════════════════════
@@ -169,6 +173,9 @@ var FORM_DESC  = ${DESC};
 
 var Q_NAME  = 'نام و نام خانوادگی';
 var Q_PHONE = 'شماره تماس';
+
+var ASSIGNEE_ID   = ${ASSIGNEE_ID};
+var ASSIGNEE_ROLE = ${ASSIGNEE_ROLE};
 
 var FIELDS  = ${FIELDS_JSON};
 var KEY_MAP = ${KEYMAP_JSON};
@@ -196,6 +203,9 @@ function onFormSubmit(e) {
   try {
     var itemResponses = e.response.getItemResponses();
     var customData = { formId: PLATFORM_FORM_ID, formTitle: FORM_TITLE };
+    // ارجاع تنظیم‌شده‌ی فرم را همراه تیکت می‌فرستیم تا سامانه آن را به همان شخص/نقش ارجاع دهد.
+    if (ASSIGNEE_ID)   customData.__assigneePersonnelId = ASSIGNEE_ID;
+    if (ASSIGNEE_ROLE) customData.__assigneeRole = ASSIGNEE_ROLE;
     var name = '', phone = '', descLines = [];
 
     for (var i = 0; i < itemResponses.length; i++) {
