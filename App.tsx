@@ -31,6 +31,8 @@ import { MetaShopView } from './components/MetaShopView';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
+// Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
+import { ExpoDoorsLoader } from './components/metaverse/ExpoDoorsLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -1187,8 +1189,10 @@ const App: React.FC = () => {
   if (view === 'expo') {
     const expo = publicExpoBazaar?.expo;
     if (publicExpoBazaar && publicExpoBazaar.isActive !== false && expo && expo.enabled) {
+      const expoTitle = (lang === 'fa' ? expo.title?.fa : expo.title?.en) || publicExpoBazaar.name;
+      const expoSub = (lang === 'fa' ? expo.subtitle?.fa : expo.subtitle?.en) || undefined;
       return (
-        <React.Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1020] text-white gap-4"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /><p className="text-sm text-white/70">{lang === 'fa' ? 'در حال بارگذاری نمایشگاه سه‌بعدی...' : 'Loading 3D exhibition...'}</p></div>}>
+        <React.Suspense fallback={<ExpoDoorsLoader lang={lang} title={expoTitle} subtitle={expoSub} primary={publicExpoBazaar.theme?.primary || '#2d4a1a'} />}>
           <MetaverseExpoView
             bazaar={publicExpoBazaar}
             shops={metaShops}

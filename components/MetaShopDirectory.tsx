@@ -189,6 +189,8 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             {bazaar.expo?.enabled && (
               <a
                 href={`?expo=${encodeURIComponent(bazaar.slug)}`}
+                onMouseEnter={() => { void import('./metaverse/MetaverseExpoView'); }}
+                onTouchStart={() => { void import('./metaverse/MetaverseExpoView'); }}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '10px 20px', borderRadius: 999, background: 'rgba(255,255,255,.95)', color: '#1f2a18', fontWeight: 800, fontSize: 14, textDecoration: 'none', boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}
               >
                 🥽 {T ? 'ورود به نمایشگاه مجازی سه‌بعدی' : 'Enter 3D Virtual Exhibition'}

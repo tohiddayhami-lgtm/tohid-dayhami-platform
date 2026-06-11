@@ -34,12 +34,13 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
   return (
     <>
-      {/* Lighting */}
-      <ambientLight intensity={0.6} />
-      <hemisphereLight intensity={0.5} groundColor={ground} />
+      {/* Lighting — fully procedural so the hall is lit instantly with NO network fetch.
+          (A multi-MB HDR is only loaded when the admin explicitly sets a skybox URL below.) */}
+      <ambientLight intensity={0.75} />
+      <hemisphereLight intensity={0.7} groundColor={ground} color="#ffffff" />
       <directionalLight
         position={[width * 0.3, height * 2, depth * 0.3]}
-        intensity={1.1}
+        intensity={1.25}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -48,16 +49,13 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         shadow-camera-top={depth} shadow-camera-bottom={-depth}
       />
 
-      {/* Sky / image-based environment. A custom HDR overrides the preset. */}
+      {/* Procedural sky background (instant). A custom HDR is loaded only when provided. */}
       {expo.skyboxUrl ? (
         <Suspense fallback={null}>
           <Environment files={expo.skyboxUrl} background />
         </Suspense>
       ) : (
-        <>
-          <Sky distance={450000} sunPosition={[10, 8, 5]} turbidity={6} rayleigh={1.2} />
-          <Environment preset={expo.preset || EXPO_DEFAULTS.preset} />
-        </>
+        <Sky distance={450000} sunPosition={[10, 8, 5]} turbidity={6} rayleigh={1.2} />
       )}
 
       {/* Floor (also the teleport target for both desktop double-click and WebXR) */}
@@ -73,7 +71,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         </mesh>
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
-      <ContactShadows position={[0, 0.02, 0]} scale={Math.max(width, depth)} blur={2} opacity={0.4} far={6} />
+      <ContactShadows position={[0, 0.02, 0]} scale={Math.max(width, depth)} blur={2} opacity={0.4} far={6} frames={1} />
 
       {/* Perimeter walls */}
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />

@@ -1,5 +1,6 @@
-import React, { Suspense, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useProgress } from '@react-three/drei';
 import { XR, createXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaBazaar, MetaShop, MetaverseHotspot, MetaverseBooth } from '../../types';
@@ -13,6 +14,7 @@ import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { VrRig, VRButton } from './XRControls';
+import { ExpoDoorsLoader } from './ExpoDoorsLoader';
 
 interface Props {
   bazaar: MetaBazaar;
@@ -33,6 +35,17 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
+
+  // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
+  // then slide them apart and remove the overlay. A hard cap prevents getting stuck. ──
+  const { active: loadActive, progress: loadProgress } = useProgress();
+  const [openDoors, setOpenDoors] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!loadActive) { const t = setTimeout(() => setOpenDoors(true), 650); return () => clearTimeout(t); }
+  }, [loadActive]);
+  useEffect(() => { const cap = setTimeout(() => setOpenDoors(true), 7000); return () => clearTimeout(cap); }, []);
+  useEffect(() => { if (openDoors) { const t = setTimeout(() => setRevealed(true), 1250); return () => clearTimeout(t); } }, [openDoors]);
 
   const controlRef: ControlRef = useRef(makeControlState());
   const poseRef: PlayerPoseRef = useRef({ x: expo.spawn?.x ?? 0, z: expo.spawn?.z ?? 0, heading: expo.spawn?.ry ?? Math.PI });
@@ -68,7 +81,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
-      <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }} gl={{ antialias: true }}>
+      <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <XR store={store}>
           <Suspense fallback={null}>
             <ExpoScene
@@ -128,6 +141,18 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}
+
+      {/* Grand "mall doors" reveal overlay (CSS-only — opens when the scene is ready) */}
+      {!revealed && (
+        <ExpoDoorsLoader
+          lang={lang}
+          title={bi(expo.title, lang, bazaar.name)}
+          subtitle={bi(expo.subtitle, lang, '') || undefined}
+          open={openDoors}
+          progress={loadActive ? loadProgress : undefined}
+          primary={bazaar.theme?.primary || '#2d4a1a'}
+        />
+      )}
     </div>
   );
 };
