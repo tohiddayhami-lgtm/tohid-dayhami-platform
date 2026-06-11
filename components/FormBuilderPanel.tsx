@@ -3,6 +3,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
+import { buildGoogleFormScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 
 interface Props {
@@ -177,6 +178,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [archiveFormId, setArchiveFormId] = useState<string>('');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
+  const [googleFormFor, setGoogleFormFor] = useState<CustomForm | null>(null);
+  const [scriptCopied, setScriptCopied] = useState(false);
 
   const isEditor = isAdmin || isMaster;
 
@@ -1196,9 +1199,96 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   );
 
   // ── List ──
+  const GoogleFormModal = googleFormFor && ((gf: CustomForm) => {
+    const script = buildGoogleFormScript(gf);
+    const copyScript = () => {
+      navigator.clipboard.writeText(script).then(() => {
+        setScriptCopied(true);
+        setTimeout(() => setScriptCopied(false), 2500);
+      });
+    };
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8 flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-green-100 text-green-700 rounded-lg"><IconLink className="w-5 h-5" /></div>
+              <div>
+                <h3 className="text-base font-bold text-gray-800">{lang === 'fa' ? 'تبدیل به گوگل‌فرم' : 'Convert to Google Form'}</h3>
+                <p className="text-xs text-gray-400">{gf.title}</p>
+              </div>
+            </div>
+            <button onClick={() => setGoogleFormFor(null)} className="text-gray-400 hover:text-gray-700 text-sm px-2">✕</button>
+          </div>
+
+          {/* Body */}
+          <div className="p-5 space-y-4 overflow-y-auto">
+            <div className="bg-green-50 border border-green-100 rounded-xl p-3 text-xs text-green-800 leading-relaxed">
+              {lang === 'fa'
+                ? 'با اجرای کد زیر، یک گوگل‌فرم دقیقاً مطابق همین فرم ساخته می‌شود. هر پاسخی که مشتری در گوگل‌فرم ثبت کند، به‌صورت خودکار به‌عنوان یک تیکت در همین فرم (بخش بایگانی) و کارتابل می‌نشیند. نیازی به VPN یا تنظیمات گوگل‌کلود نیست.'
+                : 'Running the code below creates a Google Form identical to this one. Every response is automatically saved as a ticket in this form’s archive and the cartable. No VPN or Google Cloud setup needed.'}
+            </div>
+
+            {/* Steps */}
+            <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-200">
+              {(lang === 'fa'
+                ? [
+                    'به آدرس script.google.com بروید و یک پروژه جدید بسازید (New Project).',
+                    'تمام کد پیش‌فرض را پاک کنید و کد زیر را جای‌گذاری کنید (دکمه کپی).',
+                    'ذخیره کنید (Ctrl+S).',
+                    'از نوار بالا تابع «setupGoogleForm» را انتخاب و دکمه Run (▷) را بزنید.',
+                    'بار اول پنجره مجوز باز می‌شود: Review Permissions ← انتخاب حساب گوگل ← Advanced ← Go to (unsafe) ← Allow.',
+                    'پس از اجرا، از منوی Execution log لینک پر کردن فرم را کپی کنید و برای مشتری بفرستید.',
+                    'از این پس هر پاسخ گوگل‌فرم، خودکار در بخش «بایگانی» همین فرم ثبت می‌شود.',
+                  ]
+                : [
+                    'Open script.google.com and create a New Project.',
+                    'Delete the default code and paste the code below (Copy button).',
+                    'Save (Ctrl+S).',
+                    'Select the function "setupGoogleForm" from the top bar and click Run (▷).',
+                    'First run opens an auth dialog: Review Permissions → pick your Google account → Advanced → Go to (unsafe) → Allow.',
+                    'After it runs, copy the form link from the Execution log and share it with customers.',
+                    'From now on, every Google Form response is saved automatically in this form’s Archive.',
+                  ]
+              ).map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
+
+            {/* Code */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-gray-600">{lang === 'fa' ? 'کد اسکریپت (Google Apps Script)' : 'Apps Script code'}</label>
+                <button onClick={copyScript} className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors ${scriptCopied ? 'bg-emerald-50 text-emerald-600' : 'text-green-700 hover:bg-green-50'}`}>
+                  {scriptCopied ? <IconCheck className="w-3.5 h-3.5" /> : <IconCopy className="w-3.5 h-3.5" />}
+                  {scriptCopied ? (lang === 'fa' ? 'کپی شد' : 'Copied') : (lang === 'fa' ? 'کپی کد' : 'Copy code')}
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={script}
+                dir="ltr"
+                onFocus={e => e.currentTarget.select()}
+                className="w-full h-56 bg-gray-900 text-green-300 font-mono text-[11px] leading-relaxed p-3 rounded-xl text-left overflow-auto resize-none"
+              />
+            </div>
+
+            {gf.fields.some(f => f.type === 'file') && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2.5 leading-relaxed">
+                {lang === 'fa'
+                  ? '⚠️ این فرم فیلد «بارگذاری فایل» دارد. در گوگل‌فرم، آن فیلد به‌صورت درخواست «لینک فایل» نمایش داده می‌شود (به‌دلیل محدودیت دسترسی آپلود مستقیم گوگل‌فرم).'
+                  : '⚠️ This form has a file-upload field. In the Google Form it becomes a "file link" text question (Google Forms direct uploads are access-restricted).'}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  })(googleFormFor);
+
   return (
     <div className="space-y-5 animate-fade-in">
       {JsonImportModal}
+      {GoogleFormModal}
 
       {/* Delete confirm */}
       {confirmDeleteId && (
@@ -1340,6 +1430,14 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 )}
                 {isEditor && (
                   <>
+                    <button
+                      onClick={() => { setGoogleFormFor(form); setScriptCopied(false); }}
+                      title={lang === 'fa' ? 'ساخت نسخه گوگل‌فرم از این فرم' : 'Generate a Google Form version'}
+                      className="flex items-center gap-1 py-1.5 px-2.5 text-xs font-medium text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+                    >
+                      <IconLink className="w-3.5 h-3.5" />
+                      {lang === 'fa' ? 'گوگل‌فرم' : 'Google Form'}
+                    </button>
                     <button
                       onClick={() => exportJson(form)}
                       className="py-1.5 px-2.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
