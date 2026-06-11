@@ -167,9 +167,10 @@ const GoogleScriptModal: React.FC<{
   subtitle?: string;
   script: string;
   noteFa?: string;
+  extraControls?: React.ReactNode;
   lang: Language;
   onClose: () => void;
-}> = ({ title, subtitle, script, noteFa, lang, onClose }) => {
+}> = ({ title, subtitle, script, noteFa, extraControls, lang, onClose }) => {
   const [copied, setCopied] = useState(false);
   const copyScript = () => {
     navigator.clipboard.writeText(script).then(() => {
@@ -216,6 +217,8 @@ const GoogleScriptModal: React.FC<{
               ? 'با اجرای کد زیر، یک گوگل‌فرم دقیقاً مطابق همین فرم ساخته می‌شود. هر پاسخی که مشتری ثبت کند، خودکار به‌صورت تیکت در سامانه می‌نشیند. نیازی به VPN یا تنظیمات گوگل‌کلود نیست.'
               : 'Running the code below creates a Google Form identical to this one. Every response is automatically saved as a ticket. No VPN or Google Cloud setup needed.')}
           </div>
+
+          {extraControls}
 
           <ol className="list-decimal list-inside space-y-1.5 text-xs text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-200">
             {steps.map((s, i) => <li key={i}>{s}</li>)}
@@ -268,6 +271,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
   const [googleFormFor, setGoogleFormFor] = useState<CustomForm | null>(null);
   const [serviceReqGoogleOpen, setServiceReqGoogleOpen] = useState(false);
+  const [serviceReqMulti, setServiceReqMulti] = useState(false);
 
   const isEditor = isAdmin || isMaster;
 
@@ -1307,11 +1311,36 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         <GoogleScriptModal
           lang={lang}
           title={lang === 'fa' ? 'فرم ثبت درخواست خدمات' : 'Service Request Form'}
-          subtitle={lang === 'fa'
-            ? 'این کد یک گوگل‌فرمِ «ثبت درخواست» می‌سازد: مشتری ابتدا «نوع خدمت» را انتخاب می‌کند، سپس فقط «زیرخدمت‌های» همان خدمت به او نشان داده می‌شود (بخش‌بندی شرطی)، و در پایان اطلاعات تماس را پر می‌کند. هر پاسخ با همان خدمت و زیرخدمت‌های انتخابی به‌صورت تیکت ثبت و طبق تنظیمات «ارجاع سرویس/زیرخدمت» سامانه، خودکار به کارشناس مربوطه ارجاع داده می‌شود — دقیقاً مانند ثبت درخواست در خود سامانه.'
-            : 'This creates a Service Request Google Form: the customer picks a service type first, then sees only that service’s sub-services (conditional sections), then fills contact info. Each response becomes a ticket with the chosen service + sub-services and is auto-routed to the right specialist using the platform’s service/sub-service routing rules — exactly like a native service request.'}
-          script={buildServiceRequestGoogleScript(services, formFields)}
-          noteFa={'ℹ️ ارجاع بر اساس «نوع خدمت» و «زیرخدمت‌های» انتخابی انجام می‌شود (طبق تنظیمات بخش خدمات و تعرفه‌ها). فیلد «بارگذاری فایل» نیز در گوگل‌فرم به «لینک فایل» تبدیل می‌شود.'}
+          subtitle={serviceReqMulti
+            ? (lang === 'fa'
+                ? 'حالت چند‌خدمت: مشتری می‌تواند در صورت نیاز چند خدمت را هم‌زمان انتخاب کند. برای هر خدمتِ انتخابی یک «درخواست جداگانه» ثبت و طبق تنظیمات «ارجاع سرویس/زیرخدمت» سامانه، مستقل به کارشناس مربوطه ارجاع داده می‌شود — دقیقاً مانند ثبت درخواست بومی که چند تیکت می‌سازد.'
+                : 'Multi-service mode: the customer may pick several services at once. Each selected service becomes a SEPARATE ticket, independently auto-routed by the platform’s service/sub-service rules — exactly like the native form that creates multiple tickets.')
+            : (lang === 'fa'
+                ? 'حالت تک‌خدمت: مشتری یک «نوع خدمت» را انتخاب می‌کند، سپس فقط «زیرخدمت‌های» همان خدمت به او نشان داده می‌شود (بخش‌بندی شرطی)، و در پایان اطلاعات تماس را پر می‌کند. هر پاسخ طبق تنظیمات «ارجاع سرویس/زیرخدمت» سامانه ارجاع داده می‌شود.'
+                : 'Single-service mode: the customer picks one service type, then sees only that service’s sub-services (conditional sections), then contact info. Routed by the platform’s service/sub-service rules.')}
+          script={buildServiceRequestGoogleScript(services, formFields, serviceReqMulti)}
+          noteFa={serviceReqMulti
+            ? 'ℹ️ چون انتخاب خدمت چندتایی است، گوگل‌فرم امکان «نمایش شرطی» زیرخدمت‌ها را ندارد؛ بنابراین گروه زیرخدمتِ هر خدمت با راهنمای واضح نمایش داده می‌شود و مشتری فقط زیرخدمت‌های خدمات انتخابی‌اش را پر می‌کند. زیرخدمت‌های خدمات انتخاب‌نشده نادیده گرفته می‌شوند.'
+            : 'ℹ️ ارجاع بر اساس «نوع خدمت» و «زیرخدمت‌های» انتخابی انجام می‌شود (طبق تنظیمات بخش خدمات و تعرفه‌ها). فیلد «بارگذاری فایل» نیز در گوگل‌فرم به «لینک فایل» تبدیل می‌شود.'}
+          extraControls={
+            <div className="flex flex-wrap items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5">
+              <span className="text-xs font-bold text-indigo-900 px-1">{lang === 'fa' ? 'حالت انتخاب خدمت:' : 'Service selection mode:'}</span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setServiceReqMulti(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${!serviceReqMulti ? 'bg-indigo-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {lang === 'fa' ? 'تک‌خدمت (زیرخدمت شرطی)' : 'Single (conditional subs)'}
+                </button>
+                <button
+                  onClick={() => setServiceReqMulti(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${serviceReqMulti ? 'bg-indigo-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {lang === 'fa' ? 'چند‌خدمت' : 'Multiple'}
+                </button>
+              </div>
+            </div>
+          }
           onClose={() => setServiceReqGoogleOpen(false)}
         />
       )}

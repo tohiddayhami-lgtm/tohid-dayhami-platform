@@ -250,6 +250,7 @@ ${SHARED_HELPERS}`;
 export const buildServiceRequestGoogleScript = (
   services: ServiceOption[],
   formFields: FormField[],
+  multiService = false,
 ): string => {
   const fields = mapFields(formFields);
 
@@ -257,8 +258,8 @@ export const buildServiceRequestGoogleScript = (
   const keyMap: Record<string, string> = {};
   fields.forEach(f => { if (f.type !== 'header') keyMap[f.label] = f.key; });
 
-  // Active services with their sub-services (title + id), so the script can build a
-  // branched form and map selected sub-services back to their IDs for routing.
+  // Active services with their sub-services (title + id), so the script can build the
+  // form and map selected services / sub-services back to their IDs for routing.
   const activeServices = services
     .filter(s => s.isActive !== false)
     .map(s => ({
@@ -274,29 +275,52 @@ export const buildServiceRequestGoogleScript = (
   const KEYMAP_JSON = JSON.stringify(keyMap, null, 2);
   const SERVICES_JSON = JSON.stringify(activeServices, null, 2);
 
-  return `/**
+  const headerComment = multiService
+    ? `/**
  * ═══════════════════════════════════════════════════════════════════════
- *  گوگل‌فرمِ «ثبت درخواست خدمات» — متصل به سامانه
- *  مشتری ابتدا «نوع خدمت» را انتخاب می‌کند، سپس فقط «زیرخدمت‌های» همان خدمت
- *  به او نمایش داده می‌شود (به‌صورت بخش‌بندی شرطی)، و در پایان اطلاعات تماس.
+ *  گوگل‌فرمِ «ثبت درخواست خدمات» (حالت چند‌خدمت) — متصل به سامانه
+ *  مشتری می‌تواند در صورت نیاز چند خدمت را هم‌زمان انتخاب کند. برای هر خدمتِ
+ *  انتخابی یک «درخواست جداگانه» ثبت می‌شود و هرکدام طبق تنظیمات «ارجاع
+ *  سرویس/زیرخدمت» سامانه، مستقل به کارشناس مربوطه ارجاع داده می‌شود
+ *  (دقیقاً مانند فرم ثبت درخواستِ خودِ سامانه که چند تیکت می‌سازد).
+ *
+ *  ۱) تابع «setupGoogleForm» را یک‌بار اجرا کنید.
+ *  ۲) لینک فرم از Execution log کپی و برای مشتری ارسال می‌شود.
+ * ═══════════════════════════════════════════════════════════════════════
+ */`
+    : `/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  گوگل‌فرمِ «ثبت درخواست خدمات» (حالت تک‌خدمت) — متصل به سامانه
+ *  مشتری یک «نوع خدمت» را انتخاب می‌کند، سپس فقط «زیرخدمت‌های» همان خدمت
+ *  به او نمایش داده می‌شود (بخش‌بندی شرطی)، و در پایان اطلاعات تماس.
  *  هر پاسخ به‌صورت تیکت ثبت و طبق تنظیمات «ارجاع سرویس/زیرخدمت» سامانه
  *  خودکار به کارشناس مربوطه ارجاع داده می‌شود (دقیقاً مانند ثبت درخواست بومی).
  *
  *  ۱) تابع «setupGoogleForm» را یک‌بار اجرا کنید.
  *  ۲) لینک فرم از Execution log کپی و برای مشتری ارسال می‌شود.
  * ═══════════════════════════════════════════════════════════════════════
- */
+ */`;
 
+  const vars = `
 var PROJECT_ID   = ${PROJECT_ID};
 var API_KEY      = ${API_KEY};
 var FORM_TITLE   = 'فرم ثبت درخواست خدمات';
 var Q_SERVICE    = 'نوع خدمت درخواستی';
+var Q_SERVICES   = 'خدمت‌های مورد نظر';
 var SUB_Q_PREFIX = 'زیرخدمت‌های مرتبط با';
 
 var FIELDS   = ${FIELDS_JSON};
 var KEY_MAP  = ${KEYMAP_JSON};
-var SERVICES = ${SERVICES_JSON};
+var SERVICES = ${SERVICES_JSON};`;
 
+  const pickFn = `
+function pick(formData, keys) {
+  for (var i = 0; i < keys.length; i++) { if (formData[keys[i]]) return formData[keys[i]]; }
+  return '';
+}`;
+
+  // ── SINGLE-service mode (conditional sub-service branching) ──────────────────
+  const setupSingle = `
 function setupGoogleForm() {
   var form = FormApp.create(FORM_TITLE);
   form.setDescription('برای ثبت درخواست، لطفاً فرم زیر را تکمیل کنید.');
@@ -308,21 +332,19 @@ function setupGoogleForm() {
   }
 
   if (!SERVICES.length) {
-    // بدون خدمت — فقط فیلدهای فرم
     for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
 
   } else if (!hasSubs) {
-    // حالت ساده: هیچ خدمتی زیرخدمت ندارد → یک لیست کشویی + فیلدها در یک صفحه
+    // هیچ خدمتی زیرخدمت ندارد → یک لیست کشویی + فیلدها در یک صفحه
     var titles = [];
     for (var i = 0; i < SERVICES.length; i++) titles.push(SERVICES[i].title);
     form.addListItem().setTitle(Q_SERVICE).setRequired(true).setChoiceValues(titles);
     for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
 
   } else {
-    // حالت شرطی: انتخاب خدمت (صفحه ۱) → صفحه‌ی زیرخدمتِ همان خدمت → صفحه‌ی اطلاعات تماس
+    // انتخاب خدمت (صفحه ۱) → صفحه‌ی زیرخدمتِ همان خدمت → صفحه‌ی اطلاعات تماس
     var radio = form.addMultipleChoiceItem().setTitle(Q_SERVICE).setRequired(true);
 
-    // برای هر خدمتِ دارای زیرخدمت، یک صفحه با چک‌باکس زیرخدمت‌ها می‌سازیم.
     var subPageByTitle = {};
     var subPages = [];
     for (var i = 0; i < SERVICES.length; i++) {
@@ -340,18 +362,14 @@ function setupGoogleForm() {
       }
     }
 
-    // صفحه‌ی پایانیِ مشترک برای اطلاعات تماس و سایر فیلدها
     var contactPage = form.addPageBreakItem().setTitle('اطلاعات تماس و تکمیلی');
     for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
 
-    // پس از تکمیل هر صفحه‌ی زیرخدمت، مستقیماً به صفحه‌ی تماس برود (نه صفحه‌ی خدمت بعدی).
-    // setGoToPage روی یک page break، مسیرِ «بعد از صفحه‌ی قبل از آن» را تعیین می‌کند؛
-    // بنابراین آن را روی صفحات دوم به بعد تنظیم می‌کنیم.
+    // پس از هر صفحه‌ی زیرخدمت، مستقیم به صفحه‌ی تماس (setGoToPage مسیرِ صفحه‌ی قبلی را تعیین می‌کند)
     for (var i = 1; i < subPages.length; i++) {
       subPages[i].setGoToPage(contactPage);
     }
 
-    // گزینه‌های انتخاب خدمت: دارای زیرخدمت → صفحه‌ی خودش، بدون زیرخدمت → مستقیم صفحه‌ی تماس
     var choices = [];
     for (var i = 0; i < SERVICES.length; i++) {
       var s = SERVICES[i];
@@ -365,16 +383,12 @@ function setupGoogleForm() {
   ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
   PropertiesService.getScriptProperties().setProperty('linkedFormId', form.getId());
 
-  Logger.log('✅ گوگل‌فرمِ ثبت درخواست ساخته و به سامانه متصل شد.');
+  Logger.log('✅ گوگل‌فرمِ ثبت درخواست (تک‌خدمت) ساخته و به سامانه متصل شد.');
   Logger.log('📨 لینک پر کردن فرم (برای مشتری): ' + form.getPublishedUrl());
   Logger.log('✏️ لینک ویرایش فرم (برای شما): ' + form.getEditUrl());
-}
+}`;
 
-function pick(formData, keys) {
-  for (var i = 0; i < keys.length; i++) { if (formData[keys[i]]) return formData[keys[i]]; }
-  return '';
-}
-
+  const onSubmitSingle = `
 function onFormSubmit(e) {
   try {
     var itemResponses = e.response.getItemResponses();
@@ -396,7 +410,6 @@ function onFormSubmit(e) {
         if (raw && raw.length) {
           for (var k = 0; k < raw.length; k++) subSelections.push(String(raw[k]));
         }
-        if (subSelections.length) descLines.push('زیرخدمت‌ها: ' + subSelections.join('، '));
         continue;
       }
 
@@ -409,7 +422,6 @@ function onFormSubmit(e) {
       descLines.push(title + ': ' + ansStr);
     }
 
-    // تعیین شناسه‌ی خدمت و شناسه‌های زیرخدمت‌های انتخابی (برای ارجاع دقیق)
     var serviceId = serviceTitle;
     var serviceObj = null;
     for (var i = 0; i < SERVICES.length; i++) {
@@ -425,6 +437,7 @@ function onFormSubmit(e) {
         }
       }
     }
+    if (subSelections.length) descLines.push('زیرخدمت‌ها: ' + subSelections.join('، '));
 
     var name         = pick(formData, ['fullName', 'name', 'customerName']);
     var phone        = pick(formData, ['phoneNumber', 'mobile', 'phone', 'tel']);
@@ -436,8 +449,7 @@ function onFormSubmit(e) {
     var now = new Date().toISOString();
     var id = 'FRM-' + (new Date()).getTime() + '-' + Math.floor(Math.random() * 9000 + 1000) + '-GF';
 
-    // مهم: assignedTo را خالی می‌گذاریم تا سامانه طبق تنظیمات «ارجاع سرویس/زیرخدمت»
-    // خودش تیکت را به کارشناس مربوطه ارجاع دهد — مثل ثبت درخواست بومی.
+    // assignedTo را خالی می‌گذاریم تا سامانه خودش طبق ارجاع سرویس/زیرخدمت عمل کند.
     var ticket = {
       id: id,
       customerName: name || 'بدون نام',
@@ -465,6 +477,161 @@ function onFormSubmit(e) {
   } catch (err) {
     Logger.log('❌ خطا در ثبت درخواست: ' + err);
   }
-}
+}`;
+
+  // ── MULTI-service mode (checkbox; one ticket per selected service) ───────────
+  const setupMulti = `
+function setupGoogleForm() {
+  var form = FormApp.create(FORM_TITLE);
+  form.setDescription('برای ثبت درخواست، لطفاً فرم زیر را تکمیل کنید. در صورت نیاز می‌توانید چند خدمت را هم‌زمان انتخاب کنید.');
+  form.setCollectEmail(false);
+
+  // انتخاب چندتاییِ خدمت‌ها
+  if (SERVICES.length) {
+    var titles = [];
+    for (var i = 0; i < SERVICES.length; i++) titles.push(SERVICES[i].title);
+    form.addCheckboxItem()
+        .setTitle(Q_SERVICES)
+        .setHelpText('می‌توانید یک یا چند خدمت را انتخاب کنید.')
+        .setRequired(true)
+        .setChoiceValues(titles);
+  }
+
+  // برای هر خدمتِ دارای زیرخدمت، یک چک‌باکس زیرخدمت (اختیاری). چون انتخاب خدمت
+  // چندتایی است، نمایش شرطی ممکن نیست؛ پس هر گروه با راهنمای واضح نمایش داده می‌شود.
+  for (var i = 0; i < SERVICES.length; i++) {
+    var s = SERVICES[i];
+    if (s.subs && s.subs.length) {
+      var vals = [];
+      for (var j = 0; j < s.subs.length; j++) vals.push(s.subs[j].title);
+      form.addCheckboxItem()
+          .setTitle(SUB_Q_PREFIX + ' «' + s.title + '»')
+          .setHelpText('فقط در صورتی تکمیل کنید که خدمت «' + s.title + '» را انتخاب کرده‌اید.')
+          .setRequired(false)
+          .setChoiceValues(vals);
+    }
+  }
+
+  // اطلاعات تماس و سایر فیلدها
+  for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
+
+  removeExistingTriggers();
+  ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
+  PropertiesService.getScriptProperties().setProperty('linkedFormId', form.getId());
+
+  Logger.log('✅ گوگل‌فرمِ ثبت درخواست (چند‌خدمت) ساخته و به سامانه متصل شد.');
+  Logger.log('📨 لینک پر کردن فرم (برای مشتری): ' + form.getPublishedUrl());
+  Logger.log('✏️ لینک ویرایش فرم (برای شما): ' + form.getEditUrl());
+}`;
+
+  const onSubmitMulti = `
+function onFormSubmit(e) {
+  try {
+    var itemResponses = e.response.getItemResponses();
+    var formData = {};
+    var serviceSelections = [];
+    var subByQuestion = {}; // عنوان سؤال زیرخدمت → آرایه‌ی عناوین انتخابی
+    var descLines = [];
+
+    for (var i = 0; i < itemResponses.length; i++) {
+      var ir = itemResponses[i];
+      var title = ir.getItem().getTitle();
+      var raw = ir.getResponse();
+
+      if (title === Q_SERVICES) {
+        if (raw && raw.length) { for (var k = 0; k < raw.length; k++) serviceSelections.push(String(raw[k])); }
+        if (serviceSelections.length) descLines.push('خدمات: ' + serviceSelections.join('، '));
+        continue;
+      }
+      if (title.indexOf(SUB_Q_PREFIX) === 0) {
+        var arr = [];
+        if (raw && raw.length) { for (var k = 0; k < raw.length; k++) arr.push(String(raw[k])); }
+        subByQuestion[title] = arr;
+        continue;
+      }
+
+      var ans = raw;
+      if (ans && ans.join) ans = ans.join('، ');
+      var ansStr = (ans === null || ans === undefined) ? '' : String(ans);
+      if (!ansStr) continue;
+      var key = KEY_MAP[title];
+      if (key) formData[key] = ansStr;
+      descLines.push(title + ': ' + ansStr);
+    }
+
+    var name         = pick(formData, ['fullName', 'name', 'customerName']);
+    var phone        = pick(formData, ['phoneNumber', 'mobile', 'phone', 'tel']);
+    var whatsapp     = pick(formData, ['whatsappNumber', 'whatsapp']) || phone;
+    var company      = pick(formData, ['companyName', 'company']);
+    var location     = pick(formData, ['location', 'city', 'address']) || '-';
+    var businessType = pick(formData, ['businessType', 'business']);
+
+    var now = new Date().toISOString();
+    var baseTime = (new Date()).getTime();
+    var commonDesc = descLines.join('\\n');
+
+    if (serviceSelections.length === 0) serviceSelections = ['']; // حداقل یک درخواست ثبت شود
+
+    // برای هر خدمتِ انتخابی، یک تیکت جداگانه (مثل فرم بومی) — هرکدام مستقل ارجاع می‌شود.
+    for (var si = 0; si < serviceSelections.length; si++) {
+      var stitle = serviceSelections[si];
+      var sobj = null;
+      var sid = stitle || 's_other';
+      for (var a = 0; a < SERVICES.length; a++) {
+        if (SERVICES[a].title === stitle) { sobj = SERVICES[a]; sid = SERVICES[a].id; break; }
+      }
+
+      var subIds = [];
+      var selSubTitles = [];
+      if (sobj && sobj.subs && sobj.subs.length) {
+        var qTitle = SUB_Q_PREFIX + ' «' + sobj.title + '»';
+        var selSubs = subByQuestion[qTitle] || [];
+        for (var x = 0; x < selSubs.length; x++) {
+          for (var y = 0; y < sobj.subs.length; y++) {
+            if (sobj.subs[y].title === selSubs[x]) { subIds.push(sobj.subs[y].id); selSubTitles.push(selSubs[x]); break; }
+          }
+        }
+      }
+
+      var perDesc = commonDesc;
+      if (selSubTitles.length) perDesc += '\\nزیرخدمت‌های «' + (stitle || '—') + '»: ' + selSubTitles.join('، ');
+
+      var id = 'FRM-' + baseTime + '-' + si + '-' + Math.floor(Math.random() * 9000 + 1000) + '-GF';
+      var ticket = {
+        id: id,
+        customerName: name || 'بدون نام',
+        companyName: company,
+        location: location,
+        phoneNumber: phone,
+        whatsappNumber: whatsapp,
+        businessType: businessType,
+        serviceId: sid,
+        selectedSubServices: subIds,
+        description: '[درخواست از گوگل‌فرم — خدمت: ' + (stitle || '—') + ']\\n' + perDesc,
+        status: 'ثبت شده',
+        createdAt: now,
+        priority: 'Medium',
+        source: 'google_form',
+        timeline: [{
+          type: 'creation', title: 'ثبت درخواست از گوگل‌فرم',
+          description: 'درخواست خدمت «' + (stitle || '—') + '» توسط ' + (name || 'مشتری') + ' از طریق گوگل‌فرم ثبت شد.',
+          actorName: 'گوگل‌فرم', timestamp: now, visibility: 'public'
+        }],
+        customData: formData
+      };
+
+      writeTicketToFirestore(id, ticket);
+    }
+  } catch (err) {
+    Logger.log('❌ خطا در ثبت درخواست: ' + err);
+  }
+}`;
+
+  const body = multiService ? `${setupMulti}\n${onSubmitMulti}` : `${setupSingle}\n${onSubmitSingle}`;
+
+  return `${headerComment}
+${vars}
+${body}
+${pickFn}
 ${SHARED_HELPERS}`;
 };
