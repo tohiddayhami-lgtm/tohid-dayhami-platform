@@ -2172,6 +2172,8 @@ export const AdminDashboard: React.FC<Props> = ({
                 lang={lang}
                 personnel={personnel}
                 tickets={tickets}
+                services={services}
+                formFields={config.formFields}
             />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}

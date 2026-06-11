@@ -1,104 +1,36 @@
-import { CustomForm } from '../types';
+import { CustomForm, FormField, ServiceOption } from '../types';
 import { firebaseConfig } from './firebaseService';
 
 /**
- * Builds a self-contained Google Apps Script that:
- *   1. Creates a brand-new Google Form mirroring the platform's CustomForm.
- *   2. Installs an onFormSubmit trigger automatically.
- *   3. On every submission, writes a Ticket directly to Firestore (same project
- *      the platform reads from), so the response lands in the form's archive and
- *      the admin cartable exactly like a native public-form submission.
+ * Generates self-contained Google Apps Scripts that:
+ *   1. Create a Google Form mirroring a platform form.
+ *   2. Install an onFormSubmit trigger automatically.
+ *   3. On every submission, write a Ticket directly to Firestore (the same project
+ *      the platform reads from) so the response lands in the cartable / archive.
  *
  * No OAuth / service account / Cloud API needed — the admin pastes the code into
- * script.google.com, runs `setupGoogleForm` once, authorizes, and shares the
+ * script.google.com, runs the setup function once, authorizes, and shares the
  * generated form link. Because the script runs on Google's servers, it works
  * even from Iran (where firestore.googleapis.com is blocked for the browser).
- */
-export const buildGoogleFormScript = (form: CustomForm): string => {
-  // Fields in display order; headers kept so the Google Form gets section breaks.
-  const fields = [...form.fields]
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map(f => ({
-      key: f.key || f.id,
-      label: (f.label || f.key || f.id).trim(),
-      type: f.type,
-      required: !!f.required,
-      options: f.options || [],
-    }));
-
-  // Map a Google-Form question title back to the platform field key, so responses
-  // are stored under customData[field.key] (what the archive table reads).
-  const keyMap: Record<string, string> = {};
-  fields.forEach(f => { if (f.type !== 'header') keyMap[f.label] = f.key; });
-
-  const FIELDS_JSON = JSON.stringify(fields, null, 2);
-  const KEYMAP_JSON = JSON.stringify(keyMap, null, 2);
-  const TITLE = JSON.stringify(form.title || 'فرم');
-  const DESC = JSON.stringify(form.description || '');
-  const FORM_ID = JSON.stringify(form.id);
-  const PROJECT_ID = JSON.stringify(firebaseConfig.projectId);
-  const API_KEY = JSON.stringify(firebaseConfig.apiKey);
-
-  // NOTE: everything below is plain Apps Script (ES5-ish). It is injected as a
-  // string; the only template placeholders are the JSON constants above.
-  return `/**
- * ═══════════════════════════════════════════════════════════════════════
- *  اتصال خودکار گوگل‌فرم به سامانه طوحید دهیامی
- *  فرم: ${form.title}
- * ───────────────────────────────────────────────────────────────────────
- *  راهنمای استفاده:
- *   ۱) تابع «setupGoogleForm» را یک‌بار اجرا کنید تا گوگل‌فرم ساخته شود.
- *   ۲) لینک فرم از بخش Execution log کپی و برای مشتری ارسال می‌شود.
- *   ۳) از این پس هر پاسخ، خودکار به‌صورت تیکت در سامانه ثبت می‌گردد.
- * ═══════════════════════════════════════════════════════════════════════
+ *
+ * Two builders:
+ *   - buildGoogleFormScript(form)              → a custom "Forms & Standards" form
+ *   - buildServiceRequestGoogleScript(services, formFields)
+ *                                              → the main Service Request form, with a
+ *        service-selection question. The ticket is written with the REAL serviceId and
+ *        NO assignedTo, so the platform's existing auto-routing (App.tsx) assigns it to
+ *        the right person EXACTLY like a native service request (service.routePosition /
+ *        routeDepartmentId → least-loaded eligible staff).
  */
 
-var PLATFORM_FORM_ID = ${FORM_ID};
-var FORM_TITLE       = ${TITLE};
-var FORM_DESC        = ${DESC};
-var PROJECT_ID       = ${PROJECT_ID};
-var API_KEY          = ${API_KEY};
-
-// عنوان دو پرسش ثابتِ مشخصات تماس (برای ثبت نام و شماره در کارتابل)
-var Q_NAME  = 'نام و نام خانوادگی';
-var Q_PHONE = 'شماره تماس';
-
-// تعریف فیلدهای فرم (از روی فرم سامانه تولید شده است)
-var FIELDS = ${FIELDS_JSON};
-
-// نگاشت عنوان سؤال → کلید فیلد در سامانه
-var KEY_MAP = ${KEYMAP_JSON};
+const PROJECT_ID = JSON.stringify(firebaseConfig.projectId);
+const API_KEY = JSON.stringify(firebaseConfig.apiKey);
 
 /**
- * یک‌بار اجرا کنید: گوگل‌فرم را می‌سازد و تریگر ارسال را نصب می‌کند.
+ * Apps Script helpers shared by both generated scripts. Plain ES5-ish JS injected
+ * as a string. References PROJECT_ID / API_KEY which each script declares at top.
  */
-function setupGoogleForm() {
-  var form = FormApp.create(FORM_TITLE);
-  if (FORM_DESC) form.setDescription(FORM_DESC);
-  form.setCollectEmail(false);
-
-  // پرسش‌های مشخصات تماس (همیشه و در ابتدای فرم)
-  form.addTextItem().setTitle(Q_NAME).setRequired(true);
-  form.addTextItem().setTitle(Q_PHONE).setRequired(true);
-
-  for (var i = 0; i < FIELDS.length; i++) {
-    addFieldToForm(form, FIELDS[i]);
-  }
-
-  // نصب خودکار تریگر «هنگام ارسال فرم»
-  removeExistingTriggers();
-  ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
-
-  // ذخیره‌ی شناسه فرم برای مراجعات بعدی
-  PropertiesService.getScriptProperties().setProperty('linkedFormId', form.getId());
-
-  Logger.log('✅ گوگل‌فرم با موفقیت ساخته و به سامانه متصل شد.');
-  Logger.log('📨 لینک پر کردن فرم (این را برای مشتری بفرستید):');
-  Logger.log(form.getPublishedUrl());
-  Logger.log('✏️ لینک ویرایش فرم (برای خودتان):');
-  Logger.log(form.getEditUrl());
-}
-
+const SHARED_HELPERS = `
 function addFieldToForm(form, f) {
   try {
     switch (f.type) {
@@ -136,72 +68,10 @@ function addFieldToForm(form, f) {
         form.addTextItem().setTitle(f.label).setRequired(f.required);
     }
   } catch (err) {
-    // اگر افزودن فیلد با خطا مواجه شد، به‌صورت متن ساده اضافه می‌کنیم تا فرم خراب نشود.
     try { form.addTextItem().setTitle(f.label).setRequired(false); } catch (e2) {}
   }
 }
 
-/**
- * با هر ارسال فرم اجرا می‌شود و پاسخ را به‌صورت تیکت در سامانه ثبت می‌کند.
- */
-function onFormSubmit(e) {
-  try {
-    var itemResponses = e.response.getItemResponses();
-    var customData = { formId: PLATFORM_FORM_ID, formTitle: FORM_TITLE };
-    var name = '';
-    var phone = '';
-    var descLines = [];
-
-    for (var i = 0; i < itemResponses.length; i++) {
-      var ir = itemResponses[i];
-      var title = ir.getItem().getTitle();
-      var ans = ir.getResponse();
-      if (ans && ans.join) ans = ans.join('، '); // چک‌باکس چندگزینه‌ای
-      var ansStr = (ans === null || ans === undefined) ? '' : String(ans);
-      if (!ansStr) continue;
-
-      if (title === Q_NAME)  { name = ansStr; continue; }
-      if (title === Q_PHONE) { phone = ansStr; continue; }
-
-      var key = KEY_MAP[title];
-      if (key) customData[key] = ansStr;
-      descLines.push(title + ': ' + ansStr);
-    }
-
-    var now = new Date().toISOString();
-    var id = 'FRM-' + (new Date()).getTime() + '-' + Math.floor(Math.random() * 9000 + 1000) + '-GF';
-
-    var ticket = {
-      id: id,
-      customerName: name || 'بدون نام',
-      phoneNumber: phone,
-      whatsappNumber: phone,
-      location: '-',
-      serviceId: 'form:' + PLATFORM_FORM_ID,
-      description: '[فرم: ' + FORM_TITLE + ']\\n' + descLines.join('\\n'),
-      status: 'ثبت شده',
-      createdAt: now,
-      source: 'google_form',
-      timeline: [{
-        type: 'creation',
-        title: 'ثبت از طریق گوگل‌فرم',
-        description: 'فرم «' + FORM_TITLE + '» توسط ' + (name || 'کاربر') + ' در گوگل‌فرم تکمیل شد.',
-        actorName: 'گوگل‌فرم',
-        timestamp: now,
-        visibility: 'public'
-      }],
-      customData: customData
-    };
-
-    writeTicketToFirestore(id, ticket);
-  } catch (err) {
-    Logger.log('❌ خطا در ثبت پاسخ: ' + err);
-  }
-}
-
-/**
- * نوشتن مستقیم سند تیکت در Firestore (REST). همان پروژه‌ای که سامانه از آن می‌خواند.
- */
 function writeTicketToFirestore(docId, data) {
   var url = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID +
             '/databases/(default)/documents/tickets?documentId=' +
@@ -253,4 +123,348 @@ function removeExistingTriggers() {
   }
 }
 `;
+
+/** Maps a platform FormField list into the lightweight shape the script bakes in. */
+const mapFields = (fields: FormField[]) =>
+  [...fields]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map(f => ({
+      key: f.key || f.id,
+      label: (f.label || f.key || f.id).trim(),
+      type: f.type,
+      required: !!f.required,
+      options: f.options || [],
+    }));
+
+// ════════════════════════════════════════════════════════════════════════════
+//  1) Custom "Forms & Standards" form → Google Form
+// ════════════════════════════════════════════════════════════════════════════
+export const buildGoogleFormScript = (form: CustomForm): string => {
+  const fields = mapFields(form.fields);
+
+  // Google-Form question title → platform field key (so responses land under customData[key]).
+  const keyMap: Record<string, string> = {};
+  fields.forEach(f => { if (f.type !== 'header') keyMap[f.label] = f.key; });
+
+  const FIELDS_JSON = JSON.stringify(fields, null, 2);
+  const KEYMAP_JSON = JSON.stringify(keyMap, null, 2);
+  const TITLE = JSON.stringify(form.title || 'فرم');
+  const DESC = JSON.stringify(form.description || '');
+  const FORM_ID = JSON.stringify(form.id);
+
+  return `/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  اتصال خودکار گوگل‌فرم به سامانه — فرم: ${form.title}
+ *  ۱) تابع «setupGoogleForm» را یک‌بار اجرا کنید.
+ *  ۲) لینک فرم از Execution log کپی و برای مشتری ارسال می‌شود.
+ *  ۳) هر پاسخ، خودکار به‌صورت تیکت در سامانه ثبت می‌گردد.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+var PROJECT_ID = ${PROJECT_ID};
+var API_KEY    = ${API_KEY};
+var PLATFORM_FORM_ID = ${FORM_ID};
+var FORM_TITLE = ${TITLE};
+var FORM_DESC  = ${DESC};
+
+var Q_NAME  = 'نام و نام خانوادگی';
+var Q_PHONE = 'شماره تماس';
+
+var FIELDS  = ${FIELDS_JSON};
+var KEY_MAP = ${KEYMAP_JSON};
+
+function setupGoogleForm() {
+  var form = FormApp.create(FORM_TITLE);
+  if (FORM_DESC) form.setDescription(FORM_DESC);
+  form.setCollectEmail(false);
+
+  form.addTextItem().setTitle(Q_NAME).setRequired(true);
+  form.addTextItem().setTitle(Q_PHONE).setRequired(true);
+
+  for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
+
+  removeExistingTriggers();
+  ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
+  PropertiesService.getScriptProperties().setProperty('linkedFormId', form.getId());
+
+  Logger.log('✅ گوگل‌فرم ساخته و به سامانه متصل شد.');
+  Logger.log('📨 لینک پر کردن فرم (برای مشتری): ' + form.getPublishedUrl());
+  Logger.log('✏️ لینک ویرایش فرم (برای شما): ' + form.getEditUrl());
+}
+
+function onFormSubmit(e) {
+  try {
+    var itemResponses = e.response.getItemResponses();
+    var customData = { formId: PLATFORM_FORM_ID, formTitle: FORM_TITLE };
+    var name = '', phone = '', descLines = [];
+
+    for (var i = 0; i < itemResponses.length; i++) {
+      var ir = itemResponses[i];
+      var title = ir.getItem().getTitle();
+      var ans = ir.getResponse();
+      if (ans && ans.join) ans = ans.join('، ');
+      var ansStr = (ans === null || ans === undefined) ? '' : String(ans);
+      if (!ansStr) continue;
+
+      if (title === Q_NAME)  { name = ansStr; continue; }
+      if (title === Q_PHONE) { phone = ansStr; continue; }
+
+      var key = KEY_MAP[title];
+      if (key) customData[key] = ansStr;
+      descLines.push(title + ': ' + ansStr);
+    }
+
+    var now = new Date().toISOString();
+    var id = 'FRM-' + (new Date()).getTime() + '-' + Math.floor(Math.random() * 9000 + 1000) + '-GF';
+
+    var ticket = {
+      id: id,
+      customerName: name || 'بدون نام',
+      phoneNumber: phone,
+      whatsappNumber: phone,
+      location: '-',
+      serviceId: 'form:' + PLATFORM_FORM_ID,
+      description: '[فرم: ' + FORM_TITLE + ']\\n' + descLines.join('\\n'),
+      status: 'ثبت شده',
+      createdAt: now,
+      source: 'google_form',
+      timeline: [{
+        type: 'creation', title: 'ثبت از طریق گوگل‌فرم',
+        description: 'فرم «' + FORM_TITLE + '» توسط ' + (name || 'کاربر') + ' در گوگل‌فرم تکمیل شد.',
+        actorName: 'گوگل‌فرم', timestamp: now, visibility: 'public'
+      }],
+      customData: customData
+    };
+
+    writeTicketToFirestore(id, ticket);
+  } catch (err) {
+    Logger.log('❌ خطا در ثبت پاسخ: ' + err);
+  }
+}
+${SHARED_HELPERS}`;
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+//  2) Service Request form → Google Form (with service-based auto-routing)
+// ════════════════════════════════════════════════════════════════════════════
+export const buildServiceRequestGoogleScript = (
+  services: ServiceOption[],
+  formFields: FormField[],
+): string => {
+  const fields = mapFields(formFields);
+
+  // question title → field key
+  const keyMap: Record<string, string> = {};
+  fields.forEach(f => { if (f.type !== 'header') keyMap[f.label] = f.key; });
+
+  // Active services with their sub-services (title + id), so the script can build a
+  // branched form and map selected sub-services back to their IDs for routing.
+  const activeServices = services
+    .filter(s => s.isActive !== false)
+    .map(s => ({
+      id: s.id,
+      title: (s.title || s.id).trim(),
+      subs: (s.subServices || [])
+        .map(ss => ({ id: ss.id, title: (ss.title || ss.id).trim() }))
+        .filter(ss => ss.title),
+    }))
+    .filter(s => s.title);
+
+  const FIELDS_JSON = JSON.stringify(fields, null, 2);
+  const KEYMAP_JSON = JSON.stringify(keyMap, null, 2);
+  const SERVICES_JSON = JSON.stringify(activeServices, null, 2);
+
+  return `/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  گوگل‌فرمِ «ثبت درخواست خدمات» — متصل به سامانه
+ *  مشتری ابتدا «نوع خدمت» را انتخاب می‌کند، سپس فقط «زیرخدمت‌های» همان خدمت
+ *  به او نمایش داده می‌شود (به‌صورت بخش‌بندی شرطی)، و در پایان اطلاعات تماس.
+ *  هر پاسخ به‌صورت تیکت ثبت و طبق تنظیمات «ارجاع سرویس/زیرخدمت» سامانه
+ *  خودکار به کارشناس مربوطه ارجاع داده می‌شود (دقیقاً مانند ثبت درخواست بومی).
+ *
+ *  ۱) تابع «setupGoogleForm» را یک‌بار اجرا کنید.
+ *  ۲) لینک فرم از Execution log کپی و برای مشتری ارسال می‌شود.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+var PROJECT_ID   = ${PROJECT_ID};
+var API_KEY      = ${API_KEY};
+var FORM_TITLE   = 'فرم ثبت درخواست خدمات';
+var Q_SERVICE    = 'نوع خدمت درخواستی';
+var SUB_Q_PREFIX = 'زیرخدمت‌های مرتبط با';
+
+var FIELDS   = ${FIELDS_JSON};
+var KEY_MAP  = ${KEYMAP_JSON};
+var SERVICES = ${SERVICES_JSON};
+
+function setupGoogleForm() {
+  var form = FormApp.create(FORM_TITLE);
+  form.setDescription('برای ثبت درخواست، لطفاً فرم زیر را تکمیل کنید.');
+  form.setCollectEmail(false);
+
+  var hasSubs = false;
+  for (var i = 0; i < SERVICES.length; i++) {
+    if (SERVICES[i].subs && SERVICES[i].subs.length) { hasSubs = true; break; }
+  }
+
+  if (!SERVICES.length) {
+    // بدون خدمت — فقط فیلدهای فرم
+    for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
+
+  } else if (!hasSubs) {
+    // حالت ساده: هیچ خدمتی زیرخدمت ندارد → یک لیست کشویی + فیلدها در یک صفحه
+    var titles = [];
+    for (var i = 0; i < SERVICES.length; i++) titles.push(SERVICES[i].title);
+    form.addListItem().setTitle(Q_SERVICE).setRequired(true).setChoiceValues(titles);
+    for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
+
+  } else {
+    // حالت شرطی: انتخاب خدمت (صفحه ۱) → صفحه‌ی زیرخدمتِ همان خدمت → صفحه‌ی اطلاعات تماس
+    var radio = form.addMultipleChoiceItem().setTitle(Q_SERVICE).setRequired(true);
+
+    // برای هر خدمتِ دارای زیرخدمت، یک صفحه با چک‌باکس زیرخدمت‌ها می‌سازیم.
+    var subPageByTitle = {};
+    var subPages = [];
+    for (var i = 0; i < SERVICES.length; i++) {
+      var s = SERVICES[i];
+      if (s.subs && s.subs.length) {
+        var pb = form.addPageBreakItem().setTitle('زیرخدمت‌های «' + s.title + '»');
+        var vals = [];
+        for (var j = 0; j < s.subs.length; j++) vals.push(s.subs[j].title);
+        form.addCheckboxItem()
+            .setTitle(SUB_Q_PREFIX + ' «' + s.title + '»')
+            .setRequired(false)
+            .setChoiceValues(vals);
+        subPageByTitle[s.title] = pb;
+        subPages.push(pb);
+      }
+    }
+
+    // صفحه‌ی پایانیِ مشترک برای اطلاعات تماس و سایر فیلدها
+    var contactPage = form.addPageBreakItem().setTitle('اطلاعات تماس و تکمیلی');
+    for (var i = 0; i < FIELDS.length; i++) addFieldToForm(form, FIELDS[i]);
+
+    // پس از تکمیل هر صفحه‌ی زیرخدمت، مستقیماً به صفحه‌ی تماس برود (نه صفحه‌ی خدمت بعدی).
+    // setGoToPage روی یک page break، مسیرِ «بعد از صفحه‌ی قبل از آن» را تعیین می‌کند؛
+    // بنابراین آن را روی صفحات دوم به بعد تنظیم می‌کنیم.
+    for (var i = 1; i < subPages.length; i++) {
+      subPages[i].setGoToPage(contactPage);
+    }
+
+    // گزینه‌های انتخاب خدمت: دارای زیرخدمت → صفحه‌ی خودش، بدون زیرخدمت → مستقیم صفحه‌ی تماس
+    var choices = [];
+    for (var i = 0; i < SERVICES.length; i++) {
+      var s = SERVICES[i];
+      var target = subPageByTitle[s.title] ? subPageByTitle[s.title] : contactPage;
+      choices.push(radio.createChoice(s.title, target));
+    }
+    radio.setChoices(choices);
+  }
+
+  removeExistingTriggers();
+  ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
+  PropertiesService.getScriptProperties().setProperty('linkedFormId', form.getId());
+
+  Logger.log('✅ گوگل‌فرمِ ثبت درخواست ساخته و به سامانه متصل شد.');
+  Logger.log('📨 لینک پر کردن فرم (برای مشتری): ' + form.getPublishedUrl());
+  Logger.log('✏️ لینک ویرایش فرم (برای شما): ' + form.getEditUrl());
+}
+
+function pick(formData, keys) {
+  for (var i = 0; i < keys.length; i++) { if (formData[keys[i]]) return formData[keys[i]]; }
+  return '';
+}
+
+function onFormSubmit(e) {
+  try {
+    var itemResponses = e.response.getItemResponses();
+    var formData = {};
+    var serviceTitle = '';
+    var subSelections = [];
+    var descLines = [];
+
+    for (var i = 0; i < itemResponses.length; i++) {
+      var ir = itemResponses[i];
+      var title = ir.getItem().getTitle();
+      var raw = ir.getResponse();
+
+      if (title === Q_SERVICE) {
+        serviceTitle = (raw === null || raw === undefined) ? '' : String(raw);
+        continue;
+      }
+      if (title.indexOf(SUB_Q_PREFIX) === 0) {
+        if (raw && raw.length) {
+          for (var k = 0; k < raw.length; k++) subSelections.push(String(raw[k]));
+        }
+        if (subSelections.length) descLines.push('زیرخدمت‌ها: ' + subSelections.join('، '));
+        continue;
+      }
+
+      var ans = raw;
+      if (ans && ans.join) ans = ans.join('، ');
+      var ansStr = (ans === null || ans === undefined) ? '' : String(ans);
+      if (!ansStr) continue;
+      var key = KEY_MAP[title];
+      if (key) formData[key] = ansStr;
+      descLines.push(title + ': ' + ansStr);
+    }
+
+    // تعیین شناسه‌ی خدمت و شناسه‌های زیرخدمت‌های انتخابی (برای ارجاع دقیق)
+    var serviceId = serviceTitle;
+    var serviceObj = null;
+    for (var i = 0; i < SERVICES.length; i++) {
+      if (SERVICES[i].title === serviceTitle) { serviceObj = SERVICES[i]; serviceId = SERVICES[i].id; break; }
+    }
+    if (!serviceId) serviceId = 's_other';
+
+    var selectedSubIds = [];
+    if (serviceObj && serviceObj.subs && subSelections.length) {
+      for (var a = 0; a < subSelections.length; a++) {
+        for (var b = 0; b < serviceObj.subs.length; b++) {
+          if (serviceObj.subs[b].title === subSelections[a]) { selectedSubIds.push(serviceObj.subs[b].id); break; }
+        }
+      }
+    }
+
+    var name         = pick(formData, ['fullName', 'name', 'customerName']);
+    var phone        = pick(formData, ['phoneNumber', 'mobile', 'phone', 'tel']);
+    var whatsapp     = pick(formData, ['whatsappNumber', 'whatsapp']) || phone;
+    var company      = pick(formData, ['companyName', 'company']);
+    var location     = pick(formData, ['location', 'city', 'address']) || '-';
+    var businessType = pick(formData, ['businessType', 'business']);
+
+    var now = new Date().toISOString();
+    var id = 'FRM-' + (new Date()).getTime() + '-' + Math.floor(Math.random() * 9000 + 1000) + '-GF';
+
+    // مهم: assignedTo را خالی می‌گذاریم تا سامانه طبق تنظیمات «ارجاع سرویس/زیرخدمت»
+    // خودش تیکت را به کارشناس مربوطه ارجاع دهد — مثل ثبت درخواست بومی.
+    var ticket = {
+      id: id,
+      customerName: name || 'بدون نام',
+      companyName: company,
+      location: location,
+      phoneNumber: phone,
+      whatsappNumber: whatsapp,
+      businessType: businessType,
+      serviceId: serviceId,
+      selectedSubServices: selectedSubIds,
+      description: '[درخواست از گوگل‌فرم — خدمت: ' + serviceTitle + ']\\n' + descLines.join('\\n'),
+      status: 'ثبت شده',
+      createdAt: now,
+      priority: 'Medium',
+      source: 'google_form',
+      timeline: [{
+        type: 'creation', title: 'ثبت درخواست از گوگل‌فرم',
+        description: 'درخواست خدمت «' + serviceTitle + '» توسط ' + (name || 'مشتری') + ' از طریق گوگل‌فرم ثبت شد.',
+        actorName: 'گوگل‌فرم', timestamp: now, visibility: 'public'
+      }],
+      customData: formData
+    };
+
+    writeTicketToFirestore(id, ticket);
+  } catch (err) {
+    Logger.log('❌ خطا در ثبت درخواست: ' + err);
+  }
+}
+${SHARED_HELPERS}`;
 };
