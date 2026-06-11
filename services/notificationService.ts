@@ -1,5 +1,5 @@
 
-import { NotificationConfig, NotificationLog } from '../types';
+import { NotificationConfig, NotificationLog, Personnel } from '../types';
 
 export const DEFAULT_TICKET_TEMPLATE =
   'سلام {recipientName} 👋\nیک درخواست جدید به کارتابل شما ارجاع داده شد.\n\n📋 کد رهگیری: {ticketId}\n👤 متقاضی: {customerName}\n\nبرای مشاهده وارد پنل کاربری شوید.';
@@ -95,6 +95,38 @@ export const sendWhatsAppNotification = async (
   } catch (err: any) {
     return { success: false, error: err.message || 'خطای ناشناخته' };
   }
+};
+
+/**
+ * Sends a COPY of a just-sent notification to the configured "master" recipient
+ * (config.masterRecipientId), if any. Additive — call it right after each primary
+ * send so the master mirrors every WhatsApp notification the system sends.
+ * No-ops when: no master is set, the master IS the original recipient, the master
+ * has no phone, or (callmebot) the master has no API key.
+ */
+export const sendMasterCopy = async (opts: {
+  config: NotificationConfig;
+  personnel: Personnel[];
+  message: string;
+  originalRecipientId: string;
+  originalRecipientName: string;
+  logType: NotificationLog['type'];
+  ticketId?: string;
+  meetingId?: string;
+  saveLog: (log: Omit<NotificationLog, 'id'>) => Promise<unknown> | void;
+}): Promise<void> => {
+  const { config, personnel, message, originalRecipientId, originalRecipientName, logType, ticketId, meetingId, saveLog } = opts;
+  const masterId = config.masterRecipientId;
+  if (!masterId || masterId === originalRecipientId) return;
+  const phone = config.personnelPhones?.[masterId];
+  if (!phone) return;
+  const apiKey = config.personnelApiKeys?.[masterId];
+  if (config.provider === 'callmebot' && !apiKey) return;
+
+  const master = personnel.find(p => p.id === masterId);
+  const masterMsg = `📋 رونوشت مدیریتی (Master)\n👤 گیرنده اصلی: ${originalRecipientName}\n────────────\n${message}`;
+  const result = await sendWhatsAppNotification(phone, masterMsg, config, apiKey);
+  await saveLog(buildLog(logType, masterId, master?.fullName || 'Master', phone, masterMsg, result, ticketId, meetingId));
 };
 
 // Build a notification log entry (without id)

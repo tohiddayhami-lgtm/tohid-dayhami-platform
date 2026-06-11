@@ -136,6 +136,30 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
       {/* ── Config ── */}
       {activeSection === 'config' && (
         <div className="space-y-4">
+          {/* Master (CC) recipient */}
+          <div className="bg-white rounded-xl border border-indigo-100 shadow-sm p-5 space-y-3">
+            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider pb-2 border-b border-gray-100">نفر مستر — رونوشت همه‌ی اعلان‌ها</p>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              یک نفر را انتخاب کنید تا علاوه بر گیرنده‌ی اصلی (نفر ارجاعی)، یک نسخه از <b>همه‌ی نوتیفیکیشن‌های واتساپی</b> سامانه برای او هم ارسال شود.
+            </p>
+            <select
+              value={nc.masterRecipientId || ''}
+              onChange={e => setNc(n => ({ ...n, masterRecipientId: e.target.value || undefined }))}
+              className={inputCls}
+            >
+              <option value="">— بدون نفر مستر —</option>
+              {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+            </select>
+            {nc.masterRecipientId && (() => {
+              const m = personnel.find(p => p.id === nc.masterRecipientId);
+              const phone = nc.personnelPhones?.[nc.masterRecipientId!];
+              const needsKey = nc.provider === 'callmebot' && !nc.personnelApiKeys?.[nc.masterRecipientId!];
+              return phone && !needsKey
+                ? <p className="text-xs text-green-600">✓ {m?.fullName} رونوشت همه‌ی اعلان‌ها را دریافت می‌کند.</p>
+                : <p className="text-xs text-amber-600">⚠️ برای «{m?.fullName}» شماره واتساپ{needsKey ? ' و کلید CallMeBot' : ''} در تب «شماره پرسنل» ثبت نشده — تا ثبت نشود رونوشت ارسال نمی‌شود.</p>;
+            })()}
+          </div>
+
           {/* Provider */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pb-2 border-b border-gray-100">سرویس ارسال واتساپ</p>

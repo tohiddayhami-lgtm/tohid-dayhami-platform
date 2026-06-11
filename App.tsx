@@ -36,7 +36,7 @@ import { ExpoDoorsLoader } from './components/metaverse/ExpoDoorsLoader';
 import { DoorsGate } from './components/DoorsGate';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
-import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
+import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 
 export type Language = 'fa' | 'en';
 
@@ -562,6 +562,7 @@ const App: React.FC = () => {
 
           const result = await sendWhatsAppNotification(phone, msg, currentNc, apiKey);
           await saveNotificationLog(buildLog('meeting_reminder', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+          await sendMasterCopy({ config: currentNc, personnel, message: msg, originalRecipientId: pid, originalRecipientName: person.fullName, logType: 'meeting_reminder', meetingId: meeting.id, saveLog: saveNotificationLog });
         }
 
         // Mark sent in localStorage to avoid resend on re-render
@@ -641,6 +642,7 @@ const App: React.FC = () => {
 
         const result = await sendWhatsAppNotification(phone, msg, currentNc, apiKey);
         await saveNotificationLog(buildLog('daily_summary', pid, person.fullName, phone, msg, result));
+        await sendMasterCopy({ config: currentNc, personnel, message: msg, originalRecipientId: pid, originalRecipientName: person.fullName, logType: 'daily_summary', saveLog: saveNotificationLog });
       }
 
       // Mark today's summary as sent
@@ -921,6 +923,7 @@ const App: React.FC = () => {
           });
           const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[assignedTo]);
           await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee.fullName, phone, msg, result, ticket.id));
+          await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assignedTo, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
         }
       }
     }

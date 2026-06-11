@@ -913,6 +913,9 @@ export interface NotificationConfig {
   meetingReminderTemplate?: string;
   // Daily summary template ({recipientName}, {tomorrowDate}, {meetingsList})
   dailySummaryTemplate?: string;
+  // Optional "master" recipient — gets a copy of EVERY WhatsApp notification, in
+  // addition to the normal recipient. Keyed by personnel ID.
+  masterRecipientId?: string;
   // Per-person config (keyed by personnel ID)
   personnelPhones: Record<string, string>;    // WhatsApp phone number
   personnelApiKeys: Record<string, string>;   // CallMeBot API key (per person)

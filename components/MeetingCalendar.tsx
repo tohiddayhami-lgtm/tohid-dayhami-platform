@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Meeting, Personnel, NotificationConfig } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog } from '../services/firebaseService';
-import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
+import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 
@@ -135,6 +135,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       });
       const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
       await saveNotificationLog(buildLog('meeting_created', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+      await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: pid, originalRecipientName: person.fullName, logType: 'meeting_created', meetingId: meeting.id, saveLog: saveNotificationLog });
     }
   };
 
@@ -160,6 +161,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       });
       const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
       await saveNotificationLog(buildLog('meeting_updated', pid, person.fullName, phone, msg, result, undefined, newM.id));
+      await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: pid, originalRecipientName: person.fullName, logType: 'meeting_updated', meetingId: newM.id, saveLog: saveNotificationLog });
     }
   };
 
@@ -178,6 +180,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       });
       const result = await sendWhatsAppNotification(phone, msg, nc, apiKey);
       await saveNotificationLog(buildLog('meeting_deleted', pid, person.fullName, phone, msg, result, undefined, meeting.id));
+      await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: pid, originalRecipientName: person.fullName, logType: 'meeting_deleted', meetingId: meeting.id, saveLog: saveNotificationLog });
     }
   };
   // ────────────────────────────────────────────────────────────────

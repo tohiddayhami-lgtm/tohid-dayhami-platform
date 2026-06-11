@@ -27,7 +27,7 @@ import { CustomerAccountManager } from './CustomerAccountManager';
 import { ProcessManager } from './ProcessManager';
 import { CustomerBank } from './CustomerBank';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
-import { sendWhatsAppNotification, renderTemplate, buildLog } from '../services/notificationService';
+import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
 
 interface Props {
@@ -901,6 +901,7 @@ export const AdminDashboard: React.FC<Props> = ({
     });
     const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[targetUserId]);
     await saveNotificationLog(buildLog('new_ticket', targetUserId, assignee.fullName, phone, msg, result, ticketId));
+    await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: targetUserId, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId, saveLog: saveNotificationLog });
   };
 
   const handleAssignTicket = async () => { if (!selectedTicket) return; if (tempAssignedTo === selectedTicket.assignedTo) return; const targetUser = personnel.find(p => p.id === tempAssignedTo); const actionDesc = targetUser ? `Assigned to ${targetUser.fullName}` : 'Unassigned'; onUpdateTicket(selectedTicket.id, { assignedTo: tempAssignedTo }, currentUser.fullName, actionDesc); logSystemAction('UPDATE', 'Ticket', `Assigned ticket ${selectedTicket.id}`, currentUser.fullName, selectedTicket.id); if (targetUser && targetUser.id !== currentUser.id) { const msg: InternalMessage = { id: `notify-${Date.now()}`, senderId: currentUser.id, senderName: 'System', recipientIds: [targetUser.id], recipientNames: [targetUser.fullName], subject: `Assignment: ${selectedTicket.customerName}`, body: `Ticket #${selectedTicket.id} has been assigned to you.`, createdAt: new Date().toISOString(), readBy: [] }; await sendInternalMessage(msg); await notifyAssignee(targetUser.id, selectedTicket.id, selectedTicket.customerName); } alert(lang === 'fa' ? 'ارجاع انجام شد.' : 'Assigned successfully.'); };
@@ -2197,6 +2198,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 });
                 const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[rid]);
                 await saveNotificationLog(buildLog('new_message', rid, recipient.fullName, phone, msg, result));
+                await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: rid, originalRecipientName: recipient.fullName, logType: 'new_message', saveLog: saveNotificationLog });
               }
             }}
           />}
