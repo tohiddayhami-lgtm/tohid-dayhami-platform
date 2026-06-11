@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { MetaBazaar, MetaBazaarNode, MetaShop } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
 import { downloadSample } from './metaShopSamples';
+import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
 
 interface Props {
@@ -230,6 +231,17 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
 
           <p className="mt-3 text-[11px] text-gray-400">{t.treeNote}</p>
         </div>
+
+        {/* ── Metaverse 3D exhibition for this bazaar ── */}
+        <ExpoEditor
+          expo={draft.expo}
+          shops={shops}
+          lang={lang}
+          bazaarSlug={draft.slug}
+          shopBaseUrl={shopBaseUrl}
+          onChange={(expo) => upd({ expo })}
+          readonly={readonly}
+        />
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />
       </div>
     );

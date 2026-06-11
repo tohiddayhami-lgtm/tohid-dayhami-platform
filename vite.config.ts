@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || '')
       },
       resolve: {
+        // Force a single copy of three across react-three-fiber / drei / xr,
+        // otherwise R3F hooks return undefined ("multiple instances of three").
+        dedupe: ['three'],
         alias: {
           '@': path.resolve(__dirname, '.'),
         }

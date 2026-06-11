@@ -29,6 +29,8 @@ import {
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
+// Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
+const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -188,6 +190,17 @@ const extractBazaarSlug = (): string | null => {
   return null;
 };
 
+// Extracts a Metaverse Expo slug from ?expo=... or #/expo/... (the slug is the parent bazaar's slug)
+const extractExpoSlug = (): string | null => {
+  try {
+    const s = new URLSearchParams(window.location.search).get('expo');
+    if (s) return s;
+  } catch {}
+  const h = window.location.hash;
+  if (h.startsWith('#/expo/')) return h.replace('#/expo/', '').split('?')[0] || null;
+  return null;
+};
+
 // Extracts a pre-selected service ID from ?service=... — used by per-service share links (?page=form&service=<id>)
 const extractServiceId = (): string | null => {
   try {
@@ -207,11 +220,13 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
+    if (p.get('expo')) return 'expo';
     if (p.get('bazaar')) return 'bazaar';
     if (p.has('shops')) return 'shopsdir';
     if (p.get('shop') || p.get('c')) return 'metashop';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
+  if (hash.startsWith('#/expo/'))             return 'expo';
   if (hash.startsWith('#/bazaar/'))           return 'bazaar';
   if (hash === '#/shops')                     return 'shopsdir';
   if (hash.startsWith('#/shop/'))             return 'metashop';
@@ -257,6 +272,10 @@ const App: React.FC = () => {
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
   const [publicBazaar, setPublicBazaar] = useState<MetaBazaar | null>(null);
   const [bazaarLoading, setBazaarLoading] = useState(false);
+  // Metaverse expo (3D exhibition) — resolves the parent bazaar by slug, then reads bazaar.expo
+  const [expoSlug, setExpoSlug] = useState<string | null>(extractExpoSlug);
+  const [publicExpoBazaar, setPublicExpoBazaar] = useState<MetaBazaar | null>(null);
+  const [expoLoading, setExpoLoading] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -274,7 +293,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=',
   };
 
   const openFormWithService = (serviceId: string) => {
@@ -343,7 +362,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -378,6 +397,7 @@ const App: React.FC = () => {
       if (v === 'custom-form' && fid) setCustomFormId(fid);
       if (v === 'metashop') setShopSlug(extractShopSlug());
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
+      if (v === 'expo') setExpoSlug(extractExpoSlug());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
@@ -1067,6 +1087,20 @@ const App: React.FC = () => {
     setPublicBazaar(null);
   }, [view, bazaarSlug, metaBazaars]);
 
+  // ── Metaverse Expo: resolve the parent bazaar by slug (the expo config lives inside bazaar.expo) ──
+  useEffect(() => {
+    if (view !== 'expo' || !expoSlug) { setPublicExpoBazaar(null); return; }
+    const local = metaBazaars.find(b => b.slug === expoSlug);
+    if (local) { setPublicExpoBazaar(local); return; }
+    if (metaBazaars.length === 0) {
+      let cancelled = false;
+      setExpoLoading(true);
+      getMetaBazaarBySlug(expoSlug).then(b => { if (!cancelled) { setPublicExpoBazaar(b); setExpoLoading(false); } });
+      return () => { cancelled = true; };
+    }
+    setPublicExpoBazaar(null);
+  }, [view, expoSlug, metaBazaars]);
+
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
   const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; discountCode?: string; discountAmount?: number; taxRate?: number; taxAmount?: number; taxInclusive?: boolean; total: number; currency: string; }): Promise<string> => {
     const phoneRaw = data.phone.trim();
@@ -1148,6 +1182,31 @@ const App: React.FC = () => {
     };
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
+
+  // ── Public Metaverse Expo (3D / WebXR full-screen takeover) ──
+  if (view === 'expo') {
+    const expo = publicExpoBazaar?.expo;
+    if (publicExpoBazaar && publicExpoBazaar.isActive !== false && expo && expo.enabled) {
+      return (
+        <React.Suspense fallback={<div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1020] text-white gap-4"><div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" /><p className="text-sm text-white/70">{lang === 'fa' ? 'در حال بارگذاری نمایشگاه سه‌بعدی...' : 'Loading 3D exhibition...'}</p></div>}>
+          <MetaverseExpoView
+            bazaar={publicExpoBazaar}
+            shops={metaShops}
+            lang={lang}
+            onExit={() => setView('landing')}
+            onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+          />
+        </React.Suspense>
+      );
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+        {expoLoading || (metaBazaars.length === 0 && expoSlug)
+          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
+          : <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'نمایشگاه یافت نشد' : 'Exhibition not found'}</p><p className="text-sm">{lang === 'fa' ? 'این نمایشگاه وجود ندارد یا غیرفعال است.' : 'This exhibition does not exist or is inactive.'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>}
+      </div>
+    );
+  }
 
   // ── Public curated Bazaar (full-screen takeover) ──
   if (view === 'bazaar') {

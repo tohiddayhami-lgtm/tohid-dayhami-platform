@@ -513,7 +513,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services';
@@ -552,7 +552,85 @@ export interface MetaBazaar {
   theme?: Partial<MetaShopTheme>;
   levelLabels?: MetaShopDirCat[]; // optional names for each depth level (Country, City, Group, ...)
   tree: MetaBazaarNode[];         // category tree; leaves (or any node) carry shopSlugs
+  expo?: MetaverseExpo;           // optional 3D / metaverse exhibition for this bazaar (one bazaar = one expo)
   createdAt?: string;
+}
+
+// ═══════════════════ METAVERSE EXHIBITION (3D / WebXR virtual expo) ═══════════════════
+// A bazaar can host a walkable 3D exhibition hall. Visitors explore on desktop/mobile/tablet
+// or with a VR headset (WebXR), click booths/objects, and contact exhibitors or place orders.
+// Everything below stores only metadata + URLs (GLB/images live in Firebase Storage), so the
+// whole expo fits comfortably inside the parent MetaBazaar Firestore document.
+
+// What a clickable in-world marker does when tapped
+export type HotspotType =
+  | 'product'    // show a product (by id) from the linked shop
+  | 'company'    // open the exhibitor's shop / company profile
+  | 'video'      // play a video (YouTube / Vimeo / mp4) in a popup
+  | 'pdf'        // open a PDF / catalog
+  | 'image'      // show a full image
+  | 'url'        // external website link
+  | 'page'       // a specific content page (MetaShopPage) of the linked shop
+  | 'whatsapp'   // open WhatsApp chat
+  | 'contact'    // show phone / email contact card
+  | 'order';     // jump into the shop's order flow (?shop=<slug>)
+
+export interface MetaverseHotspot {
+  id: string;
+  // world position (meters) — placed relative to the hall, resolved in the editor
+  x: number; y: number; z: number;
+  ry?: number;                  // optional yaw rotation (radians)
+  type: HotspotType;
+  title?: MetaShopDirCat;       // bilingual label shown on the marker / modal header
+  body?: MetaShopDirCat;        // bilingual descriptive text (info / contact)
+  url?: string;                 // video / pdf / image / external URL
+  shopSlug?: string;            // target shop for company/order/page/product
+  productRef?: string;          // product id within the target shop
+  pageId?: string;              // MetaShopPage id (type 'page')
+  phone?: string;
+  whatsapp?: string;            // phone number for wa.me link
+  email?: string;
+  icon?: string;                // optional emoji/marker glyph
+  color?: string;               // marker accent color
+}
+
+export interface MetaverseBooth {
+  id: string;
+  name: MetaShopDirCat;         // bilingual booth / company name
+  shopSlug?: string;            // links the booth to an existing MetaShop (the exhibitor)
+  // placement on the hall floor
+  x: number; y: number; z: number;
+  ry?: number;                  // facing rotation (radians)
+  scale?: number;               // uniform scale (default 1)
+  // visuals
+  modelUrl?: string;            // optional custom GLB/GLTF (Storage documents/ URL) — overrides procedural booth
+  color?: string;               // accent color for the procedural booth
+  logo?: string;                // logo image URL (Storage images/)
+  bannerImage?: string;         // banner image URL (Storage images/)
+  hotspots?: MetaverseHotspot[];
+}
+
+// drei <Environment> presets used for image-based lighting / skybox when no custom HDR is given
+export type EnvPreset = 'city' | 'sunset' | 'dawn' | 'night' | 'warehouse' | 'forest' | 'apartment' | 'studio' | 'park' | 'lobby';
+
+export interface MetaverseExpo {
+  enabled: boolean;
+  defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
+  title?: MetaShopDirCat;
+  subtitle?: MetaShopDirCat;
+  // environment
+  environmentUrl?: string;      // optional hall/environment GLB (Storage documents/)
+  skyboxUrl?: string;           // optional HDR / equirectangular image
+  preset?: EnvPreset;           // drei Environment preset when no custom HDR
+  groundColor?: string;
+  wallColor?: string;
+  width?: number; depth?: number; height?: number; // hall dimensions (meters)
+  spawn?: { x: number; y: number; z: number; ry?: number }; // visitor start position
+  music?: string;               // optional ambient audio URL
+  booths: MetaverseBooth[];
+  schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
+  // Seam for future multiplayer (presence + text chat). Not implemented yet:
+  // presence?: { roomId?: string; chatEnabled?: boolean };
 }
 
 // A language a shop can be displayed in (beyond the default fa/en)

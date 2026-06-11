@@ -186,6 +186,14 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             {bazaar.logo ? <img src={bazaar.logo} alt="" style={{ height: 46, margin: '0 auto 8px', objectFit: 'contain' }} /> : <div className="msd-bazaar-emoji">🏬</div>}
             <h1>{bLbl(bazaar.title) || bazaar.name}</h1>
             {bLbl(bazaar.subtitle) && <p>{bLbl(bazaar.subtitle)}</p>}
+            {bazaar.expo?.enabled && (
+              <a
+                href={`?expo=${encodeURIComponent(bazaar.slug)}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 14, padding: '10px 20px', borderRadius: 999, background: 'rgba(255,255,255,.95)', color: '#1f2a18', fontWeight: 800, fontSize: 14, textDecoration: 'none', boxShadow: '0 4px 16px rgba(0,0,0,.25)' }}
+              >
+                🥽 {T ? 'ورود به نمایشگاه مجازی سه‌بعدی' : 'Enter 3D Virtual Exhibition'}
+              </a>
+            )}
           </div>
         </header>
         <div className="msd-container">
