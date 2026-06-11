@@ -11,6 +11,7 @@ interface Props {
   bazaarSlug: string;
   shopBaseUrl: string;
   onChange: (expo: MetaverseExpo) => void;
+  onPreview?: () => void | Promise<void>;  // saves the bazaar, then opens the 3D preview
   readonly?: boolean;
 }
 
@@ -24,7 +25,7 @@ const blankExpo = (): MetaverseExpo => ({
 
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
-export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, readonly = false }) => {
+export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, readonly = false }) => {
   const T = lang === 'fa';
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
   const [openBooth, setOpenBooth] = useState<string | null>(null);
@@ -34,7 +35,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     title: T ? 'نمایشگاه متاورس (سه‌بعدی)' : 'Metaverse Exhibition (3D)',
     hint: T ? 'یک سالن نمایشگاهی سه‌بعدی برای این بازارچه بسازید که بازدیدکنندگان با مرورگر، موبایل یا عینک VR داخلش قدم بزنند.' : 'Build a walkable 3D hall for this bazaar — visitors explore on web, mobile or a VR headset.',
     enable: T ? 'فعال‌سازی نمایشگاه سه‌بعدی' : 'Enable 3D exhibition',
-    preview: T ? 'پیش‌نمایش نمایشگاه' : 'Preview exhibition',
+    preview: T ? 'ذخیره و پیش‌نمایش نمایشگاه' : 'Save & preview exhibition',
+    previewHint: T ? 'پیش‌نمایش، بازارچه را ذخیره می‌کند و نمایشگاه را در تب جدید باز می‌کند.' : 'Preview saves the bazaar and opens the exhibition in a new tab.',
     hall: T ? 'تنظیمات سالن' : 'Hall settings',
     titleFa: T ? 'عنوان (فارسی)' : 'Title (FA)', titleEn: T ? 'عنوان (انگلیسی)' : 'Title (EN)',
     subFa: T ? 'زیرعنوان (فارسی)' : 'Subtitle (FA)', subEn: T ? 'زیرعنوان (انگلیسی)' : 'Subtitle (EN)',
@@ -194,7 +196,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <div><h4 className="font-bold text-gray-800">{t.title}</h4><p className="text-xs text-gray-400 max-w-md">{t.hint}</p></div>
         </div>
         <div className="flex items-center gap-2">
-          {e.enabled && bazaarSlug && <a href={previewUrl} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</a>}
+          {e.enabled && (
+            onPreview
+              ? <button type="button" onClick={() => onPreview()} title={t.previewHint} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</button>
+              : (bazaarSlug && <a href={previewUrl} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</a>)
+          )}
           <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
             <input type="checkbox" className="w-4 h-4 accent-indigo-600" disabled={readonly} checked={!!e.enabled} onChange={ev => onChange({ ...(expo || blankExpo()), enabled: ev.target.checked })} />
             {t.enable}

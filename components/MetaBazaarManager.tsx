@@ -110,6 +110,25 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     try { await onSave({ ...draft, slug }); setDraft(null); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
   };
 
+  // Save the bazaar (without leaving the editor), then open the 3D expo in a new tab.
+  // The preview reads the PERSISTED bazaar, so it must be saved first or it shows "not found".
+  const previewExpo = async () => {
+    if (!draft) return;
+    if (!draft.name.trim()) { alert(T ? 'ابتدا نام بازارچه را وارد کنید.' : 'Enter a bazaar name first.'); return; }
+    const slug = (draft.slug || '').trim() || slugify(draft.name);
+    if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
+    // Open the tab synchronously (inside the click) so popup blockers don't kill it.
+    const w = window.open('', '_blank');
+    setSaving(true);
+    try {
+      await onSave({ ...draft, slug });
+      setDraft(d => d ? { ...d, slug } : d);
+      const url = `${shopBaseUrl}?expo=${encodeURIComponent(slug)}`;
+      if (w) w.location.href = url; else window.open(url, '_blank');
+    } catch { if (w) w.close(); alert(T ? 'خطا در ذخیره' : 'Save failed'); }
+    finally { setSaving(false); }
+  };
+
   const upd = (patch: Partial<MetaBazaar>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updCat = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => setDraft(d => d ? { ...d, [field]: { ...(d[field] || {}), [which]: val } } : d);
   // Tree editing
@@ -240,6 +259,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           bazaarSlug={draft.slug}
           shopBaseUrl={shopBaseUrl}
           onChange={(expo) => upd({ expo })}
+          onPreview={previewExpo}
           readonly={readonly}
         />
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />
