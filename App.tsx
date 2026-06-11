@@ -182,6 +182,16 @@ const extractShopSlug = (): string | null => {
   return null;
 };
 
+// True when the shop is opened inside an iframe embed (Google Sites / external website) via ?embed=1.
+// Used to render a compact catalog and to tag orders so staff see they came from the embedded site.
+const extractEmbedFlag = (): boolean => {
+  try {
+    const v = new URLSearchParams(window.location.search).get('embed');
+    if (v && v !== '0' && v !== 'false') return true;
+  } catch {}
+  return false;
+};
+
 // Extracts a Meta Bazaar slug from ?bazaar=... or #/bazaar/...
 const extractBazaarSlug = (): string | null => {
   try {
@@ -269,6 +279,7 @@ const App: React.FC = () => {
   const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
+  const [isEmbed] = useState<boolean>(extractEmbedFlag); // shop loaded inside an iframe (Google Sites / external site)
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
@@ -1121,7 +1132,7 @@ const App: React.FC = () => {
     } else {
       const newCustomer: Customer = {
         id: `C-${Date.now()}`, fullName: data.customerName, companyName: data.company, location: [data.city, data.country].filter(Boolean).join(', '),
-        phoneNumber: phoneRaw, whatsappNumber: phoneRaw, email: data.email, firstContact: new Date().toISOString(), totalTickets: 0, source: `Meta Shop: ${shop.name}`,
+        phoneNumber: phoneRaw, whatsappNumber: phoneRaw, email: data.email, firstContact: new Date().toISOString(), totalTickets: 0, source: `Meta Shop${isEmbed ? ' (Google Site)' : ''}: ${shop.name}`,
       };
       customerId = newCustomer.id;
       await saveCustomerToCloud(newCustomer);
@@ -1134,6 +1145,7 @@ const App: React.FC = () => {
       fees: data.fees, itemsTotal: data.itemsTotal, discountCode: data.discountCode, discountAmount: data.discountAmount,
       taxRate: data.taxRate, taxAmount: data.taxAmount, taxInclusive: data.taxInclusive, total: data.total,
       currency: data.currency, status: 'new', createdAt: new Date().toISOString(), customerId,
+      via: isEmbed ? 'gsite' : 'shop',
     };
     await saveMetaShopOrderToCloud(order);
 
@@ -1154,7 +1166,8 @@ const App: React.FC = () => {
     const subtotalText = ((data.fees && data.fees.length) || data.discountAmount || data.taxAmount) && data.itemsTotal != null ? `\nجمع اقلام: ${data.currency} ${data.itemsTotal.toLocaleString()}` : '';
     const discountText = data.discountAmount ? `\nتخفیف (${data.discountCode || ''}): − ${data.currency} ${data.discountAmount.toLocaleString()}` : '';
     const taxText = data.taxAmount ? `\nمالیات (${data.taxRate}%${data.taxInclusive ? ' شامل' : ''}): ${data.taxInclusive ? '' : '+ '}${data.currency} ${data.taxAmount.toLocaleString()}` : '';
-    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
+    const viaText = isEmbed ? `\n🌐 ثبت‌شده از طریق گوگل‌سایت / سایت تعبیه‌شده` : '';
+    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}${viaText}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
     const msg: InternalMessage = {
       id: `shopmsg-${Date.now()}`, senderId: '', senderName: data.customerName,
       recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),
@@ -1254,7 +1267,7 @@ const App: React.FC = () => {
   // ── Public Meta Shop page (full-screen takeover) ──
   if (view === 'metashop') {
     if (publicShop && publicShop.isActive !== false) {
-      return <MetaShopView shop={publicShop} lang={lang} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
+      return <MetaShopView shop={publicShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
     }
     // Still resolving the shop → show the "raising the shutter" loader (no artificial delay)
     if (shopLoading || (metaShops.length === 0 && shopSlug)) {

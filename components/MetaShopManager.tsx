@@ -130,6 +130,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [embedShop, setEmbedShop] = useState<MetaShop | null>(null); // Google Site / iframe embed export modal
+  const [embedHeight, setEmbedHeight] = useState(1200);
   const [saving, setSaving] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -212,6 +214,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     sNew: T ? 'جدید' : 'New', sProg: T ? 'در حال انجام' : 'In progress', sDone: T ? 'انجام شد' : 'Done', sCanc: T ? 'لغو شد' : 'Cancelled',
     deleteConfirm: T ? 'این فروشگاه حذف شود؟' : 'Delete this shop?',
     linkLabel: T ? 'لینک عمومی:' : 'Public link:',
+    // Google Site / embed export
+    gsite: T ? 'گوگل‌سایت' : 'Google Site',
+    gsiteTitle: T ? 'تعبیه در گوگل‌سایت یا هر وب‌سایت' : 'Embed in Google Sites or any website',
+    gsiteIntro: T ? 'این فروشگاه را با تمام امکانات (سبد خرید، قالب، چندزبانه، پیگیری) داخل گوگل‌سایت قرار بده. مشتری از همان‌جا سفارش می‌دهد و هر «درخواست خرید» مستقیم در کارتابل سامانه ثبت می‌شود — درست مثل لینک مستقیم.' : 'Embed this shop — with every feature (cart, theme, multilingual, tracking) — inside a Google Site. Customers order right there and every purchase request lands directly in the system cartable, just like the direct link.',
+    gsiteEmbedUrl: T ? 'لینک تعبیه (embed)' : 'Embed URL',
+    gsiteEmbedCode: T ? 'کد iframe (برای «Embed code»)' : 'iframe code (for "Embed code")',
+    gsiteHeight: T ? 'ارتفاع قاب (px)' : 'Frame height (px)',
+    gsiteCopyUrl: T ? 'کپی لینک' : 'Copy URL',
+    gsiteCopyCode: T ? 'کپی کد' : 'Copy code',
+    gsiteOpen: T ? 'پیش‌نمایش' : 'Preview',
+    gsiteStepsTitle: T ? 'مراحل افزودن به گوگل‌سایت:' : 'How to add it to Google Sites:',
+    gsiteStep1: T ? 'در ویرایشگر گوگل‌سایت، از نوار راست «Insert ← Embed» را بزن.' : 'In the Google Sites editor, click "Insert → Embed".',
+    gsiteStep2: T ? 'تب «Embed code» را انتخاب کن و کد iframe بالا را بچسبان (یا تب «By URL» و لینک تعبیه را بگذار).' : 'Pick the "Embed code" tab and paste the iframe code above (or use "By URL" with the embed URL).',
+    gsiteStep3: T ? 'روی «Next ← Insert» بزن و اندازه‌ی قاب را روی صفحه تنظیم کن. تمام؛ فروشگاه داخل سایت زنده است.' : 'Click "Next → Insert" and resize the frame on the page. Done — the shop is live inside your site.',
+    gsiteNote: T ? 'نکته: سفارش‌های ثبت‌شده از داخل گوگل‌سایت در بخش «سفارش‌ها» با برچسب 🌐 گوگل‌سایت مشخص می‌شوند.' : 'Note: orders placed from inside the Google Site are marked with a 🌐 Google Site badge in the Orders tab.',
   };
 
   const ordersByShop = useMemo(() => {
@@ -222,6 +239,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
 
   const shopUrl = (shop: MetaShop) => `${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`;
   const copyLink = (shop: MetaShop) => { navigator.clipboard.writeText(shopUrl(shop)); setCopiedId(shop.id); setTimeout(() => setCopiedId(null), 1800); };
+
+  // ── Google Site / iframe embed export ──
+  // The embed URL is the live shop page with &embed=1 so it renders compactly and tags orders as gsite-sourced.
+  const embedUrl = (shop: MetaShop) => `${shopUrl(shop)}&embed=1`;
+  const embedCode = (shop: MetaShop, height: number) =>
+    `<iframe src="${embedUrl(shop)}" title="${(shop.name || 'shop').replace(/"/g, '&quot;')}" width="100%" height="${height || 1200}" style="border:0;width:100%;max-width:100%" loading="lazy" allow="clipboard-write; fullscreen"></iframe>`;
+  const copyText = (text: string, id: string) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1800); };
 
   // Download a single shop as a JSON file (re-importable / editable)
   const downloadShopJson = (shop: MetaShop) => {
@@ -386,6 +410,52 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     </div>
   ) : null;
 
+  // ── Google Site / website embed export modal ──
+  const embedModalEl = () => embedShop ? (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setEmbedShop(null)}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconGlobe className="w-4 h-4 text-indigo-500" />{t.gsiteTitle}</h3>
+        <p className="text-xs text-gray-500 leading-relaxed mb-4">{t.gsiteIntro}</p>
+
+        {/* Embed URL */}
+        <label className={lbl}>{t.gsiteEmbedUrl}</label>
+        <div className="flex items-center gap-2 mb-3">
+          <input readOnly value={embedUrl(embedShop)} dir="ltr" onFocus={e => e.currentTarget.select()} className={fld + ' font-mono text-[11px] bg-gray-50'} />
+          <button onClick={() => copyText(embedUrl(embedShop), '__embed_url__')} className="shrink-0 text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === '__embed_url__' ? <><IconCheck className="w-3.5 h-3.5 text-emerald-500" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyUrl}</>}</button>
+        </div>
+
+        {/* Height + iframe code */}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <label className={lbl + ' mb-0'}>{t.gsiteEmbedCode}</label>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-400">{t.gsiteHeight}</span>
+            <input type="number" min={400} max={4000} step={50} value={embedHeight} onChange={e => setEmbedHeight(Math.max(400, Math.min(4000, parseInt(e.target.value) || 1200)))} className="w-20 px-2 py-1 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-xs" dir="ltr" />
+          </div>
+        </div>
+        <textarea readOnly rows={3} value={embedCode(embedShop, embedHeight)} dir="ltr" onFocus={e => e.currentTarget.select()} className={fld + ' font-mono text-[11px] bg-gray-50 resize-none'} />
+        <div className="flex items-center gap-2 mt-2 mb-4">
+          <button onClick={() => copyText(embedCode(embedShop, embedHeight), '__embed_code__')} className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex items-center gap-1.5">{copiedId === '__embed_code__' ? <><IconCheck className="w-3.5 h-3.5" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyCode}</>}</button>
+          <a href={embedUrl(embedShop)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1.5"><IconGlobe className="w-3.5 h-3.5" />{t.gsiteOpen}</a>
+        </div>
+
+        {/* Step-by-step instructions */}
+        <div className="rounded-xl bg-gray-50 border border-gray-100 p-3.5">
+          <div className="text-[13px] font-semibold text-gray-700 mb-2">{t.gsiteStepsTitle}</div>
+          <ol className="text-xs text-gray-600 leading-relaxed space-y-1.5 list-decimal ps-4">
+            <li>{t.gsiteStep1}</li>
+            <li>{t.gsiteStep2}</li>
+            <li>{t.gsiteStep3}</li>
+          </ol>
+          <p className="text-[11px] text-gray-400 mt-2.5">{t.gsiteNote}</p>
+        </div>
+
+        <div className="flex justify-end mt-4">
+          <button onClick={() => setEmbedShop(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800">{t.cancel}</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const statusLabel = (s: MetaShopOrder['status']) => s === 'done' ? t.sDone : s === 'in_progress' ? t.sProg : s === 'cancelled' ? t.sCanc : t.sNew;
   const statusCls = (s: MetaShopOrder['status']) => s === 'done' ? 'bg-emerald-100 text-emerald-700' : s === 'in_progress' ? 'bg-blue-100 text-blue-700' : s === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
 
@@ -453,6 +523,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <a href={shopUrl(s)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
                       <button onClick={() => copyLink(s)} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === s.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
+                      <button onClick={() => { setEmbedShop(s); }} title={t.gsiteTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
@@ -467,6 +538,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         )}
 
         {importModalEl()}
+        {embedModalEl()}
         <input type="file" ref={updateFileRef} className="hidden" accept=".json,application/json" onChange={e => { const f = e.target.files?.[0]; if (f && updateShop) updateShopFromFile(updateShop, f); e.target.value = ''; setUpdateShop(null); }} />
       </div>
     );
@@ -489,7 +561,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
               <tbody className="divide-y divide-gray-100">
                 {orders.map(o => (
                   <tr key={o.id} className="hover:bg-gray-50/60 align-top">
-                    <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}</td>
+                    <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}{o.via === 'gsite' && <span title={T ? 'از طریق گوگل‌سایت' : 'via Google Site'} className="ms-via-badge inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-sans font-bold align-middle">🌐 {T ? 'گوگل‌سایت' : 'GSite'}</span>}</td>
                     <td className="px-4 py-3"><div className="font-medium text-gray-800">{o.customerName}</div><div className="text-xs text-gray-400" dir="ltr">{o.phone}</div>{o.company && <div className="text-xs text-gray-400">{o.company}</div>}</td>
                     <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}</div>)}{o.discountAmount ? <div className="text-[11px] text-rose-600">− {o.currency} {o.discountAmount.toLocaleString()} ({o.discountCode})</div> : null}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.taxAmount ? <div className="text-[11px] text-gray-500">{o.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {o.taxRate}%: {o.currency} {o.taxAmount.toLocaleString()}</div> : null}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
                     <td className="px-4 py-3 font-bold text-gray-800">{o.currency} {o.total.toLocaleString()}</td>
@@ -518,6 +590,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <button onClick={() => { setMode('list'); setDraft(null); }} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
         <div className="flex items-center gap-2">
           <a href={draft.slug ? shopUrl(draft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
+          <button onClick={() => setEmbedShop(draft)} disabled={!draft.slug} title={t.gsiteTitle} className={`text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
           <button onClick={() => downloadShopJson(draft)} title={t.downloadJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
           {!readonly && <button onClick={() => triggerUpdate(draft)} title={t.updateJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
           {!readonly && <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
@@ -929,6 +1002,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
       </div>
 
       {importModalEl()}
+      {embedModalEl()}
       <input type="file" ref={updateFileRef} className="hidden" accept=".json,application/json" onChange={e => { const f = e.target.files?.[0]; if (f && updateShop) updateShopFromFile(updateShop, f); e.target.value = ''; setUpdateShop(null); }} />
     </div>
   );

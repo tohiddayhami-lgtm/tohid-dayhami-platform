@@ -22,13 +22,14 @@ interface Props {
   lang: Language;
   onSubmitOrder: (data: OrderData) => Promise<string>; // returns tracking code
   onLookup?: (phone: string) => Promise<MetaShopOrder[]>;
+  embed?: boolean; // rendered inside an iframe (Google Sites / external site embed) — slightly compacts chrome
 }
 
 const CartIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
 );
 
-export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup }) => {
+export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup, embed }) => {
   const isServices = shop.type === 'services';
   const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
@@ -345,7 +346,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   return (
-    <div className="ms-root" dir={dir} style={cssVars}>
+    <div className={`ms-root ${embed ? 'ms-embed' : ''}`} dir={dir} style={cssVars}>
       <style>{MS_CSS}</style>
 
       {/* Topbar */}
@@ -746,6 +747,9 @@ const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, 
 const MS_CSS = `
 .ms-root { --ms-primary:#2d4a1a; background: var(--ms-bg,#fdfbf6); color: var(--ms-text,#2d3a24); min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
 .ms-root * { box-sizing:border-box; }
+/* Embedded (Google Sites / iframe) — compact cover so the catalog shows sooner inside a fixed-height frame */
+.ms-root.ms-embed { min-height:100%; }
+.ms-root.ms-embed .ms-cover { padding:40px 24px; min-height:150px; }
 .ms-topbar { position:sticky; top:0; z-index:50; background:rgba(255,255,255,.97); backdrop-filter:blur(16px); border-bottom:1px solid #e8eaed; box-shadow:0 1px 8px rgba(0,0,0,.06); }
 .ms-topbar-inner { max-width:1280px; margin:0 auto; padding:0 20px; height:58px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .ms-brand { display:flex; align-items:center; gap:12px; min-width:0; }

@@ -803,6 +803,7 @@ export interface MetaShopOrder {
   status: 'new' | 'in_progress' | 'done' | 'cancelled';
   createdAt: string;
   customerId?: string;     // linked customer-bank record (by phone)
+  via?: 'shop' | 'gsite';  // where the order was placed from: direct shop page, or an embedded Google Site / external site
 }
 
 export interface NewsArticle {
