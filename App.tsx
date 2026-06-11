@@ -33,6 +33,7 @@ import { MetaShopDirectory } from './components/MetaShopDirectory';
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
 import { ExpoDoorsLoader } from './components/metaverse/ExpoDoorsLoader';
+import { DoorsGate } from './components/DoorsGate';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -1212,24 +1213,30 @@ const App: React.FC = () => {
     );
   }
 
-  // ── Public curated Bazaar (full-screen takeover) ──
+  // ── Public curated Bazaar (full-screen takeover) — with a neutral "grand doors" loader ──
   if (view === 'bazaar') {
-    if (publicBazaar && publicBazaar.isActive !== false) {
+    const ready = !!(publicBazaar && publicBazaar.isActive !== false);
+    const loading = !ready && (bazaarLoading || (metaBazaars.length === 0 && !!bazaarSlug));
+    if (!ready && !loading) {
       return (
-        <MetaShopDirectory
-          shops={metaShops}
-          lang={lang}
-          bazaar={publicBazaar}
-          onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
-        />
+        <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+          <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'بازارچه یافت نشد' : 'Bazaar not found'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>
+        </div>
       );
     }
+    const bzTitle = publicBazaar ? ((lang === 'fa' ? publicBazaar.title?.fa : publicBazaar.title?.en) || publicBazaar.name) : (lang === 'fa' ? 'بازارچه' : 'Bazaar');
+    const bzSub = publicBazaar ? ((lang === 'fa' ? publicBazaar.subtitle?.fa : publicBazaar.subtitle?.en) || undefined) : undefined;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
-        {bazaarLoading || (metaBazaars.length === 0 && bazaarSlug)
-          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
-          : <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'بازارچه یافت نشد' : 'Bazaar not found'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>}
-      </div>
+      <DoorsGate ready={ready} lang={lang} title={bzTitle} subtitle={bzSub} primary="#5b6472" accent="#cbd5e1" bg="#1f2430" emblem="🏬">
+        {publicBazaar && (
+          <MetaShopDirectory
+            shops={metaShops}
+            lang={lang}
+            bazaar={publicBazaar}
+            onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+          />
+        )}
+      </DoorsGate>
     );
   }
 
