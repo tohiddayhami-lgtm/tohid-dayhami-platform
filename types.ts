@@ -951,6 +951,9 @@ export interface AppConfig {
   landingHeroTitle?: string;
   landingHeroSubtitle?: string;
   footerText?: string;
+  // When set, all public "ثبت درخواست" buttons open this URL (e.g. a Google Form)
+  // in a new tab instead of the in-app request form.
+  requestExternalUrl?: string;
   socialLinks?: SocialLink[];
   notificationConfig?: NotificationConfig;
   dailyTips?: string[];

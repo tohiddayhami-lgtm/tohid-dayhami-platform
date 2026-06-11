@@ -311,7 +311,17 @@ const App: React.FC = () => {
     news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=',
   };
 
+  // Public "ثبت درخواست" entry point. If an external URL is configured (e.g. a Google
+  // Form), open it in a new tab; otherwise open the in-app request form.
+  const goToRequest = () => {
+    const url = appConfig.requestExternalUrl?.trim();
+    if (url) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
+    setView('new-ticket');
+  };
+
   const openFormWithService = (serviceId: string) => {
+    const url = appConfig.requestExternalUrl?.trim();
+    if (url) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
     setPreSelectedServiceId(serviceId);
     setView('new-ticket');
   };
@@ -1350,7 +1360,7 @@ const App: React.FC = () => {
             ].map(item => (
               <button
                 key={item.id}
-                onClick={() => setView(item.id as ViewState)}
+                onClick={() => item.id === 'new-ticket' ? goToRequest() : setView(item.id as ViewState)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors
                   ${view === item.id ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'}`}
               >
@@ -1432,7 +1442,7 @@ const App: React.FC = () => {
                   </p>
                   <div className="flex flex-wrap gap-2 justify-center">
                     <button
-                      onClick={() => setView('new-ticket')}
+                      onClick={goToRequest}
                       className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black transition-colors"
                     >
                       {t.startBtn}
@@ -1607,7 +1617,7 @@ const App: React.FC = () => {
                         : 'Submit your request and our experts will reach out promptly.'}
                     </p>
                     <button
-                      onClick={() => setView('new-ticket')}
+                      onClick={goToRequest}
                       className="inline-flex items-center gap-2 px-6 py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
                     >
                       {t.startBtn}

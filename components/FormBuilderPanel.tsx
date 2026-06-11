@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
@@ -16,6 +16,8 @@ interface Props {
   tickets?: Ticket[];
   services?: ServiceOption[];
   formFields?: FormField[];
+  requestExternalUrl?: string;
+  onUpdateRequestUrl?: (url: string) => void;
 }
 
 type PanelView = 'list' | 'builder' | 'preview' | 'archive';
@@ -250,7 +252,7 @@ const GoogleScriptModal: React.FC<{
   );
 };
 
-export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang, personnel = [], tickets = [], services = [], formFields = [] }) => {
+export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, isMaster, isAdmin, lang, personnel = [], tickets = [], services = [], formFields = [], requestExternalUrl, onUpdateRequestUrl }) => {
   const [view, setView] = useState<PanelView>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<FormDraft>(emptyDraft());
@@ -272,6 +274,15 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [googleFormFor, setGoogleFormFor] = useState<CustomForm | null>(null);
   const [serviceReqGoogleOpen, setServiceReqGoogleOpen] = useState(false);
   const [serviceReqMulti, setServiceReqMulti] = useState(false);
+  const [reqUrlDraft, setReqUrlDraft] = useState(requestExternalUrl || '');
+  const [reqUrlSaved, setReqUrlSaved] = useState(false);
+  useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
+  const saveReqUrl = () => {
+    onUpdateRequestUrl?.(reqUrlDraft.trim());
+    setReqUrlSaved(true);
+    setTimeout(() => setReqUrlSaved(false), 2500);
+  };
+  const clearReqUrl = () => { setReqUrlDraft(''); onUpdateRequestUrl?.(''); };
 
   const isEditor = isAdmin || isMaster;
 
@@ -1412,31 +1423,70 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       </div>
 
       {/* Built-in Service Request form (main system form) */}
-      <div className="bg-gradient-to-l from-indigo-600 to-violet-600 rounded-2xl p-5 shadow-sm text-white flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="bg-white/20 p-2.5 rounded-xl shrink-0"><IconClipboard className="w-6 h-6" /></div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base font-bold">{lang === 'fa' ? 'فرم ثبت درخواست خدمات' : 'Service Request Form'}</h3>
-              <span className="text-[10px] font-bold bg-white/25 px-2 py-0.5 rounded-full">{lang === 'fa' ? 'فرم اصلی سامانه' : 'System form'}</span>
+      <div className="bg-gradient-to-l from-indigo-600 to-violet-600 rounded-2xl p-5 shadow-sm text-white">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="bg-white/20 p-2.5 rounded-xl shrink-0"><IconClipboard className="w-6 h-6" /></div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold">{lang === 'fa' ? 'فرم ثبت درخواست خدمات' : 'Service Request Form'}</h3>
+                <span className="text-[10px] font-bold bg-white/25 px-2 py-0.5 rounded-full">{lang === 'fa' ? 'فرم اصلی سامانه' : 'System form'}</span>
+              </div>
+              <p className="text-xs text-white/80 mt-1 leading-relaxed">
+                {lang === 'fa'
+                  ? `فرم رسمی ثبت درخواست — ${services.length} خدمت، ${formFields.length} فیلد. پاسخ‌ها بر اساس «نوع خدمت» خودکار به کارشناس مربوطه ارجاع می‌شوند.`
+                  : `The official request form — ${services.length} services, ${formFields.length} fields. Responses are auto-routed to the right specialist by service type.`}
+              </p>
             </div>
-            <p className="text-xs text-white/80 mt-1 leading-relaxed">
-              {lang === 'fa'
-                ? `فرم رسمی ثبت درخواست — ${services.length} خدمت، ${formFields.length} فیلد. پاسخ‌ها بر اساس «نوع خدمت» خودکار به کارشناس مربوطه ارجاع می‌شوند.`
-                : `The official request form — ${services.length} services, ${formFields.length} fields. Responses are auto-routed to the right specialist by service type.`}
+          </div>
+          {isEditor && (
+            <button
+              onClick={() => setServiceReqGoogleOpen(true)}
+              disabled={services.length === 0}
+              title={services.length === 0 ? (lang === 'fa' ? 'ابتدا در بخش «خدمات و تعرفه‌ها» خدمت تعریف کنید' : 'Define services first') : ''}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-indigo-700 rounded-xl text-sm font-bold hover:bg-indigo-50 transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              <IconLink className="w-4 h-4" />
+              {lang === 'fa' ? 'اتصال به گوگل‌فرم' : 'Connect to Google Form'}
+            </button>
+          )}
+        </div>
+
+        {/* Public "Request" button → external link (e.g. the generated Google Form) */}
+        {isEditor && onUpdateRequestUrl && (
+          <div className="mt-4 pt-4 border-t border-white/15">
+            <label className="block text-xs font-semibold text-white/90 mb-1.5">
+              {lang === 'fa' ? 'لینک دکمه‌ی «ثبت درخواست» در سایت عمومی (مثلاً لینک گوگل‌فرم)' : 'Public "Request" button link (e.g. Google Form)'}
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={reqUrlDraft}
+                onChange={e => setReqUrlDraft(e.target.value)}
+                dir="ltr"
+                placeholder="https://docs.google.com/forms/..."
+                className="flex-1 min-w-[220px] px-3 py-2 rounded-lg text-sm text-gray-900 bg-white/95 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white/60"
+              />
+              <button
+                onClick={saveReqUrl}
+                className="px-4 py-2 bg-white text-indigo-700 rounded-lg text-sm font-bold hover:bg-indigo-50 transition-colors shrink-0"
+              >
+                {reqUrlSaved ? (lang === 'fa' ? '✓ ذخیره شد' : '✓ Saved') : (lang === 'fa' ? 'ذخیره لینک' : 'Save link')}
+              </button>
+              {reqUrlDraft.trim() && (
+                <button
+                  onClick={clearReqUrl}
+                  className="px-3 py-2 bg-white/15 text-white rounded-lg text-sm font-medium hover:bg-white/25 transition-colors shrink-0"
+                >
+                  {lang === 'fa' ? 'حذف لینک' : 'Clear'}
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-white/75 mt-1.5 leading-relaxed">
+              {requestExternalUrl?.trim()
+                ? (lang === 'fa' ? '✓ همه‌ی دکمه‌های «ثبت درخواست» در سایت عمومی این لینک را در تب جدید باز می‌کنند.' : '✓ All public "Request" buttons open this link in a new tab.')
+                : (lang === 'fa' ? 'اگر خالی بماند، دکمه‌ها مثل قبل فرم داخلی سامانه را باز می‌کنند.' : 'If empty, buttons open the built-in in-app form.')}
             </p>
           </div>
-        </div>
-        {isEditor && (
-          <button
-            onClick={() => setServiceReqGoogleOpen(true)}
-            disabled={services.length === 0}
-            title={services.length === 0 ? (lang === 'fa' ? 'ابتدا در بخش «خدمات و تعرفه‌ها» خدمت تعریف کنید' : 'Define services first') : ''}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-indigo-700 rounded-xl text-sm font-bold hover:bg-indigo-50 transition-colors shadow disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-          >
-            <IconLink className="w-4 h-4" />
-            {lang === 'fa' ? 'اتصال به گوگل‌فرم' : 'Connect to Google Form'}
-          </button>
         )}
       </div>
 

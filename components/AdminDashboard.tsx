@@ -2175,6 +2175,8 @@ export const AdminDashboard: React.FC<Props> = ({
                 tickets={tickets}
                 services={services}
                 formFields={config.formFields}
+                requestExternalUrl={config.requestExternalUrl}
+                onUpdateRequestUrl={(url) => onUpdateConfig({ ...config, requestExternalUrl: url })}
             />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}
