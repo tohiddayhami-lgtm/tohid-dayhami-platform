@@ -1,11 +1,11 @@
 import React from 'react';
 import { Language } from '../App';
 
-// Minimal "export passage" (پاساژ صادراتی) loading animation for the public bazaar page.
-// Same spirit as the Meta Shop's ShopShutterLoader — small, pure-CSS, no timers — but shaped
-// like an arcade gateway: a glass-roofed passage with a light sweeping through it (goods
-// flowing out / export) and a small storefront row. It renders only while the bazaar is being
-// resolved, so the moment the data is ready the real directory replaces it — no artificial delay.
+// Minimal "container ship" (کشتی کانتینربر) loading animation for the public export bazaar.
+// Same spirit as the Meta Shop's ShopShutterLoader — small, pure-CSS, no timers — themed for
+// exports: a cargo ship loaded with stacked containers gently bobbing on the sea, with a funnel
+// puffing smoke and a moving waterline. It renders only while the bazaar is being resolved, so
+// the moment the data is ready the real directory replaces it — no artificial delay.
 export const BazaarPassageLoader: React.FC<{ lang?: Language; title?: string; primary?: string; accent?: string }> = ({
   lang = 'fa',
   title,
@@ -21,68 +21,77 @@ export const BazaarPassageLoader: React.FC<{ lang?: Language; title?: string; pr
     >
       <style>{CSS}</style>
 
-      <div className="bpl-arcade">
-        {/* Banner / awning along the top of the passage */}
-        <div className="bpl-banner" />
-
-        {/* Arched gateway */}
-        <div className="bpl-arch">
-          {/* receding light beam — goods flowing through / export */}
-          <span className="bpl-beam" />
-
-          {/* small storefront row inside the passage */}
-          <div className="bpl-shops">
-            <span className="bpl-shop" />
-            <span className="bpl-shop" />
-            <span className="bpl-shop" />
+      <div className="bpl-scene">
+        <div className="bpl-ship">
+          {/* funnel + smoke */}
+          <div className="bpl-funnel">
+            <span className="bpl-smoke" />
+            <span className="bpl-smoke" />
+            <span className="bpl-smoke" />
           </div>
 
-          {/* export emblem */}
-          <div className="bpl-emblem">🧳</div>
+          {/* stacked cargo containers */}
+          <div className="bpl-cargo">
+            <div className="bpl-row">
+              <span className="bpl-box c1" /><span className="bpl-box c2" /><span className="bpl-box c3" /><span className="bpl-box c4" />
+            </div>
+            <div className="bpl-row">
+              <span className="bpl-box c2" /><span className="bpl-box c4" /><span className="bpl-box c1" />
+            </div>
+          </div>
+
+          {/* hull */}
+          <div className="bpl-hull"><span className="bpl-stripe" /></div>
         </div>
+
+        {/* sea */}
+        <div className="bpl-sea"><span className="bpl-wave" /><span className="bpl-wave w2" /></div>
       </div>
 
       <p className="bpl-text">
         {title || (T ? 'پاساژ صادراتی' : 'Export Passage')}
-        <span className="bpl-sub">{T ? 'در حال آماده‌سازی' : 'Getting ready'}</span>
-        <span className="bpl-dots" />
+        <span className="bpl-sub">{T ? 'در حال بارگیری' : 'Loading cargo'}<span className="bpl-dots" /></span>
       </p>
     </div>
   );
 };
 
 const CSS = `
-.bpl-wrap { --bpl-primary:#5b6472; --bpl-accent:#cbd5e1; position:fixed; inset:0; z-index:300; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; background:radial-gradient(120% 90% at 50% 0%, #fbfcfd 0%, #eef0f3 70%, #e6e9ee 100%); font-family:Vazirmatn,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+.bpl-wrap { --bpl-primary:#5b6472; --bpl-accent:#cbd5e1; position:fixed; inset:0; z-index:300; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:radial-gradient(125% 100% at 50% 0%, #f4f9fc 0%, #e6eef4 60%, #dbe6ee 100%); font-family:Vazirmatn,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
 
-.bpl-arcade { width:min(260px,70vw); }
+.bpl-scene { position:relative; width:min(260px,72vw); height:140px; }
 
-.bpl-banner { height:18px; border-radius:7px 7px 2px 2px; background:repeating-linear-gradient(90deg, var(--bpl-primary) 0 22px, #fdfdfe 22px 44px); box-shadow:0 5px 12px rgba(0,0,0,.1); transform-origin:top center; animation:bpl-drop .5s cubic-bezier(.34,1.56,.64,1) both; position:relative; z-index:2; }
+/* ── ship ── */
+.bpl-ship { position:absolute; left:50%; bottom:34px; width:160px; transform:translateX(-50%); transform-origin:50% 100%; animation:bpl-bob 3.4s ease-in-out infinite; z-index:2; }
 
-.bpl-arch { position:relative; height:150px; margin:12px 6px 0; border:5px solid var(--bpl-primary); border-bottom:0; border-radius:90px 90px 10px 10px; background:linear-gradient(180deg,#20242d 0%, #2b3038 60%, #353b45 100%); overflow:hidden; box-shadow:0 16px 34px rgba(0,0,0,.16), inset 0 2px 14px rgba(0,0,0,.4); }
+.bpl-funnel { position:absolute; top:-22px; right:24px; width:16px; height:24px; border-radius:3px 3px 0 0; background:linear-gradient(180deg,#c0392b,#7e2419); box-shadow:inset 0 -3px 4px rgba(0,0,0,.3); }
+.bpl-smoke { position:absolute; left:3px; top:-6px; width:9px; height:9px; border-radius:50%; background:rgba(120,130,140,.45); opacity:0; animation:bpl-smoke 2.6s ease-in infinite; }
+.bpl-smoke:nth-child(2){ animation-delay:.85s; }
+.bpl-smoke:nth-child(3){ animation-delay:1.7s; }
 
-/* sweeping light beam = flow of goods through the passage */
-.bpl-beam { position:absolute; top:0; bottom:0; width:55%; left:-55%; background:linear-gradient(90deg, transparent, rgba(255,255,255,.16) 45%, var(--bpl-accent) 50%, rgba(255,255,255,.16) 55%, transparent); filter:blur(1px); animation:bpl-sweep 1.7s cubic-bezier(.5,0,.5,1) infinite; }
+.bpl-cargo { display:flex; flex-direction:column-reverse; align-items:center; gap:2px; padding:0 12px; }
+.bpl-row { display:flex; gap:2px; }
+.bpl-box { width:24px; height:15px; border-radius:2px; box-shadow:inset 0 0 0 1px rgba(0,0,0,.18), inset 0 -3px 4px rgba(0,0,0,.18); }
+.bpl-box.c1{ background:#e08a2b; } .bpl-box.c2{ background:#2e7d8c; } .bpl-box.c3{ background:#b5483f; } .bpl-box.c4{ background:#5b8a3a; }
 
-/* storefront row deep inside the passage */
-.bpl-shops { position:absolute; left:14%; right:14%; bottom:14px; display:flex; gap:7px; justify-content:center; opacity:0; animation:bpl-fade .5s ease .45s both; }
-.bpl-shop { flex:1; height:34px; border-radius:5px 5px 0 0; background:linear-gradient(180deg, var(--bpl-accent), rgba(203,213,225,.35)); box-shadow:0 0 10px rgba(203,213,225,.35); }
-.bpl-shop:nth-child(2) { height:42px; }
+.bpl-hull { position:relative; height:30px; margin-top:2px; background:linear-gradient(180deg, var(--bpl-primary), #2b313b); clip-path:polygon(2% 0, 98% 0, 86% 100%, 14% 100%); box-shadow:0 8px 16px rgba(0,0,0,.18); }
+.bpl-stripe { position:absolute; left:0; right:0; top:7px; height:4px; background:var(--bpl-accent); opacity:.85; }
 
-/* export emblem (luggage / shipped goods) */
-.bpl-emblem { position:absolute; top:30px; left:0; right:0; text-align:center; font-size:30px; filter:drop-shadow(0 3px 8px rgba(0,0,0,.4)); animation:bpl-float 2.6s ease-in-out infinite; }
+/* ── sea ── */
+.bpl-sea { position:absolute; left:-12%; right:-12%; bottom:0; height:46px; overflow:hidden; border-radius:0 0 14px 14px; }
+.bpl-wave { position:absolute; left:0; bottom:0; width:200%; height:46px; background:repeating-linear-gradient(90deg, rgba(91,138,170,.55) 0 14px, rgba(133,176,201,.55) 14px 28px); -webkit-mask:radial-gradient(10px at 7px 0, transparent 96%, #000) repeat-x; mask:radial-gradient(10px at 7px 0, transparent 96%, #000) repeat-x; -webkit-mask-size:28px 12px; mask-size:28px 12px; animation:bpl-flow 2.6s linear infinite; }
+.bpl-wave.w2 { bottom:-7px; opacity:.55; animation-duration:3.6s; animation-direction:reverse; }
 
-.bpl-text { display:flex; flex-direction:column; align-items:center; gap:3px; font-weight:800; color:var(--bpl-primary); }
-.bpl-text { font-size:16px; }
-.bpl-sub { font-size:12px; font-weight:600; color:#8a909a; }
-.bpl-dots::after { content:''; display:inline-block; min-width:1.1em; text-align:start; color:#8a909a; animation:bpl-dots 1.3s steps(4,end) infinite; }
+.bpl-text { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:16px; font-weight:800; color:var(--bpl-primary); }
+.bpl-sub { font-size:12px; font-weight:600; color:#7e8794; }
+.bpl-dots::after { content:''; display:inline-block; min-width:1.1em; text-align:start; animation:bpl-dots 1.3s steps(4,end) infinite; }
 
-@keyframes bpl-sweep { 0%{left:-55%} 60%,100%{left:100%} }
-@keyframes bpl-drop { from{ transform:scaleY(0); } to{ transform:scaleY(1); } }
-@keyframes bpl-fade { from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
-@keyframes bpl-float { 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-5px); } }
+@keyframes bpl-bob { 0%,100%{ transform:translateX(-50%) translateY(0) rotate(-1.6deg); } 50%{ transform:translateX(-50%) translateY(-4px) rotate(1.6deg); } }
+@keyframes bpl-flow { from{ transform:translateX(0); } to{ transform:translateX(-28px); } }
+@keyframes bpl-smoke { 0%{ opacity:0; transform:translateY(0) scale(.6); } 30%{ opacity:.5; } 100%{ opacity:0; transform:translateY(-22px) scale(1.4); } }
 @keyframes bpl-dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%,100%{content:'...'} }
 
 @media (prefers-reduced-motion: reduce) {
-  .bpl-beam, .bpl-emblem, .bpl-banner, .bpl-shops { animation:none; opacity:1; transform:none; }
+  .bpl-ship, .bpl-wave, .bpl-smoke { animation:none; }
 }
 `;
