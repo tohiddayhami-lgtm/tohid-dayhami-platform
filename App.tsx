@@ -1249,13 +1249,15 @@ const App: React.FC = () => {
     const masterUser = personnel.find(p => p.username === 'master');
     if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
 
-    const itemsText = data.items.map((it: any, i: number) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.unitPrice ? ` — ${it.currency || data.currency} ${(it.lineTotal || 0).toLocaleString()}` : ''}`).join('\n');
+    const anyNeg = data.items.some((it: any) => it.priceHidden);
+    const allNeg = data.items.length > 0 && data.items.every((it: any) => it.priceHidden);
+    const itemsText = data.items.map((it: any, i: number) => `${i + 1}. ${it.name}${it.sku ? ` [${it.sku}]` : ''} × ${it.qty}${it.priceHidden ? ' — قابل مذاکره' : (it.unitPrice ? ` — ${it.currency || data.currency} ${(it.lineTotal || 0).toLocaleString()}` : '')}`).join('\n');
     const feesText = (data.fees && data.fees.length) ? `\n\nهزینه‌های اضافی:\n${data.fees.map(f => `• ${f.label}: ${data.currency} ${(f.amount || 0).toLocaleString()}`).join('\n')}` : '';
     const subtotalText = ((data.fees && data.fees.length) || data.discountAmount || data.taxAmount) && data.itemsTotal != null ? `\nجمع اقلام: ${data.currency} ${data.itemsTotal.toLocaleString()}` : '';
     const discountText = data.discountAmount ? `\nتخفیف (${data.discountCode || ''}): − ${data.currency} ${data.discountAmount.toLocaleString()}` : '';
     const taxText = data.taxAmount ? `\nمالیات (${data.taxRate}%${data.taxInclusive ? ' شامل' : ''}): ${data.taxInclusive ? '' : '+ '}${data.currency} ${data.taxAmount.toLocaleString()}` : '';
     const viaText = isEmbed ? `\n🌐 ثبت‌شده از طریق گوگل‌سایت / سایت تعبیه‌شده` : '';
-    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}${viaText}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${data.currency} ${data.total.toLocaleString()}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
+    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}${viaText}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${allNeg ? 'قابل مذاکره' : `${data.currency} ${data.total.toLocaleString()}${anyNeg ? ' + اقلام قابل مذاکره' : ''}`}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
     const msg: InternalMessage = {
       id: `shopmsg-${Date.now()}`, senderId: '', senderName: data.customerName,
       recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),

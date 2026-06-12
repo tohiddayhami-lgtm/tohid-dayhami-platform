@@ -21,7 +21,7 @@ const chunk = <T,>(arr: T[], n: number): T[][] => {
 const STR: Record<string, Record<string, string>> = {
   en: {
     productCatalog: 'Product Catalog', serviceCatalog: 'Service Catalog', items: 'products', services: 'services',
-    issued: 'Issued', sku: 'SKU', moq: 'MOQ', pack: 'Pack', origin: 'Origin', requestQuote: 'Price on request',
+    issued: 'Issued', sku: 'SKU', moq: 'MOQ', pack: 'Pack', origin: 'Origin', requestQuote: 'Price on request', negotiable: 'Negotiable',
     index: 'Table of Contents', page: 'Page', thankYou: 'Thank you for your interest',
     thankYouSub: 'We look forward to serving you. Scan the code below to open the live catalog and place your order online.',
     scanToOrder: 'Scan to view & order online', phone: 'Phone', email: 'Email', website: 'Website', address: 'Address',
@@ -30,7 +30,7 @@ const STR: Record<string, Record<string, string>> = {
   },
   fa: {
     productCatalog: 'کاتالوگ محصولات', serviceCatalog: 'کاتالوگ خدمات', items: 'محصول', services: 'خدمت',
-    issued: 'تاریخ صدور', sku: 'کد کالا', moq: 'حداقل سفارش', pack: 'بسته', origin: 'مبدأ', requestQuote: 'استعلام قیمت',
+    issued: 'تاریخ صدور', sku: 'کد کالا', moq: 'حداقل سفارش', pack: 'بسته', origin: 'مبدأ', requestQuote: 'استعلام قیمت', negotiable: 'قابل مذاکره',
     index: 'فهرست مطالب', page: 'صفحه', thankYou: 'از توجه شما سپاسگزاریم',
     thankYouSub: 'مشتاق همکاری با شما هستیم. برای مشاهده کاتالوگ آنلاین و ثبت سفارش، کد زیر را اسکن کنید.',
     scanToOrder: 'برای مشاهده و سفارش آنلاین اسکن کنید', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت', address: 'نشانی',
@@ -165,8 +165,12 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     ['--c-text' as any]: theme.text,
   } as React.CSSProperties;
 
+  // Price hidden (per-product or shop-wide) → «قابل مذاکره» instead of any amount
+  const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
+
   // ── Price block ──
   const priceJsx = (p: MetaShopProduct) => {
+    if (priceHidden(p)) return <div className="msc-price-neg">{s('negotiable')}</div>;
     const opts = p.priceOptions || [];
     if (opts.length) {
       return (
@@ -510,6 +514,7 @@ const MSC_CSS = `
 .msc-price-unit{ font-size:9pt; font-weight:600; opacity:.7; }
 .msc-price-pack{ display:block; font-size:8.6pt; font-weight:600; opacity:.7; }
 .msc-price-quote{ font-size:10.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; white-space:nowrap; }
+.msc-price-neg{ font-size:10.5pt; font-weight:800; color:var(--c-primary); white-space:nowrap; border:1px dashed color-mix(in srgb, var(--c-primary) 40%, #fff); border-radius:4px; padding:1px 8px; }
 .msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1mm; max-width:100%; }
 .msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
   border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1px 7px; text-align:end; max-width:100%; overflow-wrap:anywhere; }

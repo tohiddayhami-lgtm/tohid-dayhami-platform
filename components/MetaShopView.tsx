@@ -103,7 +103,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: 'Order tracking code', copy: 'Copy', copied: 'Copied', close: 'Close', trackMy: 'Track my orders', trackBtn: 'View',
       noOrders: 'No orders found for this number.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
       perPack: '/ pack', review: 'Continue to invoice preview', invoiceTitle: 'Invoice preview', editCart: 'Edit cart',
-      featured: 'Featured', featuredTitle: 'Featured products',
+      featured: 'Featured', featuredTitle: 'Featured products', negotiable: 'Negotiable — request a quote',
       colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
@@ -120,7 +120,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: 'کد رهگیری سفارش', copy: 'کپی', copied: 'کپی شد', close: 'بستن', trackMy: 'پیگیری سفارش‌های من', trackBtn: 'مشاهده',
       noOrders: 'سفارشی با این شماره یافت نشد.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
       perPack: '/ بسته', review: 'ادامه و پیش‌نمایش فاکتور', invoiceTitle: 'پیش‌نمایش فاکتور', editCart: 'ویرایش سبد',
-      featured: 'ویژه', featuredTitle: 'محصولات ویژه',
+      featured: 'ویژه', featuredTitle: 'محصولات ویژه', negotiable: 'قابل مذاکره — درخواست قیمت',
       colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
@@ -137,7 +137,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: '订单追踪码', copy: '复制', copied: '已复制', close: '关闭', trackMy: '查询我的订单', trackBtn: '查看',
       noOrders: '未找到该号码的订单。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
       perPack: '/ 包', review: '继续并预览发票', invoiceTitle: '发票预览', editCart: '编辑购物车',
-      featured: '精选', featuredTitle: '精选产品',
+      featured: '精选', featuredTitle: '精选产品', negotiable: '价格面议 — 索取报价',
       colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
       confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
@@ -227,6 +227,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
   // Effective unit price (discount applied) — used for cart math and totals.
   const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, baseUnitPrice(p, optId)) ?? 0;
+  // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
+  const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   const optLabel = (p: MetaShopProduct, optId?: string): string => { const o = optionsOf(p).find(x => x.id === optId); return o ? L(o.label, o.labelEn) : ''; };
   const selectOption = (p: MetaShopProduct, optId: string) => {
     setChosenOpt(ch => ({ ...ch, [p.id]: optId }));
@@ -235,12 +237,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
   const cartItems = useMemo(() => Object.keys(cart).map(id => {
     const p = products.find(x => x.id === id); if (!p) return null;
-    const { qty, optionId } = cart[id]; const rate = unitPrice(p, optionId);
-    return { p, qty, optionId, rate, line: rate * qty, optionText: optLabel(p, optionId), cur: curOf(p, optionId) };
-  }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; optionText: string; cur: string }[], [cart, products, uiLang]);
+    const { qty, optionId } = cart[id]; const hidden = priceHidden(p); const rate = hidden ? 0 : unitPrice(p, optionId);
+    return { p, qty, optionId, rate, line: hidden ? 0 : rate * qty, hidden, optionText: optLabel(p, optionId), cur: curOf(p, optionId) };
+  }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; hidden: boolean; optionText: string; cur: string }[], [cart, products, uiLang]);
 
   const cartCount = Object.keys(cart).length;
-  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0); // items only (numeric sum)
+  const grandTotal = cartItems.reduce((a, c) => a + c.line, 0); // items only (numeric sum; hidden-price items count as 0)
+  const anyHidden = cartItems.some(c => c.hidden);
+  const allHidden = cartItems.length > 0 && cartItems.every(c => c.hidden);
   // Per-currency subtotals (a cart may mix currencies, e.g. a money-exchange shop)
   const totalsByCurrency = useMemo(() => { const m: Record<string, number> = {}; cartItems.forEach(c => { m[c.cur] = (m[c.cur] || 0) + c.line; }); return m; }, [cartItems]);
   const currencyList = Object.keys(totalsByCurrency);
@@ -297,7 +301,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         phone: form.phone.trim(), email: form.email.trim() || undefined,
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
-        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.rate, lineTotal: c.line, currency: c.cur, optionLabel: c.optionText || undefined })),
+        items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.hidden ? undefined : c.rate, lineTotal: c.hidden ? undefined : c.line, currency: c.cur, optionLabel: c.optionText || undefined, priceHidden: c.hidden || undefined })),
         fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
@@ -336,6 +340,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const cur = curOf(p, selId);
     const off = discPercent(p, basePrice);
     const basePack = p.packPrice;
+    const hidden = priceHidden(p);
     return (
       <div className="ms-buy">
         {opts.length > 0 && (
@@ -343,15 +348,20 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             {opts.map(o => (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
-                <span className="ms-opt-price">
-                  {hasDiscount(p) && <span className="ms-opt-was">{money(o.price, curOf(p, o.id))}</span>}
-                  {money(applyDisc(p, o.price), curOf(p, o.id))}
-                </span>
+                {!hidden && (
+                  <span className="ms-opt-price">
+                    {hasDiscount(p) && <span className="ms-opt-was">{money(o.price, curOf(p, o.id))}</span>}
+                    {money(applyDisc(p, o.price), curOf(p, o.id))}
+                  </span>
+                )}
               </button>
             ))}
           </div>
         )}
         <div className="ms-prices">
+          {hidden ? (
+            <div className="ms-price-row"><span className="ms-negotiable">{t.negotiable}</span></div>
+          ) : (<>
           {(curPrice != null) && (
             <div className="ms-price-row">
               {hasDiscount(p) && <span className="ms-price-was">{money(basePrice, cur)}</span>}
@@ -365,6 +375,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               <span className="ms-price-amt ms-pack">{money(applyDisc(p, basePack), curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
             </div>
           )}
+          </>)}
         </div>
         {qty > 0 ? (
           <>
@@ -374,8 +385,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               <button onClick={() => setQty(p.id, qty + 1)}>+</button>
               <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
             </div>
-            {curPrice != null && curPrice > 0 && (
+            {!hidden && curPrice != null && curPrice > 0 && (
               <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
+            )}
+            {hidden && (
+              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} · <b>{t.negotiable}</b></div>
             )}
           </>
         ) : (
@@ -611,7 +625,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {step === 'cart' && (
           <>
             <div className="ms-drawer-body">
-              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, optionText, cur }) => {
+              {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, hidden, optionText, cur }) => {
                 const showPrice = optionsOf(p).length > 0 || p.price != null;
                 return (
                 <div className="ms-citem" key={p.id}>
@@ -624,7 +638,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                       <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
                       <button className="ms-rm" onClick={() => setQty(p.id, 0)}>{t.remove}</button>
                     </div>
-                    {showPrice && <div className="ms-citem-price">{money(line, cur)}</div>}
+                    {hidden ? <div className="ms-citem-price ms-citem-neg">{t.negotiable}</div> : (showPrice && <div className="ms-citem-price">{money(line, cur)}</div>)}
                   </div>
                 </div>
                 );
@@ -632,7 +646,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             </div>
             {cartItems.length > 0 && (
               <div className="ms-checkout-bar">
-                <div className="ms-summary"><span>{t.total}</span><b>{multiCur ? fmtTotals() : money(grandTotal, displayCur)}</b></div>
+                <div className="ms-summary"><span>{t.total}</span><b>{allHidden ? t.negotiable : (multiCur ? fmtTotals() : money(grandTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {t.negotiable}</span>}</b></div>
                 <button className="ms-submit" onClick={() => { setError(''); setStep('review'); }}>{t.review} →</button>
               </div>
             )}
@@ -652,14 +666,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <table className="ms-inv-table">
                   <thead><tr><th>{t.colItem}</th><th className="c">{t.colQty}</th><th className="r">{t.colUnit}</th><th className="r">{t.colLine}</th></tr></thead>
                   <tbody>
-                    {cartItems.map(({ p, qty, rate, line, optionText, cur }) => {
+                    {cartItems.map(({ p, qty, rate, line, hidden, optionText, cur }) => {
                       const showPrice = optionsOf(p).length > 0 || p.price != null;
                       return (
                       <tr key={p.id}>
                         <td>{pName(p)}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
                         <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
-                        <td className="r">{showPrice ? money(rate, cur) : '—'}</td>
-                        <td className="r b">{showPrice ? money(line, cur) : '—'}</td>
+                        <td className="r">{hidden ? <span className="ms-inv-neg">{t.negotiable}</span> : (showPrice ? money(rate, cur) : '—')}</td>
+                        <td className="r b">{hidden ? <span className="ms-inv-neg">{t.negotiable}</span> : (showPrice ? money(line, cur) : '—')}</td>
                       </tr>
                       );
                     })}
@@ -712,7 +726,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
                   </div>
                 )}
-                <div className="ms-inv-total"><span>{t.total}</span><b>{multiCur ? fmtTotals() : money(finalTotal, displayCur)}</b></div>
+                <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? t.negotiable : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {t.negotiable}</span>}</b></div>
                 <p className="ms-inv-hint">{t.invHint}</p>
               </div>
               <div className="ms-form embedded">
@@ -921,6 +935,11 @@ const MS_CSS = `
 .ms-price-row { display:flex; align-items:baseline; flex-wrap:wrap; gap:7px; }
 .ms-price-was { font-size:12px; font-weight:600; color:#94a3b8; text-decoration:line-through; }
 .ms-disc-tag { font-size:10px; font-weight:900; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; padding:1px 7px; border-radius:999px; }
+/* «قابل مذاکره» (price hidden) */
+.ms-negotiable { font-size:13px; font-weight:800; color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 9%, #fff); border:1px dashed color-mix(in srgb, var(--ms-primary) 35%, #fff); padding:4px 10px; border-radius:8px; }
+.ms-citem-neg { color:var(--ms-primary) !important; font-weight:800; }
+.ms-inv-neg { color:var(--ms-primary); font-weight:800; font-size:11px; }
+.ms-some-neg { font-size:11px; font-weight:700; color:var(--ms-primary); opacity:.85; }
 .ms-disc-ribbon { position:absolute; top:10px; inset-inline-end:10px; background:#dc2626; color:#fff; font-size:11px; font-weight:900; padding:4px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(220,38,38,.35); z-index:2; }
 .ms-feat-badge { position:absolute; bottom:10px; inset-inline-start:10px; background:rgba(245,158,11,.96); color:#fff; font-size:10px; font-weight:900; padding:3px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.2); }
 /* featured rail */

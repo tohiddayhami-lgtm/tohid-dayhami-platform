@@ -689,6 +689,7 @@ export interface MetaShopProduct {
   i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description } }
   active?: boolean;
   featured?: boolean;      // highlight as a «ویژه» product (up to 3 shown in the featured rail)
+  hidePrice?: boolean;     // hide the price → show «قابل مذاکره» instead; customer can still order a quantity for a later quote
   // pricing
   currency?: string;       // overrides shop currency if set
   price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
@@ -752,6 +753,7 @@ export interface MetaShop {
   footerText?: string;
   // catalog
   categories?: string[];   // ordered category list (falls back to product groups)
+  hidePrices?: boolean;    // hide ALL product prices shop-wide → «قابل مذاکره»; orders still capture quantities for a later quote
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   discounts?: MetaShopDiscount[]; // discount codes
@@ -780,6 +782,7 @@ export interface MetaShopOrderItem {
   lineTotal?: number;
   currency?: string;       // per-line currency (may differ from the order currency)
   optionLabel?: string;    // chosen rate option (e.g. "Buy" / "Sell")
+  priceHidden?: boolean;   // price was «قابل مذاکره» — quantity captured for a later quote, no amount
 }
 
 export interface MetaShopOrder {
