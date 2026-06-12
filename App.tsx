@@ -800,12 +800,6 @@ const App: React.FC = () => {
         let assigneeId = resolveFormAssignee(ticket);
         if (!assigneeId) assigneeId = resolveServiceRouting(ticket);
         if (!assigneeId && autoMode) assigneeId = calculateAssignee(ticket.serviceId);
-        // Google-Form tickets must never stay unassigned (mirror native saveNewTicketToSystem):
-        // fall back to master/manager so they still get the ticket + WhatsApp notification.
-        if (!assigneeId && ticket.source === 'google_form') {
-          const masterP = personnel.find(p => p.username === 'master' && (p.status || 'active') === 'active');
-          assigneeId = masterP?.id || personnel.find(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r.includes('مدیر')))?.id;
-        }
         if (assigneeId) {
           const assignee = personnel.find(p => p.id === assigneeId);
           if (assignee) {
