@@ -423,13 +423,13 @@ const MSC_CSS = `
   position:relative; display:flex; flex-direction:column; padding:18mm 17mm; }
 .msc-cover-top{ position:relative; display:flex; align-items:center; justify-content:center; min-height:26mm; }
 .msc-cover-logo-plate{ display:inline-flex; align-items:center; justify-content:center; background:#fff; border-radius:4mm;
-  padding:5mm 8mm; box-shadow:0 8px 26px rgba(0,0,0,.28); max-width:120mm; }
+  padding:5mm 8mm; box-shadow:0 8px 26px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.06); max-width:120mm; }
 .msc-cover-logo{ max-height:22mm; max-width:96mm; width:auto; object-fit:contain; display:block; }
 .msc-cover-logo-txt{ font-size:23pt; font-weight:900; letter-spacing:.5px; text-align:center; background:rgba(255,255,255,.14);
   border:1px solid rgba(255,255,255,.35); backdrop-filter:blur(5px); padding:4mm 8mm; border-radius:4mm; }
 .msc-cover-code{ position:absolute; top:0; inset-inline-end:0; font-family:monospace; font-size:10pt; font-weight:700;
-  letter-spacing:1px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); padding:4px 10px;
-  border-radius:8px; backdrop-filter:blur(4px); }
+  letter-spacing:1px; color:#fff; background:rgba(0,0,0,.34); border:1px solid rgba(255,255,255,.4); padding:4px 10px;
+  border-radius:8px; }
 .msc-cover-center{ margin-top:auto; margin-bottom:auto; }
 .msc-cover-eyebrow{ font-size:11pt; font-weight:700; letter-spacing:3px; text-transform:uppercase; opacity:.92; margin:0 0 10px; }
 .msc-cover-title{ font-size:40pt; line-height:1.08; font-weight:900; margin:0; text-shadow:0 2px 14px rgba(0,0,0,.28); }
@@ -510,13 +510,13 @@ const MSC_CSS = `
   align-items:center; justify-content:center; text-align:center; }
 .msc-back-inner{ padding:24mm 18mm; display:flex; flex-direction:column; align-items:center; gap:5mm; max-width:160mm; }
 .msc-back-logo-plate{ display:inline-flex; align-items:center; justify-content:center; background:#fff; border-radius:4mm;
-  padding:5mm 7mm; box-shadow:0 8px 26px rgba(0,0,0,.28); margin-bottom:2mm; }
+  padding:5mm 7mm; box-shadow:0 8px 26px rgba(0,0,0,.28); border:1px solid rgba(0,0,0,.06); margin-bottom:2mm; }
 .msc-back-logo{ max-height:22mm; max-width:72mm; width:auto; object-fit:contain; display:block; }
 .msc-back-logo-txt{ font-size:24pt; font-weight:900; }
 .msc-back-title{ font-size:26pt; font-weight:900; margin:0; }
 .msc-back-sub{ font-size:12pt; line-height:1.6; opacity:.92; margin:0; max-width:135mm; }
 .msc-back-qr{ display:flex; flex-direction:column; align-items:center; gap:3mm; margin:4mm 0; }
-.msc-back-qr img{ width:42mm; height:42mm; background:#fff; padding:3mm; border-radius:4mm; box-shadow:0 6px 20px rgba(0,0,0,.25); }
+.msc-back-qr img{ width:42mm; height:42mm; background:#fff; padding:3mm; border-radius:4mm; box-shadow:0 6px 20px rgba(0,0,0,.25); border:1px solid rgba(0,0,0,.06); }
 .msc-back-qr span{ font-size:10pt; font-weight:700; opacity:.95; }
 .msc-back-contact{ display:grid; grid-template-columns:auto auto; gap:4mm 12mm; margin-top:3mm; text-align:start; }
 .msc-back-contact .wide{ grid-column:1 / -1; }
@@ -531,6 +531,9 @@ const MSC_CSS = `
   @page{ size:A4; margin:0; }
   html, body{ margin:0 !important; padding:0 !important; background:#fff !important; }
   .msc-root{ background:#fff !important; }
+  /* Soft box/text shadows & backdrop blur render as hard grey rectangles ("halos") in many mobile PDF
+     viewers — strip them so the exported PDF is clean on every device. Borders keep the definition. */
+  .msc-root *{ box-shadow:none !important; text-shadow:none !important; backdrop-filter:none !important; }
   .msc-noprint{ display:none !important; }
   .msc-pages{ gap:0 !important; padding:0 !important; display:block !important; }
   .msc-page{ width:210mm !important; height:297mm !important; min-height:297mm !important; margin:0 !important;
