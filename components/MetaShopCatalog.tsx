@@ -473,8 +473,8 @@ const MSC_CSS = `
 .msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:7mm; min-height:0; }
 .msc-prod{ border:1px solid rgba(0,0,0,.12); border-radius:3.5mm; overflow:hidden; display:flex; flex-direction:column;
   background:#fff; box-shadow:0 2px 9px rgba(0,0,0,.07); min-height:0; }
-.msc-prod-media{ position:relative; height:60mm; background:#f1f5f9; flex:none; border-bottom:1px solid rgba(0,0,0,.07); }
-.msc-prod-media img{ width:100%; height:100%; object-fit:cover; display:block; }
+.msc-prod-media{ position:relative; height:60mm; background:#fff; flex:none; border-bottom:1px solid rgba(0,0,0,.08); }
+.msc-prod-media img{ width:100%; height:100%; object-fit:contain; padding:2.5mm; display:block; }
 .msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48pt; font-weight:900;
   color:var(--c-primary); opacity:.22; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
 .msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:10.5pt; font-weight:800;
