@@ -890,8 +890,6 @@ export const AdminDashboard: React.FC<Props> = ({
     if (!nc?.enabled || !nc.onNewTicket) return;
     const assignee = personnel.find(p => p.id === targetUserId);
     if (!assignee) return;
-    const phone = nc.personnelPhones?.[targetUserId];
-    if (!phone) return;
     const msg = renderTemplate(nc.ticketTemplate, {
       recipientName: assignee.fullName,
       ticketId,
@@ -899,8 +897,12 @@ export const AdminDashboard: React.FC<Props> = ({
       senderName: currentUser.fullName,
       status: '',
     });
-    const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[targetUserId]);
-    await saveNotificationLog(buildLog('new_ticket', targetUserId, assignee.fullName, phone, msg, result, ticketId));
+    const phone = nc.personnelPhones?.[targetUserId];
+    if (phone) {
+      const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[targetUserId]);
+      await saveNotificationLog(buildLog('new_ticket', targetUserId, assignee.fullName, phone, msg, result, ticketId));
+    }
+    // Master copy — sent even if the assignee has NO phone configured.
     await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: targetUserId, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId, saveLog: saveNotificationLog });
   };
 

@@ -812,20 +812,21 @@ const App: React.FC = () => {
             const ageMs = new Date().getTime() - new Date(ticket.createdAt).getTime();
             const isRecent = isFinite(ageMs) && ageMs >= 0 && ageMs < 30 * 60 * 1000;
             if (isRecent && nc?.enabled && nc.onNewTicket) {
+              const msg = renderTemplate(nc.ticketTemplate, {
+                recipientName: assignee.fullName,
+                ticketId: ticket.id,
+                customerName: ticket.customerName || '',
+                formTitle: ticket.customData?.formTitle || ticket.serviceId,
+                senderName: 'سیستم',
+                status: ticket.status,
+              });
               const phone = nc.personnelPhones?.[assigneeId];
               if (phone) {
-                const msg = renderTemplate(nc.ticketTemplate, {
-                  recipientName: assignee.fullName,
-                  ticketId: ticket.id,
-                  customerName: ticket.customerName || '',
-                  formTitle: ticket.customData?.formTitle || ticket.serviceId,
-                  senderName: 'سیستم',
-                  status: ticket.status,
-                });
                 const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assigneeId]);
                 await saveNotificationLog(buildLog('new_ticket', assigneeId, assignee.fullName, phone, msg, result, ticket.id));
-                await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assigneeId, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
               }
+              // Master copy — sent even if the assignee has NO phone configured.
+              await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assigneeId, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
             }
           }
         }
@@ -955,20 +956,21 @@ const App: React.FC = () => {
     if (nc?.enabled && nc.onNewTicket && assignedTo) {
       const assignee = personnel.find(p => p.id === assignedTo);
       if (assignee) {
+        const msg = renderTemplate(nc.ticketTemplate, {
+          recipientName: assignee.fullName,
+          ticketId: ticket.id,
+          customerName: ticket.customerName,
+          formTitle: ticket.customData?.formTitle || ticket.serviceId,
+          senderName: 'سیستم',
+          status: ticket.status,
+        });
         const phone = nc.personnelPhones[assignedTo];
         if (phone) {
-          const msg = renderTemplate(nc.ticketTemplate, {
-            recipientName: assignee.fullName,
-            ticketId: ticket.id,
-            customerName: ticket.customerName,
-            formTitle: ticket.customData?.formTitle || ticket.serviceId,
-            senderName: 'سیستم',
-            status: ticket.status,
-          });
           const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[assignedTo]);
           await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee.fullName, phone, msg, result, ticket.id));
-          await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assignedTo, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
         }
+        // Master copy — sent even if the assignee has NO phone configured.
+        await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assignedTo, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
       }
     }
   };
