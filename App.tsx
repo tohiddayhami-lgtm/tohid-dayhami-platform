@@ -34,7 +34,7 @@ import { MetaShopDirectory } from './components/MetaShopDirectory';
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
 import { ExpoDoorsLoader } from './components/metaverse/ExpoDoorsLoader';
-import { DoorsGate } from './components/DoorsGate';
+import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -1328,9 +1328,11 @@ const App: React.FC = () => {
       );
     }
     const bzTitle = publicBazaar ? ((lang === 'fa' ? publicBazaar.title?.fa : publicBazaar.title?.en) || publicBazaar.name) : (lang === 'fa' ? 'بازارچه' : 'Bazaar');
-    const bzSub = publicBazaar ? ((lang === 'fa' ? publicBazaar.subtitle?.fa : publicBazaar.subtitle?.en) || undefined) : undefined;
+    if (!ready) {
+      return <BazaarPassageLoader lang={lang} title={bzTitle} primary="#5b6472" accent="#cbd5e1" />;
+    }
     return (
-      <DoorsGate ready={ready} lang={lang} title={bzTitle} subtitle={bzSub} primary="#5b6472" accent="#cbd5e1" bg="#1f2430" emblem="🏬">
+      <>
         {publicBazaar && (
           <MetaShopDirectory
             shops={metaShops}
@@ -1339,7 +1341,7 @@ const App: React.FC = () => {
             onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
           />
         )}
-      </DoorsGate>
+      </>
     );
   }
 
