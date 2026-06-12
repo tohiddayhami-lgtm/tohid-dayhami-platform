@@ -28,6 +28,7 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { MetaShopView } from './components/MetaShopView';
+import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
@@ -192,6 +193,17 @@ const extractEmbedFlag = (): boolean => {
   return false;
 };
 
+// True when the shop link should render the printable A4 PDF catalog (?catalog=1 or ?pdf=1).
+// Reuses the same ?shop=<slug> resolution; only the rendered component differs.
+const extractCatalogFlag = (): boolean => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const v = p.get('catalog') ?? p.get('pdf');
+    if (v != null && v !== '0' && v !== 'false') return true;
+  } catch {}
+  return false;
+};
+
 // Extracts a Meta Bazaar slug from ?bazaar=... or #/bazaar/...
 const extractBazaarSlug = (): string | null => {
   try {
@@ -281,6 +293,7 @@ const App: React.FC = () => {
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
   const [isEmbed] = useState<boolean>(extractEmbedFlag); // shop loaded inside an iframe (Google Sites / external site)
+  const [catalogMode, setCatalogMode] = useState<boolean>(extractCatalogFlag); // shop link opened as a printable A4 PDF catalog (?catalog=1)
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
@@ -420,7 +433,7 @@ const App: React.FC = () => {
       if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
       const fid = extractFormId();
       if (v === 'custom-form' && fid) setCustomFormId(fid);
-      if (v === 'metashop') setShopSlug(extractShopSlug());
+      if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
       if (v === 'expo') setExpoSlug(extractExpoSlug());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
@@ -1342,6 +1355,8 @@ const App: React.FC = () => {
   // ── Public Meta Shop page (full-screen takeover) ──
   if (view === 'metashop') {
     if (publicShop && publicShop.isActive !== false) {
+      // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
+      if (catalogMode) return <MetaShopCatalog shop={publicShop} lang={lang} autoPrint />;
       return <MetaShopView shop={publicShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
     }
     // Still resolving the shop → show the "raising the shutter" loader (no artificial delay)

@@ -214,6 +214,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     sNew: T ? 'جدید' : 'New', sProg: T ? 'در حال انجام' : 'In progress', sDone: T ? 'انجام شد' : 'Done', sCanc: T ? 'لغو شد' : 'Cancelled',
     deleteConfirm: T ? 'این فروشگاه حذف شود؟' : 'Delete this shop?',
     linkLabel: T ? 'لینک عمومی:' : 'Public link:',
+    // PDF catalog
+    catalog: T ? 'کاتالوگ PDF' : 'PDF Catalog',
+    catalogTitle: T ? 'ساخت کاتالوگ PDF صادراتی A4 از این فروشگاه (جلد، فهرست، صفحات محصول، کد QR) — آماده چاپ و ذخیره به PDF' : 'Generate an export-grade A4 PDF catalog of this shop (cover, index, product pages, QR) — ready to print / Save as PDF',
     // Google Site / embed export
     gsite: T ? 'گوگل‌سایت' : 'Google Site',
     gsiteTitle: T ? 'تعبیه در گوگل‌سایت یا هر وب‌سایت' : 'Embed in Google Sites or any website',
@@ -239,6 +242,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
 
   const shopUrl = (shop: MetaShop) => `${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`;
   const copyLink = (shop: MetaShop) => { navigator.clipboard.writeText(shopUrl(shop)); setCopiedId(shop.id); setTimeout(() => setCopiedId(null), 1800); };
+  // Printable A4 PDF catalog link — same shop page with &catalog=1 (opens the print → "Save as PDF" view).
+  const catalogUrl = (shop: MetaShop) => `${shopUrl(shop)}&catalog=1`;
 
   // ── Google Site / iframe embed export ──
   // The embed URL is the live shop page with &embed=1 so it renders compactly and tags orders as gsite-sourced.
@@ -524,6 +529,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                       <a href={shopUrl(s)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
                       <button onClick={() => copyLink(s)} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === s.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
                       <button onClick={() => { setEmbedShop(s); }} title={t.gsiteTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
+                      <a href={catalogUrl(s)} target="_blank" rel="noreferrer" title={t.catalogTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1">📄 {t.catalog}</a>
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
@@ -591,6 +597,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <div className="flex items-center gap-2">
           <a href={draft.slug ? shopUrl(draft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
           <button onClick={() => setEmbedShop(draft)} disabled={!draft.slug} title={t.gsiteTitle} className={`text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
+          <a href={draft.slug ? catalogUrl(draft) : undefined} target="_blank" rel="noreferrer" title={t.catalogTitle} className={`text-xs px-3 py-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}>📄 {t.catalog}</a>
           <button onClick={() => downloadShopJson(draft)} title={t.downloadJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
           {!readonly && <button onClick={() => triggerUpdate(draft)} title={t.updateJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
           {!readonly && <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}

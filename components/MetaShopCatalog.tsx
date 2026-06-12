@@ -1,0 +1,545 @@
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { MetaShop, MetaShopProduct } from '../types';
+import { shopCodeOf } from './shopCode';
+import { Language } from '../App';
+
+interface Props {
+  shop: MetaShop;
+  lang: Language;
+  autoPrint?: boolean; // when reached via ?catalog=1 — opens the browser print dialog once images are ready
+}
+
+// Products per A4 page (2 columns × 3 rows). Cards are sized to fit exactly; overflow is clipped.
+const PER_PAGE = 6;
+
+const chunk = <T,>(arr: T[], n: number): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+};
+
+const STR: Record<string, Record<string, string>> = {
+  en: {
+    productCatalog: 'Product Catalog', serviceCatalog: 'Service Catalog', items: 'products', services: 'services',
+    issued: 'Issued', sku: 'SKU', moq: 'MOQ', pack: 'Pack', origin: 'Origin', requestQuote: 'Price on request',
+    index: 'Table of Contents', page: 'Page', thankYou: 'Thank you for your interest',
+    thankYouSub: 'We look forward to serving you. Scan the code below to open the live catalog and place your order online.',
+    scanToOrder: 'Scan to view & order online', phone: 'Phone', email: 'Email', website: 'Website', address: 'Address',
+    downloadPdf: 'Download PDF', backToShop: 'Back to shop', preparing: 'Preparing your catalog…',
+    printHint: 'In the print dialog, choose “Save as PDF”.', pages: 'pages', item: 'No.', items_col: 'items',
+  },
+  fa: {
+    productCatalog: 'کاتالوگ محصولات', serviceCatalog: 'کاتالوگ خدمات', items: 'محصول', services: 'خدمت',
+    issued: 'تاریخ صدور', sku: 'کد کالا', moq: 'حداقل سفارش', pack: 'بسته', origin: 'مبدأ', requestQuote: 'استعلام قیمت',
+    index: 'فهرست مطالب', page: 'صفحه', thankYou: 'از توجه شما سپاسگزاریم',
+    thankYouSub: 'مشتاق همکاری با شما هستیم. برای مشاهده کاتالوگ آنلاین و ثبت سفارش، کد زیر را اسکن کنید.',
+    scanToOrder: 'برای مشاهده و سفارش آنلاین اسکن کنید', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت', address: 'نشانی',
+    downloadPdf: 'دانلود PDF', backToShop: 'بازگشت به فروشگاه', preparing: 'در حال آماده‌سازی کاتالوگ…',
+    printHint: 'در پنجره چاپ، گزینه‌ی «ذخیره به‌صورت PDF» را انتخاب کنید.', pages: 'صفحه', item: 'ردیف', items_col: 'مورد',
+  },
+};
+
+export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
+  const isServices = shop.type === 'services';
+  const theme = shop.theme;
+
+  // ── Languages (defaults fa + en). Visitor can switch from the toolbar; init from ?lang= / shop default ──
+  const langsList: import('../types').MetaShopLang[] = (shop.languages && shop.languages.length)
+    ? shop.languages
+    : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
+  const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
+  const isRtl = (code: string) => { const l = langsList.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
+  const initialLang = (() => {
+    try { const q = new URLSearchParams(window.location.search).get('lang'); if (q && langsList.find(l => l.code === q)) return q; } catch {}
+    return shop.defaultLang || langsList[0]?.code || lang;
+  })();
+  const [uiLang, setUiLang] = useState<string>(initialLang);
+
+  const T = uiLang === 'fa';
+  const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
+  const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
+  const s = (k: string): string => (STR[uiLang] && STR[uiLang][k]) || STR.en[k] || STR.fa[k] || k;
+
+  // Content helpers (legacy fa/en + per-item i18n overrides) — mirror MetaShopView
+  const L = (faVal?: string, enVal?: string) => (uiLang === 'fa' ? faVal : (enVal || faVal)) || (faVal || enVal || '');
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
+  const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
+  const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
+  const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
+
+  const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+
+  // ── Group products by category (explicit order first, then discovered), keeping a flat fallback bucket ──
+  const UNCAT = '__uncat__';
+  const grouped = useMemo(() => {
+    const map = new Map<string, MetaShopProduct[]>();
+    const order: string[] = [];
+    (shop.categories || []).forEach(c => { if (c && !map.has(c)) { map.set(c, []); order.push(c); } });
+    products.forEach(p => {
+      const g = (p.group && p.group.trim()) ? p.group : UNCAT;
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g)!.push(p);
+    });
+    return order
+      .filter(c => (map.get(c) || []).length)
+      .map(c => ({ cat: c, label: c === UNCAT ? (isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Products')) : c, items: map.get(c)! }));
+  }, [products, shop.categories, T, isServices]);
+
+  const showToc = grouped.length > 1 && products.length > PER_PAGE;
+  const coverPages = 1;
+  const tocPages = showToc ? 1 : 0;
+
+  // ── Paginate each category into A4 pages; number items sequentially; record per-category start page for the TOC ──
+  const { pages, toc } = useMemo(() => {
+    const pgs: { cat: string; label: string; items: MetaShopProduct[]; part: number; parts: number; startNo: number }[] = [];
+    const tocEntries: { label: string; count: number; pageStart: number }[] = [];
+    let globalNo = 0;
+    const firstProductPrintNo = coverPages + tocPages + 1; // 1-based printed page index of the first product page
+    grouped.forEach(g => {
+      const parts = chunk(g.items, PER_PAGE);
+      tocEntries.push({ label: g.label, count: g.items.length, pageStart: firstProductPrintNo + pgs.length });
+      parts.forEach((items, i) => {
+        pgs.push({ cat: g.cat, label: g.label, items, part: i, parts: parts.length, startNo: globalNo });
+        globalNo += items.length;
+      });
+    });
+    return { pages: pgs, toc: tocEntries };
+  }, [grouped, tocPages]);
+
+  const totalPages = coverPages + tocPages + pages.length + 1; // + back cover
+
+  // ── Public links ──
+  const shopLink = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&qzone=1&data=${encodeURIComponent(shopLink)}`;
+
+  // ── Dates ──
+  const today = new Date();
+  const dateStr = (() => { try { return today.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return today.toLocaleDateString(); } })();
+  const yearStr = (() => { try { return today.toLocaleDateString(locale, { year: 'numeric' }); } catch { return String(today.getFullYear()); } })();
+
+  // ── Nice default filename for "Save as PDF" ──
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${shop.name} — ${T ? 'کاتالوگ' : 'Catalog'}`;
+    return () => { document.title = prev; };
+  }, [shop.name, T]);
+
+  // ── Preload images, then (optionally) open the print dialog once everything is ready ──
+  const [ready, setReady] = useState(false);
+  const printedRef = useRef(false);
+  useEffect(() => {
+    const urls = new Set<string>();
+    if (shop.coverImage) urls.add(shop.coverImage);
+    if (shop.logo) urls.add(shop.logo);
+    products.forEach(p => { if (p.images && p.images[0]) urls.add(p.images[0]); });
+    urls.add(qrUrl);
+    const list = [...urls];
+    if (!list.length) { setReady(true); return; }
+    let done = 0, finished = false;
+    const finish = () => { if (!finished) { finished = true; setReady(true); } };
+    const tick = () => { done++; if (done >= list.length) finish(); };
+    list.forEach(u => { const im = new Image(); im.onload = tick; im.onerror = tick; im.src = u; });
+    const to = setTimeout(finish, 6000); // never block forever on a slow/broken image
+    return () => clearTimeout(to);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (ready && autoPrint && !printedRef.current) {
+      printedRef.current = true;
+      const id = setTimeout(() => { try { window.print(); } catch {} }, 600);
+      return () => clearTimeout(id);
+    }
+  }, [ready, autoPrint]);
+
+  const doPrint = () => { try { window.print(); } catch {} };
+  const backToShop = () => { window.location.href = shopLink; };
+
+  // ── CSS custom props from the shop theme ──
+  const rootStyle = {
+    ['--c-primary' as any]: theme.primary,
+    ['--c-cover' as any]: theme.cover,
+    ['--c-coverText' as any]: theme.coverText,
+    ['--c-bg' as any]: theme.bg,
+    ['--c-heading' as any]: theme.heading,
+    ['--c-text' as any]: theme.text,
+  } as React.CSSProperties;
+
+  // ── Price block ──
+  const priceJsx = (p: MetaShopProduct) => {
+    const opts = p.priceOptions || [];
+    if (opts.length) {
+      return (
+        <div className="msc-price-opts">
+          {opts.slice(0, 4).map(o => (
+            <span key={o.id} className="msc-price-opt"><b>{L(o.label, o.labelEn)}</b> {money(o.price, o.currency || p.currency)}</span>
+          ))}
+        </div>
+      );
+    }
+    if (p.price != null && p.price > 0) {
+      return (
+        <div className="msc-price-main">
+          {money(p.price, p.currency)}
+          <span className="msc-price-unit">{p.priceUnit ? ` ${p.priceUnit}` : (p.unit ? ` / ${p.unit}` : '')}</span>
+          {p.packPrice ? <span className="msc-price-pack"> · {s('pack')}: {money(p.packPrice, p.currency)}</span> : null}
+        </div>
+      );
+    }
+    return <div className="msc-price-quote">{s('requestQuote')}</div>;
+  };
+
+  const metaBits = (p: MetaShopProduct): string[] => {
+    const bits: string[] = [];
+    if (!isServices && p.moq) bits.push(`${s('moq')}: ${p.moq}`);
+    if (!isServices && p.pack != null) bits.push(`${s('pack')}: ${p.pack}${p.unit ? ' ' + p.unit : ''}`);
+    if (p.stockLabel) bits.push(p.stockLabel);
+    return bits;
+  };
+
+  const productCard = (p: MetaShopProduct, no: number) => {
+    const img = p.images && p.images[0];
+    const name = pName(p);
+    const desc = pDesc(p);
+    const feats = (p.features || []).filter(f => f.label || f.value).slice(0, 3);
+    const meta = metaBits(p);
+    return (
+      <article className="msc-prod" key={p.id}>
+        <div className="msc-prod-media">
+          {img ? <img src={img} alt={name} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
+          <span className="msc-prod-no">{no}</span>
+        </div>
+        <div className="msc-prod-info">
+          <h3 className="msc-prod-name">{name}</h3>
+          <div className="msc-prod-tags">
+            {p.sku && <span className="msc-tag">{s('sku')}: {p.sku}</span>}
+            {p.hsCode && <span className="msc-tag">HS {p.hsCode}</span>}
+            {p.subcategory && <span className="msc-tag soft">{p.subcategory}</span>}
+            {p.origin?.name && (
+              <span className="msc-tag origin">
+                {p.origin.flagUrl && <img src={p.origin.flagUrl} alt="" />}{p.origin.name}
+              </span>
+            )}
+          </div>
+          {desc && <p className="msc-prod-desc">{desc}</p>}
+          {feats.length > 0 && (
+            <ul className="msc-prod-feats">
+              {feats.map((f, i) => <li key={i}><span>{f.label}</span><b>{f.value}</b></li>)}
+            </ul>
+          )}
+          <div className="msc-prod-bottom">
+            {meta.length > 0 && <div className="msc-prod-meta">{meta.join('  ·  ')}</div>}
+            <div className="msc-prod-price">{priceJsx(p)}</div>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  const coverTitle = TR(shop.i18n, 'title', shop.title || shop.name);
+  const coverSub = TR(shop.i18n, 'subtitle', shop.subtitle || '');
+  const coverEyebrow = TR(shop.i18n, 'collectionText', shop.collectionText || '');
+  const heroStyle: React.CSSProperties = shop.coverImage
+    ? { backgroundImage: `linear-gradient(155deg, rgba(0,0,0,.28), rgba(0,0,0,.62)), url(${shop.coverImage})` }
+    : { background: `linear-gradient(150deg, ${theme.cover}, ${theme.primary})` };
+
+  return (
+    <div className="msc-root" dir={dir} style={rootStyle}>
+      <style>{MSC_CSS}</style>
+
+      {/* ── Screen toolbar (never printed) ── */}
+      <div className="msc-toolbar msc-noprint">
+        <div className="ttl">
+          {shop.logo && <img src={shop.logo} alt="" className="msc-tb-logo" />}
+          <span>{shop.name}</span>
+          <span className="msc-tb-meta">· {totalPages} {s('pages')}</span>
+        </div>
+        {langsList.length > 1 && (
+          <div className="msc-langsw">
+            {langsList.map(lg => (
+              <button key={lg.code} className={uiLang === lg.code ? 'on' : ''} onClick={() => setUiLang(lg.code)}>{lg.name}</button>
+            ))}
+          </div>
+        )}
+        <button className="msc-btn ghost" onClick={backToShop}>← {s('backToShop')}</button>
+        <button className="msc-btn primary" onClick={doPrint} disabled={!ready}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+          {s('downloadPdf')}
+        </button>
+        <span className="msc-tb-hint">{s('printHint')}</span>
+      </div>
+
+      {/* ── Preparing overlay while images load ── */}
+      {!ready && (
+        <div className="msc-prep msc-noprint">
+          <div className="msc-spinner" />
+          <p>{s('preparing')}</p>
+        </div>
+      )}
+
+      <div className="msc-pages">
+        {/* ════ COVER ════ */}
+        <section className="msc-page msc-cover">
+          <div className={`msc-cover-hero ${shop.coverImage ? 'has-img' : ''}`} style={heroStyle}>
+            <div className="msc-cover-top">
+              {shop.logo
+                ? <img className="msc-cover-logo" src={shop.logo} alt={shop.name} />
+                : <span className="msc-cover-logo-txt">{shop.name}</span>}
+              <span className="msc-cover-code">{shopCodeOf(shop)}</span>
+            </div>
+            <div className="msc-cover-center">
+              {coverEyebrow && <p className="msc-cover-eyebrow">{coverEyebrow}</p>}
+              <h1 className="msc-cover-title">{coverTitle}</h1>
+              {coverSub && <p className="msc-cover-sub">{coverSub}</p>}
+            </div>
+            <div className="msc-cover-kind">{isServices ? s('serviceCatalog') : s('productCatalog')} · {yearStr}</div>
+          </div>
+          <div className="msc-cover-foot">
+            <div className="msc-cover-rule" />
+            <div className="msc-cover-contact">
+              {shop.phone && <div><span>{s('phone')}</span><b dir="ltr">{shop.phone}</b></div>}
+              {shop.email && <div><span>{s('email')}</span><b dir="ltr">{shop.email}</b></div>}
+              {shop.website && <div><span>{s('website')}</span><b dir="ltr">{shop.website}</b></div>}
+              {shop.address && <div className="wide"><span>{s('address')}</span><b>{shop.address}</b></div>}
+            </div>
+            <div className="msc-cover-issue">
+              <span>{s('issued')}: {dateStr}</span>
+              <span>{products.length} {isServices ? s('services') : s('items')}</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ════ TABLE OF CONTENTS ════ */}
+        {showToc && (
+          <section className="msc-page msc-toc">
+            <div className="msc-toc-head">
+              <h2>{s('index')}</h2>
+              <span>{coverTitle}</span>
+            </div>
+            <ul className="msc-toc-list">
+              {toc.map((e, i) => (
+                <li key={i}>
+                  <span className="msc-toc-name">{e.label}</span>
+                  <span className="msc-toc-count">{e.count} {s('items_col')}</span>
+                  <span className="msc-toc-dots" />
+                  <span className="msc-toc-pg">{e.pageStart}</span>
+                </li>
+              ))}
+            </ul>
+            <footer className="msc-run-foot">
+              <span>{shop.website || shop.name}</span>
+              <span>{s('page')} {coverPages + 1} / {totalPages}</span>
+            </footer>
+          </section>
+        )}
+
+        {/* ════ PRODUCT PAGES ════ */}
+        {pages.map((pg, idx) => {
+          const printNo = coverPages + tocPages + idx + 1;
+          return (
+            <section className="msc-page msc-catalog-page" key={idx}>
+              <header className="msc-run-head">
+                <div className="msc-run-brand">
+                  {shop.logo && <img className="msc-run-logo" src={shop.logo} alt="" />}
+                  <span className="msc-run-name">{coverTitle}</span>
+                </div>
+                <div className="msc-run-cat">{pg.label}{pg.parts > 1 ? ` (${pg.part + 1}/${pg.parts})` : ''}</div>
+              </header>
+              <div className="msc-grid">
+                {pg.items.map((p, i) => productCard(p, pg.startNo + i + 1))}
+              </div>
+              <footer className="msc-run-foot">
+                <span>{shop.website || shop.phone || shop.name}</span>
+                <span>{s('page')} {printNo} / {totalPages}</span>
+              </footer>
+            </section>
+          );
+        })}
+
+        {/* ════ BACK COVER ════ */}
+        <section className="msc-page msc-back">
+          <div className="msc-back-inner">
+            {shop.logo
+              ? <img className="msc-back-logo" src={shop.logo} alt={shop.name} />
+              : <div className="msc-back-logo-txt">{shop.name}</div>}
+            <h2 className="msc-back-title">{s('thankYou')}</h2>
+            <p className="msc-back-sub">{shop.footerText || s('thankYouSub')}</p>
+            <div className="msc-back-qr">
+              <img src={qrUrl} alt="QR" />
+              <span>{s('scanToOrder')}</span>
+            </div>
+            <div className="msc-back-contact">
+              {shop.phone && <div><span>{s('phone')}</span><b dir="ltr">{shop.phone}</b></div>}
+              {shop.email && <div><span>{s('email')}</span><b dir="ltr">{shop.email}</b></div>}
+              {shop.website && <div><span>{s('website')}</span><b dir="ltr">{shop.website}</b></div>}
+              {shop.address && <div className="wide"><span>{s('address')}</span><b>{shop.address}</b></div>}
+            </div>
+            <div className="msc-back-link" dir="ltr">{shopLink}</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+};
+
+const MSC_CSS = `
+.msc-root{ background:#525659; min-height:100vh; margin:0; font-family:'Vazirmatn',sans-serif; color:#111;
+  --c-primary:#4f46e5; --c-cover:#1e293b; --c-coverText:#ffffff; --c-bg:#ffffff; --c-heading:#0f172a; --c-text:#334155;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.msc-root *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+/* ── Toolbar ── */
+.msc-toolbar{ position:sticky; top:0; z-index:60; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:9px 16px; background:rgba(17,24,39,.94); backdrop-filter:blur(10px); color:#fff; border-bottom:1px solid rgba(255,255,255,.08); }
+.msc-toolbar .ttl{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:13px; margin-inline-end:auto; }
+.msc-tb-logo{ height:22px; width:auto; border-radius:5px; background:#fff; padding:2px; }
+.msc-tb-meta{ font-weight:500; opacity:.6; font-size:11px; }
+.msc-tb-hint{ font-size:11px; opacity:.65; width:100%; text-align:center; order:9; }
+.msc-langsw{ display:flex; gap:2px; background:rgba(255,255,255,.1); border-radius:9px; padding:3px; }
+.msc-langsw button{ border:none; background:transparent; color:#cbd5e1; font-family:inherit; font-size:12px; font-weight:700;
+  padding:5px 11px; border-radius:6px; cursor:pointer; }
+.msc-langsw button.on{ background:#fff; color:#111827; }
+.msc-btn{ border:none; cursor:pointer; font-family:inherit; font-weight:800; font-size:13px; padding:9px 16px; border-radius:10px;
+  display:inline-flex; align-items:center; gap:7px; transition:transform .1s; }
+.msc-btn:active{ transform:translateY(1px); }
+.msc-btn.primary{ background:var(--c-primary); color:#fff; box-shadow:0 5px 16px rgba(0,0,0,.35); }
+.msc-btn.primary:disabled{ opacity:.5; cursor:default; box-shadow:none; }
+.msc-btn.ghost{ background:rgba(255,255,255,.12); color:#fff; }
+
+/* ── Preparing overlay ── */
+.msc-prep{ position:fixed; inset:0; z-index:55; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; background:rgba(40,42,46,.82); backdrop-filter:blur(3px); color:#e5e7eb; font-weight:700; font-size:14px; }
+.msc-spinner{ width:38px; height:38px; border:4px solid rgba(255,255,255,.2); border-top-color:#fff; border-radius:50%; animation:msc-spin .8s linear infinite; }
+@keyframes msc-spin{ to{ transform:rotate(360deg); } }
+
+/* ── Pages frame ── */
+.msc-pages{ display:flex; flex-direction:column; align-items:center; gap:10mm; padding:26px 12px 70px; }
+.msc-page{ width:210mm; min-height:297mm; background:var(--c-bg); position:relative; overflow:hidden;
+  box-shadow:0 8px 34px rgba(0,0,0,.34); display:flex; flex-direction:column; color:var(--c-text); }
+
+/* ── Cover ── */
+.msc-cover{ padding:0; }
+.msc-cover-hero{ flex:0 0 186mm; height:186mm; background-size:cover; background-position:center; color:var(--c-coverText);
+  position:relative; display:flex; flex-direction:column; padding:18mm 17mm; }
+.msc-cover-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10mm; }
+.msc-cover-logo{ max-height:24mm; max-width:70mm; width:auto; object-fit:contain; filter:drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
+.msc-cover-logo-txt{ font-size:20pt; font-weight:900; letter-spacing:.5px; }
+.msc-cover-code{ font-family:monospace; font-size:10pt; font-weight:700; letter-spacing:1px; background:rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.35); padding:4px 10px; border-radius:8px; backdrop-filter:blur(4px); }
+.msc-cover-center{ margin-top:auto; margin-bottom:auto; }
+.msc-cover-eyebrow{ font-size:11pt; font-weight:700; letter-spacing:3px; text-transform:uppercase; opacity:.92; margin:0 0 10px; }
+.msc-cover-title{ font-size:40pt; line-height:1.08; font-weight:900; margin:0; text-shadow:0 2px 14px rgba(0,0,0,.28); }
+.msc-cover-sub{ font-size:14pt; font-weight:500; margin:14px 0 0; max-width:150mm; opacity:.95; line-height:1.5; }
+.msc-cover-kind{ font-size:11pt; font-weight:800; letter-spacing:2px; text-transform:uppercase; opacity:.9; }
+.msc-cover-foot{ flex:1 1 auto; display:flex; flex-direction:column; padding:14mm 17mm; background:var(--c-bg); }
+.msc-cover-rule{ height:4px; width:60mm; border-radius:4px; background:var(--c-primary); margin-bottom:12mm; }
+.msc-cover-contact{ display:grid; grid-template-columns:1fr 1fr; gap:8mm 12mm; }
+.msc-cover-contact .wide{ grid-column:1 / -1; }
+.msc-cover-contact div{ display:flex; flex-direction:column; gap:3px; }
+.msc-cover-contact span{ font-size:8.5pt; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--c-primary); }
+.msc-cover-contact b{ font-size:12pt; font-weight:600; color:var(--c-heading); word-break:break-word; }
+.msc-cover-issue{ margin-top:auto; display:flex; justify-content:space-between; font-size:10pt; color:var(--c-text); opacity:.75;
+  border-top:1px solid rgba(0,0,0,.08); padding-top:6mm; }
+
+/* ── Table of contents ── */
+.msc-toc{ padding:20mm 18mm 16mm; }
+.msc-toc-head{ display:flex; align-items:baseline; justify-content:space-between; border-bottom:3px solid var(--c-primary); padding-bottom:6mm; margin-bottom:8mm; }
+.msc-toc-head h2{ font-size:26pt; font-weight:900; color:var(--c-heading); margin:0; }
+.msc-toc-head span{ font-size:12pt; font-weight:600; color:var(--c-text); opacity:.7; }
+.msc-toc-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0; }
+.msc-toc-list li{ display:flex; align-items:center; gap:8px; padding:5mm 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:13pt; }
+.msc-toc-name{ font-weight:700; color:var(--c-heading); }
+.msc-toc-count{ font-size:9.5pt; font-weight:600; color:#fff; background:var(--c-primary); border-radius:20px; padding:2px 10px; opacity:.9; }
+.msc-toc-dots{ flex:1; border-bottom:2px dotted rgba(0,0,0,.22); margin:0 4px; align-self:flex-end; transform:translateY(-4px); }
+.msc-toc-pg{ font-weight:800; color:var(--c-primary); font-size:13pt; min-width:10mm; text-align:center; }
+
+/* ── Running header / footer on product pages ── */
+.msc-catalog-page{ padding:11mm 13mm 9mm; }
+.msc-run-head{ display:flex; align-items:center; justify-content:space-between; gap:8mm; padding-bottom:4mm;
+  border-bottom:2px solid var(--c-primary); margin-bottom:6mm; }
+.msc-run-brand{ display:flex; align-items:center; gap:8px; min-width:0; }
+.msc-run-logo{ height:9mm; width:auto; max-width:40mm; object-fit:contain; }
+.msc-run-name{ font-size:11pt; font-weight:800; color:var(--c-heading); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.msc-run-cat{ font-size:10.5pt; font-weight:800; color:#fff; background:var(--c-primary); padding:4px 13px; border-radius:20px; white-space:nowrap; }
+.msc-run-foot{ margin-top:auto; display:flex; align-items:center; justify-content:space-between; padding-top:4mm;
+  border-top:1px solid rgba(0,0,0,.1); font-size:8.5pt; font-weight:600; color:var(--c-text); opacity:.7; }
+.msc-run-foot span[dir]{ direction:ltr; }
+
+/* ── Product grid + card ── */
+.msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:6mm; min-height:0; }
+.msc-prod{ border:1px solid rgba(0,0,0,.1); border-radius:3mm; overflow:hidden; display:flex; flex-direction:column;
+  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+.msc-prod-media{ position:relative; height:33mm; background:#f1f5f9; flex:none; }
+.msc-prod-media img{ width:100%; height:100%; object-fit:cover; display:block; }
+.msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:30pt; font-weight:900;
+  color:var(--c-primary); opacity:.25; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
+.msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:9pt; font-weight:800;
+  min-width:8mm; height:7mm; padding:0 2mm; display:flex; align-items:center; justify-content:center; border-end-end-radius:2.5mm; }
+.msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:3mm 3.2mm; min-height:0; }
+.msc-prod-name{ font-size:11pt; line-height:1.2; font-weight:800; color:var(--c-heading); margin:0 0 1.6mm;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.msc-prod-tags{ display:flex; flex-wrap:wrap; gap:1.4mm; margin-bottom:1.6mm; }
+.msc-tag{ font-size:7.6pt; font-weight:700; color:var(--c-primary); background:color-mix(in srgb, var(--c-primary) 10%, #fff);
+  border:1px solid color-mix(in srgb, var(--c-primary) 24%, #fff); border-radius:3px; padding:1px 5px; white-space:nowrap; }
+.msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
+.msc-tag.origin{ display:inline-flex; align-items:center; gap:3px; }
+.msc-tag.origin img{ height:8pt; width:auto; border-radius:1px; }
+.msc-prod-desc{ font-size:8.6pt; line-height:1.45; color:var(--c-text); margin:0 0 1.6mm;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.msc-prod-feats{ list-style:none; margin:0 0 1.6mm; padding:0; display:flex; flex-direction:column; gap:.7mm; overflow:hidden; }
+.msc-prod-feats li{ display:flex; align-items:baseline; justify-content:space-between; gap:4px; font-size:8pt;
+  border-bottom:1px dotted rgba(0,0,0,.12); padding-bottom:.5mm; }
+.msc-prod-feats li span{ color:var(--c-text); opacity:.8; white-space:nowrap; }
+.msc-prod-feats li b{ color:var(--c-heading); font-weight:700; text-align:end; }
+.msc-prod-bottom{ margin-top:auto; padding-top:1.6mm; border-top:1px solid rgba(0,0,0,.08); }
+.msc-prod-meta{ font-size:7.8pt; font-weight:600; color:var(--c-text); opacity:.85; margin-bottom:1mm; line-height:1.3; }
+.msc-prod-price{ font-weight:900; color:var(--c-primary); }
+.msc-price-main{ font-size:11.5pt; line-height:1.2; }
+.msc-price-unit{ font-size:8pt; font-weight:600; opacity:.7; }
+.msc-price-pack{ font-size:8pt; font-weight:600; opacity:.7; }
+.msc-price-quote{ font-size:9.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; }
+.msc-price-opts{ display:flex; flex-wrap:wrap; gap:1.4mm; }
+.msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 9%, #fff);
+  border:1px solid color-mix(in srgb, var(--c-primary) 22%, #fff); border-radius:4px; padding:1px 6px; }
+.msc-price-opt b{ color:var(--c-primary); }
+
+/* ── Back cover ── */
+.msc-back{ background:linear-gradient(160deg, var(--c-cover), var(--c-primary)); color:var(--c-coverText);
+  align-items:center; justify-content:center; text-align:center; }
+.msc-back-inner{ padding:24mm 18mm; display:flex; flex-direction:column; align-items:center; gap:5mm; max-width:160mm; }
+.msc-back-logo{ max-height:26mm; max-width:80mm; width:auto; object-fit:contain; margin-bottom:2mm; filter:drop-shadow(0 2px 8px rgba(0,0,0,.3)); }
+.msc-back-logo-txt{ font-size:24pt; font-weight:900; }
+.msc-back-title{ font-size:26pt; font-weight:900; margin:0; }
+.msc-back-sub{ font-size:12pt; line-height:1.6; opacity:.92; margin:0; max-width:135mm; }
+.msc-back-qr{ display:flex; flex-direction:column; align-items:center; gap:3mm; margin:4mm 0; }
+.msc-back-qr img{ width:42mm; height:42mm; background:#fff; padding:3mm; border-radius:4mm; box-shadow:0 6px 20px rgba(0,0,0,.25); }
+.msc-back-qr span{ font-size:10pt; font-weight:700; opacity:.95; }
+.msc-back-contact{ display:grid; grid-template-columns:auto auto; gap:4mm 12mm; margin-top:3mm; text-align:start; }
+.msc-back-contact .wide{ grid-column:1 / -1; }
+.msc-back-contact div{ display:flex; flex-direction:column; gap:2px; }
+.msc-back-contact span{ font-size:8pt; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:.7; }
+.msc-back-contact b{ font-size:12pt; font-weight:700; }
+.msc-back-link{ margin-top:4mm; font-size:9.5pt; font-weight:600; opacity:.8; background:rgba(255,255,255,.14);
+  padding:3px 12px; border-radius:20px; word-break:break-all; }
+
+/* ── Print ── */
+@media print {
+  @page{ size:A4; margin:0; }
+  html, body{ margin:0 !important; padding:0 !important; background:#fff !important; }
+  .msc-root{ background:#fff !important; }
+  .msc-noprint{ display:none !important; }
+  .msc-pages{ gap:0 !important; padding:0 !important; display:block !important; }
+  .msc-page{ width:210mm !important; height:297mm !important; min-height:297mm !important; margin:0 !important;
+    box-shadow:none !important; overflow:hidden; break-inside:avoid; page-break-after:always; break-after:page; }
+  .msc-page:last-child{ page-break-after:auto; break-after:auto; }
+}
+
+/* ── Screen: scale pages down on narrow viewports so the toolbar/button stay usable ── */
+@media screen and (max-width:840px){
+  .msc-pages{ padding:16px 0 50px; }
+  .msc-page{ transform:scale(.62); transform-origin:top center; margin-bottom:-110mm; }
+}
+@media screen and (max-width:560px){
+  .msc-page{ transform:scale(.46); margin-bottom:-160mm; }
+}
+`;

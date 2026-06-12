@@ -28,6 +28,9 @@ interface Props {
 const CartIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
 );
+const PdfIcon = ({ s = 18 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+);
 
 export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup, embed }) => {
   const isServices = shop.type === 'services';
@@ -104,6 +107,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
       discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
+      catalog: 'PDF Catalog', downloadCatalog: 'Download PDF Catalog',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -119,6 +123,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
       discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
+      catalog: 'کاتالوگ PDF', downloadCatalog: 'دانلود کاتالوگ PDF',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -345,6 +350,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     );
   };
 
+  // Printable A4 PDF catalog of this shop — same link with ?catalog=1 (+ current language). Opens in a new tab.
+  const catalogHref = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}&catalog=1&lang=${uiLang}`;
+
   return (
     <div className={`ms-root ${embed ? 'ms-embed' : ''}`} dir={dir} style={cssVars}>
       <style>{MS_CSS}</style>
@@ -363,6 +371,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 {langs.map(lg => <button key={lg.code} className={uiLang === lg.code ? 'on' : ''} onClick={() => setUiLang(lg.code)}>{lg.name}</button>)}
               </div>
             )}
+            <a className="ms-cat-btn" href={catalogHref} target="_blank" rel="noreferrer" title={t.downloadCatalog}>
+              <PdfIcon s={16} /><span className="ms-cat-lbl">{t.catalog}</span>
+            </a>
             <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
               <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
             </button>
@@ -483,6 +494,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           {shop.website && <div><b>{t.footWebsite}</b> {shop.website}</div>}
           {shop.address && <div>{shop.address}</div>}
         </div>
+        <a className="ms-foot-catalog" href={catalogHref} target="_blank" rel="noreferrer">
+          <PdfIcon s={17} /><span>{t.downloadCatalog}</span>
+        </a>
         {shop.footerText && <p className="ms-foot-text">{shop.footerText}</p>}
       </footer>
 
@@ -757,6 +771,12 @@ const MS_CSS = `
 .ms-name { font-size:15px; font-weight:800; color:var(--ms-heading,#1f2a18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ms-code { font-size:10px; font-family:ui-monospace,monospace; font-weight:800; letter-spacing:.08em; background:var(--ms-primary); color:#fff; padding:2px 7px; border-radius:6px; flex-shrink:0; }
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; }
+.ms-cat-btn { display:inline-flex; align-items:center; gap:7px; background:#fff; color:var(--ms-primary); border:1.5px solid var(--ms-primary); padding:7.5px 14px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; white-space:nowrap; transition:background .15s,color .15s; }
+.ms-cat-btn:hover { background:var(--ms-primary); color:#fff; }
+.ms-embed .ms-cat-lbl { display:none; }
+@media (max-width:560px){ .ms-cat-lbl { display:none; } }
+.ms-foot-catalog { display:inline-flex; align-items:center; gap:9px; margin:26px auto 0; padding:12px 26px; background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.5); color:#fff; border-radius:999px; font-size:14px; font-weight:800; text-decoration:none; cursor:pointer; transition:background .15s; }
+.ms-foot-catalog:hover { background:rgba(255,255,255,.28); }
 .ms-badge { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 7px; font-size:11px; font-weight:800; }
 .ms-top-actions { display:flex; align-items:center; gap:10px; }
 .ms-lang { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
