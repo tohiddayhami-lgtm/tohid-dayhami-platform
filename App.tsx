@@ -523,6 +523,9 @@ const App: React.FC = () => {
   // Sends WhatsApp 1 hour before each upcoming meeting when browser is open.
   // Server-side cron (api/meeting-reminder.js) handles the offline case.
   const meetingTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Tickets already auto-assigned+notified this session — prevents duplicate WhatsApp
+  // sends if the effect re-runs before the assignment update propagates back.
+  const assignProcessedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     meetingTimersRef.current.forEach(clearTimeout);
@@ -765,11 +768,17 @@ const App: React.FC = () => {
     // assignee here using the LIVE form config (looked up by formId) so it always matches
     // what you set in the form builder — falling back to any assignee embedded in customData.
     const resolveFormAssignee = (ticket: Ticket): string | undefined => {
-      if (!ticket.serviceId?.startsWith('form:')) return undefined;
-      const formId = ticket.customData?.formId || ticket.serviceId.slice('form:'.length);
-      const form = customForms.find(f => f.id === formId);
-      const directId = form?.assigneePersonnelId || ticket.customData?.__assigneePersonnelId;
-      const roleStr  = form?.assigneeRole       || ticket.customData?.__assigneeRole;
+      const cd = ticket.customData || {};
+      // Assignee embedded in customData (custom forms + connected Google Forms)
+      let directId = cd.__assigneePersonnelId;
+      let roleStr  = cd.__assigneeRole;
+      // For custom-form tickets, prefer the LIVE form config (so changing the assignee applies)
+      if (ticket.serviceId?.startsWith('form:')) {
+        const formId = cd.formId || ticket.serviceId.slice('form:'.length);
+        const form = customForms.find(f => f.id === formId);
+        if (form?.assigneePersonnelId) directId = form.assigneePersonnelId;
+        if (form?.assigneeRole)        roleStr  = form.assigneeRole;
+      }
       if (directId) return directId;
       if (roleStr) {
         const normalizedRole = roleStr.trim().toLowerCase();
@@ -783,8 +792,10 @@ const App: React.FC = () => {
       }
       return undefined;
     };
+    const nc = appConfig.notificationConfig;
     const processAssignments = async () => {
       for (const ticket of unassigned) {
+        if (assignProcessedRef.current.has(ticket.id)) continue;
         // Custom-form assignee first, then service/sub-service routing, then the global config
         let assigneeId = resolveFormAssignee(ticket);
         if (!assigneeId) assigneeId = resolveServiceRouting(ticket);
@@ -792,13 +803,32 @@ const App: React.FC = () => {
         if (assigneeId) {
           const assignee = personnel.find(p => p.id === assigneeId);
           if (assignee) {
+            assignProcessedRef.current.add(ticket.id);
             await updateTicketInCloud(ticket.id, { assignedTo: assigneeId, timeline: [...(ticket.timeline || []), { type: 'assignment', title: 'ارجاع خودکار (سیستم)', description: `ارجاع هوشمند به ${assignee.fullName}`, actorName: 'System Bot', timestamp: new Date().toISOString(), visibility: 'internal' }] });
+            // WhatsApp notification — these tickets (e.g. from a connected Google Form) are
+            // written straight to Firestore and bypass saveNewTicketToSystem, so notify here.
+            if (nc?.enabled && nc.onNewTicket) {
+              const phone = nc.personnelPhones?.[assigneeId];
+              if (phone) {
+                const msg = renderTemplate(nc.ticketTemplate, {
+                  recipientName: assignee.fullName,
+                  ticketId: ticket.id,
+                  customerName: ticket.customerName || '',
+                  formTitle: ticket.customData?.formTitle || ticket.serviceId,
+                  senderName: 'سیستم',
+                  status: ticket.status,
+                });
+                const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assigneeId]);
+                await saveNotificationLog(buildLog('new_ticket', assigneeId, assignee.fullName, phone, msg, result, ticket.id));
+                await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assigneeId, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
+              }
+            }
           }
         }
       }
     };
     processAssignments();
-  }, [tickets, currentUser, appConfig.assignmentConfig, calculateAssignee, resolveServiceRouting, personnel, customForms]);
+  }, [tickets, currentUser, appConfig.assignmentConfig, appConfig.notificationConfig, calculateAssignee, resolveServiceRouting, personnel, customForms]);
 
   // Returns the best fallback assignee: prefers managers who have WhatsApp notification set up
   const getCeoFallbackId = (): string | undefined => {

@@ -645,3 +645,123 @@ ${body}
 ${pickFn}
 ${SHARED_HELPERS}`;
 };
+
+// ════════════════════════════════════════════════════════════════════════════
+//  3) Connect an EXISTING Google Form (the admin already built) → cartable
+// ════════════════════════════════════════════════════════════════════════════
+//  This is a CONTAINER-BOUND script: the admin pastes it into their existing
+//  form's own Apps Script editor (Extensions → Apps Script). It does NOT create a
+//  form — it just installs an onFormSubmit trigger and forwards every response to
+//  Firestore as a ticket. Contact name/phone are auto-detected from question
+//  titles; the ticket is routed by the chosen service (serviceId) or directly to
+//  the chosen person/role (__assignee* in customData), handled by App.tsx.
+export const buildExistingFormConnectScript = (opts: {
+  mode: 'service' | 'assignee';
+  serviceId?: string;
+  serviceTitle?: string;
+  assigneeId?: string;
+  assigneeRole?: string;
+  targetLabel?: string;
+}): string => {
+  const SERVICE_ID = JSON.stringify(opts.mode === 'service' ? (opts.serviceId || '') : '');
+  const ASSIGNEE_ID = JSON.stringify(opts.mode === 'assignee' ? (opts.assigneeId || '') : '');
+  const ASSIGNEE_ROLE = JSON.stringify(opts.mode === 'assignee' ? (opts.assigneeRole || '') : '');
+  const TARGET = opts.targetLabel || (opts.mode === 'service' ? (opts.serviceTitle || 'خدمت') : 'کارشناس انتخابی');
+
+  return `/**
+ * ═══════════════════════════════════════════════════════════════════════
+ *  اتصال «گوگل‌فرمِ موجودِ شما» به سامانه طوحید دهیامی
+ *  ارجاع به: ${TARGET}
+ * ───────────────────────────────────────────────────────────────────────
+ *  این کد را داخل ویرایشگر اسکریپتِ همان گوگل‌فرم جای‌گذاری کنید
+ *  (از منوی فرم: Extensions → Apps Script). سپس تابع «setupConnect» را
+ *  یک‌بار اجرا کنید. از این پس هر پاسخ این فرم در کارتابل ثبت می‌شود.
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+var PROJECT_ID    = ${PROJECT_ID};
+var API_KEY       = ${API_KEY};
+var SERVICE_ID    = ${SERVICE_ID};
+var ASSIGNEE_ID   = ${ASSIGNEE_ID};
+var ASSIGNEE_ROLE = ${ASSIGNEE_ROLE};
+
+// واژه‌های کلیدی برای تشخیص خودکار نام و شماره تماس از عنوان سؤالات فرم
+var NAME_KEYS  = ['نام', 'اسم', 'name'];
+var PHONE_KEYS = ['تلفن', 'موبایل', 'همراه', 'شماره', 'تماس', 'واتس', 'phone', 'mobile', 'tel', 'whatsapp'];
+
+function setupConnect() {
+  var form = FormApp.getActiveForm();
+  if (!form) {
+    Logger.log('❌ این اسکریپت باید از داخل ویرایشگر اسکریپتِ همان گوگل‌فرم اجرا شود (Extensions → Apps Script).');
+    return;
+  }
+  removeExistingTriggers();
+  ScriptApp.newTrigger('onFormSubmit').forForm(form).onFormSubmit().create();
+  Logger.log('✅ فرم «' + form.getTitle() + '» با موفقیت به سامانه متصل شد.');
+  Logger.log('از این پس هر پاسخ این فرم به‌صورت تیکت در کارتابل ثبت و ارجاع داده می‌شود.');
+}
+
+function matchesAny(text, keys) {
+  for (var i = 0; i < keys.length; i++) { if (text.indexOf(keys[i]) >= 0) return true; }
+  return false;
+}
+
+function onFormSubmit(e) {
+  try {
+    var form = FormApp.getActiveForm();
+    var formTitle = (form && form.getTitle()) || 'گوگل‌فرم';
+    var itemResponses = e.response.getItemResponses();
+    var customData = { formTitle: formTitle };
+    var name = '', phone = '', descLines = [];
+
+    for (var i = 0; i < itemResponses.length; i++) {
+      var ir = itemResponses[i];
+      var title = ir.getItem().getTitle();
+      var ans = ir.getResponse();
+      if (ans && ans.join) ans = ans.join('، ');
+      var ansStr = (ans === null || ans === undefined) ? '' : String(ans);
+      if (!ansStr) continue;
+
+      customData[title] = ansStr;
+      descLines.push(title + ': ' + ansStr);
+
+      var low = title.toLowerCase();
+      if (!name  && matchesAny(low, NAME_KEYS))  name = ansStr;
+      if (!phone && matchesAny(low, PHONE_KEYS)) phone = ansStr;
+    }
+
+    // ارجاع: یا بر اساس خدمت (serviceId)، یا مستقیم به شخص/نقش (در customData)
+    if (ASSIGNEE_ID)   customData.__assigneePersonnelId = ASSIGNEE_ID;
+    if (ASSIGNEE_ROLE) customData.__assigneeRole = ASSIGNEE_ROLE;
+    var serviceId = SERVICE_ID ? SERVICE_ID : 'google_form';
+
+    var now = new Date().toISOString();
+    var id = 'GF-' + (new Date()).getTime() + '-' + Math.floor(Math.random() * 9000 + 1000);
+
+    // assignedTo را خالی می‌گذاریم تا سامانه طبق ارجاع تعیین‌شده عمل کند (و نوتیفیکیشن بفرستد).
+    var ticket = {
+      id: id,
+      customerName: name || 'بدون نام',
+      phoneNumber: phone,
+      whatsappNumber: phone,
+      location: '-',
+      serviceId: serviceId,
+      description: '[گوگل‌فرم: ' + formTitle + ']\\n' + descLines.join('\\n'),
+      status: 'ثبت شده',
+      createdAt: now,
+      source: 'google_form',
+      timeline: [{
+        type: 'creation', title: 'ثبت از طریق گوگل‌فرم',
+        description: 'فرم «' + formTitle + '» توسط ' + (name || 'کاربر') + ' تکمیل شد.',
+        actorName: 'گوگل‌فرم', timestamp: now, visibility: 'public'
+      }],
+      customData: customData
+    };
+
+    writeTicketToFirestore(id, ticket);
+  } catch (err) {
+    Logger.log('❌ خطا در ثبت پاسخ: ' + err);
+  }
+}
+${SHARED_HELPERS}`;
+};

@@ -3,7 +3,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption } from '../types';
 import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
-import { buildGoogleFormScript, buildServiceRequestGoogleScript } from '../services/googleFormScript';
+import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 
 interface Props {
@@ -170,9 +170,10 @@ const GoogleScriptModal: React.FC<{
   script: string;
   noteFa?: string;
   extraControls?: React.ReactNode;
+  steps?: string[];
   lang: Language;
   onClose: () => void;
-}> = ({ title, subtitle, script, noteFa, extraControls, lang, onClose }) => {
+}> = ({ title, subtitle, script, noteFa, extraControls, steps: stepsProp, lang, onClose }) => {
   const [copied, setCopied] = useState(false);
   const copyScript = () => {
     navigator.clipboard.writeText(script).then(() => {
@@ -180,7 +181,7 @@ const GoogleScriptModal: React.FC<{
       setTimeout(() => setCopied(false), 2500);
     });
   };
-  const steps = lang === 'fa'
+  const steps = stepsProp || (lang === 'fa'
     ? [
         'به آدرس script.google.com بروید و یک پروژه جدید بسازید (New Project).',
         'تمام کد پیش‌فرض را پاک کنید و کد زیر را جای‌گذاری کنید (دکمه کپی).',
@@ -198,7 +199,7 @@ const GoogleScriptModal: React.FC<{
         'First run opens an auth dialog: Review Permissions → pick your Google account → Advanced → Go to (unsafe) → Allow.',
         'After it runs, copy the form link from the Execution log and share it with customers.',
         'From now on, every Google Form response is saved automatically as a ticket.',
-      ];
+      ]);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8 flex flex-col max-h-[90vh]">
@@ -276,6 +277,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [serviceReqMulti, setServiceReqMulti] = useState(false);
   const [reqUrlDraft, setReqUrlDraft] = useState(requestExternalUrl || '');
   const [reqUrlSaved, setReqUrlSaved] = useState(false);
+  // Connect an existing Google Form
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectMode, setConnectMode] = useState<'service' | 'assignee'>('service');
+  const [connectServiceId, setConnectServiceId] = useState('');
+  const [connectAssigneeType, setConnectAssigneeType] = useState<'person' | 'role'>('person');
+  const [connectAssigneeId, setConnectAssigneeId] = useState('');
+  const [connectAssigneeRole, setConnectAssigneeRole] = useState('');
   useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
   const saveReqUrl = () => {
     onUpdateRequestUrl?.(reqUrlDraft.trim());
@@ -1356,6 +1364,91 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         />
       )}
 
+      {connectOpen && (() => {
+        const svc = services.find(s => s.id === connectServiceId);
+        const per = personnel.find(p => p.id === connectAssigneeId);
+        const targetLabel = connectMode === 'service'
+          ? (svc?.title || (lang === 'fa' ? 'خدمت انتخاب نشده' : 'no service'))
+          : (connectAssigneeType === 'person' ? (per?.fullName || '—') : (connectAssigneeRole || '—'));
+        const script = buildExistingFormConnectScript({
+          mode: connectMode,
+          serviceId: connectServiceId,
+          serviceTitle: svc?.title,
+          assigneeId: connectAssigneeType === 'person' ? connectAssigneeId : '',
+          assigneeRole: connectAssigneeType === 'role' ? connectAssigneeRole : '',
+          targetLabel,
+        });
+        const steps = lang === 'fa'
+          ? [
+              'گوگل‌فرمِ موجود خود را باز کنید.',
+              'از منوی بالای فرم، روی «⋮» (سه‌نقطه) ← Apps Script کلیک کنید (یا Extensions ← Apps Script).',
+              'کل کد پیش‌فرض را پاک کنید و کد زیر را جای‌گذاری کنید (دکمه کپی).',
+              'ذخیره کنید (Ctrl+S).',
+              'از نوار بالا تابع «setupConnect» را انتخاب و دکمه Run (▷) را بزنید.',
+              'بار اول پنجره مجوز باز می‌شود: Review Permissions ← انتخاب حساب گوگل ← Advanced ← Go to (unsafe) ← Allow.',
+              'تمام! از این پس هر پاسخ این فرم در کارتابل ثبت و طبق ارجاع تعیین‌شده ارسال می‌شود.',
+            ]
+          : [
+              'Open your existing Google Form.',
+              'From the form’s top menu click “⋮” → Apps Script (or Extensions → Apps Script).',
+              'Delete all default code and paste the code below (Copy button).',
+              'Save (Ctrl+S).',
+              'Select the function “setupConnect” from the top bar and click Run (▷).',
+              'First run opens an auth dialog: Review Permissions → pick account → Advanced → Go to (unsafe) → Allow.',
+              'Done — every response now lands in the cartable and is routed as configured.',
+            ];
+        const inputSel = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-300";
+        const tabBtn = (active: boolean) => `px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${active ? 'bg-green-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`;
+        return (
+          <GoogleScriptModal
+            lang={lang}
+            title={lang === 'fa' ? 'اتصال گوگل‌فرم موجود' : 'Connect existing Google Form'}
+            subtitle={lang === 'fa'
+              ? 'گوگل‌فرمی که خودتان از قبل ساخته‌اید را به سامانه وصل کنید. این کد را داخل اسکریپتِ همان فرم می‌گذارید و از آن پس پاسخ‌ها به‌صورت تیکت در کارتابل می‌نشینند. نام و شماره‌ی تماس به‌صورت خودکار از سؤالات فرم تشخیص داده می‌شوند.'
+              : 'Connect a Google Form you already built. Paste this code into that form’s own Apps Script; from then on responses land in the cartable as tickets. Name & phone are auto-detected from the question titles.'}
+            steps={steps}
+            script={script}
+            noteFa={'ℹ️ برای تشخیص خودکار، بهتر است عنوان سؤال‌های نام و تماس شامل کلماتی مثل «نام»، «تلفن»، «موبایل» یا «شماره» باشد. ارجاع طبق گزینه‌ای که در بالا انتخاب کرده‌اید انجام می‌شود.'}
+            extraControls={
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-gray-700">{lang === 'fa' ? 'این فرم به چه کسی ارجاع شود؟' : 'Route this form to:'}</span>
+                  <div className="flex gap-1">
+                    <button onClick={() => setConnectMode('service')} className={tabBtn(connectMode === 'service')}>{lang === 'fa' ? 'بر اساس خدمت' : 'By service'}</button>
+                    <button onClick={() => setConnectMode('assignee')} className={tabBtn(connectMode === 'assignee')}>{lang === 'fa' ? 'شخص / نقش' : 'Person / role'}</button>
+                  </div>
+                </div>
+                {connectMode === 'service' ? (
+                  <select value={connectServiceId} onChange={e => setConnectServiceId(e.target.value)} className={inputSel}>
+                    <option value="">{lang === 'fa' ? '— انتخاب خدمت (برای ارجاع خودکار) —' : '— select service —'}</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                  </select>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex gap-1">
+                      <button onClick={() => setConnectAssigneeType('person')} className={tabBtn(connectAssigneeType === 'person')}>{lang === 'fa' ? 'شخص مشخص' : 'Specific person'}</button>
+                      <button onClick={() => setConnectAssigneeType('role')} className={tabBtn(connectAssigneeType === 'role')}>{lang === 'fa' ? 'نقش' : 'Role'}</button>
+                    </div>
+                    {connectAssigneeType === 'person' ? (
+                      <select value={connectAssigneeId} onChange={e => setConnectAssigneeId(e.target.value)} className={inputSel}>
+                        <option value="">{lang === 'fa' ? '— انتخاب شخص —' : '— select person —'}</option>
+                        {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                      </select>
+                    ) : (
+                      <select value={connectAssigneeRole} onChange={e => setConnectAssigneeRole(e.target.value)} className={inputSel}>
+                        <option value="">{lang === 'fa' ? '— انتخاب نقش —' : '— select role —'}</option>
+                        {uniqueRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            }
+            onClose={() => setConnectOpen(false)}
+          />
+        );
+      })()}
+
       {/* Delete confirm */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1409,6 +1502,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
           )}
           {isEditor && (
             <>
+              <button onClick={() => setConnectOpen(true)} className="flex items-center gap-1.5 px-3 py-2 border border-green-200 text-green-700 rounded-lg text-xs font-semibold hover:bg-green-50 transition-colors">
+                <IconLink className="w-3.5 h-3.5" />
+                {lang === 'fa' ? 'اتصال گوگل‌فرم موجود' : 'Connect existing Google Form'}
+              </button>
               <button onClick={() => setJsonImportOpen(true)} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 <IconUpload className="w-3.5 h-3.5" />
                 {lang === 'fa' ? 'ورود JSON' : 'Import JSON'}
