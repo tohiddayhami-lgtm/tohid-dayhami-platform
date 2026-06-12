@@ -103,6 +103,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: 'Order tracking code', copy: 'Copy', copied: 'Copied', close: 'Close', trackMy: 'Track my orders', trackBtn: 'View',
       noOrders: 'No orders found for this number.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
       perPack: '/ pack', review: 'Continue to invoice preview', invoiceTitle: 'Invoice preview', editCart: 'Edit cart',
+      featured: 'Featured', featuredTitle: 'Featured products',
       colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
@@ -119,6 +120,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: 'کد رهگیری سفارش', copy: 'کپی', copied: 'کپی شد', close: 'بستن', trackMy: 'پیگیری سفارش‌های من', trackBtn: 'مشاهده',
       noOrders: 'سفارشی با این شماره یافت نشد.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
       perPack: '/ بسته', review: 'ادامه و پیش‌نمایش فاکتور', invoiceTitle: 'پیش‌نمایش فاکتور', editCart: 'ویرایش سبد',
+      featured: 'ویژه', featuredTitle: 'محصولات ویژه',
       colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
@@ -135,6 +137,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       trackingCode: '订单追踪码', copy: '复制', copied: '已复制', close: '关闭', trackMy: '查询我的订单', trackBtn: '查看',
       noOrders: '未找到该号码的订单。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
       perPack: '/ 包', review: '继续并预览发票', invoiceTitle: '发票预览', editCart: '编辑购物车',
+      featured: '精选', featuredTitle: '精选产品',
       colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
       confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
@@ -159,6 +162,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+  // Up to 3 «ویژه» (featured) products, shown in a highlighted rail above the grid.
+  const featuredProducts = useMemo(() => products.filter(p => p.featured).slice(0, 3), [products]);
   const categories = useMemo(() => {
     if (shop.categories && shop.categories.length) return shop.categories;
     const set: string[] = [];
@@ -198,11 +203,30 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const opts = optionsOf(p); if (!opts.length) return undefined;
     return cart[p.id]?.optionId || chosenOpt[p.id] || opts[0].id;
   };
-  const unitPrice = (p: MetaShopProduct, optId?: string): number => {
+  // ── Per-product discount (percent or flat amount) ──
+  const hasDiscount = (p: MetaShopProduct) => !!p.discountType && (p.discountValue ?? 0) > 0;
+  // Apply the product discount to any base price (returns the rounded discounted price).
+  const applyDisc = (p: MetaShopProduct, base?: number): number | undefined => {
+    if (base == null || !hasDiscount(p)) return base;
+    const v = p.discountValue!;
+    const final = p.discountType === 'amount' ? base - v : base * (1 - v / 100);
+    return Math.max(0, Math.round(final * 100) / 100);
+  };
+  // Effective % off for the badge (works for both discount types).
+  const discPercent = (p: MetaShopProduct, base?: number): number => {
+    if (!hasDiscount(p) || !base) return 0;
+    if (p.discountType === 'percent') return Math.round(p.discountValue!);
+    const final = applyDisc(p, base) ?? base;
+    return Math.round((1 - final / base) * 100);
+  };
+  // Original (pre-discount) unit price.
+  const baseUnitPrice = (p: MetaShopProduct, optId?: string): number => {
     const opts = optionsOf(p);
     if (opts.length) { const o = opts.find(x => x.id === optId) || opts[0]; return o?.price ?? 0; }
     return p.price ?? 0;
   };
+  // Effective unit price (discount applied) — used for cart math and totals.
+  const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, baseUnitPrice(p, optId)) ?? 0;
   const optLabel = (p: MetaShopProduct, optId?: string): string => { const o = optionsOf(p).find(x => x.id === optId); return o ? L(o.label, o.labelEn) : ''; };
   const selectOption = (p: MetaShopProduct, optId: string) => {
     setChosenOpt(ch => ({ ...ch, [p.id]: optId }));
@@ -307,8 +331,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
+    const basePrice = baseUnitPrice(p, selId);
     const curPrice = unitPrice(p, selId);
     const cur = curOf(p, selId);
+    const off = discPercent(p, basePrice);
+    const basePack = p.packPrice;
     return (
       <div className="ms-buy">
         {opts.length > 0 && (
@@ -316,7 +343,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             {opts.map(o => (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
-                <span className="ms-opt-price">{money(o.price, curOf(p, o.id))}</span>
+                <span className="ms-opt-price">
+                  {hasDiscount(p) && <span className="ms-opt-was">{money(o.price, curOf(p, o.id))}</span>}
+                  {money(applyDisc(p, o.price), curOf(p, o.id))}
+                </span>
               </button>
             ))}
           </div>
@@ -324,11 +354,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         <div className="ms-prices">
           {(curPrice != null) && (
             <div className="ms-price-row">
-              <span className="ms-price-amt">{money(curPrice, curOf(p, selId))} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
+              {hasDiscount(p) && <span className="ms-price-was">{money(basePrice, cur)}</span>}
+              <span className="ms-price-amt">{money(curPrice, cur)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
+              {off > 0 && <span className="ms-disc-tag">{off}%{T ? ' تخفیف' : ' off'}</span>}
             </div>
           )}
-          {!isServices && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && (
-            <div className="ms-price-row"><span className="ms-price-amt ms-pack">{money(p.packPrice, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span></div>
+          {!isServices && opts.length === 0 && basePack != null && basePack > 0 && (
+            <div className="ms-price-row">
+              {hasDiscount(p) && <span className="ms-price-was">{money(basePack, curOf(p))}</span>}
+              <span className="ms-price-amt ms-pack">{money(applyDisc(p, basePack), curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
+            </div>
           )}
         </div>
         {qty > 0 ? (
@@ -347,6 +382,41 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
         )}
       </div>
+    );
+  };
+
+  // Single product card — reused by the featured rail and the main grid.
+  const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
+    const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
+    return (
+      <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''}`} key={p.id}>
+        <div className="ms-card-img" onClick={() => setDetail(p)}>
+          {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
+          {p.group && <span className="ms-group-badge">{p.group}</span>}
+          {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
+          {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
+          <div className="ms-media-badges">
+            {p.images && p.images.length > 1 && <span className="ms-media-badge">🖼 {p.images.length}</span>}
+            {p.videoUrl && <span className="ms-media-badge">▶</span>}
+          </div>
+        </div>
+        <div className="ms-card-body">
+          <h3 className="ms-pname" onClick={() => setDetail(p)}>{pName(p)}</h3>
+          <div className="ms-badges">
+            {p.sku && <span className="ms-sku">{p.sku}</span>}
+            {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
+            {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
+          </div>
+          {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
+          {!isServices && (p.pack || p.moq) && (
+            <div className="ms-meta">
+              {p.pack != null && <span>{t.pack}: <b>{p.pack} {p.unit}</b></span>}
+              {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
+            </div>
+          )}
+          {buyBlock(p)}
+        </div>
+      </article>
     );
   };
 
@@ -424,39 +494,20 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           </div>
         )}
 
+        {/* Featured rail (up to 3) — only on the default «all» view without an active search */}
+        {featuredProducts.length > 0 && activeCat === 'all' && !search.trim() && (
+          <div className="ms-featured">
+            <div className="ms-featured-head"><span className="ms-featured-star">★</span> {t.featuredTitle}</div>
+            <div className="ms-featured-grid">
+              {featuredProducts.map(p => productCard(p, { featured: true }))}
+            </div>
+          </div>
+        )}
+
         {/* Grid */}
         {filtered.length === 0 ? <p className="ms-empty">{t.empty}</p> : (
           <div className="ms-grid">
-            {filtered.map(p => {
-              return (
-                <article className="ms-card" key={p.id}>
-                  <div className="ms-card-img" onClick={() => setDetail(p)}>
-                    {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
-                    {p.group && <span className="ms-group-badge">{p.group}</span>}
-                    <div className="ms-media-badges">
-                      {p.images && p.images.length > 1 && <span className="ms-media-badge">🖼 {p.images.length}</span>}
-                      {p.videoUrl && <span className="ms-media-badge">▶</span>}
-                    </div>
-                  </div>
-                  <div className="ms-card-body">
-                    <h3 className="ms-pname" onClick={() => setDetail(p)}>{pName(p)}</h3>
-                    <div className="ms-badges">
-                      {p.sku && <span className="ms-sku">{p.sku}</span>}
-                      {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
-                      {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
-                    </div>
-                    {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
-                    {!isServices && (p.pack || p.moq) && (
-                      <div className="ms-meta">
-                        {p.pack != null && <span>{t.pack}: <b>{p.pack} {p.unit}</b></span>}
-                        {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
-                      </div>
-                    )}
-                    {buyBlock(p)}
-                  </div>
-                </article>
-              );
-            })}
+            {filtered.map(p => productCard(p))}
           </div>
         )}
 
@@ -864,7 +915,22 @@ const MS_CSS = `
 .ms-opt.on { border-color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 8%, #fff); }
 .ms-opt-label { font-size:10px; font-weight:700; color:#475569; line-height:1.2; }
 .ms-opt.on .ms-opt-label { color:var(--ms-primary); }
-.ms-opt-price { font-size:11px; font-weight:800; color:#0f172a; }
+.ms-opt-price { font-size:11px; font-weight:800; color:#0f172a; display:flex; flex-direction:column; line-height:1.15; }
+.ms-opt-was { font-size:9px; font-weight:600; color:#94a3b8; text-decoration:line-through; }
+/* discount: before/after price + badges */
+.ms-price-row { display:flex; align-items:baseline; flex-wrap:wrap; gap:7px; }
+.ms-price-was { font-size:12px; font-weight:600; color:#94a3b8; text-decoration:line-through; }
+.ms-disc-tag { font-size:10px; font-weight:900; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; padding:1px 7px; border-radius:999px; }
+.ms-disc-ribbon { position:absolute; top:10px; inset-inline-end:10px; background:#dc2626; color:#fff; font-size:11px; font-weight:900; padding:4px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(220,38,38,.35); z-index:2; }
+.ms-feat-badge { position:absolute; bottom:10px; inset-inline-start:10px; background:rgba(245,158,11,.96); color:#fff; font-size:10px; font-weight:900; padding:3px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.2); }
+/* featured rail */
+.ms-featured { margin:14px 0 4px; padding:16px; border:1px solid #fde68a; background:linear-gradient(135deg,#fffbeb,#fff7ed); border-radius:18px; }
+.ms-featured-head { font-size:14px; font-weight:900; color:#b45309; display:flex; align-items:center; gap:7px; margin-bottom:12px; }
+.ms-featured-star { color:#f59e0b; font-size:17px; }
+.ms-featured-grid { display:grid; gap:14px; grid-template-columns:repeat(1,1fr); }
+@media (min-width:640px){ .ms-featured-grid { grid-template-columns:repeat(2,1fr); } }
+@media (min-width:1000px){ .ms-featured-grid { grid-template-columns:repeat(3,1fr); } }
+.ms-card-feat { border-color:#fcd34d; box-shadow:0 4px 16px rgba(245,158,11,.18); }
 .ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); }
 .ms-add.in { background:#10b981; }
 .ms-add.lg { margin-top:8px; padding:13px; font-size:14px; }

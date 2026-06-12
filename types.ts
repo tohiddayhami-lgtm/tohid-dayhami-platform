@@ -688,9 +688,14 @@ export interface MetaShopProduct {
   videoUrl?: string;       // optional product video (YouTube / Vimeo / direct mp4 link)
   i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description } }
   active?: boolean;
+  featured?: boolean;      // highlight as a «ویژه» product (up to 3 shown in the featured rail)
   // pricing
   currency?: string;       // overrides shop currency if set
   price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
+  // Optional per-product discount applied to price / packPrice / every rate option.
+  // discountType 'percent' → discountValue is 0-100 ; 'amount' → discountValue is a flat amount in the product currency.
+  discountType?: 'percent' | 'amount';
+  discountValue?: number;
   // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
   // Each rate option may carry its OWN currency (e.g. a money-exchange buy/sell rate in different currencies)
   priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string }[];

@@ -205,6 +205,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     pUnit: T ? 'واحد' : 'Unit', pPackSize: T ? 'تعداد در بسته' : 'Pack size', pMoq: T ? 'حداقل سفارش' : 'MOQ', pStock: T ? 'وضعیت موجودی' : 'Stock label', pDesc: T ? 'توضیحات' : 'Description', pImg: T ? 'تصویر' : 'Image',
     pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
+    pDiscount: T ? 'تخفیف' : 'Discount', pDiscNone: T ? 'بدون تخفیف' : 'No discount', pDiscPercent: T ? 'درصدی (٪)' : 'Percent (%)', pDiscAmount: T ? 'مبلغی' : 'Amount',
+    pDiscValue: T ? 'مقدار تخفیف' : 'Discount value', pDiscHint: T ? 'قیمت قبل (خط‌خورده) و بعد به مشتری نمایش داده می‌شود.' : 'Before (struck-through) and after price are shown to the customer.',
+    featured: T ? 'ویژه' : 'Featured', featuredFull: T ? 'حداکثر ۳ محصول ویژه' : 'Max 3 featured products',
     rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
@@ -318,6 +321,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   // ── Products editing ──
   const addProduct = () => upd({ products: [...(draft!.products || []), { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency }] });
   const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
+  const featuredCount = (draft?.products || []).filter(p => p.featured).length;
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
   const updProductI18n = (idx: number, code: string, field: string, val: string) => {
     const p = draft!.products[idx];
@@ -880,6 +884,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   </div>
                   <div className="flex flex-col gap-1 items-center">
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
+                    <label className={`flex items-center gap-1 text-[11px] ${(!p.featured && featuredCount >= 3) ? 'text-gray-300' : 'text-amber-600'}`} title={t.featuredFull}><input type="checkbox" className="accent-amber-500" checked={!!p.featured} disabled={!p.featured && featuredCount >= 3} onChange={e => updProduct(idx, { featured: e.target.checked })} />★ {t.featured}</label>
                     {shopLangs().length > 0 && <button onClick={() => setTransOpen(s => ({ ...s, [p.id]: !s[p.id] }))} className={`text-[10px] px-1.5 py-0.5 rounded mt-1 ${transOpen[p.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title={t.transBtn}>🌐 {t.transBtn}</button>}
                     <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>
@@ -897,6 +902,23 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     ))}
                   </div>
                 )}
+
+                {/* Per-product discount */}
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-[11px] font-bold text-gray-600">{t.pDiscount}:</label>
+                    <select className={fld + ' bg-white max-w-[150px]'} value={p.discountType || ''} onChange={e => updProduct(idx, { discountType: (e.target.value || undefined) as any, discountValue: e.target.value ? p.discountValue : undefined })}>
+                      <option value="">{t.pDiscNone}</option>
+                      <option value="percent">{t.pDiscPercent}</option>
+                      <option value="amount">{t.pDiscAmount}</option>
+                    </select>
+                    {p.discountType && (
+                      <input className={fld + ' max-w-[120px]'} type="number" placeholder={t.pDiscValue} value={p.discountValue ?? ''} onChange={e => updProduct(idx, { discountValue: parseFloat(e.target.value) || 0 })} />
+                    )}
+                    {p.discountType === 'percent' && <span className="text-[11px] text-gray-400">٪</span>}
+                  </div>
+                  {p.discountType && <p className="text-[11px] text-gray-400 mt-1">{t.pDiscHint}</p>}
+                </div>
 
                 {/* Rate options (max 3) */}
                 <div className="mt-3 border-t border-gray-100 pt-3">
