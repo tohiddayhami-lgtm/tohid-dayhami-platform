@@ -414,7 +414,9 @@ const MSC_CSS = `
 
 /* ── Pages frame ── */
 .msc-pages{ display:flex; flex-direction:column; align-items:center; gap:10mm; padding:26px 12px 70px; }
-.msc-page{ width:210mm; min-height:297mm; background:var(--c-bg); position:relative; overflow:hidden;
+/* Fixed (NOT min-) height so the on-screen preview lays out byte-for-byte like the printed/exported PDF —
+   a growable preview hid overflow that the fixed-height PDF then clipped. */
+.msc-page{ width:210mm; height:297mm; background:var(--c-bg); position:relative; overflow:hidden;
   box-shadow:0 8px 34px rgba(0,0,0,.34); display:flex; flex-direction:column; color:var(--c-text); }
 
 /* ── Cover ── */
@@ -432,8 +434,10 @@ const MSC_CSS = `
   border-radius:8px; }
 .msc-cover-center{ margin-top:auto; margin-bottom:auto; }
 .msc-cover-eyebrow{ font-size:11pt; font-weight:700; letter-spacing:3px; text-transform:uppercase; opacity:.92; margin:0 0 10px; }
-.msc-cover-title{ font-size:40pt; line-height:1.08; font-weight:900; margin:0; text-shadow:0 2px 14px rgba(0,0,0,.28); }
-.msc-cover-sub{ font-size:14pt; font-weight:500; margin:14px 0 0; max-width:150mm; opacity:.95; line-height:1.5; }
+.msc-cover-title{ font-size:40pt; line-height:1.08; font-weight:900; margin:0; text-shadow:0 2px 14px rgba(0,0,0,.28);
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.msc-cover-sub{ font-size:14pt; font-weight:500; margin:14px 0 0; max-width:150mm; opacity:.95; line-height:1.5;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .msc-cover-kind{ font-size:11pt; font-weight:800; letter-spacing:2px; text-transform:uppercase; opacity:.9; }
 .msc-cover-foot{ flex:1 1 auto; display:flex; flex-direction:column; padding:14mm 17mm; background:var(--c-bg); }
 .msc-cover-rule{ height:4px; width:60mm; border-radius:4px; background:var(--c-primary); margin-bottom:12mm; }
@@ -473,26 +477,28 @@ const MSC_CSS = `
 .msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:7mm; min-height:0; }
 .msc-prod{ border:1px solid rgba(0,0,0,.12); border-radius:3.5mm; overflow:hidden; display:flex; flex-direction:column;
   background:#fff; box-shadow:0 2px 9px rgba(0,0,0,.07); min-height:0; }
-.msc-prod-media{ position:relative; height:60mm; background:#fff; flex:none; border-bottom:1px solid rgba(0,0,0,.08); }
+.msc-prod-media{ position:relative; height:52mm; background:#fff; flex:none; border-bottom:1px solid rgba(0,0,0,.08); }
 .msc-prod-media img{ width:100%; height:100%; object-fit:contain; padding:2.5mm; display:block; }
 .msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48pt; font-weight:900;
   color:var(--c-primary); opacity:.22; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
 .msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:10.5pt; font-weight:800;
   min-width:10mm; height:9mm; padding:0 3mm; display:flex; align-items:center; justify-content:center; border-end-end-radius:3.5mm; box-shadow:0 2px 7px rgba(0,0,0,.22); }
-.msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:4.5mm 5mm 4.2mm; min-height:0; overflow:hidden; }
-.msc-prod-name{ font-size:13.5pt; line-height:1.22; font-weight:800; color:var(--c-heading); margin:0 0 2.4mm;
+.msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:4mm 4.5mm 3.8mm; min-height:0; overflow:hidden; }
+/* name + price are flex:none → ALWAYS fully shown; the description is the only flexible block (clamps if a
+   card is unusually tall, e.g. 3 incoterm prices), so nothing important is ever clipped mid-word. */
+.msc-prod-name{ flex:none; font-size:13pt; line-height:1.22; font-weight:800; color:var(--c-heading); margin:0 0 2mm;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.msc-prod-tags{ display:flex; flex-wrap:wrap; gap:2mm; margin-bottom:2.6mm; }
+.msc-prod-tags{ flex:none; display:flex; flex-wrap:wrap; gap:2mm; margin-bottom:2mm; }
 .msc-tag{ font-size:8.6pt; font-weight:700; color:var(--c-primary); background:color-mix(in srgb, var(--c-primary) 9%, #fff);
   border:1px solid color-mix(in srgb, var(--c-primary) 22%, #fff); border-radius:4px; padding:1.5px 7px; white-space:nowrap; }
 .msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
 .msc-tag.origin{ display:inline-flex; align-items:center; gap:4px; }
 .msc-tag.origin img{ height:9pt; width:auto; border-radius:1px; }
-.msc-prod-desc{ font-size:9.6pt; line-height:1.55; color:var(--c-text); margin:0 0 2.4mm;
+.msc-prod-desc{ flex:0 1 auto; min-height:0; font-size:9.4pt; line-height:1.5; color:var(--c-text); margin:0 0 2mm;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.msc-prod-specs{ font-size:9pt; line-height:1.4; color:var(--c-text); margin:0 0 2.4mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.msc-prod-specs{ flex:none; font-size:8.8pt; line-height:1.4; color:var(--c-text); margin:0 0 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .msc-prod-specs b{ color:var(--c-heading); font-weight:700; }
-.msc-prod-bottom{ margin-top:auto; padding-top:2.6mm; border-top:1.5px solid rgba(0,0,0,.1);
+.msc-prod-bottom{ flex:none; margin-top:auto; padding-top:2.2mm; border-top:1.5px solid rgba(0,0,0,.1);
   display:flex; align-items:flex-end; justify-content:space-between; gap:4mm; }
 .msc-prod-meta{ font-size:8.8pt; font-weight:600; color:var(--c-text); opacity:.85; line-height:1.4; flex:1; min-width:0; }
 .msc-prod-price{ font-weight:900; color:var(--c-primary); text-align:end; flex:none; margin-inline-start:auto; }
@@ -500,9 +506,9 @@ const MSC_CSS = `
 .msc-price-unit{ font-size:9pt; font-weight:600; opacity:.7; }
 .msc-price-pack{ display:block; font-size:8.6pt; font-weight:600; opacity:.7; }
 .msc-price-quote{ font-size:10.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; white-space:nowrap; }
-.msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1.4mm; }
-.msc-price-opt{ font-size:9.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
-  border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1.5px 8px; white-space:nowrap; }
+.msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1mm; }
+.msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
+  border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1px 7px; white-space:nowrap; }
 .msc-price-opt b{ color:var(--c-primary); }
 
 /* ── Back cover ── */
@@ -514,7 +520,8 @@ const MSC_CSS = `
 .msc-back-logo{ max-height:22mm; max-width:72mm; width:auto; object-fit:contain; display:block; }
 .msc-back-logo-txt{ font-size:24pt; font-weight:900; }
 .msc-back-title{ font-size:26pt; font-weight:900; margin:0; }
-.msc-back-sub{ font-size:12pt; line-height:1.6; opacity:.92; margin:0; max-width:135mm; }
+.msc-back-sub{ font-size:12pt; line-height:1.6; opacity:.92; margin:0; max-width:135mm;
+  display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden; }
 .msc-back-qr{ display:flex; flex-direction:column; align-items:center; gap:3mm; margin:4mm 0; }
 .msc-back-qr img{ width:42mm; height:42mm; background:#fff; padding:3mm; border-radius:4mm; box-shadow:0 6px 20px rgba(0,0,0,.25); border:1px solid rgba(0,0,0,.06); }
 .msc-back-qr span{ font-size:10pt; font-weight:700; opacity:.95; }
