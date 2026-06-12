@@ -48,9 +48,8 @@ export const BazaarPassageLoader: React.FC<{ lang?: Language; title?: string; pr
         <div className="bpl-sea"><span className="bpl-wave" /><span className="bpl-wave w2" /></div>
       </div>
 
-      <p className="bpl-text">
-        {title || (T ? 'پاساژ صادراتی' : 'Export Passage')}
-        <span className="bpl-sub">{T ? 'در حال بارگیری' : 'Loading cargo'}<span className="bpl-dots" /></span>
+      <p className="bpl-text" dir="ltr">
+        Tohid Meta Port is Loading<span className="bpl-dots" />
       </p>
     </div>
   );
