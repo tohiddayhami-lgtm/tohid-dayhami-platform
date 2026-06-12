@@ -9,8 +9,8 @@ interface Props {
   autoPrint?: boolean; // when reached via ?catalog=1 — opens the browser print dialog once images are ready
 }
 
-// Products per A4 page (2 columns × 3 rows). Cards are sized to fit exactly; overflow is clipped.
-const PER_PAGE = 6;
+// Products per A4 page (2 columns × 2 rows). Large cards → product image shows well and the layout stays tidy.
+const PER_PAGE = 4;
 
 const chunk = <T,>(arr: T[], n: number): T[][] => {
   const out: T[][] = [];
@@ -223,9 +223,9 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
           </div>
           {desc && <p className="msc-prod-desc">{desc}</p>}
           {feats.length > 0 && (
-            <ul className="msc-prod-feats">
-              {feats.map((f, i) => <li key={i}><span>{f.label}</span><b>{f.value}</b></li>)}
-            </ul>
+            <p className="msc-prod-specs">
+              {feats.map((f, i) => <span key={i}><b>{f.label}:</b> {f.value}{i < feats.length - 1 ? '   ·   ' : ''}</span>)}
+            </p>
           )}
           <div className="msc-prod-bottom">
             {meta.length > 0 && <div className="msc-prod-meta">{meta.join('  ·  ')}</div>}
@@ -283,7 +283,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
           <div className={`msc-cover-hero ${shop.coverImage ? 'has-img' : ''}`} style={heroStyle}>
             <div className="msc-cover-top">
               {shop.logo
-                ? <img className="msc-cover-logo" src={shop.logo} alt={shop.name} />
+                ? <span className="msc-cover-logo-plate"><img className="msc-cover-logo" src={shop.logo} alt={shop.name} /></span>
                 : <span className="msc-cover-logo-txt">{shop.name}</span>}
               <span className="msc-cover-code">{shopCodeOf(shop)}</span>
             </div>
@@ -360,7 +360,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
         <section className="msc-page msc-back">
           <div className="msc-back-inner">
             {shop.logo
-              ? <img className="msc-back-logo" src={shop.logo} alt={shop.name} />
+              ? <span className="msc-back-logo-plate"><img className="msc-back-logo" src={shop.logo} alt={shop.name} /></span>
               : <div className="msc-back-logo-txt">{shop.name}</div>}
             <h2 className="msc-back-title">{s('thankYou')}</h2>
             <p className="msc-back-sub">{shop.footerText || s('thankYouSub')}</p>
@@ -421,11 +421,15 @@ const MSC_CSS = `
 .msc-cover{ padding:0; }
 .msc-cover-hero{ flex:0 0 186mm; height:186mm; background-size:cover; background-position:center; color:var(--c-coverText);
   position:relative; display:flex; flex-direction:column; padding:18mm 17mm; }
-.msc-cover-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10mm; }
-.msc-cover-logo{ max-height:24mm; max-width:70mm; width:auto; object-fit:contain; filter:drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
-.msc-cover-logo-txt{ font-size:20pt; font-weight:900; letter-spacing:.5px; }
-.msc-cover-code{ font-family:monospace; font-size:10pt; font-weight:700; letter-spacing:1px; background:rgba(255,255,255,.18);
-  border:1px solid rgba(255,255,255,.35); padding:4px 10px; border-radius:8px; backdrop-filter:blur(4px); }
+.msc-cover-top{ position:relative; display:flex; align-items:center; justify-content:center; min-height:26mm; }
+.msc-cover-logo-plate{ display:inline-flex; align-items:center; justify-content:center; background:#fff; border-radius:4mm;
+  padding:5mm 8mm; box-shadow:0 8px 26px rgba(0,0,0,.28); max-width:120mm; }
+.msc-cover-logo{ max-height:22mm; max-width:96mm; width:auto; object-fit:contain; display:block; }
+.msc-cover-logo-txt{ font-size:23pt; font-weight:900; letter-spacing:.5px; text-align:center; background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.35); backdrop-filter:blur(5px); padding:4mm 8mm; border-radius:4mm; }
+.msc-cover-code{ position:absolute; top:0; inset-inline-end:0; font-family:monospace; font-size:10pt; font-weight:700;
+  letter-spacing:1px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); padding:4px 10px;
+  border-radius:8px; backdrop-filter:blur(4px); }
 .msc-cover-center{ margin-top:auto; margin-bottom:auto; }
 .msc-cover-eyebrow{ font-size:11pt; font-weight:700; letter-spacing:3px; text-transform:uppercase; opacity:.92; margin:0 0 10px; }
 .msc-cover-title{ font-size:40pt; line-height:1.08; font-weight:900; margin:0; text-shadow:0 2px 14px rgba(0,0,0,.28); }
@@ -465,49 +469,49 @@ const MSC_CSS = `
   border-top:1px solid rgba(0,0,0,.1); font-size:8.5pt; font-weight:600; color:var(--c-text); opacity:.7; }
 .msc-run-foot span[dir]{ direction:ltr; }
 
-/* ── Product grid + card ── */
-.msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:1fr; gap:6mm; min-height:0; }
-.msc-prod{ border:1px solid rgba(0,0,0,.1); border-radius:3mm; overflow:hidden; display:flex; flex-direction:column;
-  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.05); }
-.msc-prod-media{ position:relative; height:33mm; background:#f1f5f9; flex:none; }
+/* ── Product grid + card (2 × 2 = 4 per page; large, uniform cards) ── */
+.msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:7mm; min-height:0; }
+.msc-prod{ border:1px solid rgba(0,0,0,.12); border-radius:3.5mm; overflow:hidden; display:flex; flex-direction:column;
+  background:#fff; box-shadow:0 2px 9px rgba(0,0,0,.07); min-height:0; }
+.msc-prod-media{ position:relative; height:60mm; background:#f1f5f9; flex:none; border-bottom:1px solid rgba(0,0,0,.07); }
 .msc-prod-media img{ width:100%; height:100%; object-fit:cover; display:block; }
-.msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:30pt; font-weight:900;
-  color:var(--c-primary); opacity:.25; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
-.msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:9pt; font-weight:800;
-  min-width:8mm; height:7mm; padding:0 2mm; display:flex; align-items:center; justify-content:center; border-end-end-radius:2.5mm; }
-.msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:3mm 3.2mm; min-height:0; }
-.msc-prod-name{ font-size:11pt; line-height:1.2; font-weight:800; color:var(--c-heading); margin:0 0 1.6mm;
+.msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48pt; font-weight:900;
+  color:var(--c-primary); opacity:.22; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
+.msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:10.5pt; font-weight:800;
+  min-width:10mm; height:9mm; padding:0 3mm; display:flex; align-items:center; justify-content:center; border-end-end-radius:3.5mm; box-shadow:0 2px 7px rgba(0,0,0,.22); }
+.msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:4.5mm 5mm 4.2mm; min-height:0; overflow:hidden; }
+.msc-prod-name{ font-size:13.5pt; line-height:1.22; font-weight:800; color:var(--c-heading); margin:0 0 2.4mm;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.msc-prod-tags{ display:flex; flex-wrap:wrap; gap:1.4mm; margin-bottom:1.6mm; }
-.msc-tag{ font-size:7.6pt; font-weight:700; color:var(--c-primary); background:color-mix(in srgb, var(--c-primary) 10%, #fff);
-  border:1px solid color-mix(in srgb, var(--c-primary) 24%, #fff); border-radius:3px; padding:1px 5px; white-space:nowrap; }
+.msc-prod-tags{ display:flex; flex-wrap:wrap; gap:2mm; margin-bottom:2.6mm; }
+.msc-tag{ font-size:8.6pt; font-weight:700; color:var(--c-primary); background:color-mix(in srgb, var(--c-primary) 9%, #fff);
+  border:1px solid color-mix(in srgb, var(--c-primary) 22%, #fff); border-radius:4px; padding:1.5px 7px; white-space:nowrap; }
 .msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
-.msc-tag.origin{ display:inline-flex; align-items:center; gap:3px; }
-.msc-tag.origin img{ height:8pt; width:auto; border-radius:1px; }
-.msc-prod-desc{ font-size:8.6pt; line-height:1.45; color:var(--c-text); margin:0 0 1.6mm;
+.msc-tag.origin{ display:inline-flex; align-items:center; gap:4px; }
+.msc-tag.origin img{ height:9pt; width:auto; border-radius:1px; }
+.msc-prod-desc{ font-size:9.6pt; line-height:1.55; color:var(--c-text); margin:0 0 2.4mm;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.msc-prod-feats{ list-style:none; margin:0 0 1.6mm; padding:0; display:flex; flex-direction:column; gap:.7mm; overflow:hidden; }
-.msc-prod-feats li{ display:flex; align-items:baseline; justify-content:space-between; gap:4px; font-size:8pt;
-  border-bottom:1px dotted rgba(0,0,0,.12); padding-bottom:.5mm; }
-.msc-prod-feats li span{ color:var(--c-text); opacity:.8; white-space:nowrap; }
-.msc-prod-feats li b{ color:var(--c-heading); font-weight:700; text-align:end; }
-.msc-prod-bottom{ margin-top:auto; padding-top:1.6mm; border-top:1px solid rgba(0,0,0,.08); }
-.msc-prod-meta{ font-size:7.8pt; font-weight:600; color:var(--c-text); opacity:.85; margin-bottom:1mm; line-height:1.3; }
-.msc-prod-price{ font-weight:900; color:var(--c-primary); }
-.msc-price-main{ font-size:11.5pt; line-height:1.2; }
-.msc-price-unit{ font-size:8pt; font-weight:600; opacity:.7; }
-.msc-price-pack{ font-size:8pt; font-weight:600; opacity:.7; }
-.msc-price-quote{ font-size:9.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; }
-.msc-price-opts{ display:flex; flex-wrap:wrap; gap:1.4mm; }
-.msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 9%, #fff);
-  border:1px solid color-mix(in srgb, var(--c-primary) 22%, #fff); border-radius:4px; padding:1px 6px; }
+.msc-prod-specs{ font-size:9pt; line-height:1.4; color:var(--c-text); margin:0 0 2.4mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.msc-prod-specs b{ color:var(--c-heading); font-weight:700; }
+.msc-prod-bottom{ margin-top:auto; padding-top:2.6mm; border-top:1.5px solid rgba(0,0,0,.1);
+  display:flex; align-items:flex-end; justify-content:space-between; gap:4mm; }
+.msc-prod-meta{ font-size:8.8pt; font-weight:600; color:var(--c-text); opacity:.85; line-height:1.4; flex:1; min-width:0; }
+.msc-prod-price{ font-weight:900; color:var(--c-primary); text-align:end; flex:none; margin-inline-start:auto; }
+.msc-price-main{ font-size:14pt; line-height:1.15; white-space:nowrap; }
+.msc-price-unit{ font-size:9pt; font-weight:600; opacity:.7; }
+.msc-price-pack{ display:block; font-size:8.6pt; font-weight:600; opacity:.7; }
+.msc-price-quote{ font-size:10.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; white-space:nowrap; }
+.msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1.4mm; }
+.msc-price-opt{ font-size:9.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
+  border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1.5px 8px; white-space:nowrap; }
 .msc-price-opt b{ color:var(--c-primary); }
 
 /* ── Back cover ── */
 .msc-back{ background:linear-gradient(160deg, var(--c-cover), var(--c-primary)); color:var(--c-coverText);
   align-items:center; justify-content:center; text-align:center; }
 .msc-back-inner{ padding:24mm 18mm; display:flex; flex-direction:column; align-items:center; gap:5mm; max-width:160mm; }
-.msc-back-logo{ max-height:26mm; max-width:80mm; width:auto; object-fit:contain; margin-bottom:2mm; filter:drop-shadow(0 2px 8px rgba(0,0,0,.3)); }
+.msc-back-logo-plate{ display:inline-flex; align-items:center; justify-content:center; background:#fff; border-radius:4mm;
+  padding:5mm 7mm; box-shadow:0 8px 26px rgba(0,0,0,.28); margin-bottom:2mm; }
+.msc-back-logo{ max-height:22mm; max-width:72mm; width:auto; object-fit:contain; display:block; }
 .msc-back-logo-txt{ font-size:24pt; font-weight:900; }
 .msc-back-title{ font-size:26pt; font-weight:900; margin:0; }
 .msc-back-sub{ font-size:12pt; line-height:1.6; opacity:.92; margin:0; max-width:135mm; }
