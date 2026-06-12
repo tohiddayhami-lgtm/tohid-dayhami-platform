@@ -92,11 +92,26 @@ export default async function handler(req, res) {
         return res.json(d.fields ? parseDoc(d) : null);
       }
 
-      let url = `${BASE}/${col}?key=${API_KEY}&pageSize=${lim || 500}`;
-      if (orderField) url += `&orderBy=${orderField}${dir === 'desc' ? ' desc' : ''}`;
-      const r = await fetch(url);
-      const data = await r.json();
-      return res.json((data.documents || []).map(parseDoc));
+      // Firestore caps pageSize at 300, so we MUST follow nextPageToken to return the
+      // whole collection — otherwise large collections (e.g. tickets) get silently
+      // truncated to the first page and look "deleted" in the app.
+      const pageSize = Math.min(Number(lim) || 300, 300);
+      let listUrl = `${BASE}/${col}?key=${API_KEY}&pageSize=${pageSize}`;
+      if (orderField) listUrl += `&orderBy=${orderField}${dir === 'desc' ? ' desc' : ''}`;
+      let all = [];
+      let pageToken = null;
+      let pages = 0;
+      const MAX_PAGES = 50; // safety cap (~15000 docs)
+      do {
+        const pageUrl = pageToken ? `${listUrl}&pageToken=${encodeURIComponent(pageToken)}` : listUrl;
+        const r = await fetch(pageUrl);
+        if (!r.ok) break;
+        const data = await r.json();
+        if (Array.isArray(data.documents)) all = all.concat(data.documents);
+        pageToken = data.nextPageToken || null;
+        pages++;
+      } while (pageToken && pages < MAX_PAGES);
+      return res.json(all.map(parseDoc));
     }
 
     // ── POST (setDoc) ─────────────────────────────────────────────────────

@@ -807,7 +807,11 @@ const App: React.FC = () => {
             await updateTicketInCloud(ticket.id, { assignedTo: assigneeId, timeline: [...(ticket.timeline || []), { type: 'assignment', title: 'ارجاع خودکار (سیستم)', description: `ارجاع هوشمند به ${assignee.fullName}`, actorName: 'System Bot', timestamp: new Date().toISOString(), visibility: 'internal' }] });
             // WhatsApp notification — these tickets (e.g. from a connected Google Form) are
             // written straight to Firestore and bypass saveNewTicketToSystem, so notify here.
-            if (nc?.enabled && nc.onNewTicket) {
+            // Only notify for RECENT submissions — when a big backlog of old unassigned
+            // tickets first loads, we assign them silently instead of flooding WhatsApp.
+            const ageMs = new Date().getTime() - new Date(ticket.createdAt).getTime();
+            const isRecent = isFinite(ageMs) && ageMs >= 0 && ageMs < 30 * 60 * 1000;
+            if (isRecent && nc?.enabled && nc.onNewTicket) {
               const phone = nc.personnelPhones?.[assigneeId];
               if (phone) {
                 const msg = renderTemplate(nc.ticketTemplate, {
