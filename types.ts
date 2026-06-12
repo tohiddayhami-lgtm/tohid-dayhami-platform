@@ -256,6 +256,7 @@ export interface Ticket {
   assignedTo?: string;
   timeline: TimelineEntry[];
   customData?: Record<string, string>;
+  source?: string;               // e.g. 'google_form' — set when written by an external script
   projectData?: ProjectDetails;
   discountApplied?: boolean;
   customerUploadWindow?: CustomerUploadWindow;
