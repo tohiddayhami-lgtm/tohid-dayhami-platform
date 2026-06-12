@@ -498,17 +498,21 @@ const MSC_CSS = `
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .msc-prod-specs{ flex:none; font-size:8.8pt; line-height:1.4; color:var(--c-text); margin:0 0 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .msc-prod-specs b{ color:var(--c-heading); font-weight:700; }
+/* flex-wrap + a real min-width on the meta column: when the price block is wide (long incoterm/rate
+   labels), it drops to its OWN full-width line instead of crushing the meta to one-word-per-line
+   (which then overflowed the fixed-height card and got clipped in the preview & PDF). */
 .msc-prod-bottom{ flex:none; margin-top:auto; padding-top:2.2mm; border-top:1.5px solid rgba(0,0,0,.1);
-  display:flex; align-items:flex-end; justify-content:space-between; gap:4mm; }
-.msc-prod-meta{ font-size:8.8pt; font-weight:600; color:var(--c-text); opacity:.85; line-height:1.4; flex:1; min-width:0; }
-.msc-prod-price{ font-weight:900; color:var(--c-primary); text-align:end; flex:none; margin-inline-start:auto; }
+  display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:2mm 4mm; }
+.msc-prod-meta{ font-size:8.8pt; font-weight:600; color:var(--c-text); opacity:.85; line-height:1.4; flex:1 1 40mm; min-width:40mm;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.msc-prod-price{ font-weight:900; color:var(--c-primary); text-align:end; flex:0 1 auto; max-width:100%; margin-inline-start:auto; }
 .msc-price-main{ font-size:14pt; line-height:1.15; white-space:nowrap; }
 .msc-price-unit{ font-size:9pt; font-weight:600; opacity:.7; }
 .msc-price-pack{ display:block; font-size:8.6pt; font-weight:600; opacity:.7; }
 .msc-price-quote{ font-size:10.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; white-space:nowrap; }
-.msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1mm; }
+.msc-price-opts{ display:flex; flex-direction:column; align-items:flex-end; gap:1mm; max-width:100%; }
 .msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
-  border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1px 7px; white-space:nowrap; }
+  border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1px 7px; text-align:end; max-width:100%; overflow-wrap:anywhere; }
 .msc-price-opt b{ color:var(--c-primary); }
 
 /* ── Back cover ── */
