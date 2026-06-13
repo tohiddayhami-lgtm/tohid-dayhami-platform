@@ -52,19 +52,28 @@ export const screenEmbed = (url: string): { kind: 'iframe' | 'video'; src: strin
   return { kind: 'iframe', src: u };
 };
 
+// Is this URL a playable video (vs. an image)? Used to decide between an LCD screen and a panel.
+export const isVideoUrl = (url?: string): boolean =>
+  !!url && (/(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(url) || /\.(mp4|webm|ogg)(\?.*)?$/i.test(url));
+
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
-// accent color, logo, banner, and the first product video for the LCD. Position/rotation kept.
+// accent color, logo, and panels (cover image inside-back, first product video for the LCD).
 export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<MetaverseBooth> => {
   const fa = (shop.i18n?.fa?.title) || shop.title || shop.name;
   const en = shop.title || shop.name; // shop titles are single-language; reuse name for EN
   const firstVideo = (shop.products || []).find(p => p.videoUrl)?.videoUrl;
+  const panels: Partial<Record<import('../../types').BoothFace, string>> = {};
+  if (firstVideo) panels.innerBack = firstVideo;          // LCD inside the booth
+  else if (shop.coverImage) panels.innerBack = shop.coverImage;
+  if (shop.coverImage) panels.outerBack = shop.coverImage; // storefront banner facing the aisle
   return {
     shopSlug: shop.slug,
     name: { fa, en },
     color: shop.storefrontColor || shop.theme?.primary || '#2d4a1a',
     logo: shop.logo || undefined,
-    bannerImage: shop.coverImage || undefined,
-    screenUrl: firstVideo || undefined,
+    screenUrl: undefined,        // migrate to panels
+    bannerImage: undefined,
+    panels,
   };
 };
 

@@ -3,9 +3,10 @@ import { Html, useTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, screenEmbed } from './expoUtils';
+import { bi, screenEmbed, isVideoUrl } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
+import type { BoothFace } from '../../types';
 
 interface Props {
   booth: MetaverseBooth;
@@ -23,11 +24,13 @@ export class TexBoundary extends React.Component<{ children: React.ReactNode }, 
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-// Optional image-on-a-plane (logo / banner). Loads lazily; absent → nothing.
-const ImagePlane: React.FC<{ url: string; width: number; height: number; position: [number, number, number] }> = ({ url, width, height, position }) => {
+type MediaProps = { url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number] };
+
+// Optional image-on-a-plane (logo / banner / wall panel). Loads lazily; absent → nothing.
+const ImagePlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const tex = useTexture(url);
   return (
-    <mesh position={position}>
+    <mesh position={position} rotation={rotation}>
       <planeGeometry args={[width, height]} />
       <meshBasicMaterial map={tex as THREE.Texture} transparent toneMapped={false} />
     </mesh>
@@ -35,7 +38,7 @@ const ImagePlane: React.FC<{ url: string; width: number; height: number; positio
 };
 
 // ImagePlane guarded by its own error boundary + Suspense. `key={url}` retries when the URL changes.
-const SafeImage: React.FC<{ url: string; width: number; height: number; position: [number, number, number] }> = (props) => (
+const SafeImage: React.FC<MediaProps> = (props) => (
   <TexBoundary key={props.url}>
     <Suspense fallback={null}>
       <ImagePlane {...props} />
@@ -43,15 +46,21 @@ const SafeImage: React.FC<{ url: string; width: number; height: number; position
   </TexBoundary>
 );
 
+// One wall surface: a video link → live LCD screen, anything else → an image panel.
+const PanelMedia: React.FC<MediaProps> = (props) =>
+  isVideoUrl(props.url)
+    ? <BoothScreen {...props} />
+    : <SafeImage {...props} />;
+
 // In-world LCD screen that auto-plays a video link (YouTube / Vimeo / mp4), muted + looping.
 // Rendered as a transformed HTML surface so any video source works in 3D space.
-const BoothScreen: React.FC<{ url: string; width: number; height: number; position: [number, number, number] }> = ({ url, width, height, position }) => {
+const BoothScreen: React.FC<{ url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number] }> = ({ url, width, height, position, rotation }) => {
   const v = useMemo(() => screenEmbed(url), [url]);
   if (!v) return null;
   const PX_W = 900, PX_H = Math.round((PX_W * height) / width);
   const scale = width / PX_W;
   return (
-    <group position={position}>
+    <group position={position} rotation={rotation}>
       {/* Dark bezel + a faint emissive backlight so the screen reads as a real panel */}
       <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
         <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
@@ -88,8 +97,22 @@ export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectB
   const W = 4, D = 4, wallH = 3.2;          // procedural booth footprint (meters)
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
-  const hasScreen = !!booth.screenUrl;
-  const scrW = W * 0.78, scrH = scrW * 9 / 16;
+  const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
+
+  // Media for each of the 6 wall faces (3 inner + 3 outer). innerBack falls back to the legacy
+  // screenUrl / bannerImage so older booths keep working.
+  const P = booth.panels || {};
+  const panelUrl = (face: BoothFace): string | undefined =>
+    P[face] || (face === 'innerBack' ? (booth.screenUrl || booth.bannerImage) : undefined);
+  const backW = W * 0.78, backH = backW * 9 / 16, sideW = 1.9, sideH = 1.15;
+  const PANEL_SPECS: { face: BoothFace; position: [number, number, number]; rotation: [number, number, number]; w: number; h: number }[] = [
+    { face: 'innerBack',  position: [0, 1.62, -D / 2 + 0.09], rotation: [0, 0, 0],             w: backW, h: backH },
+    { face: 'outerBack',  position: [0, 1.62, -D / 2 - 0.09], rotation: [0, Math.PI, 0],       w: backW, h: backH },
+    { face: 'innerLeft',  position: [-W / 2 + 0.09, 1.45, -D / 6], rotation: [0, Math.PI / 2, 0],  w: sideW, h: sideH },
+    { face: 'outerLeft',  position: [-W / 2 - 0.09, 1.45, -D / 6], rotation: [0, -Math.PI / 2, 0], w: sideW, h: sideH },
+    { face: 'innerRight', position: [W / 2 - 0.09, 1.45, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
+    { face: 'outerRight', position: [W / 2 + 0.09, 1.45, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
+  ];
 
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
@@ -155,16 +178,25 @@ export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectB
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
 
-          {/* Auto-playing LCD on the back wall, else the banner image */}
-          {hasScreen ? (
-            <BoothScreen url={booth.screenUrl!} width={scrW} height={scrH} position={[0, 1.62, -D / 2 + 0.1]} />
-          ) : booth.bannerImage ? (
-            <SafeImage url={booth.bannerImage} width={W * 0.8} height={wallH * 0.5} position={[0, wallH * 0.55, -D / 2 + 0.08]} />
-          ) : null}
+          {/* Six wall panels (3 inner + 3 outer) — each an image or an auto-playing video */}
+          {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} /> : null; })}
 
-          {/* Logo — above the desk when a screen occupies the wall, else on the back wall */}
+          {/* Logo plate above the reception desk */}
           {booth.logo && (
-            <SafeImage url={booth.logo} width={0.85} height={0.85} position={hasScreen ? [0, 1.5, D / 2 - 0.46] : [0, 0.62, -D / 2 + 0.09]} />
+            <SafeImage url={booth.logo} width={0.8} height={0.8} position={[0, 1.5, D / 2 - 0.46]} />
+          )}
+
+          {/* Counter / desk front — a clickable link into the booth's shop */}
+          {booth.shopSlug && (
+            <Html position={[0, 0.6, D / 2 - 0.18]} center distanceFactor={9} zIndexRange={[14, 0]}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
+                style={{ pointerEvents: 'auto', cursor: 'pointer', border: 'none', borderRadius: 999, padding: '7px 14px', background: accent, color: '#fff', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', boxShadow: '0 3px 10px rgba(0,0,0,.35)', fontFamily: 'Vazirmatn, sans-serif' }}
+                title={enterShop}
+              >
+                🛍 {enterShop}
+              </button>
+            </Html>
           )}
 
           {/* Booth name plate (Persian-safe DOM text) — clicking opens the booth's shop */}

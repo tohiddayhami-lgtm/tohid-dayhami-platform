@@ -594,6 +594,10 @@ export interface MetaverseHotspot {
   color?: string;               // marker accent color
 }
 
+// The six panel surfaces of a booth: each of the 3 walls has an inner face (toward the booth
+// interior) and an outer face (the aisle side). Each can show an image OR a video link.
+export type BoothFace = 'innerBack' | 'innerLeft' | 'innerRight' | 'outerBack' | 'outerLeft' | 'outerRight';
+
 export interface MetaverseBooth {
   id: string;
   name: MetaShopDirCat;         // bilingual booth / company name
@@ -607,7 +611,10 @@ export interface MetaverseBooth {
   color?: string;               // accent color for the procedural booth
   logo?: string;                // logo image URL (Storage images/)
   bannerImage?: string;         // banner image URL (Storage images/)
-  screenUrl?: string;           // video link for the booth's in-world LCD (YouTube/Vimeo/mp4) — auto-plays muted & looping
+  screenUrl?: string;           // (legacy) video link for the in-world LCD — now the innerBack panel fallback
+  // Per-face media: each value is an image URL or a video link (YouTube/Vimeo/mp4). Videos
+  // auto-play muted & looping on an in-world screen; images render on the wall panel.
+  panels?: Partial<Record<BoothFace, string>>;
   hotspots?: MetaverseHotspot[];
 }
 

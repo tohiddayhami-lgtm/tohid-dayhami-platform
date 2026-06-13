@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -18,6 +18,14 @@ interface Props {
 
 const PRESETS: EnvPreset[] = ['warehouse', 'city', 'sunset', 'dawn', 'night', 'forest', 'apartment', 'studio', 'park', 'lobby'];
 const HOTSPOT_TYPES: HotspotType[] = ['product', 'company', 'video', 'pdf', 'image', 'url', 'page', 'whatsapp', 'contact', 'order'];
+const PANEL_FACES: { face: BoothFace; fa: string; en: string }[] = [
+  { face: 'innerBack', fa: 'دیوار پشت — داخل', en: 'Back wall — inside' },
+  { face: 'innerLeft', fa: 'دیوار چپ — داخل', en: 'Left wall — inside' },
+  { face: 'innerRight', fa: 'دیوار راست — داخل', en: 'Right wall — inside' },
+  { face: 'outerBack', fa: 'دیوار پشت — بیرون', en: 'Back wall — outside' },
+  { face: 'outerLeft', fa: 'دیوار چپ — بیرون', en: 'Left wall — outside' },
+  { face: 'outerRight', fa: 'دیوار راست — بیرون', en: 'Right wall — outside' },
+];
 
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, preset: 'warehouse', width: 30, depth: 30, height: 6,
@@ -56,6 +64,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
     screenHint: T ? 'لینک یوتیوب/ویمیو یا فایل mp4. روی نمایشگر داخل غرفه به‌صورت خودکار و بی‌صدا پخش می‌شود.' : 'YouTube/Vimeo link or mp4 file. Plays automatically (muted) on the in-booth LCD.',
     screenAuto: T ? 'از ویدئوی محصولات' : 'From product video',
+    panels: T ? 'تابلوها و نمایشگرها (۳ داخل + ۳ بیرون)' : 'Panels & screens (3 inside + 3 outside)',
+    panelsHint: T ? 'برای هر دیوار غرفه (داخل و بیرون) یک تصویر یا لینک ویدئو بگذارید. لینک ویدئو روی نمایشگر، به‌صورت خودکار و بی‌صدا پخش می‌شود؛ تصویر روی دیوار نصب می‌شود.' : 'Set an image or a video link for each booth wall (inside & outside). A video link plays automatically (muted) on a screen; an image mounts on the wall.',
     applyShop: T ? 'پر کردن اطلاعات از فروشگاه' : 'Fill from shop',
     boothFa: T ? 'نام غرفه (فارسی)' : 'Booth name (FA)', boothEn: T ? 'نام غرفه (انگلیسی)' : 'Booth name (EN)',
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
@@ -114,6 +124,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const firstProductVideo = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []).find(p => p.videoUrl)?.videoUrl : undefined);
 
+  // ── Booth wall panels (3 inner + 3 outer; each an image URL or a video link) ──
+  const panelVal = (b: MetaverseBooth, face: BoothFace): string =>
+    (b.panels?.[face]) || (face === 'innerBack' ? (b.screenUrl || b.bannerImage || '') : '');
+  const setPanel = (b: MetaverseBooth, face: BoothFace, url: string) => {
+    const panels = { ...(b.panels || {}) };
+    if (url) panels[face] = url; else delete panels[face];
+    const p: Partial<MetaverseBooth> = { panels };
+    if (face === 'innerBack') { p.screenUrl = undefined; p.bannerImage = undefined; } // migrate legacy into panels
+    updBooth(b.id, p);
+  };
+
   // ── Hotspots ──
   const updHotspots = (boothId: string, hs: MetaverseHotspot[]) => updBooth(boothId, { hotspots: hs });
   const addHotspot = (b: MetaverseBooth) => {
@@ -164,6 +185,23 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           {value && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
           <input type="file" ref={ref} className="hidden" accept=".glb,.gltf,model/gltf-binary" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadGlb(id, f, onUrl); ev.target.value = ''; }} />
         </div>
+      </div>
+    );
+  };
+
+  // One wall-panel field: a URL input (image or video link) + an image-upload shortcut.
+  const PanelField: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string; product?: string }> = ({ id, value, onUrl, label, product }) => {
+    const ref = useRef<HTMLInputElement>(null);
+    return (
+      <div>
+        <label className={lbl}>{label}</label>
+        <div className="flex gap-1">
+          <input className={fld + ' dir-ltr'} value={value || ''} onChange={ev => onUrl(ev.target.value)} placeholder={T ? 'لینک تصویر یا ویدئو' : 'image or video link'} />
+          {!readonly && <button type="button" title={t.upload} onClick={() => ref.current?.click()} className="shrink-0 text-xs px-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"><IconUpload className="w-3.5 h-3.5" /></button>}
+          {product && !readonly && <button type="button" title={t.screenAuto} onClick={() => onUrl(product)} className="shrink-0 text-[11px] px-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">📹</button>}
+          <input type="file" ref={ref} className="hidden" accept="image/*" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadImage(id, f, onUrl); ev.target.value = ''; }} />
+        </div>
+        {uploading === id && <span className="text-[10px] text-gray-400">{t.uploading}</span>}
       </div>
     );
   };
@@ -327,15 +365,19 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               <div><label className={lbl}>{t.posZ}</label><input type="number" step="0.5" className={fld} value={b.z ?? 0} onChange={ev => updBooth(b.id, { z: +ev.target.value })} /></div>
                             </div>
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
-                            <ImgUpload id={`banner-${b.id}`} value={b.bannerImage} onUrl={u => updBooth(b.id, { bannerImage: u || undefined })} label={t.banner} />
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
-                            <div className="md:col-span-2 lg:col-span-3">
-                              <label className={lbl}>📺 {t.screen}</label>
-                              <div className="flex gap-1.5">
-                                <input className={fld + ' dir-ltr'} value={b.screenUrl || ''} onChange={ev => updBooth(b.id, { screenUrl: ev.target.value || undefined })} placeholder="https://youtube.com/watch?v=… | https://…/clip.mp4" />
-                                {firstProductVideo(b.shopSlug) && !readonly && <button type="button" onClick={() => updBooth(b.id, { screenUrl: firstProductVideo(b.shopSlug) })} className="shrink-0 text-[11px] px-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">{t.screenAuto}</button>}
-                              </div>
-                              <p className="text-[11px] text-gray-400 mt-1">{t.screenHint}</p>
+                          </div>
+
+                          {/* Six wall panels (3 inner + 3 outer) — image or video per surface */}
+                          <div className="border-t border-gray-100 pt-2">
+                            <span className="text-xs font-bold text-gray-600">🖼 {t.panels}</span>
+                            <p className="text-[11px] text-gray-400 mb-2 mt-0.5">{t.panelsHint}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {PANEL_FACES.map(pf => (
+                                <PanelField key={pf.face} id={`panel-${b.id}-${pf.face}`} label={T ? pf.fa : pf.en}
+                                  value={panelVal(b, pf.face)} onUrl={u => setPanel(b, pf.face, u)}
+                                  product={pf.face === 'innerBack' ? firstProductVideo(b.shopSlug) : undefined} />
+                              ))}
                             </div>
                           </div>
 
