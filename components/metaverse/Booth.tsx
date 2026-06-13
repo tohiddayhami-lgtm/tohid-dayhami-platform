@@ -67,10 +67,14 @@ const BoothScreen: React.FC<{ url: string; width: number; height: number; positi
   React.useEffect(() => {
     if (v?.kind !== 'iframe') return;
     const isVimeo = /vimeo\.com/.test(v.src);
-    const msg = isVimeo ? JSON.stringify({ method: 'play' }) : JSON.stringify({ event: 'command', func: 'playVideo', args: [] });
+    // YouTube's IFrame API ignores a bare playVideo command until it has received a `listening`
+    // handshake first; send both each tick so muted autoplay actually kicks in.
+    const listen = JSON.stringify({ event: 'listening', id: 1 });
+    const play = isVimeo ? JSON.stringify({ method: 'play' }) : JSON.stringify({ event: 'command', func: 'playVideo', args: [] });
     let n = 0;
     const id = window.setInterval(() => {
-      try { iframeRef.current?.contentWindow?.postMessage(msg, '*'); } catch {}
+      const w = iframeRef.current?.contentWindow;
+      try { if (!isVimeo) w?.postMessage(listen, '*'); w?.postMessage(play, '*'); } catch {}
       if (++n > 10) window.clearInterval(id);
     }, 800);
     return () => window.clearInterval(id);

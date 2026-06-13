@@ -60,14 +60,35 @@ export const wallTransform = (
   }
 };
 
+// Robustly pull the 11-char video id out of ANY YouTube URL shape: watch?v= (with the v=
+// param anywhere in the query, even after app=/si=/feature=), youtu.be/, /embed/, /shorts/,
+// /live/. Returns null if it isn't a recognizable YouTube link.
+export const ytId = (url: string): string | null => {
+  const u = (url || '').trim();
+  if (!/youtu/i.test(u)) return null;
+  // youtu.be/ID  |  /embed/ID  |  /shorts/ID  |  /live/ID  |  /v/ID
+  const path = u.match(/(?:youtu\.be\/|youtube\.com\/(?:embed|shorts|live|v)\/)([\w-]{11})/);
+  if (path) return path[1];
+  // ...watch?...v=ID...  (v= may sit anywhere in the query string)
+  const q = u.match(/[?&]v=([\w-]{11})/);
+  if (q) return q[1];
+  return null;
+};
+
+// Pull the numeric Vimeo id out of common Vimeo URL shapes.
+export const vimeoId = (url: string): string | null => {
+  const m = (url || '').match(/vimeo\.com\/(?:video\/|channels\/[\w]+\/|groups\/[\w]+\/videos\/)?(\d+)/i);
+  return m ? m[1] : null;
+};
+
 // Convert a YouTube / Vimeo / direct-mp4 URL into an embeddable form for the video popup.
 export const videoEmbed = (url: string): { kind: 'iframe' | 'video'; src: string } | null => {
   if (!url) return null;
   const u = url.trim();
-  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}` };
-  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (vm) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}` };
+  const yt = ytId(u);
+  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt}` };
+  const vm = vimeoId(u);
+  if (vm) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vm}` };
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(u)) return { kind: 'video', src: u };
   // Unknown host → try as an iframe (lets generic embeds / pages through)
   return { kind: 'iframe', src: u };
@@ -77,17 +98,17 @@ export const videoEmbed = (url: string): { kind: 'iframe' | 'video'; src: string
 export const screenEmbed = (url: string): { kind: 'iframe' | 'video'; src: string } | null => {
   if (!url) return null;
   const u = url.trim();
-  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&loop=1&playlist=${yt[1]}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1` };
-  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (vm) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}?autoplay=1&muted=1&loop=1&background=1` };
+  const yt = ytId(u);
+  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt}?autoplay=1&mute=1&loop=1&playlist=${yt}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1` };
+  const vm = vimeoId(u);
+  if (vm) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vm}?autoplay=1&muted=1&loop=1&background=1` };
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(u)) return { kind: 'video', src: u };
   return { kind: 'iframe', src: u };
 };
 
 // Is this URL a playable video (vs. an image)? Used to decide between an LCD screen and a panel.
 export const isVideoUrl = (url?: string): boolean =>
-  !!url && (/(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(url) || /\.(mp4|webm|ogg)(\?.*)?$/i.test(url));
+  !!url && (!!ytId(url) || !!vimeoId(url) || /\.(mp4|webm|ogg)(\?.*)?$/i.test(url));
 
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
 // accent color, logo, and panels (cover image inside-back, first product video for the LCD).
