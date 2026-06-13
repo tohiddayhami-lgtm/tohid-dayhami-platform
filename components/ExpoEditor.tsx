@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
+import { autoArrangeBooths, shopToBoothFields } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -30,6 +31,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
   const [openBooth, setOpenBooth] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [quickN, setQuickN] = useState(6);
 
   const t = {
     title: T ? 'نمایشگاه متاورس (سه‌بعدی)' : 'Metaverse Exhibition (3D)',
@@ -46,6 +48,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     spawn: T ? 'نقطه‌ی شروع بازدیدکننده' : 'Visitor start point',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
+    quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
+    quickHint: T ? 'تعداد غرفه‌ها را وارد کنید؛ فضای نمایشگاه به‌صورت خودکار اندازه و غرفه‌ها مرتب چیده می‌شوند. سپس هر غرفه را به یک فروشگاه وصل کنید.' : 'Enter how many booths — the hall is auto-sized and booths are laid out in tidy aisles. Then link each booth to a shop.',
+    quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
+    quickBuild: T ? 'ساخت و چیدمان خودکار' : 'Build & arrange',
+    quickConfirm: T ? 'غرفه‌های فعلی پاک و دوباره چیده می‌شوند. ادامه می‌دهید؟' : 'Existing booths will be replaced and re-arranged. Continue?',
+    screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
+    screenHint: T ? 'لینک یوتیوب/ویمیو یا فایل mp4. روی نمایشگر داخل غرفه به‌صورت خودکار و بی‌صدا پخش می‌شود.' : 'YouTube/Vimeo link or mp4 file. Plays automatically (muted) on the in-booth LCD.',
+    screenAuto: T ? 'از ویدئوی محصولات' : 'From product video',
+    applyShop: T ? 'پر کردن اطلاعات از فروشگاه' : 'Fill from shop',
     boothFa: T ? 'نام غرفه (فارسی)' : 'Booth name (FA)', boothEn: T ? 'نام غرفه (انگلیسی)' : 'Booth name (EN)',
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
@@ -81,6 +92,27 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const updBooth = (id: string, p: Partial<MetaverseBooth>) => updBooths((e.booths || []).map(b => b.id === id ? { ...b, ...p } : b));
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
+
+  // Quick setup: ask "how many booths", auto-size the hall and arrange empty booths in aisles.
+  const quickBuild = () => {
+    if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
+    const { width, depth, spawn, cells } = autoArrangeBooths(quickN);
+    const booths: MetaverseBooth[] = cells.map((c, i) => ({
+      id: newId('booth'), name: { fa: `غرفه ${i + 1}`, en: `Booth ${i + 1}` },
+      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', hotspots: [],
+    }));
+    patch({ width, depth, spawn, booths });
+    setOpenBooth(null);
+  };
+
+  // Link a booth to a shop and pull the shop's name/logo/banner/color/video into the booth.
+  const applyShopToBooth = (booth: MetaverseBooth, slug: string) => {
+    if (!slug) { updBooth(booth.id, { shopSlug: undefined }); return; }
+    const shop = shops.find(s => s.slug === slug);
+    if (!shop) { updBooth(booth.id, { shopSlug: slug }); return; }
+    updBooth(booth.id, shopToBoothFields(shop, lang));
+  };
+  const firstProductVideo = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []).find(p => p.videoUrl)?.videoUrl : undefined);
 
   // ── Hotspots ──
   const updHotspots = (boothId: string, hs: MetaverseHotspot[]) => updBooth(boothId, { hotspots: hs });
@@ -238,6 +270,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             <FloorPlan />
           </div>
 
+          {/* Quick setup — N booths → auto-arrange */}
+          {!readonly && (
+            <div className="border border-indigo-100 bg-indigo-50/50 rounded-xl p-4">
+              <h5 className="font-bold text-indigo-700 text-sm mb-1">⚡ {t.quickTitle}</h5>
+              <p className="text-[12px] text-indigo-600/80 mb-3 max-w-2xl">{t.quickHint}</p>
+              <div className="flex items-end gap-2 flex-wrap">
+                <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
+                <button onClick={quickBuild} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold flex items-center gap-1"><IconPlus className="w-4 h-4" />{t.quickBuild}</button>
+              </div>
+            </div>
+          )}
+
           {/* Booths */}
           <div className="border border-gray-100 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -265,10 +309,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <div><label className={lbl}>{t.boothFa}</label><input className={fld} value={b.name?.fa || ''} onChange={ev => updBooth(b.id, { name: { ...(b.name || {}), fa: ev.target.value } })} /></div>
                             <div><label className={lbl}>{t.boothEn}</label><input className={fld + ' dir-ltr'} value={b.name?.en || ''} onChange={ev => updBooth(b.id, { name: { ...(b.name || {}), en: ev.target.value } })} /></div>
                             <div><label className={lbl}>{t.shop}</label>
-                              <select className={fld + ' bg-white'} value={b.shopSlug || ''} onChange={ev => updBooth(b.id, { shopSlug: ev.target.value || undefined })}>
-                                <option value="">{t.noShop}</option>
-                                {shops.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
-                              </select>
+                              <div className="flex gap-1.5">
+                                <select className={fld + ' bg-white'} value={b.shopSlug || ''} onChange={ev => applyShopToBooth(b, ev.target.value)}>
+                                  <option value="">{t.noShop}</option>
+                                  {shops.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
+                                </select>
+                                {b.shopSlug && !readonly && <button type="button" title={t.applyShop} onClick={() => applyShopToBooth(b, b.shopSlug!)} className="shrink-0 text-xs px-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">↻</button>}
+                              </div>
                             </div>
                             <div><label className={lbl}>{t.color}</label><div className="flex gap-2"><input type="color" value={b.color || '#2d4a1a'} onChange={ev => updBooth(b.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.color || ''} onChange={ev => updBooth(b.id, { color: ev.target.value })} /></div></div>
                             <div className="grid grid-cols-2 gap-2">
@@ -282,6 +329,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
                             <ImgUpload id={`banner-${b.id}`} value={b.bannerImage} onUrl={u => updBooth(b.id, { bannerImage: u || undefined })} label={t.banner} />
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
+                            <div className="md:col-span-2 lg:col-span-3">
+                              <label className={lbl}>📺 {t.screen}</label>
+                              <div className="flex gap-1.5">
+                                <input className={fld + ' dir-ltr'} value={b.screenUrl || ''} onChange={ev => updBooth(b.id, { screenUrl: ev.target.value || undefined })} placeholder="https://youtube.com/watch?v=… | https://…/clip.mp4" />
+                                {firstProductVideo(b.shopSlug) && !readonly && <button type="button" onClick={() => updBooth(b.id, { screenUrl: firstProductVideo(b.shopSlug) })} className="shrink-0 text-[11px] px-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 whitespace-nowrap">{t.screenAuto}</button>}
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-1">{t.screenHint}</p>
+                            </div>
                           </div>
 
                           {/* Hotspots */}

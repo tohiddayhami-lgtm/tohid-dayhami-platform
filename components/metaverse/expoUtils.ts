@@ -1,4 +1,4 @@
-import type { MetaShopDirCat, MetaverseExpo, MetaverseBooth } from '../../types';
+import type { MetaShopDirCat, MetaverseExpo, MetaverseBooth, MetaShop } from '../../types';
 import { Language } from '../../App';
 
 // ── Bilingual label resolver (mirrors the {fa,en} pattern used across MetaShop/MetaBazaar) ──
@@ -38,6 +38,56 @@ export const videoEmbed = (url: string): { kind: 'iframe' | 'video'; src: string
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(u)) return { kind: 'video', src: u };
   // Unknown host → try as an iframe (lets generic embeds / pages through)
   return { kind: 'iframe', src: u };
+};
+
+// Same as videoEmbed but for an always-on, muted, looping in-world LCD screen (autoplay params added).
+export const screenEmbed = (url: string): { kind: 'iframe' | 'video'; src: string } | null => {
+  if (!url) return null;
+  const u = url.trim();
+  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&loop=1&playlist=${yt[1]}&controls=0&modestbranding=1&playsinline=1&rel=0` };
+  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vm) return { kind: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}?autoplay=1&muted=1&loop=1&background=1` };
+  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(u)) return { kind: 'video', src: u };
+  return { kind: 'iframe', src: u };
+};
+
+// Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
+// accent color, logo, banner, and the first product video for the LCD. Position/rotation kept.
+export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<MetaverseBooth> => {
+  const fa = (shop.i18n?.fa?.title) || shop.title || shop.name;
+  const en = shop.title || shop.name; // shop titles are single-language; reuse name for EN
+  const firstVideo = (shop.products || []).find(p => p.videoUrl)?.videoUrl;
+  return {
+    shopSlug: shop.slug,
+    name: { fa, en },
+    color: shop.storefrontColor || shop.theme?.primary || '#2d4a1a',
+    logo: shop.logo || undefined,
+    bannerImage: shop.coverImage || undefined,
+    screenUrl: firstVideo || undefined,
+  };
+};
+
+// Auto-arrange `count` booths into tidy exhibition aisles and size the hall to fit.
+// Booths face +Z (toward the entrance/spawn) in a cols×rows grid with walking aisles between.
+export const autoArrangeBooths = (count: number): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number }[] } => {
+  const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
+  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(n))));
+  const rows = Math.ceil(n / cols);
+  const cellW = 7;   // booth (4m) + side aisle
+  const cellD = 8;   // booth (4m) + walking aisle in front
+  const width = Math.max(14, cols * cellW + 6);
+  const depth = Math.max(16, rows * cellD + 10);
+  const cells: { x: number; z: number; ry: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / cols), c = i % cols;
+    const colsThisRow = Math.min(cols, n - r * cols);
+    const x = (c - (colsThisRow - 1) / 2) * cellW;
+    const z = ((rows - 1) / 2 - r) * cellD; // row 0 nearest the entrance (+Z), facing the visitor
+    cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: 0 });
+  }
+  const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+  return { width, depth, spawn, cells };
 };
 
 // Normalize a phone number for a wa.me link (digits only, drop leading +/00).

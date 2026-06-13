@@ -607,6 +607,7 @@ export interface MetaverseBooth {
   color?: string;               // accent color for the procedural booth
   logo?: string;                // logo image URL (Storage images/)
   bannerImage?: string;         // banner image URL (Storage images/)
+  screenUrl?: string;           // video link for the booth's in-world LCD (YouTube/Vimeo/mp4) — auto-plays muted & looping
   hotspots?: MetaverseHotspot[];
 }
 
