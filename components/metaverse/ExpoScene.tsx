@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS } from './expoUtils';
-import { Booth } from './Booth';
+import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 
 interface Props {
@@ -79,9 +79,11 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
       {/* Procedural sky background (instant). A custom HDR is loaded only when provided. */}
       {expo.skyboxUrl ? (
-        <Suspense fallback={null}>
-          <Environment files={expo.skyboxUrl} background />
-        </Suspense>
+        <TexBoundary key={expo.skyboxUrl}>
+          <Suspense fallback={null}>
+            <Environment files={expo.skyboxUrl} background />
+          </Suspense>
+        </TexBoundary>
       ) : (
         <Sky distance={450000} sunPosition={[10, 8, 5]} turbidity={6} rayleigh={1.2} />
       )}
@@ -121,9 +123,11 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
       {/* Optional custom environment / hall GLB */}
       {expo.environmentUrl && (
-        <Suspense fallback={null}>
-          <GltfModel url={expo.environmentUrl} />
-        </Suspense>
+        <TexBoundary key={expo.environmentUrl}>
+          <Suspense fallback={null}>
+            <GltfModel url={expo.environmentUrl} />
+          </Suspense>
+        </TexBoundary>
       )}
 
       {/* Booths */}

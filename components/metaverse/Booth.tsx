@@ -14,6 +14,15 @@ interface Props {
   onSelectBooth: (b: MetaverseBooth) => void;
 }
 
+// Catches a failed texture/GLTF load (e.g. a Firebase Storage image without CORS headers, which
+// WebGL refuses to use) so ONE bad image can't crash the whole exhibition — it just renders nothing.
+export class TexBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { /* swallow — a missing booth image is non-fatal */ }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
 // Optional image-on-a-plane (logo / banner). Loads lazily; absent → nothing.
 const ImagePlane: React.FC<{ url: string; width: number; height: number; position: [number, number, number] }> = ({ url, width, height, position }) => {
   const tex = useTexture(url);
@@ -24,6 +33,15 @@ const ImagePlane: React.FC<{ url: string; width: number; height: number; positio
     </mesh>
   );
 };
+
+// ImagePlane guarded by its own error boundary + Suspense. `key={url}` retries when the URL changes.
+const SafeImage: React.FC<{ url: string; width: number; height: number; position: [number, number, number] }> = (props) => (
+  <TexBoundary key={props.url}>
+    <Suspense fallback={null}>
+      <ImagePlane {...props} />
+    </Suspense>
+  </TexBoundary>
+);
 
 // In-world LCD screen that auto-plays a video link (YouTube / Vimeo / mp4), muted + looping.
 // Rendered as a transformed HTML surface so any video source works in 3D space.
@@ -76,9 +94,11 @@ export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectB
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
       {booth.modelUrl ? (
-        <Suspense fallback={null}>
-          <GltfModel url={booth.modelUrl} />
-        </Suspense>
+        <TexBoundary key={booth.modelUrl}>
+          <Suspense fallback={null}>
+            <GltfModel url={booth.modelUrl} />
+          </Suspense>
+        </TexBoundary>
       ) : (
         <group>
           {/* Carpet base + accent inlay */}
@@ -139,16 +159,12 @@ export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectB
           {hasScreen ? (
             <BoothScreen url={booth.screenUrl!} width={scrW} height={scrH} position={[0, 1.62, -D / 2 + 0.1]} />
           ) : booth.bannerImage ? (
-            <Suspense fallback={null}>
-              <ImagePlane url={booth.bannerImage} width={W * 0.8} height={wallH * 0.5} position={[0, wallH * 0.55, -D / 2 + 0.08]} />
-            </Suspense>
+            <SafeImage url={booth.bannerImage} width={W * 0.8} height={wallH * 0.5} position={[0, wallH * 0.55, -D / 2 + 0.08]} />
           ) : null}
 
           {/* Logo — above the desk when a screen occupies the wall, else on the back wall */}
           {booth.logo && (
-            <Suspense fallback={null}>
-              <ImagePlane url={booth.logo} width={0.85} height={0.85} position={hasScreen ? [0, 1.5, D / 2 - 0.46] : [0, 0.62, -D / 2 + 0.09]} />
-            </Suspense>
+            <SafeImage url={booth.logo} width={0.85} height={0.85} position={hasScreen ? [0, 1.5, D / 2 - 0.46] : [0, 0.62, -D / 2 + 0.09]} />
           )}
 
           {/* Booth name plate (Persian-safe DOM text) — clicking opens the booth's shop */}
