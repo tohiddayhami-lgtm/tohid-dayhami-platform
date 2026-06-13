@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Environment, Sky, ContactShadows, Grid } from '@react-three/drei';
+import { Environment, Sky, Grid } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -62,20 +62,13 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
   return (
     <>
-      {/* Lighting — fully procedural so the hall is lit instantly with NO network fetch.
-          (A multi-MB HDR is only loaded when the admin explicitly sets a skybox URL below.) */}
-      <ambientLight intensity={0.75} />
-      <hemisphereLight intensity={0.7} groundColor={ground} color="#ffffff" />
-      <directionalLight
-        position={[width * 0.3, height * 2, depth * 0.3]}
-        intensity={1.25}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-far={Math.max(width, depth) * 2}
-        shadow-camera-left={-width} shadow-camera-right={width}
-        shadow-camera-top={depth} shadow-camera-bottom={-depth}
-      />
+      {/* Lighting — flat & even (no shadows), so every booth is lit identically. Fully procedural
+          so the hall is lit instantly with NO network fetch. */}
+      <ambientLight intensity={1.15} />
+      <hemisphereLight intensity={0.9} groundColor="#ffffff" color="#ffffff" />
+      {/* Two soft, opposing, shadow-less fills cancel out directional darkening on any booth. */}
+      <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
+      <directionalLight position={[-width, height * 2, -depth]} intensity={0.45} />
 
       {/* Procedural sky background (instant). A custom HDR is loaded only when provided. */}
       {expo.skyboxUrl ? (
@@ -101,7 +94,6 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         </mesh>
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
-      <ContactShadows position={[0, 0.02, 0]} scale={Math.max(width, depth)} blur={2} opacity={0.4} far={6} frames={1} />
 
       {/* Perimeter walls */}
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
@@ -131,8 +123,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
       )}
 
       {/* Booths */}
-      {(expo.booths || []).map(b => (
-        <Booth key={b.id} booth={b} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} />
+      {(expo.booths || []).map((b, i) => (
+        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} />
       ))}
     </>
   );

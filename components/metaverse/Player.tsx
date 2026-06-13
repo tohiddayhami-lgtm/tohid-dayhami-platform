@@ -94,7 +94,12 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
       return;
     }
 
-    // Look — apply drag deltas unless PointerLockControls is steering.
+    // Continuous turn from the mobile LOOK joystick (deadzone, then proportional rad/sec).
+    const LOOK = 2.4;
+    if (Math.abs(c.look.x) > 0.08) c.yawDelta += c.look.x * LOOK * dt;
+    if (Math.abs(c.look.y) > 0.08) c.pitchDelta += c.look.y * LOOK * dt;
+
+    // Look — apply drag + joystick deltas unless PointerLockControls is steering.
     if (!pointerLock) {
       yawRef.current -= c.yawDelta;
       pitchRef.current = clamp(pitchRef.current - c.pitchDelta, -1.3, 1.3);

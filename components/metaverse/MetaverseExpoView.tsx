@@ -26,7 +26,7 @@ interface Props {
 
 // Full-screen 3D / WebXR exhibition viewer. Orchestrates the Canvas (scene + player + XR rig)
 // and all 2D chrome (top bar, minimap, joystick, hotspot modal). Lazy-loaded by App.tsx.
-export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit, onOpenShop }) => {
+export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit }) => {
   const expo = bazaar.expo!;
   const caps = useDeviceCapabilities();
   const [lang, setLang] = useState<Language>((expo.defaultLang === 'fa' || expo.defaultLang === 'en') ? expo.defaultLang : initialLang);
@@ -58,7 +58,13 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, expo.spawn?.z ?? Math.min(depth / 2 - 2, 8)];
   const T = lang === 'fa';
 
-  const onSelectBooth = (b: MetaverseBooth) => { if (b.shopSlug) onOpenShop(b.shopSlug); };
+  // Open a shop in a NEW TAB so the exhibition stays open behind it (hyperlinks shouldn't
+  // navigate away from the 3D hall).
+  const openShopNewTab = (slug: string) => {
+    const href = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(slug)}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
+  const onSelectBooth = (b: MetaverseBooth) => { if (b.shopSlug) openShopNewTab(b.shopSlug); };
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -73,7 +79,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     lock: T ? 'حالت غوطه‌ور' : 'Immersive',
     vr: T ? 'ورود به VR' : 'Enter VR',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
-    helpTouch: T ? 'با اهرم حرکت کنید · با کشیدن صفحه نگاه کنید · روی نشانگرها بزنید' : 'Joystick to move · drag to look · tap markers',
+    helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
   };
 
@@ -81,7 +87,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
-      <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+      <Canvas dpr={[1, 1.5]} camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
         <XR store={store}>
           <Suspense fallback={null}>
             <ExpoScene
@@ -123,8 +129,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       {/* Minimap */}
       <Minimap expo={expo} poseRef={poseRef} />
 
-      {/* Mobile joystick */}
-      {caps.touch && <MobileControls controlRef={controlRef} />}
+      {/* Mobile joysticks — left = move, right = look/turn */}
+      {caps.touch && <MobileControls controlRef={controlRef} kind="move" />}
+      {caps.touch && <MobileControls controlRef={controlRef} kind="look" />}
 
       {/* Help hint */}
       {help && (
@@ -137,7 +144,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       )}
 
       {/* Hotspot modal */}
-      <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={onOpenShop} />
+      <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
 
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}

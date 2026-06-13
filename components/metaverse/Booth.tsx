@@ -10,10 +10,14 @@ import type { BoothFace } from '../../types';
 
 interface Props {
   booth: MetaverseBooth;
+  index?: number;            // 0-based booth order → shown as a 1-based number on the header sign
   lang: Language;
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
 }
+
+// Latin → Persian digits for the booth number on the header sign.
+const faDigits = (s: string | number) => String(s).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
 
 // Catches a failed texture/GLTF load (e.g. a Firebase Storage image without CORS headers, which
 // WebGL refuses to use) so ONE bad image can't crash the whole exhibition — it just renders nothing.
@@ -90,9 +94,10 @@ const BoothScreen: React.FC<{ url: string; width: number; height: number; positi
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectBooth }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
+  const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
   const scale = booth.scale || 1;
   const W = 4, D = 4, wallH = 3.2;          // procedural booth footprint (meters)
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
@@ -199,14 +204,17 @@ export const Booth: React.FC<Props> = ({ booth, lang, onSelectHotspot, onSelectB
             </Html>
           )}
 
-          {/* Booth name plate (Persian-safe DOM text) — clicking opens the booth's shop */}
+          {/* Booth header sign: number badge + name (Persian-safe DOM text) — click opens the shop */}
           <Html position={[0, wallH + 0.12, -D / 2 + 0.16]} center distanceFactor={11} zIndexRange={[15, 0]}>
             <button
               onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
-              style={{ pointerEvents: 'auto', cursor: 'pointer', border: 'none', background: 'transparent', color: '#fff', fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', textShadow: '0 1px 3px rgba(0,0,0,.55)', fontFamily: 'Vazirmatn, sans-serif' }}
-              title={name}
+              style={{ pointerEvents: 'auto', cursor: 'pointer', border: 'none', background: 'transparent', color: '#fff', fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', textShadow: '0 1px 3px rgba(0,0,0,.55)', fontFamily: 'Vazirmatn, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 7 }}
+              title={num ? `${num} · ${name}` : name}
             >
-              {name}
+              {num && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', borderRadius: 999, background: '#fff', color: accent, fontWeight: 900, fontSize: 13, boxShadow: '0 1px 4px rgba(0,0,0,.4)' }}>{num}</span>
+              )}
+              <span>{name}</span>
             </button>
           </Html>
         </group>

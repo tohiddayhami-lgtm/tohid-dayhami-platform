@@ -5,7 +5,8 @@ import type { MutableRefObject } from 'react';
 // Keeping ONE authority prevents the "camera fighting itself" bug when several controllers mount.
 export interface ControlState {
   keys: { forward: boolean; back: boolean; left: boolean; right: boolean; up: boolean; down: boolean };
-  joy: { x: number; y: number };       // normalized [-1,1] from the mobile joystick
+  joy: { x: number; y: number };       // normalized [-1,1] from the mobile MOVE joystick
+  look: { x: number; y: number };      // normalized [-1,1] from the mobile LOOK joystick (continuous turn)
   yawDelta: number;                    // accumulated look deltas (radians) applied & zeroed per frame
   pitchDelta: number;
   run: boolean;
@@ -14,6 +15,7 @@ export interface ControlState {
 export const makeControlState = (): ControlState => ({
   keys: { forward: false, back: false, left: false, right: false, up: false, down: false },
   joy: { x: 0, y: 0 },
+  look: { x: 0, y: 0 },
   yawDelta: 0,
   pitchDelta: 0,
   run: false,
