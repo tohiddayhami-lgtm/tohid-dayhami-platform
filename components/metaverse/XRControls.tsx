@@ -6,8 +6,18 @@ export type ExpoXRStore = ReturnType<typeof createXRStore>;
 
 // In-canvas WebXR rig: the movable origin (driven by controller thumbstick locomotion) plus
 // teleport (the parent mutates originRef.current.position from the floor's TeleportTarget).
+//
+// Tuned for a Meta Quest 3 merchant walking an exhibition hall:
+//  • Left stick → brisk, head-relative glide (3 m/s vs. the slow ~1 m/s default) so crossing the
+//    hall and approaching booths feels natural.
+//  • Right stick → comfortable 30° snap-turn (with a dead-zone) — responsive for looking around
+//    booth-to-booth while minimising motion sickness vs. smooth spinning.
 export const VrRig: React.FC<{ originRef: React.RefObject<THREE.Group | null>; spawn: [number, number, number] }> = ({ originRef, spawn }) => {
-  useXRControllerLocomotion(originRef);
+  useXRControllerLocomotion(
+    originRef,
+    { speed: 3 },
+    { type: 'snap', degrees: 30, deadZone: 0.5 },
+  );
   return <XROrigin ref={originRef} position={spawn} />;
 };
 
