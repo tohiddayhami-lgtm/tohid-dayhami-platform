@@ -32,8 +32,8 @@ const ComfortVignette: React.FC<{ originRef: React.RefObject<THREE.Group | null>
       if (have.current) { const d = o.position.distanceTo(last.current); speed = d > 1.2 ? 0 : d / Math.max(dt, 1e-3); }
       last.current.copy(o.position); have.current = true;
     }
-    // Ramp opacity from 0 (≤0.6 m/s) to 0.85 (≥2.2 m/s); ease toward the target so it never snaps.
-    const target = THREE.MathUtils.clamp((speed - 0.6) / 1.6, 0, 1) * 0.85;
+    // Ramp opacity from 0 (≤0.6 m/s) to a gentle 0.5 (≥2.2 m/s); ease toward the target so it never snaps.
+    const target = THREE.MathUtils.clamp((speed - 0.6) / 1.6, 0, 1) * 0.5;
     smooth.current += (target - smooth.current) * Math.min(1, dt * 8);
     mat.opacity = smooth.current;
     mesh.visible = smooth.current > 0.01;
@@ -50,8 +50,8 @@ const ComfortVignette: React.FC<{ originRef: React.RefObject<THREE.Group | null>
 
   return (
     <mesh ref={meshRef} renderOrder={999} frustumCulled={false} visible={false}>
-      {/* clear hole over the central ~70° of view, opaque black out to the periphery */}
-      <ringGeometry args={[0.42, 3, 48]} />
+      {/* clear hole over the wide central ~85° of view, soft black only at the far periphery */}
+      <ringGeometry args={[0.55, 3, 48]} />
       <meshBasicMaterial ref={matRef} color="#000000" transparent opacity={0} depthTest={false} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
     </mesh>
   );

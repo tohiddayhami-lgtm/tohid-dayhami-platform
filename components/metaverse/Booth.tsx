@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -74,7 +74,7 @@ const CtrlBtn: React.FC<{ x: number; size: number; glyph: string; onClick: (e: T
 // In-world transport controls overlaid on the bottom of a wall video: rewind/forward 10s,
 // play/pause, a scrub bar (click anywhere to seek), and mute. All raycast-clickable, so they
 // work both on desktop and with a VR controller pointer.
-const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: number }> = ({ video, width, height }) => {
+const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: number; onActivity: () => void }> = ({ video, width, height, onActivity }) => {
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(true);
   const fillRef = useRef<THREE.Mesh>(null);
@@ -102,10 +102,10 @@ const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: 
     if (headRef.current) headRef.current.position.x = trackL + trackW * f;
   });
 
-  const toggle = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (video.paused) video.play().catch(() => {}); else video.pause(); setPaused(video.paused); };
-  const skip = (s: number) => (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const d = video.duration || 0; video.currentTime = Math.min(d ? d - 0.1 : 1e9, Math.max(0, (video.currentTime || 0) + s)); };
-  const toggleMute = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); video.muted = !video.muted; setMuted(video.muted); };
-  const seek = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const d = video.duration || 0; if (d && e.uv) video.currentTime = Math.min(d - 0.1, Math.max(0, e.uv.x * d)); };
+  const toggle = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onActivity(); if (video.paused) video.play().catch(() => {}); else video.pause(); setPaused(video.paused); };
+  const skip = (s: number) => (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onActivity(); const d = video.duration || 0; video.currentTime = Math.min(d ? d - 0.1 : 1e9, Math.max(0, (video.currentTime || 0) + s)); };
+  const toggleMute = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onActivity(); video.muted = !video.muted; setMuted(video.muted); };
+  const seek = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onActivity(); const d = video.duration || 0; if (d && e.uv) video.currentTime = Math.min(d - 0.1, Math.max(0, e.uv.x * d)); };
 
   return (
     <group position={[0, by, Z]}>
@@ -151,15 +151,24 @@ const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: 
 const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const tex = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'anonymous', playsInline: true } as any);
   const video = tex.image as HTMLVideoElement;
-  // Tapping the picture itself toggles play/pause (handy in VR); the bar below scrubs/seeks.
-  const togglePlay = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (video.paused) video.play().catch(() => {}); else video.pause(); };
+  // The controls auto-hide a few seconds after the last interaction so they don't sit over the
+  // video's subtitles; tapping the picture brings them back.
+  const [show, setShow] = useState(true);
+  const timer = useRef<number | undefined>(undefined);
+  const reveal = () => {
+    setShow(true);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setShow(false), 3500);
+  };
+  useEffect(() => { reveal(); return () => { if (timer.current) window.clearTimeout(timer.current); }; }, []);
+  const onPic = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); reveal(); };
   return (
     <group position={position} rotation={rotation}>
-      <mesh onClick={togglePlay}>
+      <mesh onClick={onPic}>
         <planeGeometry args={[width, height]} />
         <meshBasicMaterial map={tex as THREE.Texture} toneMapped={false} />
       </mesh>
-      <VideoControls video={video} width={width} height={height} />
+      {show && <VideoControls video={video} width={width} height={height} onActivity={reveal} />}
     </group>
   );
 };
