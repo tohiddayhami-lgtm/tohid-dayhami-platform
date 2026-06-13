@@ -110,6 +110,17 @@ export const screenEmbed = (url: string): { kind: 'iframe' | 'video'; src: strin
 export const isVideoUrl = (url?: string): boolean =>
   !!url && (!!ytId(url) || !!vimeoId(url) || /\.(mp4|webm|ogg)(\?.*)?$/i.test(url));
 
+// Is this a direct video FILE we can texture onto a 3D plane (true in-world playback)?
+// YouTube/Vimeo are NOT files — they can only live in an iframe (→ click-to-play modal).
+export const isVideoFile = (url?: string): boolean => !!url && /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
+
+// A still poster image for a video link, used as the clickable thumbnail on a booth screen.
+// YouTube exposes CORS-friendly thumbnails; other hosts have none → caller shows a dark poster.
+export const videoPoster = (url?: string): string | null => {
+  const id = url ? ytId(url) : null;
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+};
+
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
 // accent color, logo, and panels (cover image inside-back, first product video for the LCD).
 export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<MetaverseBooth> => {
