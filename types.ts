@@ -1000,6 +1000,26 @@ export interface AnalyticsEvent {
   referrer?: string;
 }
 
+// Per-Meta-Shop visitor analytics event (a visit, a product click, or an add-to-cart).
+// Stored in the `metaShopEvents` collection; powers the per-shop visit report.
+export interface MetaShopEvent {
+  id: string;
+  timestamp: string;
+  shopId: string;
+  shopName?: string;
+  type: 'visit' | 'product_click' | 'add_to_cart';
+  productId?: string;
+  productName?: string;
+  productGroup?: string;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  device?: 'mobile' | 'tablet' | 'desktop';
+  sessionId?: string;
+  referrer?: string;
+  via?: 'shop' | 'gsite'; // direct shop page vs embedded Google Site / external site
+}
+
 export interface CustomerAccount {
   id: string;
   fullName: string;

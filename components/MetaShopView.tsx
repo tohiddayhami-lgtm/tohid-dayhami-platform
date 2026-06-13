@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
+import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
 
 interface OrderData {
@@ -52,6 +53,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
   useEffect(() => { setGalIdx(0); }, [detail]);
+  // Record a visit (once per session per shop) for the shop's visit report.
+  useEffect(() => { logMetaShopEvent('visit', { id: shop.id, name: shop.name }, { via: embed ? 'gsite' : 'shop' }); }, [shop.id]);
 
   // Resolve a product video URL into an embeddable form
   const videoEmbed = (url?: string): { type: 'iframe' | 'video' | 'link'; src: string } | null => {
@@ -297,7 +300,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
   const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
 
-  const addToCart = (p: MetaShopProduct) => { const optId = selOptId(p); setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } })); };
+  const addToCart = (p: MetaShopProduct) => {
+    const optId = selOptId(p);
+    setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } }));
+    logMetaShopEvent('add_to_cart', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
+  };
+  // Open a product's detail modal and record the click for the shop's visit report.
+  const openDetail = (p: MetaShopProduct) => {
+    setDetail(p);
+    logMetaShopEvent('product_click', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
+  };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
 
   const submit = async () => {
@@ -419,7 +431,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''}`} key={p.id}>
-        <div className="ms-card-img" onClick={() => setDetail(p)}>
+        <div className="ms-card-img" onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
           {p.group && <span className="ms-group-badge">{p.group}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
@@ -430,7 +442,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           </div>
         </div>
         <div className="ms-card-body">
-          <h3 className="ms-pname" onClick={() => setDetail(p)}>{pName(p)}</h3>
+          <h3 className="ms-pname" onClick={() => openDetail(p)}>{pName(p)}</h3>
           <div className="ms-badges">
             {p.sku && <span className="ms-sku">{p.sku}</span>}
             {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}

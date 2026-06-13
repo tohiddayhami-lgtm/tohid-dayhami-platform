@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress } from '../services/firebaseService';
+import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaBazaar } from '../types';
@@ -126,9 +126,13 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars'>('shops');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
+  const [analyticsShopId, setAnalyticsShopId] = useState<string | null>(null);
+  const [analyticsEvents, setAnalyticsEvents] = useState<MetaShopEvent[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [embedShop, setEmbedShop] = useState<MetaShop | null>(null); // Google Site / iframe embed export modal
   const [embedHeight, setEmbedHeight] = useState(1200);
@@ -146,12 +150,40 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
 
+  const openAnalytics = async (shop: MetaShop) => {
+    setAnalyticsShopId(shop.id); setAnalyticsEvents([]); setAnalyticsLoading(true); setMode('analytics');
+    try { setAnalyticsEvents(await fetchMetaShopEvents(shop.id)); }
+    finally { setAnalyticsLoading(false); }
+  };
+
   const t = {
     title: T ? 'متاشاپ' : 'Meta Shop', subtitle: T ? 'فروشگاه‌های آنلاین شما' : 'Your online shops',
     newShop: T ? 'فروشگاه جدید' : 'New Shop', importJson: T ? 'ساخت از JSON' : 'Import from JSON',
     empty: T ? 'هنوز فروشگاهی نساخته‌اید.' : 'No shops yet.',
     edit: T ? 'ویرایش' : 'Edit', del: T ? 'حذف' : 'Delete', open: T ? 'باز کردن' : 'Open', copy: T ? 'کپی لینک' : 'Copy link', copied: T ? 'کپی شد ✓' : 'Copied ✓',
     orders: T ? 'سفارش‌ها' : 'Orders', active: T ? 'فعال' : 'Active', inactive: T ? 'غیرفعال' : 'Inactive',
+    analytics: T ? 'گزارش بازدید' : 'Visit report',
+    anTitle: T ? 'گزارش بازدید' : 'Visit report',
+    anLoading: T ? 'در حال بارگذاری گزارش…' : 'Loading report…',
+    anEmpty: T ? 'هنوز بازدیدی ثبت نشده است. به‌محض بازدید مشتری‌ها از لینک فروشگاه، آمار اینجا نمایش داده می‌شود.' : 'No visits recorded yet. Once customers open the shop link, stats will appear here.',
+    anEmptyRange: T ? 'در این بازهٔ زمانی بازدیدی ثبت نشده است. بازهٔ دیگری را انتخاب کنید.' : 'No visits in this time range. Try another range.',
+    anVisits: T ? 'بازدید' : 'Visits',
+    anVisitors: T ? 'بازدیدکننده یکتا' : 'Unique visitors',
+    anClicks: T ? 'کلیک روی محصول' : 'Product clicks',
+    anAddCart: T ? 'افزودن به سبد' : 'Add to cart',
+    anConv: T ? 'نرخ تبدیل به سبد' : 'Cart conversion',
+    anCountries: T ? 'کشورهای بازدیدکننده' : 'Visitor countries',
+    anTopProducts: T ? 'پربازدیدترین محصولات (کلیک)' : 'Most-clicked products',
+    anTopCart: T ? 'بیشترین افزوده‌شده به سبد' : 'Most added to cart',
+    anDevices: T ? 'دستگاه' : 'Devices',
+    anReferrers: T ? 'منبع ورود' : 'Traffic sources',
+    anTrend: T ? 'بازدید ۱۴ روز اخیر' : 'Visits — last 14 days',
+    anCities: T ? 'شهرها' : 'Cities',
+    anMobile: T ? 'موبایل' : 'Mobile', anTablet: T ? 'تبلت' : 'Tablet', anDesktop: T ? 'دسکتاپ' : 'Desktop',
+    anDirect: T ? 'مستقیم' : 'Direct', anUnknown: T ? 'نامشخص' : 'Unknown', anNone: T ? '—' : '—',
+    anRefresh: T ? 'به‌روزرسانی' : 'Refresh',
+    anVia: T ? 'از گوگل‌سایت' : 'via Google Site',
+    anToday: T ? 'امروز' : 'Today', anWeek: T ? '۷ روز' : '7 days', anMonth: T ? '۳۰ روز' : '30 days', anAll: T ? 'کل' : 'All',
     downloadJson: T ? 'دانلود فایل JSON این فروشگاه' : 'Download this shop as JSON', updateJson: T ? 'به‌روزرسانی از فایل JSON' : 'Update from JSON file',
     dirT: T ? 'دسته‌بندی در بازارچه (لینک همه فروشگاه‌ها)' : 'Bazaar category (all-shops page)',
     dirHint: T ? 'این فروشگاه در صفحه‌ی «همه فروشگاه‌ها» زیر این دسته‌ها نمایش داده می‌شود. دسته‌ها دوزبانه‌اند (فارسی و انگلیسی).' : 'This shop appears under these categories on the all-shops page. Categories are bilingual (FA & EN).',
@@ -542,6 +574,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                       <button onClick={() => { setEmbedShop(s); }} title={t.gsiteTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
                       <a href={catalogUrl(s)} target="_blank" rel="noreferrer" title={t.catalogTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1">📄 {t.catalog}</a>
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
+                      <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
                       {!readonly && <button onClick={() => startEdit(s)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
@@ -596,6 +629,140 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ════════════ VISIT ANALYTICS REPORT ════════════
+  if (mode === 'analytics') {
+    const shop = metaShops.find(s => s.id === analyticsShopId);
+    // Restrict to the selected time range (computed against each event's timestamp).
+    const rangeMs: Record<typeof analyticsRange, number> = { today: 86400000, week: 7 * 86400000, month: 30 * 86400000, all: Infinity };
+    const cutoff = Date.now() - rangeMs[analyticsRange];
+    const ev = analyticsEvents.filter(e => new Date(e.timestamp).getTime() >= cutoff);
+    const hasAny = analyticsEvents.length > 0; // events exist overall, even if none in this range
+    const visits = ev.filter(e => e.type === 'visit');
+    const clicks = ev.filter(e => e.type === 'product_click');
+    const carts = ev.filter(e => e.type === 'add_to_cart');
+    const sidSet = (arr: MetaShopEvent[]) => new Set(arr.map(e => e.sessionId).filter(Boolean));
+    const visitSids = sidSet(visits), cartSids = sidSet(carts);
+    const conv = visitSids.size ? Math.round((cartSids.size / visitSids.size) * 100) : 0;
+    const viaGsite = visits.filter(v => v.via === 'gsite').length;
+
+    // ISO country code → flag emoji
+    const flag = (cc?: string) => (cc && /^[A-Za-z]{2}$/.test(cc))
+      ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : '🌐';
+
+    // Country tally (with code, for the flag)
+    const countryAgg = (() => {
+      const m = new Map<string, { count: number; code: string }>();
+      for (const e of visits) { const c = e.country; if (!c || c === 'Unknown') continue; const ex = m.get(c) || { count: 0, code: e.countryCode || 'XX' }; ex.count++; m.set(c, ex); }
+      return [...m.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    })();
+    const maxCountry = countryAgg[0]?.[1].count || 1;
+
+    const tally = (arr: MetaShopEvent[], keyFn: (e: MetaShopEvent) => string | undefined, n = 8) => {
+      const m = new Map<string, number>();
+      for (const e of arr) { const k = keyFn(e); if (!k) continue; m.set(k, (m.get(k) || 0) + 1); }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+    };
+    const cityAgg = tally(visits, e => (e.city && e.city.trim()) ? e.city : undefined, 6);
+    const clickAgg = tally(clicks, e => e.productName || e.productId, 8);
+    const cartAgg = tally(carts, e => e.productName || e.productId, 8);
+    const refAgg = tally(visits, e => e.referrer || 'direct', 6);
+    const devCount = { mobile: 0, tablet: 0, desktop: 0 } as Record<string, number>;
+    for (const e of visits) if (e.device) devCount[e.device] = (devCount[e.device] || 0) + 1;
+    const devTotal = visits.length || 1;
+
+    // 14-day visit trend — always the last 14 days (independent of the selected range)
+    const dayCount = new Map<string, number>();
+    for (const e of analyticsEvents) { if (e.type !== 'visit') continue; const d = e.timestamp.slice(0, 10); dayCount.set(d, (dayCount.get(d) || 0) + 1); }
+    const trend = Array.from({ length: 14 }, (_, i) => {
+      const dt = new Date(Date.now() - (13 - i) * 86400000);
+      const key = dt.toISOString().slice(0, 10);
+      return { key, label: dt.toLocaleDateString(T ? 'fa-IR' : 'en-US', { month: 'numeric', day: 'numeric' }), count: dayCount.get(key) || 0 };
+    });
+    const maxTrend = Math.max(1, ...trend.map(d => d.count));
+
+    const barRow = (label: React.ReactNode, value: number, max: number, color = 'bg-sky-500') => (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600 w-32 shrink-0 truncate" title={typeof label === 'string' ? label : undefined}>{label}</span>
+        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${color} rounded-full`} style={{ width: `${Math.max(4, (value / max) * 100)}%` }} /></div>
+        <span className="text-xs font-bold text-gray-700 w-8 text-end">{value.toLocaleString()}</span>
+      </div>
+    );
+    const statCard = (label: string, value: React.ReactNode, color: string) => (
+      <div className={card + ' p-4 flex flex-col gap-1'}><span className="text-[11px] text-gray-400">{label}</span><span className={`text-2xl font-extrabold ${color}`}>{value}</span></div>
+    );
+    const panel = (title: string, body: React.ReactNode, empty?: boolean) => (
+      <div className={card + ' p-4'}><h4 className="text-sm font-bold text-gray-700 mb-3">{title}</h4>{empty ? <p className="text-xs text-gray-400 py-3 text-center">{t.anNone}</p> : body}</div>
+    );
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <button onClick={() => shop && openAnalytics(shop)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">↻ {t.anRefresh}</button>
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-lg font-bold text-gray-800">{t.anTitle} — {shop?.name}</h3>
+          <div className="inline-flex bg-gray-100 rounded-lg p-1">
+            {([['today', t.anToday], ['week', t.anWeek], ['month', t.anMonth], ['all', t.anAll]] as const).map(([r, label]) => (
+              <button key={r} onClick={() => setAnalyticsRange(r)} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${analyticsRange === r ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {analyticsLoading ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.anLoading}</div>
+        ) : ev.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{hasAny ? t.anEmptyRange : t.anEmpty}</div>
+        ) : (
+          <div className="space-y-4">
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {statCard(t.anVisits, visits.length.toLocaleString(), 'text-gray-900')}
+              {statCard(t.anClicks, clicks.length.toLocaleString(), 'text-sky-600')}
+              {statCard(t.anAddCart, carts.length.toLocaleString(), 'text-emerald-600')}
+              {statCard(t.anConv, `${conv}%`, 'text-indigo-600')}
+            </div>
+            {viaGsite > 0 && <p className="text-[11px] text-indigo-500">🌐 {viaGsite.toLocaleString()} {t.anVisits} {t.anVia}</p>}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Countries */}
+              {panel(t.anCountries, <div className="space-y-2">{countryAgg.map(([c, info]) => barRow(<span>{flag(info.code)} {c}</span>, info.count, maxCountry))}</div>, countryAgg.length === 0)}
+              {/* Top clicked products */}
+              {panel(t.anTopProducts, <div className="space-y-2">{clickAgg.map(([n, v]) => barRow(n, v, clickAgg[0]?.[1] || 1))}</div>, clickAgg.length === 0)}
+              {/* Top cart products */}
+              {panel(t.anTopCart, <div className="space-y-2">{cartAgg.map(([n, v]) => barRow(n, v, cartAgg[0]?.[1] || 1, 'bg-emerald-500'))}</div>, cartAgg.length === 0)}
+              {/* Devices */}
+              {panel(t.anDevices, <div className="space-y-2">
+                {barRow(`📱 ${t.anMobile}`, devCount.mobile, devTotal, 'bg-violet-500')}
+                {barRow(`💻 ${t.anDesktop}`, devCount.desktop, devTotal, 'bg-violet-500')}
+                {barRow(`📟 ${t.anTablet}`, devCount.tablet, devTotal, 'bg-violet-500')}
+              </div>)}
+              {/* Cities */}
+              {panel(t.anCities, <div className="space-y-2">{cityAgg.map(([n, v]) => barRow(n, v, cityAgg[0]?.[1] || 1, 'bg-amber-500'))}</div>, cityAgg.length === 0)}
+              {/* Referrers */}
+              {panel(t.anReferrers, <div className="space-y-2">{refAgg.map(([n, v]) => barRow(n === 'direct' ? t.anDirect : n, v, refAgg[0]?.[1] || 1, 'bg-rose-500'))}</div>, refAgg.length === 0)}
+            </div>
+
+            {/* 14-day trend */}
+            <div className={card + ' p-4'}>
+              <h4 className="text-sm font-bold text-gray-700 mb-3">{t.anTrend}</h4>
+              <div className="flex items-end gap-1.5 h-28">
+                {trend.map(d => (
+                  <div key={d.key} className="flex-1 flex flex-col items-center gap-1 group">
+                    <div className="w-full flex items-end justify-center flex-1">
+                      <div className="w-full bg-sky-500/80 group-hover:bg-sky-600 rounded-t transition-colors" style={{ height: `${(d.count / maxTrend) * 100}%`, minHeight: d.count ? 4 : 0 }} title={`${d.count}`} />
+                    </div>
+                    <span className="text-[9px] text-gray-400" dir="ltr">{d.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

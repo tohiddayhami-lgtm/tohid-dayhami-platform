@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -1122,6 +1122,58 @@ export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => voi
         (snap) => callback(snap.docs.map(d => d.data() as AnalyticsEvent)),
         () => {}
     );
+};
+
+// ── Meta Shop visitor analytics ────────────────────────────────────────────
+// Public, fire-and-forget. Records a visit / product-click / add-to-cart event for one shop.
+// Reuses the same geo-IP, session and device helpers as the site-wide analytics, and the
+// Iran proxy when active. Visits are de-duplicated to once per session per shop.
+export const logMetaShopEvent = async (
+    type: MetaShopEvent['type'],
+    shop: { id: string; name?: string },
+    opts: { productId?: string; productName?: string; productGroup?: string; via?: 'shop' | 'gsite' } = {}
+) => {
+    try {
+        if (!shop?.id) return;
+        // One "visit" per session per shop — product clicks / add-to-cart are always logged.
+        if (type === 'visit') {
+            const key = `_msvisit_${shop.id}`;
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+        }
+        const geo = await getCountryInfo();
+        const event: MetaShopEvent = {
+            id: `mse_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            shopId: shop.id,
+            shopName: shop.name || '',
+            type,
+            productId: opts.productId,
+            productName: opts.productName,
+            productGroup: opts.productGroup,
+            country: geo.country,
+            countryCode: geo.countryCode,
+            city: geo.city,
+            device: getDevice(),
+            sessionId: getSessionId(),
+            referrer: document.referrer ? new URL(document.referrer).hostname : 'direct',
+            via: opts.via,
+        };
+        const proxy = await checkProxyMode();
+        if (proxy) await proxyWrite('metaShopEvents', event.id, sanitizeData(event));
+        else await setDoc(doc(db, 'metaShopEvents', event.id), sanitizeData(event));
+    } catch {}
+};
+
+// Admin, on-demand. Loads all visitor events for one shop (single-field equality query →
+// no composite index needed; sorted newest-first client-side).
+export const fetchMetaShopEvents = async (shopId: string): Promise<MetaShopEvent[]> => {
+    try {
+        const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(10000));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaShopEvent)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch { return []; }
 };
 
 // ── Notification Logs ──
