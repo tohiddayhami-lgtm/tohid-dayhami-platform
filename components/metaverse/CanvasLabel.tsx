@@ -58,8 +58,11 @@ export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, ro
 
   useEffect(() => () => texture.dispose(), [texture]);
 
+  // Stop propagation so a click on this label doesn't ALSO trigger the mesh sitting behind it
+  // (e.g. an arrow button's backing plane) — that double-fire made the PDF skip pages / open 2 tabs.
+  const handleClick = onClick ? (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(e); } : undefined;
   return (
-    <mesh position={position} rotation={rotation} onClick={onClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+    <mesh position={position} rotation={rotation} onClick={handleClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <planeGeometry args={[width, height]} />
       <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} />
     </mesh>
