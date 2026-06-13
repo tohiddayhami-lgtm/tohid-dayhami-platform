@@ -802,6 +802,14 @@ export const lookupMetaShopOrders = async (phone: string): Promise<MetaShopOrder
         return snap.docs.map(d => d.data() as MetaShopOrder).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch { return []; }
 };
+// Customer order lookup by tracking code (public, no auth)
+export const lookupMetaShopOrdersByTracking = async (trackingCode: string): Promise<MetaShopOrder[]> => {
+    try {
+        const q = query(collection(db, "metaShopOrders"), where("trackingCode", "==", trackingCode));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaShopOrder).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch { return []; }
+};
 
 // ── Meta Bazaars (curated multi-level shop directories) ──
 export const saveMetaBazaarToCloud = async (bazaar: MetaBazaar) => {

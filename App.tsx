@@ -23,7 +23,7 @@ import {
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug,
-  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders,
+  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
@@ -1270,8 +1270,19 @@ const App: React.FC = () => {
     return trackingCode;
   };
 
-  const handleMetaShopLookup = async (phone: string): Promise<MetaShopOrder[]> => {
-    return lookupMetaShopOrders(normalizePhone(phone));
+  const handleMetaShopLookup = async (criteria: { phone?: string; trackingCode?: string; name?: string }): Promise<MetaShopOrder[]> => {
+    const code = (criteria.trackingCode || '').trim().toUpperCase();
+    const ph = normalizePhone(criteria.phone || '');
+    const nm = (criteria.name || '').trim().toLowerCase();
+    // Primary lookup: tracking code if given, otherwise phone. (Name alone is too broad to query.)
+    let results: MetaShopOrder[] = [];
+    if (code) results = await lookupMetaShopOrdersByTracking(code);
+    else if (ph) results = await lookupMetaShopOrders(ph);
+    else return [];
+    // Refine with any other fields the customer supplied, so the three together act as a filter.
+    if (ph) results = results.filter(o => normalizePhone(o.phone) === ph);
+    if (nm) results = results.filter(o => (o.customerName || '').trim().toLowerCase().includes(nm));
+    return results;
   };
 
   const handleCustomerAddComment = async (ticketId: string, commentText: string, files?: AttachedFile[]) => {

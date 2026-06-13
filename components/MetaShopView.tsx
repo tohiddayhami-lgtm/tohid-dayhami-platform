@@ -21,7 +21,7 @@ interface Props {
   shop: MetaShop;
   lang: Language;
   onSubmitOrder: (data: OrderData) => Promise<string>; // returns tracking code
-  onLookup?: (phone: string) => Promise<MetaShopOrder[]>;
+  onLookup?: (criteria: { phone?: string; trackingCode?: string; name?: string }) => Promise<MetaShopOrder[]>;
   embed?: boolean; // rendered inside an iframe (Google Sites / external site embed) — slightly compacts chrome
 }
 
@@ -69,7 +69,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [tracking, setTracking] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupCode, setLookupCode] = useState('');
   const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupName, setLookupName] = useState('');
+  const [lookupErr, setLookupErr] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupResults, setLookupResults] = useState<MetaShopOrder[] | null>(null);
   const [copied, setCopied] = useState(false);
   // Supported languages (defaults to FA + EN). Visitor can switch; default from shop.defaultLang.
@@ -101,7 +105,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
       thanksTitle: 'Order received!', thanksDesc: 'Your order has been received. Keep your tracking code below — we will contact you shortly.',
       trackingCode: 'Order tracking code', copy: 'Copy', copied: 'Copied', close: 'Close', trackMy: 'Track my orders', trackBtn: 'View',
-      noOrders: 'No orders found for this number.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
+      trackCodePh: 'Tracking code', trackHint: 'Search by tracking code, or by phone — add your name to narrow it down.', trackNeed: 'Enter a tracking code or phone number.',
+      noOrders: 'No orders found. Check your tracking code, phone or name.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
       perPack: '/ pack', review: 'Continue to invoice preview', invoiceTitle: 'Invoice preview', editCart: 'Edit cart',
       featured: 'Featured', featuredTitle: 'Featured products', negotiable: 'Negotiable — request a quote',
       colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
@@ -118,7 +123,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
       thanksTitle: 'سفارش شما ثبت شد!', thanksDesc: 'سفارش شما با موفقیت ثبت شد. کد رهگیری زیر را نزد خود نگه دارید؛ به‌زودی با شما تماس می‌گیریم.',
       trackingCode: 'کد رهگیری سفارش', copy: 'کپی', copied: 'کپی شد', close: 'بستن', trackMy: 'پیگیری سفارش‌های من', trackBtn: 'مشاهده',
-      noOrders: 'سفارشی با این شماره یافت نشد.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
+      trackCodePh: 'شماره پیگیری', trackHint: 'با شماره پیگیری، یا با شماره موبایل جستجو کنید — برای دقیق‌تر شدن نام‌تان را هم وارد کنید.', trackNeed: 'شماره پیگیری یا شماره موبایل را وارد کنید.',
+      noOrders: 'سفارشی یافت نشد. شماره پیگیری، موبایل یا نام را بررسی کنید.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
       perPack: '/ بسته', review: 'ادامه و پیش‌نمایش فاکتور', invoiceTitle: 'پیش‌نمایش فاکتور', editCart: 'ویرایش سبد',
       featured: 'ویژه', featuredTitle: 'محصولات ویژه', negotiable: 'قابل مذاکره — درخواست قیمت',
       colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
@@ -135,7 +141,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       submit: '提交订单', submitting: '提交中...', incomplete: '请填写姓名和电话。', err: '提交失败，请重试。',
       thanksTitle: '订单已收到！', thanksDesc: '您的订单已收到。请保存下方的追踪码，我们会尽快与您联系。',
       trackingCode: '订单追踪码', copy: '复制', copied: '已复制', close: '关闭', trackMy: '查询我的订单', trackBtn: '查看',
-      noOrders: '未找到该号码的订单。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
+      trackCodePh: '追踪码', trackHint: '可用追踪码或手机号查询 — 填写姓名可缩小范围。', trackNeed: '请输入追踪码或手机号。',
+      noOrders: '未找到订单。请检查追踪码、手机号或姓名。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
       perPack: '/ 包', review: '继续并预览发票', invoiceTitle: '发票预览', editCart: '编辑购物车',
       featured: '精选', featuredTitle: '精选产品', negotiable: '价格面议 — 索取报价',
       colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
@@ -320,8 +327,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   const doLookup = async () => {
-    if (!onLookup || !lookupPhone.trim()) return;
-    setLookupResults(await onLookup(lookupPhone.trim()));
+    if (!onLookup) return;
+    const code = lookupCode.trim(), phone = lookupPhone.trim(), name = lookupName.trim();
+    setLookupErr('');
+    // Need at least a tracking code or a phone number to look up an order.
+    if (!code && !phone) { setLookupErr(t.trackNeed); setLookupResults(null); return; }
+    setLookupBusy(true);
+    try { setLookupResults(await onLookup({ trackingCode: code || undefined, phone: phone || undefined, name: name || undefined })); }
+    finally { setLookupBusy(false); }
   };
 
   const statusLabel = (s: MetaShopOrder['status']) => s === 'done' ? t.statusDone : s === 'in_progress' ? t.statusProg : s === 'cancelled' ? t.statusCanc : t.statusNew;
@@ -532,10 +545,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <button onClick={() => setLookupOpen(v => !v)}>{t.trackMy}</button>
             {lookupOpen && (
               <div className="ms-track-box">
-                <div className="ms-track-row">
-                  <input value={lookupPhone} onChange={e => setLookupPhone(e.target.value)} placeholder={t.phone} dir="ltr" />
-                  <button onClick={doLookup}>{t.trackBtn}</button>
+                <p className="ms-track-hint">{t.trackHint}</p>
+                <div className="ms-track-fields">
+                  <input value={lookupCode} onChange={e => setLookupCode(e.target.value)} placeholder={t.trackCodePh} dir="ltr" onKeyDown={e => { if (e.key === 'Enter') doLookup(); }} />
+                  <input value={lookupPhone} onChange={e => setLookupPhone(e.target.value)} placeholder={t.phone} dir="ltr" onKeyDown={e => { if (e.key === 'Enter') doLookup(); }} />
+                  <input value={lookupName} onChange={e => setLookupName(e.target.value)} placeholder={t.name} onKeyDown={e => { if (e.key === 'Enter') doLookup(); }} />
+                  <button onClick={doLookup} disabled={lookupBusy}>{lookupBusy ? t.submitting : t.trackBtn}</button>
                 </div>
+                {lookupErr && <p className="ms-track-empty">{lookupErr}</p>}
                 {lookupResults && (lookupResults.length === 0
                   ? <p className="ms-track-empty">{t.noOrders}</p>
                   : <div className="ms-track-list">{lookupResults.map(o => (
@@ -1081,6 +1098,11 @@ const MS_CSS = `
 .ms-track-row { display:flex; gap:8px; }
 .ms-track-row input { flex:1; padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; }
 .ms-track-row button { padding:9px 18px; background:var(--ms-primary); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+.ms-track-hint { color:#94a3b8; font-size:12px; margin:0 0 10px; line-height:1.6; text-align:start; }
+.ms-track-fields { display:flex; flex-wrap:wrap; gap:8px; }
+.ms-track-fields input { flex:1 1 140px; min-width:0; padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:13px; outline:none; }
+.ms-track-fields button { flex:1 1 100%; padding:9px 18px; background:var(--ms-primary); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; }
+.ms-track-fields button:disabled { opacity:.6; cursor:default; }
 .ms-track-empty { color:#94a3b8; font-size:13px; padding:14px; }
 .ms-track-list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
 .ms-track-item { border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; text-align:start; font-size:13px; }
