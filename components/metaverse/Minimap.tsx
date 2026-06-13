@@ -31,7 +31,7 @@ export const Minimap: React.FC<{ expo: MetaverseExpo; poseRef: PlayerPoseRef }> 
   const headDeg = (pose.heading * 180) / Math.PI;
 
   return (
-    <div style={{ position: 'absolute', top: 14, insetInlineEnd: 14, width: size, height: size, borderRadius: 12, overflow: 'hidden', background: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(6px)', zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.3)' }}>
+    <div style={{ position: 'absolute', top: 64, insetInlineEnd: 14, width: size, height: size, borderRadius: 12, overflow: 'hidden', background: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.25)', backdropFilter: 'blur(6px)', zIndex: 40, boxShadow: '0 4px 16px rgba(0,0,0,.3)' }}>
       <svg width={size} height={size}>
         <rect x={pad} y={pad} width={size - 2 * pad} height={size - 2 * pad} fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.35)" rx={6} />
         {(expo.booths || []).map(b => (

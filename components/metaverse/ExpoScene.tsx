@@ -36,16 +36,16 @@ const Ceiling: React.FC<{ width: number; depth: number; height: number }> = ({ w
   const pw = (width / cols) * 0.5, pd = (depth / rows) * 0.5;
   return (
     <group>
-      {/* Ceiling slab */}
-      <mesh position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
+      {/* White, lightly-glossy exhibition ceiling slab */}
+      <mesh position={[0, height, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[width, depth]} />
-        <meshStandardMaterial color="#20242c" roughness={0.95} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#f5f7fa" roughness={0.45} metalness={0} side={THREE.DoubleSide} />
       </mesh>
-      {/* Glowing light panels just below the ceiling */}
+      {/* Soft recessed light panels (warm white, gentle glow — reads as ceiling fixtures) */}
       {panels.map((p, i) => (
-        <mesh key={i} position={[p.x, height - 0.06, p.z]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh key={i} position={[p.x, height - 0.05, p.z]} rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[pw, pd]} />
-          <meshStandardMaterial color="#ffffff" emissive={'#fef7e6'} emissiveIntensity={1.5} toneMapped={false} />
+          <meshStandardMaterial color="#ffffff" emissive={'#fff6e8'} emissiveIntensity={0.85} toneMapped={false} />
         </mesh>
       ))}
     </group>
