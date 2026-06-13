@@ -61,6 +61,20 @@ const PanelMedia: React.FC<MediaProps> = (props) =>
 // Rendered as a transformed HTML surface so any video source works in 3D space.
 const BoothScreen: React.FC<{ url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number] }> = ({ url, width, height, position, rotation }) => {
   const v = useMemo(() => screenEmbed(url), [url]);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+  // YouTube/Vimeo embedded in a CSS-3D-transformed iframe often refuse to autoplay (their player
+  // thinks it's "not visible"). Actively command playback a few times after mount to force it.
+  React.useEffect(() => {
+    if (v?.kind !== 'iframe') return;
+    const isVimeo = /vimeo\.com/.test(v.src);
+    const msg = isVimeo ? JSON.stringify({ method: 'play' }) : JSON.stringify({ event: 'command', func: 'playVideo', args: [] });
+    let n = 0;
+    const id = window.setInterval(() => {
+      try { iframeRef.current?.contentWindow?.postMessage(msg, '*'); } catch {}
+      if (++n > 10) window.clearInterval(id);
+    }, 800);
+    return () => window.clearInterval(id);
+  }, [v]);
   if (!v) return null;
   const PX_W = 900, PX_H = Math.round((PX_W * height) / width);
   const scale = width / PX_W;
@@ -79,14 +93,13 @@ const BoothScreen: React.FC<{ url: string; width: number; height: number; positi
       <CanvasLabel text="▶" width={width * 0.4} height={width * 0.4} position={[0, 0, 0.005]} color="#ffffff" />
       <Html
         transform
-        occlude
         position={[0, 0, 0.02]}
         scale={scale}
         zIndexRange={[12, 0]}
         style={{ width: PX_W, height: PX_H, background: '#000', overflow: 'hidden', borderRadius: 8, boxShadow: '0 0 24px rgba(80,140,255,.25)' }}
       >
         {v.kind === 'iframe' ? (
-          <iframe src={v.src} width={PX_W} height={PX_H} frameBorder={0} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen style={{ display: 'block', border: 0 }} title="booth-screen" />
+          <iframe ref={iframeRef} src={v.src} width={PX_W} height={PX_H} frameBorder={0} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen style={{ display: 'block', border: 0 }} title="booth-screen" />
         ) : (
           <video src={v.src} width={PX_W} height={PX_H} autoPlay muted loop playsInline style={{ display: 'block', objectFit: 'cover', width: PX_W, height: PX_H }} />
         )}
