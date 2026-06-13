@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Ticket, TicketStatus, ServiceOption, AttachedFile, AppConfig, InternalMessage } from '../types';
+import { Ticket, TicketStatus, ServiceOption, AttachedFile, AppConfig, InternalMessage, MetaShopOrder } from '../types';
 import { IconSearch, IconCheck, IconFile, IconActivity, IconCopy, IconUpload, IconTrash, IconSend, IconClock, IconMail, IconReply } from './Icons';
 import { Language } from '../App';
 import { uploadFileWithProgress, getTicketById } from '../services/firebaseService';
@@ -14,16 +14,18 @@ interface Props {
   onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<string | void>;
   lookupContactMessages?: (name: string, phone: string) => InternalMessage[];
   lookupContactByCode?: (code: string) => InternalMessage | null;
+  lookupShopOrder?: (trackingCode: string) => Promise<MetaShopOrder[]>; // look up a Meta Shop order by its tracking code (SHP-...)
   openContactTick?: number; // bumped by the parent to switch to the "Contact Us" tab
 }
 
-export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, lookupContactByCode, openContactTick }) => {
+export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, lookupContactByCode, lookupShopOrder, openContactTick }) => {
   const [tab, setTab] = useState<'track' | 'recover' | 'contact'>('track');
 
   // When the parent requests the Contact Us tab (e.g. from the header nav), switch to it
   useEffect(() => { if (openContactTick) setTab('contact'); }, [openContactTick]);
   const [searchId, setSearchId] = useState('');
   const [foundTicket, setFoundTicket] = useState<Ticket | null>(null);
+  const [foundOrder, setFoundOrder] = useState<MetaShopOrder | null>(null); // Meta Shop order found by tracking code
   const [trackError, setTrackError] = useState('');
   const [trackLoading, setTrackLoading] = useState(false);
   const [recoverName, setRecoverName] = useState('');
@@ -62,9 +64,12 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     fa: {
       trackTab: 'پیگیری با کد رهگیری', recoverTab: 'بازیابی کد رهگیری',
       trackTitle: 'پیگیری وضعیت درخواست',
-      trackDesc: 'کد رهگیری پرونده یا کد رهگیری مکاتبه (MK-...) را وارد کنید.',
-      placeholder: 'کد رهگیری — مثال: EXP-4829 یا MK-1234-AB7C', search: 'جستجو',
+      trackDesc: 'کد رهگیری پرونده، سفارش فروشگاه (SHP-...) یا مکاتبه (MK-...) را وارد کنید.',
+      placeholder: 'کد رهگیری — مثال: EXP-4829 یا SHP-1234-AB7C', search: 'جستجو',
       notFound: 'درخواستی با این کد یافت نشد.',
+      orderTitle: 'سفارش فروشگاه شما', orderShop: 'فروشگاه', orderDate: 'تاریخ سفارش', orderItemsT: 'اقلام سفارش', orderTotal: 'جمع کل',
+      orderNegotiable: 'قابل مذاکره',
+      orderStatus: { new: 'ثبت شد', in_progress: 'در حال انجام', done: 'انجام شد', cancelled: 'لغو شد' } as Record<string, string>,
       recoverTitle: 'بازیابی کد رهگیری',
       recoverDesc: 'نام و شماره موبایلی که هنگام ثبت درخواست وارد کردید را بنویسید.',
       namePlaceholder: 'نام و نام خانوادگی', phonePlaceholder: 'شماره موبایل — مثال: 09120000000',
@@ -97,16 +102,19 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       contactNoReply: 'هنوز پاسخی ثبت نشده است.',
       contactYou: 'شما',
       contactTracking: 'کد رهگیری مکاتبه:',
-      contactTrackHint: 'این کد را نگه دارید؛ از همین بخش «پیگیری پرونده» می‌توانید با وارد کردن آن، پاسخ‌های مکاتبه را ببینید.',
+      contactTrackHint: 'این کد را نگه دارید؛ از همین بخش «پیگیری درخواست» می‌توانید با وارد کردن آن، پاسخ‌های مکاتبه را ببینید.',
       trackContactTitle: 'مکاتبه شما',
       trackContactNotFound: 'مکاتبه‌ای با این کد رهگیری یافت نشد.',
     },
     en: {
       trackTab: 'Track by ID', recoverTab: 'Recover Tracking ID',
       trackTitle: 'Track Your Request',
-      trackDesc: 'Enter a case tracking ID or a correspondence code (MK-...).',
-      placeholder: 'Tracking ID — e.g. EXP-4829 or MK-1234-AB7C', search: 'Search',
+      trackDesc: 'Enter a case tracking ID, a shop order code (SHP-...) or a correspondence code (MK-...).',
+      placeholder: 'Tracking ID — e.g. EXP-4829 or SHP-1234-AB7C', search: 'Search',
       notFound: 'No application found with this ID.',
+      orderTitle: 'Your shop order', orderShop: 'Shop', orderDate: 'Order date', orderItemsT: 'Order items', orderTotal: 'Total',
+      orderNegotiable: 'Negotiable',
+      orderStatus: { new: 'Received', in_progress: 'In progress', done: 'Completed', cancelled: 'Cancelled' } as Record<string, string>,
       recoverTitle: 'Recover Tracking ID',
       recoverDesc: 'Enter the name and phone number you used when submitting your request.',
       namePlaceholder: 'Full Name', phonePlaceholder: 'Phone Number — e.g. +1 555 000 0000',
@@ -153,23 +161,36 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     // Correspondence tracking code (MK-...) → look up the conversation instead of a ticket
     if (/^mk-/i.test(clean) && lookupContactByCode) {
       const msg = lookupContactByCode(clean);
-      setFoundTicket(null);
+      setFoundTicket(null); setFoundOrder(null);
       if (msg) { setFoundContact(msg); setTrackError(''); }
       else { setFoundContact(null); setTrackError(t.trackContactNotFound); }
       return;
     }
     setFoundContact(null);
 
+    // Meta Shop order tracking code (SHP-...) → look up the shop order
+    if (/^shp-/i.test(clean) && lookupShopOrder) {
+      setTrackLoading(true); setFoundTicket(null); setFoundOrder(null); setTrackError('');
+      try {
+        const orders = await lookupShopOrder(clean.toUpperCase());
+        if (orders.length) setFoundOrder(orders[0]);
+        else setTrackError(t.notFound);
+      } catch {
+        setTrackError(lang === 'fa' ? 'خطا در اتصال. دوباره تلاش کنید.' : 'Connection error. Please try again.');
+      } finally { setTrackLoading(false); }
+      return;
+    }
+
     // Try local list first (instant if already loaded)
     const local = tickets.find(tk =>
       tk.id.toLowerCase() === clean.toLowerCase() ||
       tk.id.toLowerCase() === `exp-${clean.toLowerCase()}`
     );
-    if (local) { setFoundTicket(local); setTrackError(''); return; }
+    if (local) { setFoundTicket(local); setFoundOrder(null); setTrackError(''); return; }
 
     // Direct Firebase / proxy lookup — works in Iran, works before subscription loads
     setTrackLoading(true);
-    setFoundTicket(null);
+    setFoundTicket(null); setFoundOrder(null);
     setTrackError('');
     try {
       const ids = [clean, `exp-${clean}`, clean.toUpperCase(), `EXP-${clean.toUpperCase()}`];
@@ -178,8 +199,13 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
         const result = await getTicketById(id);
         if (result) { found = result; break; }
       }
-      if (found) { setFoundTicket(found); setTrackError(''); }
-      else { setFoundTicket(null); setTrackError(t.notFound); }
+      if (found) { setFoundTicket(found); setTrackError(''); return; }
+      // Fallback: it may be a shop order code entered without the SHP- prefix being recognised
+      if (lookupShopOrder) {
+        const orders = await lookupShopOrder(clean.toUpperCase());
+        if (orders.length) { setFoundOrder(orders[0]); setTrackError(''); return; }
+      }
+      setTrackError(t.notFound);
     } catch {
       setTrackError(lang === 'fa' ? 'خطا در اتصال. دوباره تلاش کنید.' : 'Connection error. Please try again.');
     } finally {
@@ -362,7 +388,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       <div className="flex border-b border-gray-200 mb-7 gap-6">
         {(['track', 'recover', 'contact'] as const).map((tabId) => (
           <button key={tabId}
-            onClick={() => { setTab(tabId); setFoundTicket(null); setTrackError(''); setRecoveredTickets(null); setRecoveredContacts(null); setRecoverError(''); setFoundContact(null); }}
+            onClick={() => { setTab(tabId); setFoundTicket(null); setFoundOrder(null); setTrackError(''); setRecoveredTickets(null); setRecoveredContacts(null); setRecoverError(''); setFoundContact(null); }}
             className={`py-3 px-0.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${tab === tabId ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
             {tabId === 'track' ? <><IconSearch className="w-3.5 h-3.5" />{t.trackTab}</>
@@ -571,6 +597,54 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* Meta Shop order found by tracking code (SHP-...) */}
+          {foundOrder && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">{t.orderTitle}</p>
+                    <p className="font-mono text-sm font-semibold text-gray-900" dir="ltr">{foundOrder.trackingCode}</p>
+                  </div>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full border
+                    ${foundOrder.status === 'done' ? 'bg-green-50 text-green-700 border-green-200' :
+                      foundOrder.status === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200' :
+                      'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                    {t.orderStatus[foundOrder.status] || foundOrder.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-gray-100 rtl:divide-x-reverse">
+                  {[
+                    { label: t.orderShop, value: foundOrder.shopName },
+                    { label: t.applicant, value: foundOrder.customerName },
+                    { label: t.orderDate, value: new Date(foundOrder.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') },
+                    { label: t.orderTotal, value: foundOrder.items.every(it => it.priceHidden) ? t.orderNegotiable : `${(foundOrder.total || 0).toLocaleString()} ${foundOrder.currency || ''}` },
+                  ].map((item, i) => (
+                    <div key={i} className="px-4 py-3">
+                      <p className="text-[11px] text-gray-400 mb-0.5">{item.label}</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+                {foundOrder.items && foundOrder.items.length > 0 && (
+                  <div className="px-5 py-3 border-t border-gray-100">
+                    <p className="text-[11px] text-gray-400 mb-2">{t.orderItemsT}</p>
+                    <div className="space-y-1.5">
+                      {foundOrder.items.map((it, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-700 min-w-0 truncate">{it.name}{it.optionLabel ? <span className="text-gray-400"> — {it.optionLabel}</span> : null}</span>
+                          <span className="text-gray-500 shrink-0 font-mono text-xs" dir="ltr">
+                            {it.qty}{it.unit ? ` ${it.unit}` : ''}{it.priceHidden ? ` · ${t.orderNegotiable}` : (it.lineTotal != null ? ` · ${it.lineTotal.toLocaleString()} ${it.currency || foundOrder.currency || ''}` : '')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

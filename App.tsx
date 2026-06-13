@@ -44,7 +44,7 @@ export type Language = 'fa' | 'en';
 export const DICTIONARY = {
   fa: {
     startBtn: 'شروع مشاوره و خدمات',
-    trackBtn: 'پیگیری پرونده',
+    trackBtn: 'پیگیری درخواست',
     newTicket: 'ثبت درخواست',
     tracking: 'پیگیری',
     expertPanel: 'پنل کارشناسان',
@@ -1737,7 +1737,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} lookupContactByCode={lookupContactByCode} openContactTick={contactTick} />
+              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} lookupContactByCode={lookupContactByCode} lookupShopOrder={(code) => lookupMetaShopOrdersByTracking(code.trim().toUpperCase())} openContactTick={contactTick} />
             )}
 
             {view === 'custom-form' && (

@@ -86,7 +86,7 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
               <IconUsers className="w-5 h-5 text-gray-600" />
             </div>
             <h2 className="text-sm font-semibold text-gray-900">پنل مشتریان</h2>
-            <p className="text-xs text-gray-400 mt-1">پیگیری پرونده و مکاتبات</p>
+            <p className="text-xs text-gray-400 mt-1">پیگیری درخواست و مکاتبات</p>
           </div>
           <form onSubmit={handleCustSubmit} className="space-y-3">
             <div>
