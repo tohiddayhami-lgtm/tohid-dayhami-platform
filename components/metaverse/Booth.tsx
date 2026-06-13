@@ -4,7 +4,7 @@ import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, isVideoUrl, isVideoFile, screenEmbed } from './expoUtils';
+import { bi, isVideoUrl, isVideoFile, isGif, isHtmlFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { CanvasLabel } from './CanvasLabel';
@@ -52,11 +52,75 @@ const SafeImage: React.FC<MediaProps> = (props) => (
   </TexBoundary>
 );
 
-// One wall surface: a video link → live LCD screen, anything else → an image panel.
+// One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
+// video → LCD screen, anything else → a static image panel.
 const PanelMedia: React.FC<MediaProps> = (props) =>
-  isVideoUrl(props.url)
-    ? <BoothScreen {...props} />
+  isHtmlFile(props.url) ? <IframePanel {...props} />
+    : isGif(props.url) ? <GifPlane {...props} />
+    : isVideoUrl(props.url) ? <BoothScreen {...props} />
     : <SafeImage {...props} />;
+
+// An animated GIF painted onto the wall as a real WebGL texture (so it shows in VR too): an
+// off-DOM <img> animates natively, and we copy its current frame onto a CanvasTexture each tick.
+const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const state = useMemo(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const canvas = document.createElement('canvas');
+    canvas.width = 2; canvas.height = 2;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const o = { img, canvas, tex, ready: false };
+    img.onload = () => { canvas.width = img.naturalWidth || 256; canvas.height = img.naturalHeight || 256; o.ready = true; };
+    img.src = url;
+    return o;
+  }, [url]);
+  const acc = useRef(0);
+  useFrame((_, dt) => {
+    if (!state.ready) return;
+    acc.current += dt;
+    if (acc.current < 1 / 15) return;           // ~15fps redraw is plenty for a GIF and cheap
+    acc.current = 0;
+    const ctx = state.canvas.getContext('2d');
+    if (ctx) { ctx.drawImage(state.img, 0, 0, state.canvas.width, state.canvas.height); state.tex.needsUpdate = true; }
+  });
+  useEffect(() => () => state.tex.dispose(), [state]);
+  return (
+    <mesh position={position} rotation={rotation}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={state.tex} transparent toneMapped={false} />
+    </mesh>
+  );
+};
+
+// An uploaded HTML page shown on the wall through an iframe transformed onto the surface (the
+// only way to render arbitrary HTML in 3D; like the YouTube path, it's a DOM overlay, so VR
+// headsets see the bezel + 🌐 glyph rather than the live page).
+const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const PX_W = 1000, PX_H = Math.round((PX_W * height) / width);
+  const scale = width / PX_W;
+  return (
+    <group position={position} rotation={rotation}>
+      <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
+        <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
+      </RoundedBox>
+      <mesh position={[0, 0, -0.005]}>
+        <planeGeometry args={[width + 0.02, height + 0.02]} />
+        <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
+      </mesh>
+      <CanvasLabel text="🌐" width={width * 0.35} height={width * 0.35} position={[0, 0, 0.004]} color="#ffffff" />
+      <Html
+        transform
+        position={[0, 0, 0.02]}
+        scale={scale}
+        zIndexRange={[12, 0]}
+        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 8, boxShadow: '0 0 24px rgba(80,140,255,.25)' }}
+      >
+        <iframe src={url} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms" style={{ display: 'block', border: 0 }} title="booth-html" />
+      </Html>
+    </group>
+  );
+};
 
 // A small 3D push-button (rounded plate + glyph). Works with mouse AND a VR controller ray.
 const CtrlBtn: React.FC<{ x: number; size: number; glyph: string; onClick: (e: ThreeEvent<MouseEvent>) => void }> = ({ x, size, glyph, onClick }) => (

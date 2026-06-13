@@ -114,6 +114,13 @@ export const isVideoUrl = (url?: string): boolean =>
 // YouTube/Vimeo are NOT files — they can only be shown through an iframe transformed onto the wall.
 export const isVideoFile = (url?: string): boolean => !!url && /\.(mp4|webm|ogg)(\?.*)?$/i.test(url);
 
+// Animated GIF → drawn frame-by-frame onto a CanvasTexture so it actually animates on the wall
+// (a plain image texture would freeze on the first frame).
+export const isGif = (url?: string): boolean => !!url && /\.gif(\?.*)?$/i.test(url);
+
+// An uploaded HTML page → embedded through an iframe transformed onto the wall surface.
+export const isHtmlFile = (url?: string): boolean => !!url && /\.html?(\?.*)?$/i.test(url);
+
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
 // accent color, logo, and panels (cover image inside-back, first product video for the LCD).
 export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<MetaverseBooth> => {
