@@ -1,9 +1,9 @@
 import React, { Suspense, useMemo } from 'react';
-import { useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
+import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, isVideoUrl, isVideoFile, videoPoster } from './expoUtils';
+import { bi, isVideoUrl, isVideoFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { CanvasLabel } from './CanvasLabel';
@@ -51,10 +51,10 @@ const SafeImage: React.FC<MediaProps> = (props) => (
   </TexBoundary>
 );
 
-// One wall surface: a video link → LCD screen, anything else → an image panel.
-const PanelMedia: React.FC<MediaProps & { onPlay?: () => void }> = ({ onPlay, ...props }) =>
+// One wall surface: a video link → live LCD screen, anything else → an image panel.
+const PanelMedia: React.FC<MediaProps> = (props) =>
   isVideoUrl(props.url)
-    ? <BoothScreen {...props} onPlay={onPlay} />
+    ? <BoothScreen {...props} />
     : <SafeImage {...props} />;
 
 // A real <video> textured straight onto the 3D plane — muted, looping in-world playback.
@@ -69,14 +69,40 @@ const VideoPlane: React.FC<MediaProps> = ({ url, width, height, position, rotati
   );
 };
 
-// In-world LCD screen for a video link. Direct files play on the wall; YouTube/Vimeo show a
-// clickable poster (▶) that opens the full 2D video player — reliable, unlike autoplaying an
-// iframe inside a CSS-3D-transformed surface (which silently fails to play and isn't clickable).
-const BoothScreen: React.FC<{ url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number]; onPlay?: () => void }> = ({ url, width, height, position, rotation, onPlay }) => {
+// In-world LCD screen that plays a video ON the wall, muted + looping. Direct files are painted
+// as a real WebGL texture; YouTube/Vimeo are shown through an iframe transformed onto the wall
+// surface (the only way to embed them in 3D — they can't be textured due to CORS).
+const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const file = isVideoFile(url);
-  const poster = useMemo(() => videoPoster(url), [url]);
-  const click = (e: any) => { e.stopPropagation(); onPlay?.(); };
-  const hoverable = !file && !!onPlay;
+  const v = useMemo(() => {
+    if (file) return null;
+    const e = screenEmbed(url);
+    // YouTube ignores postMessage play commands (enablejsapi) unless the embed carries an
+    // `origin` matching the host page — without it, forced autoplay in the 3D iframe stays paused.
+    if (e?.kind === 'iframe' && /youtube\.com\/embed/.test(e.src) && typeof window !== 'undefined') {
+      e.src += `&origin=${encodeURIComponent(window.location.origin)}`;
+    }
+    return e;
+  }, [url, file]);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+  // YouTube/Vimeo in a CSS-3D-transformed iframe often refuse to autoplay (the player thinks it's
+  // "not visible"). Send the IFrame-API handshake + a play command a few times to force it.
+  React.useEffect(() => {
+    if (!v || v.kind !== 'iframe') return;
+    const isVimeo = /vimeo\.com/.test(v.src);
+    const listen = JSON.stringify({ event: 'listening', id: 1 });
+    const play = isVimeo ? JSON.stringify({ method: 'play' }) : JSON.stringify({ event: 'command', func: 'playVideo', args: [] });
+    let n = 0;
+    const id = window.setInterval(() => {
+      const w = iframeRef.current?.contentWindow;
+      try { if (!isVimeo) w?.postMessage(listen, '*'); w?.postMessage(play, '*'); } catch {}
+      if (++n > 12) window.clearInterval(id);
+    }, 700);
+    return () => window.clearInterval(id);
+  }, [v]);
+
+  const PX_W = 900, PX_H = Math.round((PX_W * height) / width);
+  const scale = width / PX_W;
   return (
     <group position={position} rotation={rotation}>
       {/* Dark bezel + a faint emissive backlight so the screen reads as a real panel */}
@@ -87,32 +113,33 @@ const BoothScreen: React.FC<{ url: string; width: number; height: number; positi
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#05070b" emissive={'#0a1626'} emissiveIntensity={0.6} />
       </mesh>
+      {/* VR fallback glyph (the Html iframe is invisible in immersive XR); also shows under a
+          still-loading texture. Sits behind the media so it's hidden once the video paints. */}
+      <CanvasLabel text="▶" width={width * 0.4} height={width * 0.4} position={[0, 0, 0.004]} color="#ffffff" />
 
       {file ? (
-        // Direct video file → genuine playback on the wall.
+        // Direct video file → genuine playback painted onto the wall.
         <TexBoundary key={url}>
           <Suspense fallback={null}>
             <VideoPlane url={url} width={width} height={height} position={[0, 0, 0.01]} />
           </Suspense>
         </TexBoundary>
-      ) : (
-        // YouTube/Vimeo → poster thumbnail + clickable ▶ that opens the full-screen player.
-        <group
-          onClick={hoverable ? click : undefined}
-          onPointerOver={hoverable ? () => { document.body.style.cursor = 'pointer'; } : undefined}
-          onPointerOut={hoverable ? () => { document.body.style.cursor = 'auto'; } : undefined}
+      ) : v ? (
+        // YouTube/Vimeo → iframe transformed onto the wall surface, autoplaying muted.
+        <Html
+          transform
+          position={[0, 0, 0.02]}
+          scale={scale}
+          zIndexRange={[12, 0]}
+          style={{ width: PX_W, height: PX_H, background: '#000', overflow: 'hidden', borderRadius: 8, boxShadow: '0 0 24px rgba(80,140,255,.25)' }}
         >
-          {poster && (
-            <SafeImage url={poster} width={width} height={height} position={[0, 0, 0.005]} />
+          {v.kind === 'iframe' ? (
+            <iframe ref={iframeRef} src={v.src} width={PX_W} height={PX_H} frameBorder={0} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen style={{ display: 'block', border: 0 }} title="booth-screen" />
+          ) : (
+            <video src={v.src} width={PX_W} height={PX_H} autoPlay muted loop playsInline style={{ display: 'block', objectFit: 'cover', width: PX_W, height: PX_H }} />
           )}
-          {/* Dim scrim + big play glyph so it clearly reads as a tappable video */}
-          <mesh position={[0, 0, 0.012]}>
-            <circleGeometry args={[Math.min(width, height) * 0.18, 32]} />
-            <meshBasicMaterial color="#000000" transparent opacity={0.5} toneMapped={false} />
-          </mesh>
-          <CanvasLabel text="▶" width={width * 0.34} height={width * 0.34} position={[0, 0, 0.02]} color="#ffffff" onClick={hoverable ? click : undefined} />
-        </group>
-      )}
+        </Html>
+      ) : null}
     </group>
   );
 };
@@ -135,12 +162,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const P = booth.panels || {};
   const panelUrl = (face: BoothFace): string | undefined =>
     P[face] || (face === 'innerBack' ? (booth.screenUrl || booth.bannerImage) : undefined);
-
-  // Clicking a booth video screen opens the full 2D player (HotspotModal) — reliable autoplay
-  // with sound, instead of a flaky in-iframe autoplay on a CSS-3D surface.
-  const playVideo = (face: BoothFace, url: string) => onSelectHotspot({
-    id: `${booth.id}-screen-${face}`, x: 0, y: 0, z: 0, type: 'video', url, title: booth.name,
-  });
   const backW = W * 0.78, backH = backW * 9 / 16, sideW = 1.9, sideH = 1.15;
   const PANEL_SPECS: { face: BoothFace; position: [number, number, number]; rotation: [number, number, number]; w: number; h: number }[] = [
     { face: 'innerBack',  position: [0, 1.62, -D / 2 + 0.09], rotation: [0, 0, 0],             w: backW, h: backH },
@@ -215,8 +236,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
 
-          {/* Six wall panels (3 inner + 3 outer) — each an image, an in-world video, or a clickable poster */}
-          {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} onPlay={() => playVideo(s.face, u)} /> : null; })}
+          {/* Six wall panels (3 inner + 3 outer) — each an image or an in-world auto-playing video */}
+          {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} /> : null; })}
 
           {/* Logo plate above the reception desk */}
           {booth.logo && (
