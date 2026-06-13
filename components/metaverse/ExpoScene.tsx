@@ -4,9 +4,11 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
+import { WallAd, PresentationScreen } from './WallMedia';
+import { bi } from './expoUtils';
 
 interface Props {
   expo: MetaverseExpo;
@@ -121,6 +123,32 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
           </Suspense>
         </TexBoundary>
       )}
+
+      {/* Environmental advertising banners — auto-distributed along each wall, height auto-fit. */}
+      {(() => {
+        const dims = { width, depth, height };
+        const byWall: Record<string, typeof expo.wallAds> = {};
+        (expo.wallAds || []).forEach(a => { (byWall[a.wall] = byWall[a.wall] || []).push(a); });
+        const out: React.ReactElement[] = [];
+        Object.keys(byWall).forEach(wall => {
+          const list = byWall[wall]!;
+          list.forEach((ad, i) => {
+            const w = ad.w || 3, h = ad.h || 2;
+            const u = (i + 1) / (list.length + 1);                                   // even spacing along the wall
+            const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55)); // comfortable height
+            const { position, rotation } = wallTransform(wall as 'back' | 'left' | 'right' | 'front', u, yc / height, dims);
+            out.push(<WallAd key={ad.id} image={ad.image} url={ad.url} title={bi(ad.title, lang, '')} w={w} h={h} position={position} rotation={rotation} />);
+          });
+        });
+        return out;
+      })()}
+
+      {/* Big page-turnable PDF presentation on a hall wall (default the far/end wall) */}
+      {expo.presentation?.enabled && expo.presentation.pdfUrl && (() => {
+        const p = expo.presentation;
+        const { position, rotation } = wallTransform(p.wall || 'back', p.u ?? 0.5, p.v ?? 0.55, { width, depth, height });
+        return <PresentationScreen url={p.pdfUrl!} w={p.w || Math.min(width * 0.5, 7)} h={p.h || Math.min(height * 0.6, 4)} position={position} rotation={rotation} />;
+      })()}
 
       {/* Booths */}
       {(expo.booths || []).map((b, i) => (

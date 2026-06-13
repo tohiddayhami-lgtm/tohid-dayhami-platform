@@ -621,6 +621,34 @@ export interface MetaverseBooth {
 // drei <Environment> presets used for image-based lighting / skybox when no custom HDR is given
 export type EnvPreset = 'city' | 'sunset' | 'dawn' | 'night' | 'warehouse' | 'forest' | 'apartment' | 'studio' | 'park' | 'lobby';
 
+export type ExpoWall = 'back' | 'left' | 'right' | 'front';
+
+// An environmental advertising banner mounted on one of the hall's perimeter walls. Clickable
+// (opens its link in a new tab). u/v are normalized placement along the wall (0..1); w/h in meters.
+export interface ExpoWallAd {
+  id: string;
+  wall: ExpoWall;
+  size?: string;         // preset banner size key (see BANNER_SIZES) — drives w/h
+  w?: number;            // width (meters) — set from the chosen size preset
+  h?: number;            // height (meters)
+  image?: string;        // banner image URL
+  url?: string;          // hyperlink — opens in a new tab
+  title?: MetaShopDirCat;
+  // Position is auto-distributed along the wall based on the hall — no manual u/v needed.
+}
+
+// A large page-turnable PDF presentation mounted on a hall wall (default the far/end wall).
+// Pages are rasterized to textures so it works on phone AND in VR; arrows flip pages.
+export interface ExpoPresentation {
+  enabled?: boolean;
+  pdfUrl?: string;
+  wall?: ExpoWall;       // which wall (default 'back')
+  u?: number;            // 0..1 horizontal position
+  v?: number;            // 0..1 vertical center
+  w?: number;            // width (meters)
+  h?: number;            // height (meters)
+}
+
 export interface MetaverseExpo {
   enabled: boolean;
   defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
@@ -636,6 +664,8 @@ export interface MetaverseExpo {
   spawn?: { x: number; y: number; z: number; ry?: number }; // visitor start position
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
+  wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls
+  presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
   // Seam for future multiplayer (presence + text chat). Not implemented yet:
   // presence?: { roomId?: string; chatEnabled?: boolean };

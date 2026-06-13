@@ -12,7 +12,7 @@ export const bi = (v: MetaShopDirCat | undefined | null, lang: Language, fallbac
 export const EXPO_DEFAULTS = {
   width: 30,
   depth: 30,
-  height: 6,
+  height: 9,            // taller, proper exhibition-hall ceiling
   groundColor: '#cfd4dc',
   wallColor: '#e9edf3',
   preset: 'warehouse' as const,
@@ -22,10 +22,41 @@ export const EXPO_DEFAULTS = {
 export const hallDims = (expo: MetaverseExpo) => ({
   width: Math.max(8, expo.width || EXPO_DEFAULTS.width),
   depth: Math.max(8, expo.depth || EXPO_DEFAULTS.depth),
-  height: Math.max(3, expo.height || EXPO_DEFAULTS.height),
+  // Clamp to a tall minimum so halls feel like real exhibition spaces, not low rooms.
+  height: Math.max(8, expo.height || EXPO_DEFAULTS.height),
 });
 
 export const boothPos = (b: MetaverseBooth): [number, number, number] => [b.x || 0, b.y || 0, b.z || 0];
+
+// Standard exhibition banner sizes (meters) the admin picks from — no manual sizing needed.
+export const BANNER_SIZES: { key: string; fa: string; en: string; w: number; h: number }[] = [
+  { key: 'billboard', fa: 'بیلبورد افقی', en: 'Billboard', w: 6, h: 3 },
+  { key: 'wide',      fa: 'بنر عریض',      en: 'Wide banner', w: 4.5, h: 2 },
+  { key: 'standard',  fa: 'بنر استاندارد', en: 'Standard banner', w: 3, h: 2 },
+  { key: 'square',    fa: 'مربع',          en: 'Square', w: 2.5, h: 2.5 },
+  { key: 'portrait',  fa: 'رول‌آپ عمودی',  en: 'Roll-up (portrait)', w: 2, h: 3.5 },
+  { key: 'small',     fa: 'کوچک',          en: 'Small', w: 2, h: 1.2 },
+];
+export const bannerSize = (key?: string) => BANNER_SIZES.find(s => s.key === key) || BANNER_SIZES[2]; // default: standard
+
+// Place something flat on a hall perimeter wall. u = 0..1 along the wall, v = 0..1 up the wall.
+// Returns a world position (just inside the wall) + a rotation so it faces into the hall.
+export const wallTransform = (
+  wall: 'back' | 'left' | 'right' | 'front',
+  u: number, v: number,
+  dims: { width: number; depth: number; height: number },
+): { position: [number, number, number]; rotation: [number, number, number] } => {
+  const { width, depth, height } = dims;
+  const off = 0.08;
+  const y = Math.max(0.4, v * height);
+  switch (wall) {
+    case 'left':  return { position: [-width / 2 + off, y, (u - 0.5) * depth], rotation: [0, Math.PI / 2, 0] };
+    case 'right': return { position: [width / 2 - off, y, (0.5 - u) * depth], rotation: [0, -Math.PI / 2, 0] };
+    case 'front': return { position: [(0.5 - u) * width, y, depth / 2 - off], rotation: [0, Math.PI, 0] };
+    case 'back':
+    default:      return { position: [(u - 0.5) * width, y, -depth / 2 + off], rotation: [0, 0, 0] };
+  }
+};
 
 // Convert a YouTube / Vimeo / direct-mp4 URL into an embeddable form for the video popup.
 export const videoEmbed = (url: string): { kind: 'iframe' | 'video'; src: string } | null => {

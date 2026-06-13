@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -28,7 +28,7 @@ const PANEL_FACES: { face: BoothFace; fa: string; en: string }[] = [
 ];
 
 const blankExpo = (): MetaverseExpo => ({
-  enabled: true, preset: 'warehouse', width: 30, depth: 30, height: 6,
+  enabled: true, preset: 'warehouse', width: 30, depth: 30, height: 9,
   groundColor: '#cfd4dc', wallColor: '#e9edf3', spawn: { x: 0, y: 0, z: 8 }, booths: [], schemaVersion: 1,
 });
 
@@ -40,6 +40,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const [openBooth, setOpenBooth] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [quickN, setQuickN] = useState(6);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const t = {
     title: T ? 'نمایشگاه متاورس (سه‌بعدی)' : 'Metaverse Exhibition (3D)',
@@ -56,6 +57,16 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     spawn: T ? 'نقطه‌ی شروع بازدیدکننده' : 'Visitor start point',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
+    adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
+    adsHint: T ? 'فقط دیوار، اندازهٔ بنر، تصویر و لینک را بدهید؛ جای‌گذاری روی دیوار به‌صورت خودکار و متناسب با سالن انجام می‌شود. هر بنر لینک‌دار است (در تب جدید باز می‌شود).' : 'Just pick a wall, a banner size, an image and a link — placement on the wall is automatic and fits the hall. Each banner is clickable (opens in a new tab).',
+    addAd: T ? 'افزودن بنر' : 'Add banner', noAds: T ? 'بنری اضافه نشده.' : 'No banners yet.',
+    adWall: T ? 'دیوار' : 'Wall', adSize: T ? 'اندازهٔ بنر' : 'Banner size', adLink: T ? 'لینک (اختیاری)' : 'Link (optional)', adImage: T ? 'تصویر بنر' : 'Banner image',
+    meter: T ? 'متر' : 'm',
+    adPos: T ? 'موقعیت افقی (۰ تا ۱)' : 'Horizontal (0–1)', adHeight: T ? 'ارتفاع (۰ تا ۱)' : 'Height (0–1)', adW: T ? 'عرض (متر)' : 'Width (m)', adH: T ? 'ارتفاع (متر)' : 'Height (m)',
+    wallBack: T ? 'دیوار انتهایی' : 'Back', wallLeft: T ? 'چپ' : 'Left', wallRight: T ? 'راست' : 'Right', wallFront: T ? 'ورودی' : 'Front',
+    presT: T ? 'پرزنتیشن دیوار انتهایی (PDF)' : 'End-wall presentation (PDF)',
+    presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
+    presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'تعداد غرفه‌ها را وارد کنید؛ فضای نمایشگاه به‌صورت خودکار اندازه و غرفه‌ها مرتب چیده می‌شوند. سپس هر غرفه را به یک فروشگاه وصل کنید.' : 'Enter how many booths — the hall is auto-sized and booths are laid out in tidy aisles. Then link each booth to a shop.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
@@ -102,6 +113,23 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const updBooth = (id: string, p: Partial<MetaverseBooth>) => updBooths((e.booths || []).map(b => b.id === id ? { ...b, ...p } : b));
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
+
+  // ── Environmental wall ads ──
+  const WALLS: ExpoWall[] = ['back', 'left', 'right', 'front'];
+  const updWallAds = (wallAds: ExpoWallAd[]) => patch({ wallAds });
+  const addWallAd = () => { const s = bannerSize('standard'); updWallAds([...(e.wallAds || []), { id: newId('ad'), wall: 'back', size: s.key, w: s.w, h: s.h }]); };
+  const updWallAd = (id: string, p: Partial<ExpoWallAd>) => updWallAds((e.wallAds || []).map(a => a.id === id ? { ...a, ...p } : a));
+  const setAdSize = (id: string, key: string) => { const s = bannerSize(key); updWallAd(id, { size: key, w: s.w, h: s.h }); };
+  const delWallAd = (id: string) => updWallAds((e.wallAds || []).filter(a => a.id !== id));
+
+  // ── End-wall PDF presentation ──
+  const setPres = (p: Partial<ExpoPresentation>) => patch({ presentation: { ...(e.presentation || {}), ...p } });
+  const uploadPdf = (key: string, file: File, onUrl: (u: string) => void) => {
+    if (!/\.pdf$/i.test(file.name)) { alert(T ? 'فقط فایل PDF مجاز است.' : 'Only PDF files allowed.'); return; }
+    if (file.size > 40 * 1024 * 1024) { alert(t.tooBig); return; }
+    setUploading(key);
+    uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents');
+  };
 
   // Quick setup: ask "how many booths", auto-size the hall and arrange empty booths in aisles.
   const quickBuild = () => {
@@ -306,6 +334,69 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <div className="border border-gray-100 rounded-xl p-4">
             <h5 className="font-bold text-gray-700 text-sm mb-3">{t.floorplan}</h5>
             <FloorPlan />
+          </div>
+
+          {/* Environmental wall ads */}
+          <div className="border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <h5 className="font-bold text-gray-700 text-sm">📣 {t.adsT} <span className="text-xs text-gray-400">({(e.wallAds || []).length})</span></h5>
+              {!readonly && <button onClick={addWallAd} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addAd}</button>}
+            </div>
+            <p className="text-[11px] text-gray-400 mb-3">{t.adsHint}</p>
+            {(e.wallAds || []).length === 0 ? <p className="text-sm text-gray-400 text-center py-2">{t.noAds}</p> : (
+              <div className="space-y-2">
+                {(e.wallAds || []).map(ad => (
+                  <div key={ad.id} className="rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                    <div><label className={lbl}>{t.adWall}</label>
+                      <select className={fld + ' bg-white'} value={ad.wall} onChange={ev => updWallAd(ad.id, { wall: ev.target.value as ExpoWall })}>
+                        <option value="back">{t.wallBack}</option><option value="left">{t.wallLeft}</option><option value="right">{t.wallRight}</option><option value="front">{t.wallFront}</option>
+                      </select>
+                    </div>
+                    <div><label className={lbl}>{t.adSize}</label>
+                      <select className={fld + ' bg-white'} value={ad.size || 'standard'} onChange={ev => setAdSize(ad.id, ev.target.value)}>
+                        {BANNER_SIZES.map(s => <option key={s.key} value={s.key}>{(T ? s.fa : s.en)} ({s.w}×{s.h} {t.meter})</option>)}
+                      </select>
+                    </div>
+                    <ImgUpload id={`ad-${ad.id}`} value={ad.image} onUrl={u => updWallAd(ad.id, { image: u || undefined })} label={t.adImage} />
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1"><label className={lbl}>{t.adLink}</label><input className={fld + ' dir-ltr'} value={ad.url || ''} onChange={ev => updWallAd(ad.id, { url: ev.target.value || undefined })} placeholder="https://…" /></div>
+                      {!readonly && <button onClick={() => delWallAd(ad.id)} className="text-red-400 hover:text-red-600 pb-2" title={t.clear}><IconTrash className="w-4 h-4" /></button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* End-wall PDF presentation */}
+          <div className="border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <h5 className="font-bold text-gray-700 text-sm">📊 {t.presT}</h5>
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" disabled={readonly} checked={!!e.presentation?.enabled} onChange={ev => setPres({ enabled: ev.target.checked })} />{t.presEnable}</label>
+            </div>
+            <p className="text-[11px] text-gray-400 mb-3">{t.presHint}</p>
+            {e.presentation?.enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                <div className="lg:col-span-2">
+                  <label className={lbl}>{t.presPdf}</label>
+                  <div className="flex items-center gap-2">
+                    {e.presentation?.pdfUrl && <span className="text-[11px] text-emerald-600 font-bold">{t.presUploaded}</span>}
+                    {!readonly && <button type="button" onClick={() => pdfInputRef.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconUpload className="w-3.5 h-3.5" />{uploading === 'pres-pdf' ? t.uploading : t.upload}</button>}
+                    {e.presentation?.pdfUrl && !readonly && <button type="button" onClick={() => setPres({ pdfUrl: undefined })} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
+                    <input type="file" ref={pdfInputRef} className="hidden" accept="application/pdf,.pdf" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadPdf('pres-pdf', f, u => setPres({ pdfUrl: u })); ev.target.value = ''; }} />
+                  </div>
+                </div>
+                <div><label className={lbl}>{t.adWall}</label>
+                  <select className={fld + ' bg-white'} value={e.presentation?.wall || 'back'} onChange={ev => setPres({ wall: ev.target.value as ExpoWall })}>
+                    <option value="back">{t.wallBack}</option><option value="left">{t.wallLeft}</option><option value="right">{t.wallRight}</option><option value="front">{t.wallFront}</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className={lbl}>{t.adW}</label><input type="number" step="0.5" className={fld} value={e.presentation?.w ?? 7} onChange={ev => setPres({ w: +ev.target.value })} /></div>
+                  <div><label className={lbl}>{t.adH}</label><input type="number" step="0.5" className={fld} value={e.presentation?.h ?? 4} onChange={ev => setPres({ h: +ev.target.value })} /></div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Quick setup — N booths → auto-arrange */}
