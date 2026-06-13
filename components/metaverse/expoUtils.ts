@@ -47,7 +47,9 @@ export const wallTransform = (
   dims: { width: number; depth: number; height: number },
 ): { position: [number, number, number]; rotation: [number, number, number] } => {
   const { width, depth, height } = dims;
-  const off = 0.08;
+  // The perimeter walls are 0.2m-thick boxes centred on the edge, so their inner face is 0.1m in.
+  // Mount banners clearly IN FRONT of that face (else they sink into the wall and the white face hides them).
+  const off = 0.22;
   const y = Math.max(0.4, v * height);
   switch (wall) {
     case 'left':  return { position: [-width / 2 + off, y, (u - 0.5) * depth], rotation: [0, Math.PI / 2, 0] };
