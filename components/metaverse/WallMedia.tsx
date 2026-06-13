@@ -75,7 +75,9 @@ export const PresentationScreen: React.FC<{
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [dims, setDims] = useState({ w: 0, h: 0 }); // rendered page pixel size (for aspect)
+  const [cachedCount, setCachedCount] = useState(0); // how many pages have been pre-rendered
   const docRef = useRef<any>(null);
+  const bitmapsRef = useRef<(ImageBitmap | null)[]>([]); // pre-rendered page bitmaps (1-based)
   // ONE stable texture reused for every page — we redraw its canvas and flag needsUpdate so the
   // GPU re-uploads it. Swapping in a fresh texture object failed to update inside a WebXR session.
   const [tex] = useState(() => {
@@ -84,45 +86,50 @@ export const PresentationScreen: React.FC<{
     return t;
   });
 
-  // Load the document once per URL.
+  // Load + PRE-RENDER every page to an ImageBitmap up front. pdf.js rasterization needs
+  // window.requestAnimationFrame, which is PAUSED inside an immersive WebXR session — so rendering
+  // a page *during* VR stalls (the number changed but the slide stayed on page 1). By rasterizing
+  // all pages here (on load, before VR), later flips only blit a cached bitmap, which works in VR.
   useEffect(() => {
     let cancelled = false;
-    setCount(0); setPage(1); setDims({ w: 0, h: 0 });
+    setCount(0); setPage(1); setDims({ w: 0, h: 0 }); setCachedCount(0);
+    bitmapsRef.current.forEach(b => b?.close?.()); bitmapsRef.current = [];
     (async () => {
       try {
         const pdfjs = await getPdfjs();
         const doc = await pdfjs.getDocument({ url }).promise;
         if (cancelled) return;
-        docRef.current = doc;
-        setCount(doc.numPages);
+        docRef.current = doc; setCount(doc.numPages);
+        for (let i = 1; i <= doc.numPages; i++) {
+          if (cancelled) return;
+          const pg = await doc.getPage(i);
+          const base = pg.getViewport({ scale: 1 });
+          const vp = pg.getViewport({ scale: 1300 / base.width });
+          const c = document.createElement('canvas');
+          c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+          const ctx = c.getContext('2d')!;
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+          await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+          if (cancelled) return;
+          bitmapsRef.current[i] = await createImageBitmap(c);
+          setCachedCount(i);
+        }
       } catch { /* leave blank — handled by the placeholder */ }
     })();
-    return () => { cancelled = true; docRef.current = null; };
+    return () => { cancelled = true; docRef.current = null; bitmapsRef.current.forEach(b => b?.close?.()); bitmapsRef.current = []; };
   }, [url]);
 
-  // Redraw the current page onto the SAME canvas/texture, then flag it for GPU re-upload.
+  // Blit the cached bitmap for the current page onto the texture — plain canvas2D, works in VR.
   useEffect(() => {
-    if (!count) return;
-    let cancelled = false;
-    (async () => {
-      const doc = docRef.current; if (!doc) return;
-      try {
-        const pg = await doc.getPage(Math.min(Math.max(1, page), doc.numPages));
-        if (cancelled) return;
-        const base = pg.getViewport({ scale: 1 });
-        const vp = pg.getViewport({ scale: 1400 / base.width });
-        const canvas = tex.image as HTMLCanvasElement;
-        canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        await pg.render({ canvasContext: ctx, viewport: vp }).promise;
-        if (cancelled) return;
-        tex.needsUpdate = true;
-        setDims({ w: canvas.width, h: canvas.height });
-      } catch { /* ignore a failed page */ }
-    })();
-    return () => { cancelled = true; };
-  }, [page, count, tex]);
+    const bmp = bitmapsRef.current[page];
+    if (!bmp) return;
+    const canvas = tex.image as HTMLCanvasElement;
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0);
+    tex.needsUpdate = true;
+    setDims({ w: bmp.width, h: bmp.height });
+  }, [page, cachedCount, tex]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
