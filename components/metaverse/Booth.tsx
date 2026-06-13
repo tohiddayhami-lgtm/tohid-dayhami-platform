@@ -1,4 +1,5 @@
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense, useMemo, useRef, useState } from 'react';
+import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -57,15 +58,109 @@ const PanelMedia: React.FC<MediaProps> = (props) =>
     ? <BoothScreen {...props} />
     : <SafeImage {...props} />;
 
-// A real <video> textured straight onto the 3D plane — muted, looping in-world playback.
-// Used ONLY for direct video files (mp4/webm/ogg); YouTube/Vimeo can't be textured (CORS).
-const VideoPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
-  const tex = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'anonymous', playsInline: true } as any);
-  return (
-    <mesh position={position} rotation={rotation}>
-      <planeGeometry args={[width, height]} />
-      <meshBasicMaterial map={tex as THREE.Texture} toneMapped={false} />
+// A small 3D push-button (rounded plate + glyph). Works with mouse AND a VR controller ray.
+const CtrlBtn: React.FC<{ x: number; size: number; glyph: string; onClick: (e: ThreeEvent<MouseEvent>) => void }> = ({ x, size, glyph, onClick }) => (
+  <group position={[x, 0, 0]}>
+    <mesh onClick={onClick}
+      onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+      <planeGeometry args={[size, size]} />
+      <meshBasicMaterial color="#1b2230" transparent opacity={0.92} toneMapped={false} />
     </mesh>
+    <CanvasLabel text={glyph} width={size * 0.78} height={size * 0.78} position={[0, 0, 0.002]} color="#ffffff" onClick={onClick} />
+  </group>
+);
+
+// In-world transport controls overlaid on the bottom of a wall video: rewind/forward 10s,
+// play/pause, a scrub bar (click anywhere to seek), and mute. All raycast-clickable, so they
+// work both on desktop and with a VR controller pointer.
+const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: number }> = ({ video, width, height }) => {
+  const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const fillRef = useRef<THREE.Mesh>(null);
+  const headRef = useRef<THREE.Group>(null);
+
+  const ch = Math.min(Math.max(height * 0.14, 0.075), 0.15);   // control-row height
+  const gap = ch * 0.28;
+  const by = -height / 2 + ch * 0.9;                            // row centre, just inside the bottom edge
+  const prevX = -width / 2 + ch * 0.75;
+  const playX = prevX + ch + gap;
+  const nextX = playX + ch + gap;
+  const muteX = width / 2 - ch * 0.75;
+  const trackL = nextX + ch / 2 + gap;
+  const trackR = muteX - ch / 2 - gap;
+  const trackW = Math.max(0.2, trackR - trackL);
+  const trackCx = (trackL + trackR) / 2;
+  const trackH = ch * 0.26;
+  const Z = 0.03;
+
+  // Drive the fill width + playhead from the video clock each frame (refs only — no re-render).
+  useFrame(() => {
+    const d = video.duration || 0;
+    const f = d ? Math.min(1, Math.max(0, (video.currentTime || 0) / d)) : 0;
+    if (fillRef.current) { fillRef.current.scale.x = Math.max(0.0001, f); fillRef.current.position.x = trackL + (trackW * f) / 2; }
+    if (headRef.current) headRef.current.position.x = trackL + trackW * f;
+  });
+
+  const toggle = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (video.paused) video.play().catch(() => {}); else video.pause(); setPaused(video.paused); };
+  const skip = (s: number) => (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const d = video.duration || 0; video.currentTime = Math.min(d ? d - 0.1 : 1e9, Math.max(0, (video.currentTime || 0) + s)); };
+  const toggleMute = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); video.muted = !video.muted; setMuted(video.muted); };
+  const seek = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); const d = video.duration || 0; if (d && e.uv) video.currentTime = Math.min(d - 0.1, Math.max(0, e.uv.x * d)); };
+
+  return (
+    <group position={[0, by, Z]}>
+      {/* translucent backdrop so the controls stay legible over any video frame */}
+      <mesh position={[0, 0, -0.004]}>
+        <planeGeometry args={[width * 0.98, ch * 1.7]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.42} toneMapped={false} />
+      </mesh>
+
+      <CtrlBtn x={prevX} size={ch} glyph="⏪" onClick={skip(-10)} />
+      <CtrlBtn x={playX} size={ch} glyph={paused ? '▶' : '⏸'} onClick={toggle} />
+      <CtrlBtn x={nextX} size={ch} glyph="⏩" onClick={skip(10)} />
+      <CtrlBtn x={muteX} size={ch} glyph={muted ? '🔇' : '🔊'} onClick={toggleMute} />
+
+      {/* scrub bar: dark groove + green fill + playhead, with a transparent click target on top */}
+      <mesh position={[trackCx, 0, 0]}>
+        <planeGeometry args={[trackW, trackH]} />
+        <meshBasicMaterial color="#3a4458" toneMapped={false} />
+      </mesh>
+      <mesh ref={fillRef} position={[trackCx, 0, 0.002]}>
+        <planeGeometry args={[trackW, trackH]} />
+        <meshBasicMaterial color="#22d3ee" toneMapped={false} />
+      </mesh>
+      <group ref={headRef} position={[trackCx, 0, 0.004]}>
+        <mesh>
+          <circleGeometry args={[trackH * 0.85, 20]} />
+          <meshBasicMaterial color="#ffffff" toneMapped={false} />
+        </mesh>
+      </group>
+      {/* frontmost transparent hit area → click/drag anywhere on the bar to seek */}
+      <mesh position={[trackCx, 0, 0.006]} onClick={seek}
+        onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+        onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+        <planeGeometry args={[trackW, trackH * 2.4]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+};
+
+// A real <video> textured straight onto the 3D plane — looping in-world playback with transport
+// controls. Used ONLY for direct video files (mp4/webm/ogg); YouTube/Vimeo can't be textured (CORS).
+const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const tex = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'anonymous', playsInline: true } as any);
+  const video = tex.image as HTMLVideoElement;
+  // Tapping the picture itself toggles play/pause (handy in VR); the bar below scrubs/seeks.
+  const togglePlay = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (video.paused) video.play().catch(() => {}); else video.pause(); };
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh onClick={togglePlay}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={tex as THREE.Texture} toneMapped={false} />
+      </mesh>
+      <VideoControls video={video} width={width} height={height} />
+    </group>
   );
 };
 
@@ -118,10 +213,10 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
       <CanvasLabel text="▶" width={width * 0.4} height={width * 0.4} position={[0, 0, 0.004]} color="#ffffff" />
 
       {file ? (
-        // Direct video file → genuine playback painted onto the wall.
+        // Direct video file → genuine playback painted onto the wall, with transport controls.
         <TexBoundary key={url}>
           <Suspense fallback={null}>
-            <VideoPlane url={url} width={width} height={height} position={[0, 0, 0.01]} />
+            <VideoScreen url={url} width={width} height={height} position={[0, 0, 0.01]} />
           </Suspense>
         </TexBoundary>
       ) : v ? (
