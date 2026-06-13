@@ -112,6 +112,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       noOrders: 'No orders found. Check your tracking code, phone or name.', moq: 'MOQ', pack: 'Pack', statusNew: 'New', statusProg: 'In progress', statusDone: 'Done', statusCanc: 'Cancelled',
       perPack: '/ pack', review: 'Continue to invoice preview', invoiceTitle: 'Invoice preview', editCart: 'Edit cart',
       featured: 'Featured', featuredTitle: 'Featured products', negotiable: 'Negotiable — request a quote',
+      outOfStock: 'Currently unavailable',
       colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
@@ -130,6 +131,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       noOrders: 'سفارشی یافت نشد. شماره پیگیری، موبایل یا نام را بررسی کنید.', moq: 'حداقل سفارش', pack: 'بسته', statusNew: 'جدید', statusProg: 'در حال انجام', statusDone: 'انجام شد', statusCanc: 'لغو شد',
       perPack: '/ بسته', review: 'ادامه و پیش‌نمایش فاکتور', invoiceTitle: 'پیش‌نمایش فاکتور', editCart: 'ویرایش سبد',
       featured: 'ویژه', featuredTitle: 'محصولات ویژه', negotiable: 'قابل مذاکره — درخواست قیمت',
+      outOfStock: 'در حال حاضر موجود نیست',
       colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
@@ -148,6 +150,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       noOrders: '未找到订单。请检查追踪码、手机号或姓名。', moq: '起订量', pack: '包装', statusNew: '新', statusProg: '处理中', statusDone: '已完成', statusCanc: '已取消',
       perPack: '/ 包', review: '继续并预览发票', invoiceTitle: '发票预览', editCart: '编辑购物车',
       featured: '精选', featuredTitle: '精选产品', negotiable: '价格面议 — 索取报价',
+      outOfStock: '暂时缺货',
       colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
       confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
@@ -248,7 +251,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   const cartItems = useMemo(() => Object.keys(cart).map(id => {
-    const p = products.find(x => x.id === id); if (!p) return null;
+    const p = products.find(x => x.id === id); if (!p || p.outOfStock) return null;
     const { qty, optionId } = cart[id]; const hidden = priceHidden(p); const rate = hidden ? 0 : unitPrice(p, optionId);
     return { p, qty, optionId, rate, line: hidden ? 0 : rate * qty, hidden, optionText: optLabel(p, optionId), cur: curOf(p, optionId) };
   }).filter(Boolean) as { p: MetaShopProduct; qty: number; optionId?: string; rate: number; line: number; hidden: boolean; optionText: string; cur: string }[], [cart, products, uiLang]);
@@ -301,6 +304,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
 
   const addToCart = (p: MetaShopProduct) => {
+    if (p.outOfStock) return; // out-of-stock products can't be ordered
     const optId = selOptId(p);
     setCart(c => ({ ...c, [p.id]: { qty: (c[p.id]?.qty || 0) + 1, optionId: optId } }));
     logMetaShopEvent('add_to_cart', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
@@ -404,7 +408,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           )}
           </>)}
         </div>
-        {qty > 0 ? (
+        {p.outOfStock ? (
+          <div className="ms-oos">{t.outOfStock}</div>
+        ) : qty > 0 ? (
           <>
             <div className={`ms-card-qty ${big ? 'big' : ''}`}>
               <button onClick={() => setQty(p.id, qty - 1)}>−</button>
@@ -430,9 +436,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
     return (
-      <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''}`} key={p.id}>
+      <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className="ms-card-img" onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
+          {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
           {p.group && <span className="ms-group-badge">{p.group}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
           {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
@@ -968,6 +975,10 @@ const MS_CSS = `
 .ms-disc-tag { font-size:10px; font-weight:900; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; padding:1px 7px; border-radius:999px; }
 /* «قابل مذاکره» (price hidden) */
 .ms-negotiable { font-size:13px; font-weight:800; color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 9%, #fff); border:1px dashed color-mix(in srgb, var(--ms-primary) 35%, #fff); padding:4px 10px; border-radius:8px; }
+/* Out-of-stock (در حال حاضر موجود نیست) */
+.ms-oos { font-size:13px; font-weight:800; color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; padding:8px 10px; border-radius:10px; text-align:center; }
+.ms-oos-badge { position:absolute; top:8px; inset-inline-start:8px; z-index:2; font-size:11px; font-weight:800; color:#fff; background:rgba(185,28,28,.92); padding:4px 9px; border-radius:999px; box-shadow:0 2px 6px rgba(0,0,0,.2); }
+.ms-card-oos .ms-card-img img { filter:grayscale(.7) opacity(.7); }
 .ms-citem-neg { color:var(--ms-primary) !important; font-weight:800; }
 .ms-inv-neg { color:var(--ms-primary); font-weight:800; font-size:11px; }
 .ms-some-neg { font-size:11px; font-weight:700; color:var(--ms-primary); opacity:.85; }

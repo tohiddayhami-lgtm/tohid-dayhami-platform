@@ -241,6 +241,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     pDiscValue: T ? 'مقدار تخفیف' : 'Discount value', pDiscHint: T ? 'قیمت قبل (خط‌خورده) و بعد به مشتری نمایش داده می‌شود.' : 'Before (struck-through) and after price are shown to the customer.',
     featured: T ? 'ویژه' : 'Featured', featuredFull: T ? 'حداکثر ۳ محصول ویژه' : 'Max 3 featured products',
     hidePrice: T ? 'قابل مذاکره' : 'Negotiable', hidePriceTip: T ? 'قیمت نمایش داده نمی‌شود؛ مشتری تعداد را ثبت می‌کند تا بعداً قیمت بدهید.' : 'Hide price; the customer orders a quantity and you quote later.',
+    outOfStock: T ? 'ناموجود' : 'Out of stock', outOfStockTip: T ? 'محصول با برچسب «در حال حاضر موجود نیست» نمایش داده می‌شود و مشتری نمی‌تواند آن را سفارش دهد.' : 'Shown as «Currently unavailable»; customers cannot order it.',
     hideAllPrices: T ? 'مخفی‌کردن قیمت همه‌ی محصولات (قابل مذاکره)' : 'Hide all product prices (negotiable)',
     hideAllPricesTip: T ? 'هیچ قیمتی در فروشگاه، کاتالوگ و فاکتور نمایش داده نمی‌شود؛ سفارش‌ها فقط تعداد را ثبت می‌کنند.' : 'No prices shown in the shop, catalog or invoices; orders capture quantities only.',
     priceLabel: T ? 'متن جای قیمت' : 'Price label', priceLabelDefault: T ? 'قابل مذاکره (پیش‌فرض)' : 'Negotiable (default)',
@@ -1075,6 +1076,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
                     <label className={`flex items-center gap-1 text-[11px] ${(!p.featured && featuredCount >= 3) ? 'text-gray-300' : 'text-amber-600'}`} title={t.featuredFull}><input type="checkbox" className="accent-amber-500" checked={!!p.featured} disabled={!p.featured && featuredCount >= 3} onChange={e => updProduct(idx, { featured: e.target.checked })} />★ {t.featured}</label>
                     <label className="flex items-center gap-1 text-[11px] text-emerald-600" title={t.hidePriceTip}><input type="checkbox" className="accent-emerald-600" checked={!!p.hidePrice} onChange={e => updProduct(idx, { hidePrice: e.target.checked })} />{t.hidePrice}</label>
+                    <label className="flex items-center gap-1 text-[11px] text-red-600" title={t.outOfStockTip}><input type="checkbox" className="accent-red-600" checked={!!p.outOfStock} onChange={e => updProduct(idx, { outOfStock: e.target.checked })} />{t.outOfStock}</label>
                     {(p.hidePrice || draft.hidePrices) && (
                       <select className="text-[10px] border border-gray-200 rounded px-1 py-0.5 max-w-[120px] text-gray-600" title={t.priceLabelTip} value={p.hidePriceText || ''} onChange={e => updProduct(idx, { hidePriceText: e.target.value || undefined })}>
                         <option value="">{t.priceLabelInherit}</option>

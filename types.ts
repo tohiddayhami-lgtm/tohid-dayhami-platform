@@ -689,6 +689,7 @@ export interface MetaShopProduct {
   i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description } }
   active?: boolean;
   featured?: boolean;      // highlight as a «ویژه» product (up to 3 shown in the featured rail)
+  outOfStock?: boolean;    // mark as «در حال حاضر موجود نیست» → customer can browse it but cannot order it
   hidePrice?: boolean;     // hide the price → show «قابل مذاکره» instead; customer can still order a quantity for a later quote
   hidePriceText?: string;  // custom label shown when the price is hidden (e.g. "Please contact us for the new price"); falls back to the shop's hidePriceText, then «قابل مذاکره»
   // pricing
