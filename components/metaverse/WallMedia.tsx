@@ -12,7 +12,7 @@ const openNewTab = (url?: string) => { if (url) window.open(url, '_blank', 'noop
 const AdImage: React.FC<{ url: string; w: number; h: number; onClick?: () => void }> = ({ url, w, h, onClick }) => {
   const tex = useTexture(url);
   return (
-    <mesh position={[0, 0, 0.02]} onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+    <mesh position={[0, 0, 0.04]} onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       onPointerOver={() => { if (onClick) document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
       <planeGeometry args={[w, h]} />
@@ -26,22 +26,26 @@ export const WallAd: React.FC<{
   position: [number, number, number]; rotation: [number, number, number];
 }> = ({ url, image, title, w, h, position, rotation }) => (
   <group position={position} rotation={rotation}>
-    {/* dark frame */}
+    {/* frame border + light board (so a not-yet-loaded/blocked image shows as a blank board, not black) */}
     <mesh position={[0, 0, 0]}>
-      <planeGeometry args={[w + 0.12, h + 0.12]} />
-      <meshStandardMaterial color="#11161f" />
+      <planeGeometry args={[w + 0.14, h + 0.14]} />
+      <meshStandardMaterial color="#334155" />
     </mesh>
-    {image ? (
+    <mesh position={[0, 0, 0.01]} onClick={(e) => { e.stopPropagation(); openNewTab(url); }}>
+      <planeGeometry args={[w, h]} />
+      <meshStandardMaterial color="#f1f5f9" />
+    </mesh>
+    {/* caption fallback (covered by the image once it loads) */}
+    <CanvasLabel text={title || (url ? 'بنر تبلیغاتی' : 'تبلیغات')} width={w * 0.85} height={Math.min(h * 0.4, 0.7)} position={[0, 0, 0.02]} color="#334155" onClick={() => openNewTab(url)} />
+    {image && (
       <TexBoundary key={image}>
         <Suspense fallback={null}>
           <AdImage url={image} w={w} h={h} onClick={() => openNewTab(url)} />
         </Suspense>
       </TexBoundary>
-    ) : (
-      <CanvasLabel text={title || (url || 'تبلیغات')} width={w * 0.9} height={Math.min(h * 0.6, 0.6)} position={[0, 0, 0.02]} color="#fff" onClick={() => openNewTab(url)} />
     )}
     {/* tiny "link" hint when clickable */}
-    {url && <CanvasLabel text="🔗" width={0.28} height={0.28} position={[w / 2 - 0.18, -h / 2 + 0.18, 0.03]} color="#fff" onClick={() => openNewTab(url)} />}
+    {url && <CanvasLabel text="🔗" width={0.3} height={0.3} position={[w / 2 - 0.2, -h / 2 + 0.2, 0.05]} color="#1f6f43" onClick={() => openNewTab(url)} />}
   </group>
 );
 
