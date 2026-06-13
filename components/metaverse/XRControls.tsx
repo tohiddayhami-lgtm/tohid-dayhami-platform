@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import * as THREE from 'three';
 import { XROrigin, useXRControllerLocomotion, createXRStore } from '@react-three/xr';
 
@@ -12,12 +12,17 @@ export type ExpoXRStore = ReturnType<typeof createXRStore>;
 //    hall and approaching booths feels natural.
 //  • Right stick → comfortable 30° snap-turn (with a dead-zone) — responsive for looking around
 //    booth-to-booth while minimising motion sickness vs. smooth spinning.
-export const VrRig: React.FC<{ originRef: React.RefObject<THREE.Group | null>; spawn: [number, number, number] }> = ({ originRef, spawn }) => {
+// `eyeOffsetY` raises the origin so a SEATED visitor sees the hall at standing eye-level
+// (0 = standing / room-scale; ~0.55 = seated).
+export const VrRig: React.FC<{ originRef: React.RefObject<THREE.Group | null>; spawn: [number, number, number]; eyeOffsetY?: number }> = ({ originRef, spawn, eyeOffsetY = 0 }) => {
   useXRControllerLocomotion(
     originRef,
     { speed: 3 },
     { type: 'snap', degrees: 30, deadZone: 0.5 },
   );
+  // Apply the seated/standing height offset without resetting the X/Z position the locomotion
+  // hook is driving each frame.
+  useEffect(() => { if (originRef.current) originRef.current.position.y = eyeOffsetY; }, [eyeOffsetY, originRef]);
   return <XROrigin ref={originRef} position={spawn} />;
 };
 

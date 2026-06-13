@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { bi, HOTSPOT_ICON } from './expoUtils';
+import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
   hotspot: MetaverseHotspot;
@@ -46,15 +47,14 @@ export const Hotspot: React.FC<Props> = ({ hotspot, lang, onSelect }) => {
           <ringGeometry args={[0.34, 0.42, 32]} />
           <meshBasicMaterial color={color} transparent opacity={hover ? 0.9 : 0.45} side={THREE.DoubleSide} />
         </mesh>
-        {/* Icon + optional label via DOM (Persian-safe) */}
-        <Html center distanceFactor={9} pointerEvents="none" zIndexRange={[20, 0]}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', userSelect: 'none', pointerEvents: 'none' }}>
-            <span style={{ fontSize: 22, lineHeight: 1, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.5))' }}>{icon}</span>
-            {label && (hover) && (
-              <span style={{ marginTop: 6, padding: '3px 9px', borderRadius: 999, background: 'rgba(15,23,42,.92)', color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(0,0,0,.35)' }}>{label}</span>
-            )}
-          </div>
-        </Html>
+        {/* Icon baked into a 3D label so it shows in VR as well as on desktop */}
+        <CanvasLabel text={icon} width={0.4} height={0.4} position={[0, 0, 0.01]} color="#ffffff" />
+        {/* Desktop-only hover title (DOM is invisible inside immersive XR — fine, the modal still opens) */}
+        {label && hover && (
+          <Html center distanceFactor={9} pointerEvents="none" zIndexRange={[20, 0]} position={[0, -0.5, 0]}>
+            <span style={{ padding: '3px 9px', borderRadius: 999, background: 'rgba(15,23,42,.92)', color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(0,0,0,.35)' }}>{label}</span>
+          </Html>
+        )}
       </Billboard>
     </group>
   );

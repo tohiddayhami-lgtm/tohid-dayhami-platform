@@ -35,6 +35,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
+  const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
 
   // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
   // then slide them apart and remove the overlay. A hard cap prevents getting stuck. ──
@@ -78,6 +79,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     orbit: T ? 'نمای کلی' : 'Overview',
     lock: T ? 'حالت غوطه‌ور' : 'Immersive',
     vr: T ? 'ورود به VR' : 'Enter VR',
+    seated: T ? 'نشسته' : 'Seated',
+    standing: T ? 'ایستاده' : 'Standing',
+    heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
     helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
@@ -100,7 +104,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             />
           </Suspense>
           <Player expo={expo} mode={mode} pointerLock={pointerLock} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
-          <VrRig originRef={originRef} spawn={spawn} />
+          <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
         </XR>
       </Canvas>
 
@@ -122,6 +126,11 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             <button onClick={() => setPointerLock(p => !p)} className={chip + (pointerLock ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🔒 {ui.lock}</button>
           )}
           {expo.music && <button onClick={toggleMusic} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{muted ? '🔇' : '🔊'}</button>}
+          {caps.vrSupported && (
+            <button onClick={() => setSeated(s => !s)} title={ui.heightHint} className={chip + (seated ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>
+              {seated ? '🪑 ' + ui.seated : '🧍 ' + ui.standing}
+            </button>
+          )}
           {caps.vrSupported && <VRButton store={store} label={ui.vr} />}
         </div>
       </div>

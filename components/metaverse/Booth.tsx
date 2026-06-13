@@ -6,6 +6,7 @@ import { Language } from '../../App';
 import { bi, screenEmbed, isVideoUrl } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
+import { CanvasLabel } from './CanvasLabel';
 import type { BoothFace } from '../../types';
 
 interface Props {
@@ -73,6 +74,9 @@ const BoothScreen: React.FC<{ url: string; width: number; height: number; positi
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#05070b" emissive={'#0a1626'} emissiveIntensity={0.6} />
       </mesh>
+      {/* VR fallback: the Html iframe below is invisible in immersive XR, so show a ▶ glyph
+          on the panel so headset users still see it's a video screen. */}
+      <CanvasLabel text="▶" width={width * 0.4} height={width * 0.4} position={[0, 0, 0.005]} color="#ffffff" />
       <Html
         transform
         occlude
@@ -191,32 +195,30 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <SafeImage url={booth.logo} width={0.8} height={0.8} position={[0, 1.5, D / 2 - 0.46]} />
           )}
 
-          {/* Counter / desk front — a clickable link into the booth's shop */}
+          {/* Counter / desk front — a clickable 3D link into the booth's shop (works in VR too) */}
           {booth.shopSlug && (
-            <Html position={[0, 0.6, D / 2 - 0.18]} center distanceFactor={9} zIndexRange={[14, 0]}>
-              <button
-                onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
-                style={{ pointerEvents: 'auto', cursor: 'pointer', border: 'none', borderRadius: 999, padding: '7px 14px', background: accent, color: '#fff', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', boxShadow: '0 3px 10px rgba(0,0,0,.35)', fontFamily: 'Vazirmatn, sans-serif' }}
-                title={enterShop}
-              >
-                🛍 {enterShop}
-              </button>
-            </Html>
+            <group position={[0, 0.62, D / 2 - 0.19]}>
+              <mesh onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
+                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+                onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+                <planeGeometry args={[1.74, 0.42]} />
+                <meshStandardMaterial color={accentColor} />
+              </mesh>
+              <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
+                onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }} />
+            </group>
           )}
 
-          {/* Booth header sign: number badge + name (Persian-safe DOM text) — click opens the shop */}
-          <Html position={[0, wallH + 0.12, -D / 2 + 0.16]} center distanceFactor={11} zIndexRange={[15, 0]}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
-              style={{ pointerEvents: 'auto', cursor: 'pointer', border: 'none', background: 'transparent', color: '#fff', fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', textShadow: '0 1px 3px rgba(0,0,0,.55)', fontFamily: 'Vazirmatn, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 7 }}
-              title={num ? `${num} · ${name}` : name}
-            >
-              {num && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 5px', borderRadius: 999, background: '#fff', color: accent, fontWeight: 900, fontSize: 13, boxShadow: '0 1px 4px rgba(0,0,0,.4)' }}>{num}</span>
-              )}
-              <span>{name}</span>
-            </button>
-          </Html>
+          {/* Booth header sign: number + name. A baked 3D label so it renders in VR. Click → shop. */}
+          <CanvasLabel
+            text={num ? `${num} · ${name}` : name}
+            width={W * 0.92} height={0.42}
+            position={[0, wallH + 0.12, -D / 2 + 0.17]}
+            color="#ffffff"
+            onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          />
         </group>
       )}
 
