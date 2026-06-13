@@ -96,9 +96,36 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 // An uploaded HTML page shown on the wall through an iframe transformed onto the surface (the
 // only way to render arbitrary HTML in 3D; like the YouTube path, it's a DOM overlay, so VR
 // headsets see the bezel + 🌐 glyph rather than the live page).
+//
+// We fetch the file and inline it via `srcDoc` instead of pointing the iframe at the Storage URL:
+// Firebase often serves uploaded HTML as a download (octet-stream / Content-Disposition) or with
+// frame restrictions, which leaves a plain `src` iframe blank. Inlining the bytes sidesteps all of
+// that. `<base>` is injected so the page's own relative links still resolve back to its folder.
 const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const [doc, setDoc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancel = false;
+    setDoc(null); setFailed(false);
+    fetch(url)
+      .then(r => r.text())
+      .then(html => {
+        if (cancel) return;
+        let out = html;
+        if (!/<base\b/i.test(html)) {
+          const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
+          out = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
+        }
+        setDoc(out);
+      })
+      .catch(() => { if (!cancel) setFailed(true); });
+    return () => { cancel = true; };
+  }, [url]);
+
   const PX_W = 1000, PX_H = Math.round((PX_W * height) / width);
   const scale = width / PX_W;
+  // Inline the fetched markup; only fall back to a direct src if the fetch was blocked.
+  const frameProps = doc != null ? { srcDoc: doc } : failed ? { src: url } : {};
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
@@ -116,7 +143,7 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
         zIndexRange={[12, 0]}
         style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 8, boxShadow: '0 0 24px rgba(80,140,255,.25)' }}
       >
-        <iframe src={url} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms" style={{ display: 'block', border: 0 }} title="booth-html" />
+        <iframe {...frameProps} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" style={{ display: 'block', border: 0, background: '#fff' }} title="booth-html" />
       </Html>
     </group>
   );
