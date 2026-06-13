@@ -54,9 +54,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const originRef = useRef<THREE.Group>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   // foveation: render the periphery at lower resolution so the headset reliably hits its frame
-  // budget (kills the judder/"jumping" that causes eye strain). frameRate 'high' asks for the
-  // display's top refresh. The centre of vision stays sharp.
-  const store = useMemo(() => createXRStore({ foveation: 1, frameRate: 'high' }), []);
+  // budget — this is what keeps walking smooth (no judder). The centre of vision stays sharp.
+  const store = useMemo(() => createXRStore({ foveation: 1 }), []);
 
   const { depth } = hallDims(expo);
   const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, expo.spawn?.z ?? Math.min(depth / 2 - 2, 8)];
