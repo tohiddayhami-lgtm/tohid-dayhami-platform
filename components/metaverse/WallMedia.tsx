@@ -74,15 +74,20 @@ export const PresentationScreen: React.FC<{
 }> = ({ url, w, h, accent = '#1f6f43', position, rotation }) => {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
-  const [tex, setTex] = useState<THREE.CanvasTexture | null>(null);
+  const [dims, setDims] = useState({ w: 0, h: 0 }); // rendered page pixel size (for aspect)
   const docRef = useRef<any>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const texRef = useRef<THREE.CanvasTexture | null>(null);
+  // ONE stable texture reused for every page — we redraw its canvas and flag needsUpdate so the
+  // GPU re-uploads it. Swapping in a fresh texture object failed to update inside a WebXR session.
+  const [tex] = useState(() => {
+    const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
 
   // Load the document once per URL.
   useEffect(() => {
     let cancelled = false;
-    setCount(0); setPage(1); setTex(null);
+    setCount(0); setPage(1); setDims({ w: 0, h: 0 });
     (async () => {
       try {
         const pdfjs = await getPdfjs();
@@ -95,7 +100,7 @@ export const PresentationScreen: React.FC<{
     return () => { cancelled = true; docRef.current = null; };
   }, [url]);
 
-  // Render the current page to a canvas texture.
+  // Redraw the current page onto the SAME canvas/texture, then flag it for GPU re-upload.
   useEffect(() => {
     if (!count) return;
     let cancelled = false;
@@ -105,32 +110,28 @@ export const PresentationScreen: React.FC<{
         const pg = await doc.getPage(Math.min(Math.max(1, page), doc.numPages));
         if (cancelled) return;
         const base = pg.getViewport({ scale: 1 });
-        const scale = 1400 / base.width;
-        const vp = pg.getViewport({ scale });
-        const canvas = canvasRef.current || document.createElement('canvas');
-        canvasRef.current = canvas;
+        const vp = pg.getViewport({ scale: 1400 / base.width });
+        const canvas = tex.image as HTMLCanvasElement;
         canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
         const ctx = canvas.getContext('2d')!;
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         await pg.render({ canvasContext: ctx, viewport: vp }).promise;
         if (cancelled) return;
-        const t = new THREE.CanvasTexture(canvas);
-        t.anisotropy = 4; t.needsUpdate = true;
-        texRef.current?.dispose();
-        texRef.current = t;
-        setTex(t);
+        tex.needsUpdate = true;
+        setDims({ w: canvas.width, h: canvas.height });
       } catch { /* ignore a failed page */ }
     })();
     return () => { cancelled = true; };
-  }, [page, count]);
+  }, [page, count, tex]);
 
-  useEffect(() => () => { texRef.current?.dispose(); }, []);
+  useEffect(() => () => tex.dispose(), [tex]);
 
   const prev = () => setPage(p => Math.max(1, p - 1));
   const next = () => setPage(p => Math.min(count || 1, p + 1));
 
   // Fit the page within w×h keeping its aspect ratio.
-  const aspect = tex?.image ? (tex.image as HTMLCanvasElement).height / (tex.image as HTMLCanvasElement).width : h / w;
+  const ready = dims.w > 0;
+  const aspect = ready ? dims.h / dims.w : h / w;
   let pw = w, ph = w * aspect;
   if (ph > h) { ph = h; pw = h / aspect; }
 
@@ -141,7 +142,7 @@ export const PresentationScreen: React.FC<{
         <planeGeometry args={[w + 0.4, h + 0.9]} />
         <meshStandardMaterial color="#0b0e14" metalness={0.4} roughness={0.5} />
       </mesh>
-      {tex ? (
+      {ready ? (
         <mesh position={[0, 0.25, 0]}>
           <planeGeometry args={[pw, ph]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
