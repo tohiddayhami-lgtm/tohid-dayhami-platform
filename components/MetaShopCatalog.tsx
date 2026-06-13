@@ -170,7 +170,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
 
   // ── Price block ──
   const priceJsx = (p: MetaShopProduct) => {
-    if (priceHidden(p)) return <div className="msc-price-neg">{s('negotiable')}</div>;
+    if (priceHidden(p)) return <div className="msc-price-neg">{p.hidePriceText || shop.hidePriceText || s('negotiable')}</div>;
     const opts = p.priceOptions || [];
     if (opts.length) {
       return (

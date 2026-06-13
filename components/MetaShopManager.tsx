@@ -211,6 +211,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     hidePrice: T ? 'قابل مذاکره' : 'Negotiable', hidePriceTip: T ? 'قیمت نمایش داده نمی‌شود؛ مشتری تعداد را ثبت می‌کند تا بعداً قیمت بدهید.' : 'Hide price; the customer orders a quantity and you quote later.',
     hideAllPrices: T ? 'مخفی‌کردن قیمت همه‌ی محصولات (قابل مذاکره)' : 'Hide all product prices (negotiable)',
     hideAllPricesTip: T ? 'هیچ قیمتی در فروشگاه، کاتالوگ و فاکتور نمایش داده نمی‌شود؛ سفارش‌ها فقط تعداد را ثبت می‌کنند.' : 'No prices shown in the shop, catalog or invoices; orders capture quantities only.',
+    priceLabel: T ? 'متن جای قیمت' : 'Price label', priceLabelDefault: T ? 'قابل مذاکره (پیش‌فرض)' : 'Negotiable (default)',
+    priceLabelContact: 'Please contact us for the new price',
+    priceLabelInherit: T ? 'مثل فروشگاه' : 'Same as shop',
+    priceLabelTip: T ? 'وقتی قیمت مخفی است، این متن به‌جای «قابل مذاکره» نمایش داده می‌شود.' : 'Shown instead of «Negotiable» when the price is hidden.',
     rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
@@ -872,6 +876,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <input type="checkbox" className="accent-emerald-600 mt-0.5" checked={!!draft.hidePrices} onChange={e => setDraft(d => d ? { ...d, hidePrices: e.target.checked } : d)} />
           <span><span className="text-xs font-bold text-emerald-700">{t.hideAllPrices}</span><span className="block text-[11px] text-emerald-600/80">{t.hideAllPricesTip}</span></span>
         </label>
+        <div className="flex items-center gap-2 mb-3 px-1" title={t.priceLabelTip}>
+          <span className="text-[11px] font-medium text-gray-500 shrink-0">{t.priceLabel}:</span>
+          <select className={fld + ' flex-1'} value={draft.hidePriceText || ''} onChange={e => setDraft(d => d ? { ...d, hidePriceText: e.target.value || undefined } : d)}>
+            <option value="">{t.priceLabelDefault}</option>
+            <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
+          </select>
+        </div>
         {draft.products.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">{t.noProducts}</p> : (
           <div className="space-y-3">
             {draft.products.map((p, idx) => (
@@ -897,6 +908,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
                     <label className={`flex items-center gap-1 text-[11px] ${(!p.featured && featuredCount >= 3) ? 'text-gray-300' : 'text-amber-600'}`} title={t.featuredFull}><input type="checkbox" className="accent-amber-500" checked={!!p.featured} disabled={!p.featured && featuredCount >= 3} onChange={e => updProduct(idx, { featured: e.target.checked })} />★ {t.featured}</label>
                     <label className="flex items-center gap-1 text-[11px] text-emerald-600" title={t.hidePriceTip}><input type="checkbox" className="accent-emerald-600" checked={!!p.hidePrice} onChange={e => updProduct(idx, { hidePrice: e.target.checked })} />{t.hidePrice}</label>
+                    {(p.hidePrice || draft.hidePrices) && (
+                      <select className="text-[10px] border border-gray-200 rounded px-1 py-0.5 max-w-[120px] text-gray-600" title={t.priceLabelTip} value={p.hidePriceText || ''} onChange={e => updProduct(idx, { hidePriceText: e.target.value || undefined })}>
+                        <option value="">{t.priceLabelInherit}</option>
+                        <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
+                      </select>
+                    )}
                     {shopLangs().length > 0 && <button onClick={() => setTransOpen(s => ({ ...s, [p.id]: !s[p.id] }))} className={`text-[10px] px-1.5 py-0.5 rounded mt-1 ${transOpen[p.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title={t.transBtn}>🌐 {t.transBtn}</button>}
                     <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>

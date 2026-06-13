@@ -229,6 +229,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, baseUnitPrice(p, optId)) ?? 0;
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
+  // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
+  const negLabel = (p?: MetaShopProduct) => (p && p.hidePriceText) || shop.hidePriceText || t.negotiable;
   const optLabel = (p: MetaShopProduct, optId?: string): string => { const o = optionsOf(p).find(x => x.id === optId); return o ? L(o.label, o.labelEn) : ''; };
   const selectOption = (p: MetaShopProduct, optId: string) => {
     setChosenOpt(ch => ({ ...ch, [p.id]: optId }));
@@ -360,7 +362,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         )}
         <div className="ms-prices">
           {hidden ? (
-            <div className="ms-price-row"><span className="ms-negotiable">{t.negotiable}</span></div>
+            <div className="ms-price-row"><span className="ms-negotiable">{negLabel(p)}</span></div>
           ) : (<>
           {(curPrice != null) && (
             <div className="ms-price-row">
@@ -389,7 +391,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
             )}
             {hidden && (
-              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} · <b>{t.negotiable}</b></div>
+              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} · <b>{negLabel(p)}</b></div>
             )}
           </>
         ) : (
@@ -638,7 +640,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                       <div className="ms-qty"><button onClick={() => setQty(p.id, qty - 1)}>−</button><input value={qty} onChange={e => setQty(p.id, parseInt(e.target.value) || 0)} /><button onClick={() => setQty(p.id, qty + 1)}>+</button></div>
                       <button className="ms-rm" onClick={() => setQty(p.id, 0)}>{t.remove}</button>
                     </div>
-                    {hidden ? <div className="ms-citem-price ms-citem-neg">{t.negotiable}</div> : (showPrice && <div className="ms-citem-price">{money(line, cur)}</div>)}
+                    {hidden ? <div className="ms-citem-price ms-citem-neg">{negLabel(p)}</div> : (showPrice && <div className="ms-citem-price">{money(line, cur)}</div>)}
                   </div>
                 </div>
                 );
@@ -646,7 +648,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             </div>
             {cartItems.length > 0 && (
               <div className="ms-checkout-bar">
-                <div className="ms-summary"><span>{t.total}</span><b>{allHidden ? t.negotiable : (multiCur ? fmtTotals() : money(grandTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {t.negotiable}</span>}</b></div>
+                <div className="ms-summary"><span>{t.total}</span><b>{allHidden ? negLabel() : (multiCur ? fmtTotals() : money(grandTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {negLabel()}</span>}</b></div>
                 <button className="ms-submit" onClick={() => { setError(''); setStep('review'); }}>{t.review} →</button>
               </div>
             )}
@@ -672,8 +674,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                       <tr key={p.id}>
                         <td>{pName(p)}{optionText && <span className="ms-inv-opt"> — {optionText}</span>}{p.sku && <span className="ms-inv-sku"> · {p.sku}</span>}</td>
                         <td className="c">{qty}{p.unit ? ` ${p.unit}` : ''}</td>
-                        <td className="r">{hidden ? <span className="ms-inv-neg">{t.negotiable}</span> : (showPrice ? money(rate, cur) : '—')}</td>
-                        <td className="r b">{hidden ? <span className="ms-inv-neg">{t.negotiable}</span> : (showPrice ? money(line, cur) : '—')}</td>
+                        <td className="r">{hidden ? <span className="ms-inv-neg">{negLabel(p)}</span> : (showPrice ? money(rate, cur) : '—')}</td>
+                        <td className="r b">{hidden ? <span className="ms-inv-neg">{negLabel(p)}</span> : (showPrice ? money(line, cur) : '—')}</td>
                       </tr>
                       );
                     })}
@@ -726,7 +728,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
                   </div>
                 )}
-                <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? t.negotiable : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {t.negotiable}</span>}</b></div>
+                <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? negLabel() : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {negLabel()}</span>}</b></div>
                 <p className="ms-inv-hint">{t.invHint}</p>
               </div>
               <div className="ms-form embedded">

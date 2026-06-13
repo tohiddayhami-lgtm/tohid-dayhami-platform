@@ -690,6 +690,7 @@ export interface MetaShopProduct {
   active?: boolean;
   featured?: boolean;      // highlight as a «ویژه» product (up to 3 shown in the featured rail)
   hidePrice?: boolean;     // hide the price → show «قابل مذاکره» instead; customer can still order a quantity for a later quote
+  hidePriceText?: string;  // custom label shown when the price is hidden (e.g. "Please contact us for the new price"); falls back to the shop's hidePriceText, then «قابل مذاکره»
   // pricing
   currency?: string;       // overrides shop currency if set
   price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
@@ -754,6 +755,7 @@ export interface MetaShop {
   // catalog
   categories?: string[];   // ordered category list (falls back to product groups)
   hidePrices?: boolean;    // hide ALL product prices shop-wide → «قابل مذاکره»; orders still capture quantities for a later quote
+  hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   discounts?: MetaShopDiscount[]; // discount codes
