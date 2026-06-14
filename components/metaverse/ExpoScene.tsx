@@ -38,14 +38,14 @@ const DoormanImage: React.FC<{ url: string; position: [number, number, number]; 
 };
 
 const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: number; depth: number }> = ({ expo, lang, width, depth }) => {
-  const z0 = depth / 2 - 3.4;
-  const z1 = z0 - 5.8;
+  const z0 = depth / 2 + 7.2;
+  const z1 = depth / 2 + 0.55;
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
   return (
     <group>
-      {/* Welcome carpet / guided corridor */}
+      {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
       <mesh position={[0, 0.035, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[4.6, Math.abs(z0 - z1) + 1.2]} />
         <meshStandardMaterial color="#0f5132" roughness={0.75} metalness={0.04} />
@@ -168,13 +168,37 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
       {/* Perimeter walls */}
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
-      <Wall args={[width, height, t]} position={[0, height / 2, depth / 2]} color={wall} />
+      {expo.entranceEnabled ? (() => {
+        const gap = Math.min(7, width * 0.42);
+        const sideW = Math.max(0.5, (width - gap) / 2);
+        const lintelH = Math.max(0.2, height - 3.4);
+        return (
+          <>
+            <Wall args={[sideW, height, t]} position={[-gap / 2 - sideW / 2, height / 2, depth / 2]} color={wall} />
+            <Wall args={[sideW, height, t]} position={[gap / 2 + sideW / 2, height / 2, depth / 2]} color={wall} />
+            <Wall args={[gap, lintelH, t]} position={[0, 3.4 + lintelH / 2, depth / 2]} color={wall} />
+          </>
+        );
+      })() : (
+        <Wall args={[width, height, t]} position={[0, height / 2, depth / 2]} color={wall} />
+      )}
       <Wall args={[t, height, depth]} position={[-width / 2, height / 2, 0]} color={wall} />
       <Wall args={[t, height, depth]} position={[width / 2, height / 2, 0]} color={wall} />
 
       {/* Dark baseboard trim around the room for a finished look */}
       <Wall args={[width, 0.25, t + 0.02]} position={[0, 0.125, -depth / 2 + 0.01]} color="#3a4150" />
-      <Wall args={[width, 0.25, t + 0.02]} position={[0, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+      {expo.entranceEnabled ? (() => {
+        const gap = Math.min(7, width * 0.42);
+        const sideW = Math.max(0.5, (width - gap) / 2);
+        return (
+          <>
+            <Wall args={[sideW, 0.25, t + 0.02]} position={[-gap / 2 - sideW / 2, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+            <Wall args={[sideW, 0.25, t + 0.02]} position={[gap / 2 + sideW / 2, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+          </>
+        );
+      })() : (
+        <Wall args={[width, 0.25, t + 0.02]} position={[0, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+      )}
       <Wall args={[t + 0.02, 0.25, depth]} position={[-width / 2 + 0.01, 0.125, 0]} color="#3a4150" />
       <Wall args={[t + 0.02, 0.25, depth]} position={[width / 2 - 0.01, 0.125, 0]} color="#3a4150" />
 

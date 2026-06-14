@@ -48,8 +48,11 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   useEffect(() => { const cap = setTimeout(() => setOpenDoors(true), 7000); return () => clearTimeout(cap); }, []);
   useEffect(() => { if (openDoors) { const t = setTimeout(() => setRevealed(true), 1250); return () => clearTimeout(t); } }, [openDoors]);
 
+  const { depth } = hallDims(expo);
+  const startZ = expo.entranceEnabled ? depth / 2 + 6.2 : (expo.spawn?.z ?? Math.min(depth / 2 - 2, 8));
+  const startRy = expo.entranceEnabled ? 0 : (expo.spawn?.ry ?? Math.PI);
   const controlRef: ControlRef = useRef(makeControlState());
-  const poseRef: PlayerPoseRef = useRef({ x: expo.spawn?.x ?? 0, z: expo.spawn?.z ?? 0, heading: expo.spawn?.ry ?? Math.PI });
+  const poseRef: PlayerPoseRef = useRef({ x: expo.spawn?.x ?? 0, z: startZ, heading: startRy });
   const teleportRef: TeleportRef = useRef(null);
   const originRef = useRef<THREE.Group>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -57,8 +60,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   // budget — this is what keeps walking smooth (no judder). The centre of vision stays sharp.
   const store = useMemo(() => createXRStore({ foveation: 1 }), []);
 
-  const { depth } = hallDims(expo);
-  const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, expo.spawn?.z ?? Math.min(depth / 2 - 2, 8)];
+  const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, startZ];
   const T = lang === 'fa';
 
   // Open a shop in a NEW TAB so the exhibition stays open behind it (hyperlinks shouldn't

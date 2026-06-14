@@ -26,8 +26,10 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
   const inXR = useXR((s) => !!s.session);
   const { width, depth } = hallDims(expo);
   const eye = EXPO_DEFAULTS.eyeHeight;
-  const posRef = useRef(new THREE.Vector3(expo.spawn?.x ?? 0, eye, expo.spawn?.z ?? Math.min(depth / 2 - 2, 8)));
-  const yawRef = useRef(expo.spawn?.ry ?? Math.PI);
+  const startZ = expo.entranceEnabled ? depth / 2 + 6.2 : (expo.spawn?.z ?? Math.min(depth / 2 - 2, 8));
+  const startRy = expo.entranceEnabled ? 0 : (expo.spawn?.ry ?? Math.PI);
+  const posRef = useRef(new THREE.Vector3(expo.spawn?.x ?? 0, eye, startZ));
+  const yawRef = useRef(startRy);
   const pitchRef = useRef(0);
 
   // Initial camera placement + expose teleport to the outside world (floor double-click).
@@ -37,7 +39,8 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
     camera.rotation.set(0, yawRef.current, 0);
     teleportRef.current = (x: number, z: number) => {
       const m = 1.2;
-      posRef.current.set(clamp(x, -width / 2 + m, width / 2 - m), eye, clamp(z, -depth / 2 + m, depth / 2 - m));
+      const maxZ = depth / 2 - m + (expo.entranceEnabled ? 8 : 0);
+      posRef.current.set(clamp(x, -width / 2 + m, width / 2 - m), eye, clamp(z, -depth / 2 + m, maxZ));
     };
     return () => { teleportRef.current = null; };
   }, [camera, teleportRef, width, depth, eye]);
@@ -121,7 +124,7 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
       posRef.current.addScaledVector(right, ms * speed);
       const m = 1.2;
       posRef.current.x = clamp(posRef.current.x, -width / 2 + m, width / 2 - m);
-      posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m);
+      posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m + (expo.entranceEnabled ? 8 : 0));
     }
     posRef.current.y = eye;
     camera.position.copy(posRef.current);
