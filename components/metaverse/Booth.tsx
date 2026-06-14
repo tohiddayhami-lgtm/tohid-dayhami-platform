@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -102,134 +102,56 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
   );
 };
 
-// An uploaded HTML page painted onto the wall as a REAL WebGL texture (works on desktop AND inside
-// the VR headset — unlike a drei <Html> overlay, which does not composite over the canvas here).
-// The WHOLE document is rendered in a hidden iframe (scripts allowed, so JS-built pages render),
-// rasterised at full height with html2canvas onto an off-screen canvas, then a window of it is
-// blitted onto the wall texture — with ▲/▼ scroll + auto-scroll play/pause so a long page can be
-// read top-to-bottom right on the wall.
+// An uploaded HTML page shown on the wall as a LIVE, interactive iframe (so even a self-unpacking
+// JS bundle runs and renders for real, and the page scrolls natively). Uses drei <Html> in
+// NON-transform mode — a plain 2D overlay billboarded at the panel — which composites over the
+// canvas far more reliably here than the CSS-3D transform mode. The markup is fetched and inlined
+// via srcDoc (no Storage content-type / X-Frame issues) and run unsandboxed so its scripts work.
 const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
-  const PX_W = 1280;
-  const PX_H = Math.max(2, Math.round((PX_W * height) / width));
-  const tex = useMemo(() => {
-    const c = document.createElement('canvas');
-    c.width = PX_W; c.height = PX_H;
-    const ctx = c.getContext('2d');
-    if (ctx) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PX_W, PX_H); ctx.fillStyle = '#94a3b8'; ctx.font = '600 40px Vazirmatn, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('HTML…', PX_W / 2, PX_H / 2); }
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-    return t;
-  }, [PX_W, PX_H]);
-
-  const fullRef = useRef<HTMLCanvasElement | null>(null);   // full-height rasterised document
-  const scroll = useRef(0);
-  const maxScroll = useRef(0);
-  const [playing, setPlaying] = useState(false);
-
-  // Blit the current window of the full document onto the wall texture.
-  const redraw = useCallback(() => {
-    const full = fullRef.current;
-    const dst = tex.image as HTMLCanvasElement;
-    const ctx = dst.getContext('2d');
-    if (!full || !ctx) return;
-    const y = Math.max(0, Math.min(maxScroll.current, scroll.current));
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PX_W, PX_H);
-    ctx.drawImage(full, 0, y, PX_W, PX_H, 0, 0, PX_W, PX_H);
-    tex.needsUpdate = true;
-  }, [tex, PX_W, PX_H]);
-
+  const portal = useCanvasPortal();
+  const [doc, setDoc] = useState<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    let frame: HTMLIFrameElement | null = null;
-    fullRef.current = null; scroll.current = 0; maxScroll.current = 0;
+    let cancel = false;
+    setDoc(null);
+    fetch(url)
+      .then(r => r.ok ? r.text() : Promise.reject(new Error('fetch failed')))
+      .then(html => {
+        if (cancel) return;
+        if (!/<base\b/i.test(html)) {
+          const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
+          html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
+        }
+        setDoc(html);
+      })
+      .catch(() => { /* fall back to a direct src below */ });
+    return () => { cancel = true; };
+  }, [url]);
 
-    (async () => {
-      let html: string;
-      try { const r = await fetch(url); if (!r.ok) return; html = await r.text(); } catch { return; }
-      if (cancelled) return;
-      if (!/<base\b/i.test(html)) {
-        const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
-        html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
-      }
-      // hidden iframe — NOT sandboxed, so a self-unpacking bundle (dynamic import / blob / module
-      // loading) can run fully and actually build its content. The admin uploads this file, so it's
-      // trusted. Sized to the panel viewport so position:fixed apps lay out correctly.
-      frame = document.createElement('iframe');
-      Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: PX_W + 'px', height: PX_H + 'px', border: '0', background: '#fff', opacity: '0', pointerEvents: 'none', zIndex: '-1' });
-      frame.srcdoc = html;
-      document.body.appendChild(frame);
-      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 5000); });
-
-      const sleep = (ms: number) => new Promise<void>(r => window.setTimeout(r, ms));
-      // Poll until the (often JS-built) content has settled: watch the node/text count stabilise.
-      const measure = () => { const b = frame?.contentDocument?.body; return b ? (b.innerText || '').length + b.querySelectorAll('*').length : 0; };
-      let prev = -1, stable = 0;
-      for (let i = 0; i < 30 && !cancelled; i++) {
-        await sleep(400);
-        const n = measure();
-        if (n > 12 && n === prev) { if (++stable >= 2) break; } else stable = 0;
-        prev = n;
-      }
-      if (cancelled) return;
-      const cdoc = frame?.contentDocument;
-      const root = cdoc?.documentElement;
-      if (!root) return;
-      // Capture the html element (so position:fixed/full-screen layouts are included). Tall flowing
-      // documents grow the capture height so the ▲/▼ scroll can page through them.
-      const docH = Math.min(16000, Math.max(PX_H, root.scrollHeight, cdoc!.body?.scrollHeight || 0));
-      if (docH > PX_H + 4) { frame.style.height = docH + 'px'; await sleep(250); }
-      if (cancelled) return;
-      try {
-        const { default: html2canvas } = await import('html2canvas');
-        const capH = (frame.contentDocument?.documentElement.scrollHeight) || docH;
-        const rendered = await html2canvas(frame.contentDocument!.documentElement, { width: PX_W, height: capH, windowWidth: PX_W, windowHeight: capH, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
-        if (cancelled) return;
-        fullRef.current = rendered;
-        maxScroll.current = Math.max(0, rendered.height - PX_H);
-        redraw();
-      } catch { /* leave the placeholder */ }
-      if (frame?.parentNode) frame.parentNode.removeChild(frame);
-      frame = null;
-    })();
-
-    return () => { cancelled = true; if (frame?.parentNode) frame.parentNode.removeChild(frame); };
-  }, [url, redraw, PX_W, PX_H]);
-
-  useEffect(() => () => tex.dispose(), [tex]);
-
-  // Auto-scroll while playing; stop at the bottom.
-  useFrame((_, dt) => {
-    if (!playing || !fullRef.current) return;
-    scroll.current += dt * 160;
-    if (scroll.current >= maxScroll.current) { scroll.current = maxScroll.current; setPlaying(false); }
-    redraw();
-  });
-
-  const scrollBy = (d: number) => (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-    setPlaying(false);
-    scroll.current = Math.max(0, Math.min(maxScroll.current, scroll.current + d));
-    redraw();
-  };
-  const togglePlay = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); setPlaying(p => !p); };
-
-  // Scroll controls stacked on the right edge.
-  const bs = Math.min(Math.max(height * 0.13, 0.07), 0.13);
-  const bx = width / 2 - bs * 0.72;
-  const page = PX_H * 0.85;
+  const PX_W = 1100;
+  const PX_H = Math.max(2, Math.round((PX_W * height) / width));
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
         <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
       </RoundedBox>
-      <mesh position={[0, 0, 0.005]}>
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
+      <mesh position={[0, 0, -0.005]}>
+        <planeGeometry args={[width + 0.02, height + 0.02]} />
+        <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
       </mesh>
-      {/* ▲ scroll up · ⏯ auto-scroll · ▼ scroll down */}
-      <group position={[0, bs * 1.2, 0.02]}><CtrlBtn x={bx} size={bs} glyph="▲" onClick={scrollBy(-page)} /></group>
-      <group position={[0, 0, 0.02]}><CtrlBtn x={bx} size={bs} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} /></group>
-      <group position={[0, -bs * 1.2, 0.02]}><CtrlBtn x={bx} size={bs} glyph="▼" onClick={scrollBy(page)} /></group>
+      {/* VR-only fallback glyph (DOM can't render inside an immersive XR session) */}
+      <CanvasLabel text="🌐" width={width * 0.32} height={width * 0.32} position={[0, 0, 0.004]} color="#ffffff" />
+      <Html
+        portal={portal}
+        position={[0, 0, 0.03]}
+        center
+        distanceFactor={width}
+        zIndexRange={[24, 0]}
+        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)' }}
+      >
+        {doc != null
+          ? <iframe srcDoc={doc} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />
+          : <iframe src={url} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />}
+      </Html>
     </group>
   );
 };
