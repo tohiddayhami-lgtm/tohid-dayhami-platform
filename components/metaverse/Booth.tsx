@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import * as ReactDOM from 'react-dom/client';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -59,6 +60,110 @@ const SafeImage: React.FC<MediaProps> = (props) => (
 const useCanvasPortal = () => {
   const gl = useThree(s => s.gl);
   return useRef<HTMLElement | null>(gl.domElement.parentElement);
+};
+
+// A DOM iframe that is projected to the four corners of an in-world wall panel. drei <Html
+// transform> can fail to paint live iframes in this scene, while non-transform Html floats as a
+// billboard. This keeps the reliable DOM iframe path but pins it to the wall's screen projection.
+const ProjectedHtmlPanel: React.FC<{
+  width: number;
+  height: number;
+  pxW: number;
+  pxH: number;
+  portal: React.RefObject<HTMLElement | null>;
+  children: React.ReactNode;
+}> = ({ width, height, pxW, pxH, portal, children }) => {
+  const { camera, size } = useThree();
+  const anchorRef = useRef<THREE.Group>(null);
+  const [el] = useState(() => document.createElement('div'));
+  const rootRef = useRef<ReactDOM.Root | null>(null);
+  const target = portal.current;
+  const cornerRefs = useRef({
+    tl: new THREE.Vector3(),
+    tr: new THREE.Vector3(),
+    bl: new THREE.Vector3(),
+    center: new THREE.Vector3(),
+    camPos: new THREE.Vector3(),
+    camDir: new THREE.Vector3(),
+  });
+
+  useEffect(() => {
+    el.style.cssText = [
+      'position:absolute',
+      'top:0',
+      'left:0',
+      `width:${pxW}px`,
+      `height:${pxH}px`,
+      'transform-origin:0 0',
+      'overflow:hidden',
+      'border-radius:10px',
+      'background:#fff',
+      'box-shadow:0 0 28px rgba(80,140,255,.3)',
+      'pointer-events:auto',
+      'will-change:transform',
+      'backface-visibility:hidden',
+    ].join(';');
+    rootRef.current = ReactDOM.createRoot(el);
+    target?.appendChild(el);
+    return () => {
+      target?.removeChild(el);
+      rootRef.current?.unmount();
+      rootRef.current = null;
+    };
+  }, [el, pxW, pxH, target]);
+
+  useEffect(() => {
+    rootRef.current?.render(<>{children}</>);
+  }, [children]);
+
+  useFrame(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+
+    anchor.updateWorldMatrix(true, false);
+    camera.updateMatrixWorld();
+
+    const { tl, tr, bl, center, camPos, camDir } = cornerRefs.current;
+    tl.set(-width / 2, height / 2, 0).applyMatrix4(anchor.matrixWorld);
+    tr.set(width / 2, height / 2, 0).applyMatrix4(anchor.matrixWorld);
+    bl.set(-width / 2, -height / 2, 0).applyMatrix4(anchor.matrixWorld);
+    center.set(0, 0, 0).applyMatrix4(anchor.matrixWorld);
+
+    camera.getWorldPosition(camPos);
+    camera.getWorldDirection(camDir);
+    const toPanel = center.clone().sub(camPos);
+    if (toPanel.dot(camDir) <= 0) {
+      el.style.display = 'none';
+      return;
+    }
+
+    const toScreen = (v: THREE.Vector3) => {
+      v.project(camera);
+      return {
+        x: (v.x * 0.5 + 0.5) * size.width,
+        y: (-v.y * 0.5 + 0.5) * size.height,
+        z: v.z,
+      };
+    };
+    const p0 = toScreen(tl);
+    const p1 = toScreen(tr);
+    const p2 = toScreen(bl);
+    if (p0.z < -1 || p0.z > 1 || p1.z < -1 || p1.z > 1 || p2.z < -1 || p2.z > 1) {
+      el.style.display = 'none';
+      return;
+    }
+
+    const a = (p1.x - p0.x) / pxW;
+    const b = (p1.y - p0.y) / pxW;
+    const c = (p2.x - p0.x) / pxH;
+    const d = (p2.y - p0.y) / pxH;
+    const dist = center.distanceTo(camPos);
+    el.style.display = 'block';
+    el.style.zIndex = String(Math.max(5, Math.min(35, Math.round(36 - dist * 0.25))));
+    el.style.transform = `matrix(${a},${b},${c},${d},${p0.x},${p0.y})`;
+  });
+
+  return <group ref={anchorRef} position={[0, 0, 0.035]} />;
 };
 
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
@@ -140,18 +245,11 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
       </mesh>
       {/* VR-only fallback glyph (DOM can't render inside an immersive XR session) */}
       <CanvasLabel text="🌐" width={width * 0.32} height={width * 0.32} position={[0, 0, 0.004]} color="#ffffff" />
-      <Html
-        portal={portal}
-        position={[0, 0, 0.03]}
-        center
-        distanceFactor={width}
-        zIndexRange={[1000, 0]}
-        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)', pointerEvents: 'auto' }}
-      >
+      <ProjectedHtmlPanel width={width} height={height} pxW={PX_W} pxH={PX_H} portal={portal}>
         {doc != null
           ? <iframe srcDoc={doc} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />
           : <iframe src={url} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />}
-      </Html>
+      </ProjectedHtmlPanel>
     </group>
   );
 };
