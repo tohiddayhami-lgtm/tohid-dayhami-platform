@@ -131,7 +131,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
       id: `bz-${Date.now()}`,
       name: copyName,
       slug: uniqueSlug(`${source.slug || source.name}-copy`),
-      isActive: false,
+      isActive: source.isActive !== false,
       createdAt: new Date().toISOString(),
     };
     setSaving(true);
