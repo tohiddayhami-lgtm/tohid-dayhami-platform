@@ -134,16 +134,18 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
         html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
       }
-      // hidden, laid-out, same-origin iframe so html2canvas can read its computed styles
-      // (allow-same-origin only → no scripts run; we just snapshot the static layout)
+      // hidden, laid-out iframe so html2canvas can read its computed styles. allow-scripts so a
+      // JS-rendered page (e.g. one that builds its DOM on load) actually produces content; the
+      // admin uploads this file, so running its scripts is expected.
       frame = document.createElement('iframe');
-      frame.setAttribute('sandbox', 'allow-same-origin');
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
       Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: PX_W + 'px', height: PX_H + 'px', border: '0', background: '#fff', opacity: '0', pointerEvents: 'none', zIndex: '-1' });
       frame.srcdoc = html;
       document.body.appendChild(frame);
-      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 3000); });
+      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 4000); });
 
       const { default: html2canvas } = await import('html2canvas');
+      const sleep = (ms: number) => new Promise<void>(r => window.setTimeout(r, ms));
       const snap = async () => {
         const cdoc = frame?.contentDocument;
         if (cancelled || !cdoc?.body) return;
@@ -154,12 +156,14 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
           if (ctx) { ctx.clearRect(0, 0, PX_W, PX_H); ctx.drawImage(rendered, 0, 0, PX_W, PX_H); tex.needsUpdate = true; }
         } catch { /* leave the placeholder */ }
       };
-      await snap();
-      window.setTimeout(async () => {
-        if (!cancelled) await snap();                       // second pass for late fonts/images
-        if (frame?.parentNode) frame.parentNode.removeChild(frame);
-        frame = null;
-      }, 1400);
+      // Give the page's JS time to build the DOM, then re-snapshot a few times to catch late content.
+      for (const wait of [700, 1500, 2000]) {
+        await sleep(wait);
+        if (cancelled) break;
+        await snap();
+      }
+      if (frame?.parentNode) frame.parentNode.removeChild(frame);
+      frame = null;
     })();
 
     return () => { cancelled = true; if (frame?.parentNode) frame.parentNode.removeChild(frame); };
