@@ -33,7 +33,14 @@ export class TexBoundary extends React.Component<{ children: React.ReactNode }, 
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-type MediaProps = { url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number] };
+type MediaProps = {
+  url: string;
+  width: number;
+  height: number;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+};
 
 const ThinPanelFrame: React.FC<{ width: number; height: number; z?: number; color?: string }> = ({ width, height, z = 0.05, color = '#0f172a' }) => {
   const t = 0.035;
@@ -49,10 +56,16 @@ const ThinPanelFrame: React.FC<{ width: number; height: number; z?: number; colo
 };
 
 // Optional image-on-a-plane (logo / banner / wall panel). Loads lazily; absent → nothing.
-const ImagePlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const ImagePlane: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const tex = useTexture(url);
   return (
-    <mesh position={position} rotation={rotation}>
+    <mesh
+      position={position}
+      rotation={rotation}
+      onClick={onClick}
+      onPointerOver={() => { if (onClick) document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+    >
       <planeGeometry args={[width, height]} />
       <meshBasicMaterial map={tex as THREE.Texture} transparent toneMapped={false} />
     </mesh>
@@ -730,7 +743,15 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     { face: 'innerRight', position: [W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
     { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
-  const managerPngs = (booth.managerPngs || []).filter(Boolean).slice(0, 2);
+  const managerPngs = [booth.managerPngs?.[0] || '', booth.managerPngs?.[1] || ''];
+  const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
+  const managerLinks = [booth.managerLinks?.[0] || legacyWhatsapps?.[0] || '', booth.managerLinks?.[1] || legacyWhatsapps?.[1] || ''];
+  const openManagerLink = (raw?: string) => {
+    const v = (raw || '').trim();
+    if (!v) return;
+    const href = /^https?:\/\//i.test(v) ? v : /^\+?\d[\d\s-]+$/.test(v) ? `https://wa.me/${v.replace(/[^\d]/g, '')}` : `https://${v}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
@@ -874,15 +895,16 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       )}
 
       {/* Optional life-size transparent PNG people standing behind the reception counter. */}
-      {managerPngs.map((url, i) => (
+      {managerPngs.map((url, i) => url ? (
         <SafeImage
           key={`${url}-${i}`}
           url={url}
-          width={0.85}
-          height={1.85}
-          position={[managerPngs.length === 1 ? 0 : (i === 0 ? -0.58 : 0.58), 0.925, D / 2 - 1.08]}
+          width={0.98}
+          height={2.1}
+          position={[i === 0 ? -1.05 : 1.05, 1.05, D / 2 - 1.08]}
+          onClick={managerLinks[i] ? (e) => { e.stopPropagation(); openManagerLink(managerLinks[i]); } : undefined}
         />
-      ))}
+      ) : null)}
 
       {/* Interactive hotspots (positions are local offsets from the booth origin) */}
       {(booth.hotspots || []).map(h => (

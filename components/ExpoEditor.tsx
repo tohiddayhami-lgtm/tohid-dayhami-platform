@@ -126,6 +126,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     managerPng1: T ? 'PNG مدیرعامل / شخص ۱ پشت کانتر' : 'Manager/person PNG 1 behind counter',
     managerPng2: T ? 'PNG مدیرعامل / شخص ۲ پشت کانتر' : 'Manager/person PNG 2 behind counter',
+    managerLink1: T ? 'لینک شخص ۱' : 'Person 1 link',
+    managerLink2: T ? 'لینک شخص ۲' : 'Person 2 link',
     uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
@@ -180,9 +182,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
   const setBoothManagerPng = (b: MetaverseBooth, index: 0 | 1, url: string) => {
-    const next = [...(b.managerPngs || [])].slice(0, 2);
-    if (url) next[index] = url; else delete next[index];
-    updBooth(b.id, { managerPngs: next.filter(Boolean) });
+    const next = [b.managerPngs?.[0] || '', b.managerPngs?.[1] || ''];
+    next[index] = url || '';
+    while (next.length && !next[next.length - 1]) next.pop();
+    updBooth(b.id, { managerPngs: next });
+  };
+  const setBoothManagerLink = (b: MetaverseBooth, index: 0 | 1, val: string) => {
+    const legacy = (b as any).managerWhatsapps as string[] | undefined;
+    const next = [b.managerLinks?.[0] || legacy?.[0] || '', b.managerLinks?.[1] || legacy?.[1] || ''];
+    next[index] = val;
+    while (next.length && !next[next.length - 1]) next.pop();
+    updBooth(b.id, { managerLinks: next });
   };
 
   // ── Environmental wall ads ──
@@ -708,7 +718,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             </div>
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
                             <ImgUpload id={`manager-1-${b.id}`} value={b.managerPngs?.[0]} onUrl={u => setBoothManagerPng(b, 0, u)} label={t.managerPng1} />
+                            <div><label className={lbl}>{t.managerLink1}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[0] || (b as any).managerWhatsapps?.[0] || ''} onChange={ev => setBoothManagerLink(b, 0, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
                             <ImgUpload id={`manager-2-${b.id}`} value={b.managerPngs?.[1]} onUrl={u => setBoothManagerPng(b, 1, u)} label={t.managerPng2} />
+                            <div><label className={lbl}>{t.managerLink2}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[1] || (b as any).managerWhatsapps?.[1] || ''} onChange={ev => setBoothManagerLink(b, 1, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
                           </div>
 
