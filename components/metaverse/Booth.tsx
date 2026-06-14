@@ -570,12 +570,12 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
   const tier: BoothTier = booth.tier || 'basic';
   const tierSpec = {
-    basic: { w: 3.75, d: 3.75, wallH: 3.05, panel: 0.92, side: 0.9, glow: 1.1, trim: 0, label: lang === 'fa' ? 'پایه' : 'Basic' },
-    standard: { w: 4.75, d: 4.55, wallH: 3.75, panel: 1.3, side: 1.28, glow: 2.2, trim: 0.22, label: lang === 'fa' ? 'استاندارد' : 'Standard' },
-    premium: { w: 5.7, d: 5.35, wallH: 4.35, panel: 1.55, side: 1.5, glow: 3.4, trim: 0.42, label: lang === 'fa' ? 'پریمیوم' : 'Premium' },
+    basic: { panel: 1, side: 1, glow: 1.4, trim: 0, label: lang === 'fa' ? 'پایه' : 'Basic' },
+    standard: { panel: 1.12, side: 1.12, glow: 1.9, trim: 0.12, label: lang === 'fa' ? 'استاندارد' : 'Standard' },
+    premium: { panel: 1.2, side: 1.18, glow: 2.5, trim: 0.2, label: lang === 'fa' ? 'پریمیوم' : 'Premium' },
   }[tier];
   const scale = booth.scale || 1;
-  const W = tierSpec.w, D = tierSpec.d, wallH = tierSpec.wallH; // procedural booth footprint (meters)
+  const W = 4, D = 4, wallH = 3.2;          // keep the core footprint stable so layout/buttons don't shift
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
@@ -585,9 +585,9 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const P = booth.panels || {};
   const panelUrl = (face: BoothFace): string | undefined =>
     P[face] || (face === 'innerBack' ? (booth.screenUrl || booth.bannerImage) : undefined);
-  const backW = Math.min(W * 0.94, W * 0.78 * tierSpec.panel);
+  const backW = Math.min(W * 0.9, W * 0.78 * tierSpec.panel);
   const backH = backW * 9 / 16;
-  const sideW = Math.min(D * 0.66, 1.9 * tierSpec.side);
+  const sideW = Math.min(D * 0.62, 1.9 * tierSpec.side);
   const sideH = 1.15 * tierSpec.side;
   const backY = Math.min(wallH - backH / 2 - 0.35, 1.62 + tierSpec.trim * 1.4);
   const sideY = Math.min(wallH - sideH / 2 - 0.35, 1.45 + tierSpec.trim);
@@ -695,18 +695,18 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           )}
 
           {/* Reception desk / podium */}
-          <RoundedBox args={[W * (tier === 'premium' ? 0.7 : tier === 'standard' ? 0.62 : 0.52), tier === 'basic' ? 0.95 : 1.08, tier === 'premium' ? 0.82 : 0.66]} radius={0.05} smoothness={3} position={[0, tier === 'basic' ? 0.48 : 0.55, D / 2 - 0.5]} castShadow receiveShadow>
+          <RoundedBox args={[W * 0.52, 0.95, 0.6]} radius={0.05} smoothness={3} position={[0, 0.48, D / 2 - 0.5]} castShadow receiveShadow>
             <meshStandardMaterial color={accentDark} metalness={0.15} roughness={0.55} />
           </RoundedBox>
-          <mesh position={[0, tier === 'basic' ? 0.98 : 1.12, D / 2 - 0.5]} castShadow>
-            <boxGeometry args={[W * (tier === 'premium' ? 0.72 : tier === 'standard' ? 0.64 : 0.54), 0.06, tier === 'premium' ? 0.9 : 0.66]} />
+          <mesh position={[0, 0.98, D / 2 - 0.5]} castShadow>
+            <boxGeometry args={[W * 0.54, 0.06, 0.66]} />
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
           {tier !== 'basic' && (
             <CanvasLabel
               text={tier === 'premium' ? (lang === 'fa' ? 'VIP' : 'VIP') : (lang === 'fa' ? 'STD' : 'STD')}
               width={0.72} height={0.28}
-              position={[0, 1.08, D / 2 - 0.12]}
+              position={[0, 1.15, D / 2 - 0.22]}
               bg={tier === 'premium' ? 'rgba(180,83,9,.96)' : 'rgba(37,99,235,.94)'}
               color="#ffffff"
             />
