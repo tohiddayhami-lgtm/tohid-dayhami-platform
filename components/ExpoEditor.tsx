@@ -61,6 +61,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
     adsHint: T ? 'فقط دیوار، اندازهٔ بنر، تصویر و لینک را بدهید؛ جای‌گذاری روی دیوار به‌صورت خودکار و متناسب با سالن انجام می‌شود. هر بنر لینک‌دار است (در تب جدید باز می‌شود).' : 'Just pick a wall, a banner size, an image and a link — placement on the wall is automatic and fits the hall. Each banner is clickable (opens in a new tab).',
     addAd: T ? 'افزودن بنر' : 'Add banner', noAds: T ? 'بنری اضافه نشده.' : 'No banners yet.',
+    moveUp: T ? 'انتقال به بالا' : 'Move up', moveDown: T ? 'انتقال به پایین' : 'Move down',
     adWall: T ? 'دیوار' : 'Wall', adSize: T ? 'اندازهٔ بنر' : 'Banner size', adLink: T ? 'لینک (اختیاری)' : 'Link (optional)', adImage: T ? 'تصویر بنر' : 'Banner image',
     meter: T ? 'متر' : 'm',
     adPos: T ? 'موقعیت افقی (۰ تا ۱)' : 'Horizontal (0–1)', adHeight: T ? 'ارتفاع (۰ تا ۱)' : 'Height (0–1)', adW: T ? 'عرض (متر)' : 'Width (m)', adH: T ? 'ارتفاع (متر)' : 'Height (m)',
@@ -125,6 +126,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const addWallAd = () => { const s = bannerSize('standard'); updWallAds([...(e.wallAds || []), { id: newId('ad'), wall: 'back', size: s.key, w: s.w, h: s.h }]); };
   const updWallAd = (id: string, p: Partial<ExpoWallAd>) => updWallAds((e.wallAds || []).map(a => a.id === id ? { ...a, ...p } : a));
   const setAdSize = (id: string, key: string) => { const s = bannerSize(key); updWallAd(id, { size: key, w: s.w, h: s.h }); };
+  const moveWallAd = (id: string, dir: -1 | 1) => {
+    const ads = [...(e.wallAds || [])];
+    const i = ads.findIndex(a => a.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ads.length) return;
+    [ads[i], ads[j]] = [ads[j], ads[i]];
+    updWallAds(ads);
+  };
   const delWallAd = (id: string) => updWallAds((e.wallAds || []).filter(a => a.id !== id));
 
   // ── End-wall PDF presentation ──
@@ -378,7 +387,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             <p className="text-[11px] text-gray-400 mb-3">{t.adsHint}</p>
             {(e.wallAds || []).length === 0 ? <p className="text-sm text-gray-400 text-center py-2">{t.noAds}</p> : (
               <div className="space-y-2">
-                {(e.wallAds || []).map(ad => (
+                {(e.wallAds || []).map((ad, idx, ads) => (
                   <div key={ad.id} className="rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
                     <div><label className={lbl}>{t.adWall}</label>
                       <select className={fld + ' bg-white'} value={ad.wall} onChange={ev => updWallAd(ad.id, { wall: ev.target.value as ExpoWall })}>
@@ -393,6 +402,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     <ImgUpload id={`ad-${ad.id}`} value={ad.image} onUrl={u => updWallAd(ad.id, { image: u || undefined })} label={t.adImage} />
                     <div className="flex items-end gap-2">
                       <div className="flex-1"><label className={lbl}>{t.adLink}</label><input className={fld + ' dir-ltr'} value={ad.url || ''} onChange={ev => updWallAd(ad.id, { url: ev.target.value || undefined })} placeholder="https://…" /></div>
+                      {!readonly && <div className="flex items-center gap-1 pb-2">
+                        <button type="button" onClick={() => moveWallAd(ad.id, -1)} disabled={idx === 0} className="w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white" title={t.moveUp}>↑</button>
+                        <button type="button" onClick={() => moveWallAd(ad.id, 1)} disabled={idx === ads.length - 1} className="w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white" title={t.moveDown}>↓</button>
+                      </div>}
                       {!readonly && <button onClick={() => delWallAd(ad.id)} className="text-red-400 hover:text-red-600 pb-2" title={t.clear}><IconTrash className="w-4 h-4" /></button>}
                     </div>
                   </div>
