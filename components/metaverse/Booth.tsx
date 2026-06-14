@@ -103,10 +103,10 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 };
 
 // An uploaded HTML page shown on the wall as a LIVE, interactive iframe (so even a self-unpacking
-// JS bundle runs and renders for real, and the page scrolls natively). Use drei <Html> in transform
-// mode so the DOM panel inherits the wall's local position/rotation instead of billboard-orbiting
-// around the booth as a 2D overlay. The markup is fetched and inlined via srcDoc (no Storage
-// content-type / X-Frame issues) and run unsandboxed so its scripts work.
+// JS bundle runs and renders for real, and the page scrolls natively). Keep this in non-transform
+// mode: CSS3D transform iframes are unreliable in this scene and can leave only the fallback glyph
+// visible. The markup is fetched and inlined via srcDoc (no Storage content-type / X-Frame issues)
+// and run unsandboxed so its scripts work.
 const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const portal = useCanvasPortal();
   const [doc, setDoc] = useState<string | null>(null);
@@ -141,11 +141,10 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
       {/* VR-only fallback glyph (DOM can't render inside an immersive XR session) */}
       <CanvasLabel text="🌐" width={width * 0.32} height={width * 0.32} position={[0, 0, 0.004]} color="#ffffff" />
       <Html
-        transform
         portal={portal}
         position={[0, 0, 0.03]}
-        distanceFactor={Math.max(1.1, width * 0.42)}
         center
+        distanceFactor={width}
         zIndexRange={[1000, 0]}
         style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)', pointerEvents: 'auto' }}
       >
