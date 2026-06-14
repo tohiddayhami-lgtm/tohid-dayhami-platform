@@ -45,10 +45,14 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const entranceAds = expo.entranceAds || [];
-  const apronStart = depth / 2 + 0.08;
+  const apronStart = depth / 2 + 0.18;
   const apronEnd = z0 + 0.55;
   const apronLen = apronEnd - apronStart;
   const apronZ = (apronStart + apronEnd) / 2;
+  const carpetStart = depth / 2 + 0.24;
+  const carpetEnd = z0 + 0.32;
+  const carpetLen = carpetEnd - carpetStart;
+  const carpetZ = (carpetStart + carpetEnd) / 2;
   const railTotals = entranceAds.reduce<Record<string, number>>((acc, ad) => {
     if (ad.position === 'railLeft' || ad.position === 'railRight') acc[ad.position] = (acc[ad.position] || 0) + 1;
     return acc;
@@ -76,18 +80,18 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   return (
     <group>
       {/* Light entrance apron covers the whole outside corridor, including behind the rails. */}
-      <mesh position={[0, 0.018, apronZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <mesh position={[0, 0.026, apronZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[Math.min(width, 9.5), apronLen]} />
-        <meshStandardMaterial color="#f8fafc" roughness={0.62} metalness={0} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.62} metalness={0} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
       </mesh>
       {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
-      <mesh position={[0, 0.035, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[4.6, Math.abs(z0 - z1) + 1.2]} />
-        <meshStandardMaterial color="#0f5132" roughness={0.75} metalness={0.04} />
+      <mesh position={[0, 0.07, carpetZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[4.6, carpetLen]} />
+        <meshStandardMaterial color="#0f5132" roughness={0.75} metalness={0.04} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
-      <mesh position={[0, 0.045, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.16, Math.abs(z0 - z1) + 0.8]} />
-        <meshStandardMaterial color="#f8fafc" emissive="#dbeafe" emissiveIntensity={0.35} toneMapped={false} />
+      <mesh position={[0, 0.092, carpetZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.16, Math.max(0.1, carpetLen - 0.35)]} />
+        <meshStandardMaterial color="#f8fafc" emissive="#dbeafe" emissiveIntensity={0.35} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
       </mesh>
       {/* Low side rails keep the corridor readable without blocking walking. */}
       {[-2.55, 2.55].map(x => (
