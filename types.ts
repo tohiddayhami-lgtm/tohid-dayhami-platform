@@ -616,6 +616,7 @@ export interface MetaverseBooth {
   logo?: string;                // logo image URL (Storage images/)
   managerPngs?: string[];       // up to 2 life-size transparent PNG people shown behind the counter
   managerLinks?: string[];      // optional clickable links for those PNG people
+  managerAudios?: string[];     // optional audio files played when those PNG people are clicked
   bannerImage?: string;         // banner image URL (Storage images/)
   screenUrl?: string;           // (legacy) video link for the in-world LCD — now the innerBack panel fallback
   // Per-face media: each value is an image URL or a video link (YouTube/Vimeo/mp4). Videos

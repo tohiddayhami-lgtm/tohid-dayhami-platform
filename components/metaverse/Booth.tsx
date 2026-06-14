@@ -746,11 +746,29 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const managerPngs = [booth.managerPngs?.[0] || '', booth.managerPngs?.[1] || ''];
   const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
   const managerLinks = [booth.managerLinks?.[0] || legacyWhatsapps?.[0] || '', booth.managerLinks?.[1] || legacyWhatsapps?.[1] || ''];
+  const managerAudios = [booth.managerAudios?.[0] || '', booth.managerAudios?.[1] || ''];
+  const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null]);
+  useEffect(() => () => {
+    managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });
+  }, []);
   const openManagerLink = (raw?: string) => {
     const v = (raw || '').trim();
     if (!v) return;
     const href = /^https?:\/\//i.test(v) ? v : /^\+?\d[\d\s-]+$/.test(v) ? `https://wa.me/${v.replace(/[^\d]/g, '')}` : `https://${v}`;
     window.open(href, '_blank', 'noopener,noreferrer');
+  };
+  const toggleManagerAudio = (index: number, raw?: string) => {
+    const url = (raw || '').trim();
+    if (!url) return;
+    managerAudioRefs.current.forEach((a, i) => { if (a && i !== index) a.pause(); });
+    let audio = managerAudioRefs.current[index];
+    if (!audio || audio.src !== url) {
+      audio?.pause();
+      audio = new Audio(url);
+      managerAudioRefs.current[index] = audio;
+    }
+    if (audio.paused) audio.play().catch(() => {});
+    else audio.pause();
   };
 
   return (
@@ -899,11 +917,28 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         <SafeImage
           key={`${url}-${i}`}
           url={url}
-          width={0.98}
+          width={1.12}
           height={2.1}
           position={[i === 0 ? -1.05 : 1.05, 1.05, D / 2 - 1.08]}
-          onClick={managerLinks[i] ? (e) => { e.stopPropagation(); openManagerLink(managerLinks[i]); } : undefined}
+          onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
+            e.stopPropagation();
+            if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
+            else openManagerLink(managerLinks[i]);
+          } : undefined}
         />
+      ) : null)}
+      {managerPngs.map((url, i) => (url && managerAudios[i]) ? (
+        <group key={`audio-${url}-${i}`} position={[i === 0 ? -1.05 : 1.05, 2.26, D / 2 - 1.06]}>
+          <mesh
+            onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          >
+            <circleGeometry args={[0.17, 32]} />
+            <meshBasicMaterial color="#0f172a" transparent opacity={0.86} toneMapped={false} />
+          </mesh>
+          <CanvasLabel text="♪" width={0.24} height={0.24} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }} />
+        </group>
       ) : null)}
 
       {/* Interactive hotspots (positions are local offsets from the booth origin) */}

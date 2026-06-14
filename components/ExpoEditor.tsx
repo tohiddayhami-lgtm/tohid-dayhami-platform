@@ -128,9 +128,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     managerPng2: T ? 'PNG مدیرعامل / شخص ۲ پشت کانتر' : 'Manager/person PNG 2 behind counter',
     managerLink1: T ? 'لینک شخص ۱' : 'Person 1 link',
     managerLink2: T ? 'لینک شخص ۲' : 'Person 2 link',
+    managerAudio1: T ? 'فایل صوتی شخص ۱' : 'Person 1 audio',
+    managerAudio2: T ? 'فایل صوتی شخص ۲' : 'Person 2 audio',
     uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
+    audioErr: T ? 'فقط فایل صوتی مجاز است.' : 'Only audio files are allowed.',
     htmlErr: T ? 'فقط فایل HTML (html/htm) مجاز است.' : 'Only HTML files (html/htm) allowed.',
     posX: 'X', posZ: 'Z',
     hotspots: T ? 'نشانگرهای تعاملی (هات‌اسپات)' : 'Interactive hotspots', addHotspot: T ? 'افزودن نشانگر' : 'Add hotspot', noHot: T ? 'بدون نشانگر.' : 'No hotspots.',
@@ -193,6 +196,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     next[index] = val;
     while (next.length && !next[next.length - 1]) next.pop();
     updBooth(b.id, { managerLinks: next });
+  };
+  const setBoothManagerAudio = (b: MetaverseBooth, index: 0 | 1, url: string) => {
+    const next = [b.managerAudios?.[0] || '', b.managerAudios?.[1] || ''];
+    next[index] = url || '';
+    while (next.length && !next[next.length - 1]) next.pop();
+    updBooth(b.id, { managerAudios: next });
   };
 
   // ── Environmental wall ads ──
@@ -302,6 +311,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       'documents',
     );
   };
+  const uploadAudio = (key: string, file: File, onUrl: (u: string) => void) => {
+    if (!/\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(file.name) && !/^audio\//.test(file.type)) { alert(t.audioErr); return; }
+    if (file.size > 30 * 1024 * 1024) { alert(t.tooBig); return; }
+    setUploading(key); setUploadPct(0);
+    uploadFileWithProgress(
+      file,
+      p => setUploadPct(Math.round(p)),
+      u => { onUrl(u); setUploading(null); setUploadPct(0); },
+      err => { alert(err.message); setUploading(null); setUploadPct(0); },
+      'documents',
+    );
+  };
   // Upload an HTML page → shown on the booth wall through an iframe. Force text/html so Firebase
   // serves it inline (renderable in the iframe) instead of as a download.
   const uploadHtml = (key: string, file: File, onUrl: (u: string) => void) => {
@@ -322,6 +343,21 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           {value && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
           <input type="file" ref={ref} className="hidden" accept="image/*" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadImage(id, f, onUrl); ev.target.value = ''; }} />
         </div>
+      </div>
+    );
+  };
+  const AudioUpload: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string }> = ({ id, value, onUrl, label }) => {
+    const ref = useRef<HTMLInputElement>(null);
+    return (
+      <div>
+        <label className={lbl}>{label}</label>
+        <div className="flex items-center gap-2">
+          {value && <span className="text-[11px] px-2 py-1 rounded bg-sky-50 text-sky-700 font-bold">AUDIO</span>}
+          <button type="button" onClick={() => ref.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconUpload className="w-3.5 h-3.5" />{uploading === id ? t.uploading : t.upload}</button>
+          {value && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
+          <input type="file" ref={ref} className="hidden" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadAudio(id, f, onUrl); ev.target.value = ''; }} />
+        </div>
+        {uploading === id && <span className="text-[10px] text-gray-400">{t.uploading} {uploadPct > 0 ? `${uploadPct}%` : ''}</span>}
       </div>
     );
   };
@@ -719,8 +755,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
                             <ImgUpload id={`manager-1-${b.id}`} value={b.managerPngs?.[0]} onUrl={u => setBoothManagerPng(b, 0, u)} label={t.managerPng1} />
                             <div><label className={lbl}>{t.managerLink1}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[0] || (b as any).managerWhatsapps?.[0] || ''} onChange={ev => setBoothManagerLink(b, 0, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
+                            <AudioUpload id={`manager-audio-1-${b.id}`} value={b.managerAudios?.[0]} onUrl={u => setBoothManagerAudio(b, 0, u)} label={t.managerAudio1} />
                             <ImgUpload id={`manager-2-${b.id}`} value={b.managerPngs?.[1]} onUrl={u => setBoothManagerPng(b, 1, u)} label={t.managerPng2} />
                             <div><label className={lbl}>{t.managerLink2}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[1] || (b as any).managerWhatsapps?.[1] || ''} onChange={ev => setBoothManagerLink(b, 1, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
+                            <AudioUpload id={`manager-audio-2-${b.id}`} value={b.managerAudios?.[1]} onUrl={u => setBoothManagerAudio(b, 1, u)} label={t.managerAudio2} />
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
                           </div>
 
