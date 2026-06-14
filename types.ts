@@ -643,6 +643,8 @@ export interface ExpoWallAd {
   size?: string;         // preset banner size key (see BANNER_SIZES) — drives w/h
   w?: number;            // width (meters) — set from the chosen size preset
   h?: number;            // height (meters)
+  scale?: number;        // per-banner multiplier, applied after the global wallAdScale
+  lift?: number;         // per-banner vertical offset in meters, applied after global wallAdLift
   image?: string;        // banner image URL
   url?: string;          // hyperlink — opens in a new tab
   title?: MetaShopDirCat;

@@ -93,6 +93,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     adTitleFa: T ? 'متن تابلو (فارسی)' : 'Banner text (FA)', adTitleEn: T ? 'متن تابلو (انگلیسی)' : 'Banner text (EN)',
     adScaleAll: T ? 'بزرگ‌نمایی همه تابلوها' : 'All banners scale',
     adLiftAll: T ? 'بالا بردن همه تابلوها (متر)' : 'Lift all banners (m)',
+    adScaleOne: T ? 'بزرگ‌نمایی همین تابلو' : 'This banner scale',
+    adLiftOne: T ? 'بالا/پایین همین تابلو (متر)' : 'This banner lift (m)',
     meter: T ? 'متر' : 'm',
     adPos: T ? 'موقعیت افقی (۰ تا ۱)' : 'Horizontal (0–1)', adHeight: T ? 'ارتفاع (۰ تا ۱)' : 'Height (0–1)', adW: T ? 'عرض (متر)' : 'Width (m)', adH: T ? 'ارتفاع (متر)' : 'Height (m)',
     wallBack: T ? 'دیوار انتهایی' : 'Back', wallLeft: T ? 'چپ' : 'Left', wallRight: T ? 'راست' : 'Right', wallFront: T ? 'ورودی' : 'Front',
@@ -514,13 +516,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       size: ad.size || 'standard',
       w: ad.w || bannerSize(ad.size).w,
       h: ad.h || bannerSize(ad.size).h,
+      scale: ad.scale ?? 1,
+      lift: ad.lift ?? 0,
       title: ad.title || { fa: `تبلیغات محیطی ${i + 1}`, en: `Wall Advertising ${i + 1}` },
       image: ad.image || 'PASTE_GENERATED_IMAGE_OR_VIDEO_GIF_PDF_URL_HERE',
       url: ad.url || 'https://example.com',
     })) : [
-      { id: 'wall-ad-back-1', wall: 'back', size: 'billboard', w: 6, h: 3, title: { fa: 'تبلیغات اصلی سالن', en: 'Main Hall Advertisement' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
-      { id: 'wall-ad-left-1', wall: 'left', size: 'wide', w: 4.5, h: 2, title: { fa: 'حامی نمایشگاه', en: 'Expo Sponsor' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
-      { id: 'wall-ad-right-1', wall: 'right', size: 'standard', w: 3, h: 2, title: { fa: 'محل تبلیغات', en: 'Advertising Space' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'wall-ad-back-1', wall: 'back', size: 'billboard', w: 6, h: 3, scale: 1, lift: 0, title: { fa: 'تبلیغات اصلی سالن', en: 'Main Hall Advertisement' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'wall-ad-left-1', wall: 'left', size: 'wide', w: 4.5, h: 2, scale: 1.15, lift: 0.4, title: { fa: 'حامی نمایشگاه', en: 'Expo Sponsor' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'wall-ad-right-1', wall: 'right', size: 'standard', w: 3, h: 2, scale: 1, lift: -0.25, title: { fa: 'محل تبلیغات', en: 'Advertising Space' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
     ];
     const entranceAds = (e.entranceAds || []).length > 0 ? (e.entranceAds || []).map((ad, i) => ({
       id: ad.id || `entrance-ad-${i + 1}`,
@@ -693,6 +697,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                         {BANNER_SIZES.map(s => <option key={s.key} value={s.key}>{(T ? s.fa : s.en)} ({s.w}×{s.h} {t.meter})</option>)}
                       </select>
                     </div>
+                    <div><label className={lbl}>{t.adScaleOne}</label><input type="number" min={0.2} max={4} step={0.05} className={fld} value={ad.scale ?? 1} onChange={ev => updWallAd(ad.id, { scale: +ev.target.value || 1 })} /></div>
+                    <div><label className={lbl}>{t.adLiftOne}</label><input type="number" min={-6} max={8} step={0.25} className={fld} value={ad.lift ?? 0} onChange={ev => updWallAd(ad.id, { lift: +ev.target.value || 0 })} /></div>
                     <div><label className={lbl}>{t.adTitleFa}</label><input className={fld} value={ad.title?.fa || ''} onChange={ev => setWallAdTitle(ad, 'fa', ev.target.value)} placeholder="محل تبلیغات" /></div>
                     <div><label className={lbl}>{t.adTitleEn}</label><input className={fld + ' dir-ltr'} value={ad.title?.en || ''} onChange={ev => setWallAdTitle(ad, 'en', ev.target.value)} placeholder="Advertising space" /></div>
                     <AdMediaUpload id={`ad-${ad.id}`} value={ad.image} onUrl={u => updWallAd(ad.id, { image: u || undefined })} label={t.adImage} />

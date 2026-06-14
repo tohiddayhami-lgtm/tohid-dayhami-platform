@@ -288,9 +288,10 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         Object.keys(byWall).forEach(wall => {
           const list = byWall[wall]!;
           list.forEach((ad, i) => {
-            const w = (ad.w || 3) * adScale, h = (ad.h || 2) * adScale;
+            const perAdScale = Math.max(0.2, ad.scale ?? 1);
+            const w = (ad.w || 3) * adScale * perAdScale, h = (ad.h || 2) * adScale * perAdScale;
             const u = (i + 1) / (list.length + 1);                                   // even spacing along the wall
-            const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55 + adLift)); // comfortable height
+            const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55 + adLift + (ad.lift ?? 0))); // comfortable height
             const { position, rotation } = wallTransform(wall as 'back' | 'left' | 'right' | 'front', u, yc / height, dims);
             out.push(<WallAd
               key={ad.id}
