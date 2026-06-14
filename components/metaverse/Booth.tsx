@@ -628,15 +628,18 @@ const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [num
 
 const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number] }> = ({ url, position }) => {
   const { camera } = useThree();
+  const inXR = useXR((s) => !!s.session);
   const { scene } = useGLTF(url);
   const ref = useRef<THREE.Group>(null);
   const [grabbed, setGrabbed] = useState(false);
   const grabbedRef = useRef(false);
+  const pointerTargetReady = useRef(false);
   const home = useMemo(() => new THREE.Vector3(...position), [position]);
   const tmp = useMemo(() => ({
     camPos: new THREE.Vector3(),
     camDir: new THREE.Vector3(),
     worldTarget: new THREE.Vector3(),
+    pointerWorldTarget: new THREE.Vector3(),
     localTarget: new THREE.Vector3(),
   }), []);
   const { object, scale, offset } = useMemo(() => {
@@ -659,20 +662,34 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
 
   const setHeld = (held: boolean) => {
     grabbedRef.current = held;
+    if (!held) pointerTargetReady.current = false;
     setGrabbed(held);
+  };
+
+  const updateControllerGrabTarget = (e: ThreeEvent<PointerEvent>) => {
+    if (!e.ray) return;
+    // In WebXR this ray comes from the controller, not from the headset camera. Holding the
+    // miniature therefore feels like it is in the visitor's hand instead of glued to gaze.
+    tmp.pointerWorldTarget.copy(e.ray.origin).addScaledVector(e.ray.direction, inXR ? 0.42 : 1.05);
+    tmp.pointerWorldTarget.y -= inXR ? 0.03 : 0.12;
+    pointerTargetReady.current = true;
   };
 
   useFrame((_, dt) => {
     const g = ref.current;
     if (!g) return;
     if (grabbedRef.current) {
-      camera.getWorldPosition(tmp.camPos);
-      camera.getWorldDirection(tmp.camDir);
-      tmp.worldTarget.copy(tmp.camPos).addScaledVector(tmp.camDir, 1.05);
-      tmp.worldTarget.y -= 0.12;
+      if (inXR && pointerTargetReady.current) {
+        tmp.worldTarget.copy(tmp.pointerWorldTarget);
+      } else {
+        camera.getWorldPosition(tmp.camPos);
+        camera.getWorldDirection(tmp.camDir);
+        tmp.worldTarget.copy(tmp.camPos).addScaledVector(tmp.camDir, 1.05);
+        tmp.worldTarget.y -= 0.12;
+      }
       tmp.localTarget.copy(tmp.worldTarget);
       g.parent?.worldToLocal(tmp.localTarget);
-      g.position.lerp(tmp.localTarget, 0.32);
+      g.position.lerp(tmp.localTarget, inXR ? 0.46 : 0.32);
       g.rotation.y += dt * 1.35;
       g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, -0.18, 0.1);
       return;
@@ -690,7 +707,13 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
       onPointerDown={(e) => {
         e.stopPropagation();
         (e.target as Element).setPointerCapture?.(e.pointerId);
+        updateControllerGrabTarget(e);
         setHeld(true);
+      }}
+      onPointerMove={(e) => {
+        if (!grabbedRef.current) return;
+        e.stopPropagation();
+        updateControllerGrabTarget(e);
       }}
       onPointerUp={(e) => {
         e.stopPropagation();
@@ -698,6 +721,7 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
         setHeld(false);
       }}
       onPointerCancel={() => setHeld(false)}
+      onLostPointerCapture={() => setHeld(false)}
       onPointerOver={() => { document.body.style.cursor = 'grab'; }}
       onPointerOut={() => { document.body.style.cursor = 'auto'; }}
     >
