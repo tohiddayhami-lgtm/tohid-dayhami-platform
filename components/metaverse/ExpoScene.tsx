@@ -71,6 +71,11 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   };
   return (
     <group>
+      {/* Light entrance apron covers the whole outside corridor, including behind the rails. */}
+      <mesh position={[0, 0.018, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[Math.min(width, 9.5), Math.abs(z0 - z1) + 1.7]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.62} metalness={0} />
+      </mesh>
       {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
       <mesh position={[0, 0.035, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[4.6, Math.abs(z0 - z1) + 1.2]} />
