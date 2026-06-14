@@ -82,6 +82,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     noEntranceAds: T ? 'بنر ورودی اضافه نشده.' : 'No entrance banners yet.',
     entranceAdPos: T ? 'جایگاه بنر' : 'Banner position',
     entranceAdLift: T ? 'فاصله از سردر (متر)' : 'Distance above arch (m)',
+    adsJsonSample: T ? 'دانلود JSON نمونه تبلیغات برای AI' : 'Download AI ads JSON sample',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
@@ -506,6 +507,56 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
   const previewUrl = `${shopBaseUrl}?expo=${encodeURIComponent(bazaarSlug)}`;
   const shopProducts = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []) : []);
+  const downloadExpoAdsJsonSample = () => {
+    const wallAds = (e.wallAds || []).length > 0 ? (e.wallAds || []).map((ad, i) => ({
+      id: ad.id || `wall-ad-${i + 1}`,
+      wall: ad.wall || 'back',
+      size: ad.size || 'standard',
+      w: ad.w || bannerSize(ad.size).w,
+      h: ad.h || bannerSize(ad.size).h,
+      title: ad.title || { fa: `تبلیغات محیطی ${i + 1}`, en: `Wall Advertising ${i + 1}` },
+      image: ad.image || 'PASTE_GENERATED_IMAGE_OR_VIDEO_GIF_PDF_URL_HERE',
+      url: ad.url || 'https://example.com',
+    })) : [
+      { id: 'wall-ad-back-1', wall: 'back', size: 'billboard', w: 6, h: 3, title: { fa: 'تبلیغات اصلی سالن', en: 'Main Hall Advertisement' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'wall-ad-left-1', wall: 'left', size: 'wide', w: 4.5, h: 2, title: { fa: 'حامی نمایشگاه', en: 'Expo Sponsor' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'wall-ad-right-1', wall: 'right', size: 'standard', w: 3, h: 2, title: { fa: 'محل تبلیغات', en: 'Advertising Space' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+    ];
+    const entranceAds = (e.entranceAds || []).length > 0 ? (e.entranceAds || []).map((ad, i) => ({
+      id: ad.id || `entrance-ad-${i + 1}`,
+      position: ad.position || 'aboveArch',
+      size: ad.size || 'billboard',
+      w: ad.w || bannerSize(ad.size).w,
+      h: ad.h || bannerSize(ad.size).h,
+      lift: ad.lift ?? (ad.position === 'aboveArch' ? 0.75 : undefined),
+      title: ad.title || { fa: `تبلیغات ورودی ${i + 1}`, en: `Entrance Advertising ${i + 1}` },
+      image: ad.image || 'PASTE_GENERATED_IMAGE_OR_VIDEO_GIF_PDF_URL_HERE',
+      url: ad.url || 'https://example.com',
+    })) : [
+      { id: 'entrance-above-arch', position: 'aboveArch', size: 'billboard', w: 8, h: 2.5, lift: 1, title: { fa: 'بنر بالای سردر', en: 'Banner Above Entrance Arch' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'entrance-rail-left', position: 'railLeft', size: 'portrait', w: 2, h: 3.5, title: { fa: 'بنر ایستاده چپ', en: 'Left Standing Banner' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+      { id: 'entrance-rail-right', position: 'railRight', size: 'portrait', w: 2, h: 3.5, title: { fa: 'بنر ایستاده راست', en: 'Right Standing Banner' }, image: 'PASTE_GENERATED_IMAGE_URL_HERE', url: 'https://example.com' },
+    ];
+    const sample = {
+      _instructions: {
+        fa: 'این فایل را به هوش مصنوعی بدهید تا فقط مقدار image را با URL رسانه تولیدشده پر کند. سپس در بخش بازارچه‌ها روی همان بازارچه، دکمه به‌روزرسانی از JSON را بزنید و این فایل را آپلود کنید.',
+        en: 'Give this file to an AI image/media generator and ask it to replace only the image fields with generated media URLs. Then upload it via Bazaars > Update from JSON for the target bazaar.',
+      },
+      expo: {
+        wallAdScale: e.wallAdScale ?? 1.35,
+        wallAdLift: e.wallAdLift ?? 2,
+        wallAds,
+        entranceAds,
+      },
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = `expo-ads-ai-sample-${bazaarSlug || 'bazaar'}.json`;
+    a.click();
+    URL.revokeObjectURL(href);
+  };
 
   return (
     <div className={card + ' space-y-4'}>
@@ -520,6 +571,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               ? <button type="button" onClick={() => onPreview()} title={t.previewHint} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</button>
               : (bazaarSlug && <a href={previewUrl} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</a>)
           )}
+          {e.enabled && <button type="button" onClick={downloadExpoAdsJsonSample} className="text-xs px-3 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">⤓ {t.adsJsonSample}</button>}
           <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
             <input type="checkbox" className="w-4 h-4 accent-indigo-600" disabled={readonly} checked={!!e.enabled} onChange={ev => onChange({ ...(expo || blankExpo()), enabled: ev.target.checked })} />
             {t.enable}

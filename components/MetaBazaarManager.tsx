@@ -33,12 +33,14 @@ const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
   const j = JSON.parse(raw);
+  const { _instructions, _aiInstructions, ...clean } = j;
   return {
-    ...base, ...j,
+    ...base, ...clean,
     id: base.id, createdAt: base.createdAt,
-    tree: Array.isArray(j.tree) ? j.tree : [],
-    levelLabels: Array.isArray(j.levelLabels) ? j.levelLabels : [],
+    tree: Array.isArray(j.tree) ? j.tree : (base.tree || []),
+    levelLabels: Array.isArray(j.levelLabels) ? j.levelLabels : (base.levelLabels || []),
     theme: { ...(base.theme || {}), ...(j.theme || {}) },
+    expo: j.expo ? { ...(base.expo || {}), ...j.expo } : base.expo,
   };
 };
 
