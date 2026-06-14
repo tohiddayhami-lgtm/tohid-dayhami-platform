@@ -2,6 +2,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
+import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
@@ -32,6 +33,19 @@ export class TexBoundary extends React.Component<{ children: React.ReactNode }, 
 }
 
 type MediaProps = { url: string; width: number; height: number; position: [number, number, number]; rotation?: [number, number, number] };
+
+const ThinPanelFrame: React.FC<{ width: number; height: number; z?: number; color?: string }> = ({ width, height, z = 0.05, color = '#0f172a' }) => {
+  const t = 0.035;
+  const mat = <meshStandardMaterial color={color} metalness={0.35} roughness={0.4} />;
+  return (
+    <group position={[0, 0, z]}>
+      <mesh position={[0, height / 2 + t / 2, 0]}><boxGeometry args={[width + t * 2, t, 0.018]} />{mat}</mesh>
+      <mesh position={[0, -height / 2 - t / 2, 0]}><boxGeometry args={[width + t * 2, t, 0.018]} />{mat}</mesh>
+      <mesh position={[-width / 2 - t / 2, 0, 0]}><boxGeometry args={[t, height + t * 2, 0.018]} />{mat}</mesh>
+      <mesh position={[width / 2 + t / 2, 0, 0]}><boxGeometry args={[t, height + t * 2, 0.018]} />{mat}</mesh>
+    </group>
+  );
+};
 
 // Optional image-on-a-plane (logo / banner / wall panel). Loads lazily; absent → nothing.
 const ImagePlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
@@ -74,6 +88,7 @@ const ProjectedHtmlPanel: React.FC<{
   children: React.ReactNode;
 }> = ({ width, height, pxW, pxH, portal, children }) => {
   const { camera, size } = useThree();
+  const inXR = useXR((s) => !!s.session);
   const anchorRef = useRef<THREE.Group>(null);
   const [el] = useState(() => document.createElement('div'));
   const rootRef = useRef<ReactDOM.Root | null>(null);
@@ -120,6 +135,10 @@ const ProjectedHtmlPanel: React.FC<{
   useFrame(() => {
     const anchor = anchorRef.current;
     if (!anchor) return;
+    if (inXR) {
+      el.style.display = 'none';
+      return;
+    }
 
     anchor.updateWorldMatrix(true, false);
     camera.updateMatrixWorld();
@@ -173,13 +192,90 @@ const ProjectedHtmlPanel: React.FC<{
     const b = p1.y - p0.y + g * p1.y;
     const c = p2.x - p0.x + h * p2.x;
     const d = p2.y - p0.y + h * p2.y;
-    const dist = center.distanceTo(camPos);
+    const f = (n: number) => Math.round(n * 10000) / 10000;
     el.style.display = 'block';
-    el.style.zIndex = String(Math.max(5, Math.min(35, Math.round(36 - dist * 0.25))));
-    el.style.transform = `matrix3d(${a / pxW},${b / pxW},0,${g / pxW},${c / pxH},${d / pxH},0,${h / pxH},0,0,1,0,${p0.x},${p0.y},0,1)`;
+    el.style.zIndex = '28';
+    el.style.transform = `matrix3d(${f(a / pxW)},${f(b / pxW)},0,${f(g / pxW)},${f(c / pxH)},${f(d / pxH)},0,${f(h / pxH)},0,0,1,0,${f(p0.x)},${f(p0.y)},0,1)`;
   });
 
   return <group ref={anchorRef} position={[0, 0, 0.035]} />;
+};
+
+// Best-effort WebGL copy of the iframe for immersive VR. Browsers do not render DOM iframes inside
+// WebXR, so this snapshots same-origin/srcDoc HTML into a texture that the headset can actually see.
+const HtmlSnapshotPlane: React.FC<{
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+  width: number;
+  height: number;
+}> = ({ iframeRef, width, height }) => {
+  const [tex] = useState(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 8; canvas.height = 8;
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  });
+  const [ready, setReady] = useState(false);
+  const busy = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    let html2canvasPromise: Promise<typeof import('html2canvas').default> | null = null;
+    const capture = async () => {
+      const frame = iframeRef.current;
+      const doc = frame?.contentDocument;
+      const body = doc?.body;
+      if (!frame || !body || busy.current) return;
+      busy.current = true;
+      try {
+        html2canvasPromise ||= import('html2canvas').then(m => m.default);
+        const html2canvas = await html2canvasPromise;
+        const w = frame.clientWidth || 900;
+        const h = frame.clientHeight || Math.round((w * height) / width);
+        const snap = await html2canvas(body, {
+          backgroundColor: '#ffffff',
+          logging: false,
+          useCORS: true,
+          width: w,
+          height: h,
+          windowWidth: w,
+          windowHeight: h,
+          scale: 1,
+        });
+        if (!alive) return;
+        const dst = tex.image as HTMLCanvasElement;
+        dst.width = snap.width; dst.height = snap.height;
+        const ctx = dst.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, dst.width, dst.height);
+          ctx.drawImage(snap, 0, 0);
+          tex.needsUpdate = true;
+          setReady(true);
+        }
+      } catch {
+        // Cross-origin or complex pages may not snapshot; keep the static VR fallback visible.
+      } finally {
+        busy.current = false;
+      }
+    };
+    const timer = window.setInterval(capture, 1600);
+    const first = window.setTimeout(capture, 700);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.clearTimeout(first);
+    };
+  }, [height, iframeRef, tex, width]);
+
+  useEffect(() => () => tex.dispose(), [tex]);
+
+  return ready ? (
+    <mesh position={[0, 0, 0.012]}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={tex} toneMapped={false} />
+    </mesh>
+  ) : null;
 };
 
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
@@ -231,6 +327,7 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const portal = useCanvasPortal();
   const [doc, setDoc] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     let cancel = false;
     setDoc(null);
@@ -259,12 +356,14 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
       </mesh>
-      {/* VR-only fallback glyph (DOM can't render inside an immersive XR session) */}
-      <CanvasLabel text="🌐" width={width * 0.32} height={width * 0.32} position={[0, 0, 0.004]} color="#ffffff" />
+      <HtmlSnapshotPlane iframeRef={iframeRef} width={width} height={height} />
+      {/* VR/static fallback glyph (covered once the snapshot or live iframe paints). */}
+      <CanvasLabel text="HTML" width={width * 0.44} height={width * 0.16} position={[0, 0, 0.006]} bg="rgba(15,23,42,.72)" color="#ffffff" />
+      <ThinPanelFrame width={width + 0.02} height={height + 0.02} />
       <ProjectedHtmlPanel width={width} height={height} pxW={PX_W} pxH={PX_H} portal={portal}>
         {doc != null
-          ? <iframe srcDoc={doc} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />
-          : <iframe src={url} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />}
+          ? <iframe ref={iframeRef} srcDoc={doc} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />
+          : <iframe ref={iframeRef} src={url} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />}
       </ProjectedHtmlPanel>
     </group>
   );
