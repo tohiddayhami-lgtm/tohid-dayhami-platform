@@ -749,7 +749,11 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const managerNames = managerSlots.map(i => bi(booth.managerNames?.[i], lang, ''));
   const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
   const managerLinks = managerSlots.map(i => booth.managerLinks?.[i] || legacyWhatsapps?.[i] || '');
-  const managerAudios = managerSlots.map(i => booth.managerAudios?.[i] || '');
+  const managerAudios = managerSlots.map(i => (
+    lang === 'fa'
+      ? (booth.managerAudiosFa?.[i] || booth.managerAudios?.[i] || booth.managerAudiosEn?.[i] || '')
+      : (booth.managerAudiosEn?.[i] || booth.managerAudios?.[i] || booth.managerAudiosFa?.[i] || '')
+  ));
   const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null, null, null, null]);
   useEffect(() => () => {
     managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });

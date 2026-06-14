@@ -130,7 +130,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     managerNameFa: (n: number) => T ? `نام شخص ${n} (فارسی)` : `Person ${n} name (FA)`,
     managerNameEn: (n: number) => T ? `نام شخص ${n} (انگلیسی)` : `Person ${n} name (EN)`,
     managerLink: (n: number) => T ? `لینک شخص ${n}` : `Person ${n} link`,
-    managerAudio: (n: number) => T ? `فایل صوتی شخص ${n}` : `Person ${n} audio`,
+    managerAudioFa: (n: number) => T ? `فایل صوتی فارسی شخص ${n}` : `Person ${n} Persian audio`,
+    managerAudioEn: (n: number) => T ? `فایل صوتی انگلیسی شخص ${n}` : `Person ${n} English audio`,
     uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
@@ -207,10 +208,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     next[index] = val;
     updBooth(b.id, { managerLinks: compactFive(next) });
   };
-  const setBoothManagerAudio = (b: MetaverseBooth, index: number, url: string) => {
-    const next = Array.from({ length: 5 }, (_, i) => b.managerAudios?.[i] || '');
+  const setBoothManagerAudio = (b: MetaverseBooth, index: number, which: 'fa' | 'en', url: string) => {
+    const field = which === 'fa' ? 'managerAudiosFa' : 'managerAudiosEn';
+    const next = Array.from({ length: 5 }, (_, i) => b[field]?.[i] || '');
     next[index] = url || '';
-    updBooth(b.id, { managerAudios: compactFive(next) });
+    updBooth(b.id, { [field]: compactFive(next), ...(which === 'fa' ? { managerAudios: undefined } : {}) } as Partial<MetaverseBooth>);
   };
 
   // ── Environmental wall ads ──
@@ -768,7 +770,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <div><label className={lbl}>{t.managerNameFa(i + 1)}</label><input className={fld} value={b.managerNames?.[i]?.fa || ''} onChange={ev => setBoothManagerName(b, i, 'fa', ev.target.value)} /></div>
                                 <div><label className={lbl}>{t.managerNameEn(i + 1)}</label><input className={fld + ' dir-ltr'} value={b.managerNames?.[i]?.en || ''} onChange={ev => setBoothManagerName(b, i, 'en', ev.target.value)} /></div>
                                 <div><label className={lbl}>{t.managerLink(i + 1)}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[i] || (b as any).managerWhatsapps?.[i] || ''} onChange={ev => setBoothManagerLink(b, i, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
-                                <AudioUpload id={`manager-audio-${i + 1}-${b.id}`} value={b.managerAudios?.[i]} onUrl={u => setBoothManagerAudio(b, i, u)} label={t.managerAudio(i + 1)} />
+                                <AudioUpload id={`manager-audio-fa-${i + 1}-${b.id}`} value={b.managerAudiosFa?.[i] || b.managerAudios?.[i]} onUrl={u => setBoothManagerAudio(b, i, 'fa', u)} label={t.managerAudioFa(i + 1)} />
+                                <AudioUpload id={`manager-audio-en-${i + 1}-${b.id}`} value={b.managerAudiosEn?.[i]} onUrl={u => setBoothManagerAudio(b, i, 'en', u)} label={t.managerAudioEn(i + 1)} />
                               </React.Fragment>
                             ))}
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
