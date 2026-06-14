@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -104,9 +104,10 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 
 // An uploaded HTML page painted onto the wall as a REAL WebGL texture (works on desktop AND inside
 // the VR headset — unlike a drei <Html> overlay, which does not composite over the canvas here).
-// The page is fetched, rendered in a hidden same-origin iframe, then rasterised with html2canvas
-// onto a CanvasTexture. It's a snapshot (the top of the page, fit to the panel) rather than a live
-// document, but it actually shows on the wall — which is the whole point.
+// The WHOLE document is rendered in a hidden iframe (scripts allowed, so JS-built pages render),
+// rasterised at full height with html2canvas onto an off-screen canvas, then a window of it is
+// blitted onto the wall texture — with ▲/▼ scroll + auto-scroll play/pause so a long page can be
+// read top-to-bottom right on the wall.
 const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const PX_W = 1280;
   const PX_H = Math.max(2, Math.round((PX_W * height) / width));
@@ -120,23 +121,37 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
     return t;
   }, [PX_W, PX_H]);
 
+  const fullRef = useRef<HTMLCanvasElement | null>(null);   // full-height rasterised document
+  const scroll = useRef(0);
+  const maxScroll = useRef(0);
+  const [playing, setPlaying] = useState(false);
+
+  // Blit the current window of the full document onto the wall texture.
+  const redraw = useCallback(() => {
+    const full = fullRef.current;
+    const dst = tex.image as HTMLCanvasElement;
+    const ctx = dst.getContext('2d');
+    if (!full || !ctx) return;
+    const y = Math.max(0, Math.min(maxScroll.current, scroll.current));
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PX_W, PX_H);
+    ctx.drawImage(full, 0, y, PX_W, PX_H, 0, 0, PX_W, PX_H);
+    tex.needsUpdate = true;
+  }, [tex, PX_W, PX_H]);
+
   useEffect(() => {
     let cancelled = false;
     let frame: HTMLIFrameElement | null = null;
-    const dst = tex.image as HTMLCanvasElement;
+    fullRef.current = null; scroll.current = 0; maxScroll.current = 0;
 
     (async () => {
       let html: string;
       try { const r = await fetch(url); if (!r.ok) return; html = await r.text(); } catch { return; }
       if (cancelled) return;
-      // inject <base> so the page's own relative links resolve back to its Storage folder
       if (!/<base\b/i.test(html)) {
         const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
         html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
       }
-      // hidden, laid-out iframe so html2canvas can read its computed styles. allow-scripts so a
-      // JS-rendered page (e.g. one that builds its DOM on load) actually produces content; the
-      // admin uploads this file, so running its scripts is expected.
+      // hidden iframe, scripts allowed so a JS-rendered page actually builds its content
       frame = document.createElement('iframe');
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
       Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: PX_W + 'px', height: PX_H + 'px', border: '0', background: '#fff', opacity: '0', pointerEvents: 'none', zIndex: '-1' });
@@ -144,33 +159,61 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
       document.body.appendChild(frame);
       await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 4000); });
 
-      const { default: html2canvas } = await import('html2canvas');
       const sleep = (ms: number) => new Promise<void>(r => window.setTimeout(r, ms));
-      const snap = async () => {
-        const cdoc = frame?.contentDocument;
-        if (cancelled || !cdoc?.body) return;
-        try {
-          const rendered = await html2canvas(cdoc.body, { width: PX_W, height: PX_H, windowWidth: PX_W, windowHeight: PX_H, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
-          if (cancelled) return;
-          const ctx = dst.getContext('2d');
-          if (ctx) { ctx.clearRect(0, 0, PX_W, PX_H); ctx.drawImage(rendered, 0, 0, PX_W, PX_H); tex.needsUpdate = true; }
-        } catch { /* leave the placeholder */ }
-      };
-      // Give the page's JS time to build the DOM, then re-snapshot a few times to catch late content.
-      for (const wait of [700, 1500, 2000]) {
-        await sleep(wait);
-        if (cancelled) break;
-        await snap();
+      // Poll until the (possibly JS-rendered) content has appeared and its height is stable.
+      let lastH = -1, stable = 0;
+      for (let i = 0; i < 22 && !cancelled; i++) {
+        await sleep(350);
+        const b = frame?.contentDocument?.body;
+        const h = b ? b.scrollHeight : 0;
+        if (h > 40 && h === lastH) { if (++stable >= 2) break; } else stable = 0;
+        lastH = h;
       }
+      if (cancelled) return;
+      const cdoc = frame?.contentDocument;
+      const body = cdoc?.body;
+      if (!body) return;
+      const fullH = Math.min(16000, Math.max(PX_H, cdoc!.documentElement.scrollHeight, body.scrollHeight));
+      frame.style.height = fullH + 'px';   // expand so the whole page is laid out for capture
+      await sleep(200);
+      if (cancelled) return;
+      try {
+        const { default: html2canvas } = await import('html2canvas');
+        const rendered = await html2canvas(body, { width: PX_W, height: fullH, windowWidth: PX_W, windowHeight: fullH, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
+        if (cancelled) return;
+        fullRef.current = rendered;
+        maxScroll.current = Math.max(0, rendered.height - PX_H);
+        redraw();
+      } catch { /* leave the placeholder */ }
       if (frame?.parentNode) frame.parentNode.removeChild(frame);
       frame = null;
     })();
 
     return () => { cancelled = true; if (frame?.parentNode) frame.parentNode.removeChild(frame); };
-  }, [url, tex, PX_W, PX_H]);
+  }, [url, redraw, PX_W, PX_H]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
+  // Auto-scroll while playing; stop at the bottom.
+  useFrame((_, dt) => {
+    if (!playing || !fullRef.current) return;
+    scroll.current += dt * 160;
+    if (scroll.current >= maxScroll.current) { scroll.current = maxScroll.current; setPlaying(false); }
+    redraw();
+  });
+
+  const scrollBy = (d: number) => (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    setPlaying(false);
+    scroll.current = Math.max(0, Math.min(maxScroll.current, scroll.current + d));
+    redraw();
+  };
+  const togglePlay = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); setPlaying(p => !p); };
+
+  // Scroll controls stacked on the right edge.
+  const bs = Math.min(Math.max(height * 0.13, 0.07), 0.13);
+  const bx = width / 2 - bs * 0.72;
+  const page = PX_H * 0.85;
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
@@ -180,6 +223,10 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         <planeGeometry args={[width, height]} />
         <meshBasicMaterial map={tex} toneMapped={false} />
       </mesh>
+      {/* ▲ scroll up · ⏯ auto-scroll · ▼ scroll down */}
+      <group position={[0, bs * 1.2, 0.02]}><CtrlBtn x={bx} size={bs} glyph="▲" onClick={scrollBy(-page)} /></group>
+      <group position={[0, 0, 0.02]}><CtrlBtn x={bx} size={bs} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} /></group>
+      <group position={[0, -bs * 1.2, 0.02]}><CtrlBtn x={bx} size={bs} glyph="▼" onClick={scrollBy(page)} /></group>
     </group>
   );
 };
