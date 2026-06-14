@@ -620,6 +620,7 @@ export interface MetaverseBooth {
   managerAudios?: string[];     // legacy/fallback audio files played when those PNG people are clicked
   managerAudiosFa?: string[];   // Persian audio files for those PNG people
   managerAudiosEn?: string[];   // English audio files for those PNG people
+  counterGlbs?: string[];       // up to 5 standardized miniature GLB models displayed on the counter
   bannerImage?: string;         // banner image URL (Storage images/)
   screenUrl?: string;           // (legacy) video link for the in-world LCD — now the innerBack panel fallback
   // Per-face media: each value is an image URL or a video link (YouTube/Vimeo/mp4). Videos

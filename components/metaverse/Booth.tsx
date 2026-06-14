@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
+import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { BoothTier, MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -626,6 +626,36 @@ const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [num
   );
 };
 
+const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number] }> = ({ url, position }) => {
+  const { scene } = useGLTF(url);
+  const { object, scale, offset } = useMemo(() => {
+    const cloned = scene.clone(true);
+    cloned.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const box = new THREE.Box3().setFromObject(cloned);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxFootprint = Math.max(size.x, size.z);
+    const fitScale = Math.min(
+      size.y > 0 ? 0.42 / size.y : 0.16,
+      maxFootprint > 0 ? 0.34 / maxFootprint : 0.16,
+    );
+    return {
+      object: cloned,
+      scale: Number.isFinite(fitScale) && fitScale > 0 ? fitScale : 0.16,
+      offset: new THREE.Vector3(-center.x, -box.min.y, -center.z),
+    };
+  }, [scene]);
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.008, 0]} receiveShadow>
+        <cylinderGeometry args={[0.19, 0.21, 0.035, 32]} />
+        <meshStandardMaterial color="#111827" metalness={0.35} roughness={0.45} />
+      </mesh>
+      <primitive object={object} position={[offset.x * scale, 0.035 + offset.y * scale, offset.z * scale]} scale={scale} />
+    </group>
+  );
+};
+
 // In-world LCD screen that plays a video ON the wall, muted + looping. Direct files are painted
 // as a real WebGL texture; YouTube/Vimeo are shown through an iframe transformed onto the wall
 // surface (the only way to embed them in 3D — they can't be textured due to CORS).
@@ -755,6 +785,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       : (booth.managerAudiosEn?.[i] || booth.managerAudios?.[i] || booth.managerAudiosFa?.[i] || '')
   ));
   const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null, null, null, null]);
+  const counterGlbs = managerSlots.map(i => booth.counterGlbs?.[i] || '');
+  const counterGlbXs = [-0.82, -0.41, 0, 0.41, 0.82];
   useEffect(() => () => {
     managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });
   }, []);
@@ -895,6 +927,13 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <boxGeometry args={[W * 0.54, 0.06, 0.66]} />
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
+          {counterGlbs.map((url, i) => url ? (
+            <TexBoundary key={`${url}-${i}`}>
+              <Suspense fallback={null}>
+                <CounterMiniatureGlb url={url} position={[counterGlbXs[i], 1.02, D / 2 - 0.5]} />
+              </Suspense>
+            </TexBoundary>
+          ) : null)}
 
           {/* Six wall panels (3 inner + 3 outer) — each an image or an in-world auto-playing video */}
           {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} /> : null; })}

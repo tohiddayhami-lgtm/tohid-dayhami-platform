@@ -126,6 +126,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
+    counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,
     managerNameFa: (n: number) => T ? `نام شخص ${n} (فارسی)` : `Person ${n} name (FA)`,
     managerNameEn: (n: number) => T ? `نام شخص ${n} (انگلیسی)` : `Person ${n} name (EN)`,
@@ -213,6 +214,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const next = Array.from({ length: 5 }, (_, i) => b[field]?.[i] || '');
     next[index] = url || '';
     updBooth(b.id, { [field]: compactFive(next), ...(which === 'fa' ? { managerAudios: undefined } : {}) } as Partial<MetaverseBooth>);
+  };
+  const setBoothCounterGlb = (b: MetaverseBooth, index: number, url: string) => {
+    const next = Array.from({ length: 5 }, (_, i) => b.counterGlbs?.[i] || '');
+    next[index] = url || '';
+    updBooth(b.id, { counterGlbs: compactFive(next) });
   };
 
   // ── Environmental wall ads ──
@@ -764,6 +770,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               <div><label className={lbl}>{t.posZ}</label><input type="number" step="0.5" className={fld} value={b.z ?? 0} onChange={ev => updBooth(b.id, { z: +ev.target.value })} /></div>
                             </div>
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
+                            {MANAGER_SLOTS.map(i => (
+                              <GlbUpload key={`counter-glb-${b.id}-${i}`} id={`counter-glb-${i + 1}-${b.id}`} value={b.counterGlbs?.[i]} onUrl={u => setBoothCounterGlb(b, i, u)} label={t.counterGlb(i + 1)} />
+                            ))}
                             {MANAGER_SLOTS.map(i => (
                               <React.Fragment key={`manager-slot-${b.id}-${i}`}>
                                 <ImgUpload id={`manager-${i + 1}-${b.id}`} value={b.managerPngs?.[i]} onUrl={u => setBoothManagerPng(b, i, u)} label={t.managerPng(i + 1)} />
