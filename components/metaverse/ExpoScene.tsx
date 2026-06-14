@@ -54,7 +54,7 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
     const h = ad.h || 3.5;
     const y = h / 2 + 0.18;
     if (ad.position === 'aboveArch') {
-      return { position: [0, 3.65 + h / 2, depth / 2 + 0.24], rotation: [0, 0, 0] };
+      return { position: [0, 3.65 + h / 2 + (ad.lift ?? 0.75), depth / 2 + 0.24], rotation: [0, 0, 0] };
     }
     if (ad.position === 'archLeft' || ad.position === 'archRight') {
       const side = ad.position === 'archLeft' ? -1 : 1;

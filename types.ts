@@ -649,6 +649,7 @@ export interface ExpoEntranceAd {
   size?: string;
   w?: number;
   h?: number;
+  lift?: number;          // vertical offset for above-arch banners (meters)
   image?: string;
   url?: string;
   title?: MetaShopDirCat;

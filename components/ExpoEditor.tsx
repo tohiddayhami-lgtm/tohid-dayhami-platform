@@ -79,6 +79,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     addEntranceAd: T ? 'افزودن بنر ورودی' : 'Add entrance banner',
     noEntranceAds: T ? 'بنر ورودی اضافه نشده.' : 'No entrance banners yet.',
     entranceAdPos: T ? 'جایگاه بنر' : 'Banner position',
+    entranceAdLift: T ? 'فاصله از سردر (متر)' : 'Distance above arch (m)',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
@@ -514,6 +515,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                           </div>
                           <div><label className={lbl}>{t.adW}</label><input type="number" min={0.8} max={18} step={0.25} className={fld} value={ad.w ?? bannerSize(ad.size).w} onChange={ev => updEntranceAd(ad.id, { w: +ev.target.value || undefined })} /></div>
                           <div><label className={lbl}>{t.adH}</label><input type="number" min={0.8} max={8} step={0.25} className={fld} value={ad.h ?? bannerSize(ad.size).h} onChange={ev => updEntranceAd(ad.id, { h: +ev.target.value || undefined })} /></div>
+                          {ad.position === 'aboveArch' && (
+                            <div><label className={lbl}>{t.entranceAdLift}</label><input type="number" min={0} max={8} step={0.25} className={fld} value={ad.lift ?? 0.75} onChange={ev => updEntranceAd(ad.id, { lift: ev.target.value === '' ? undefined : +ev.target.value })} /></div>
+                          )}
                           <div><label className={lbl}>{t.adTitleFa}</label><input className={fld} value={ad.title?.fa || ''} onChange={ev => setEntranceAdTitle(ad, 'fa', ev.target.value)} placeholder="تبلیغات ورودی" /></div>
                           <div><label className={lbl}>{t.adTitleEn}</label><input className={fld + ' dir-ltr'} value={ad.title?.en || ''} onChange={ev => setEntranceAdTitle(ad, 'en', ev.target.value)} placeholder="Entrance ad" /></div>
                           <AdMediaUpload id={`entrance-ad-${ad.id}`} value={ad.image} onUrl={u => updEntranceAd(ad.id, { image: u || undefined })} label={t.adImage} />
