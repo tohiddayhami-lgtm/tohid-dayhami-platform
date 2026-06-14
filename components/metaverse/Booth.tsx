@@ -132,10 +132,10 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
   const scale = width / PX_W;
   return (
     <group position={position} rotation={rotation}>
-      <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
+      <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.08]} castShadow>
         <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
       </RoundedBox>
-      <mesh position={[0, 0, -0.005]}>
+      <mesh position={[0, 0, -0.02]}>
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
       </mesh>
@@ -147,8 +147,8 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         position={[0, 0, 0.03]}
         scale={scale}
         center
-        zIndexRange={[24, 0]}
-        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)' }}
+        zIndexRange={[1000, 0]}
+        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)', pointerEvents: 'auto' }}
       >
         {doc != null
           ? <iframe srcDoc={doc} style={{ display: 'block', border: 0, width: PX_W, height: PX_H, background: '#fff' }} title="booth-html" />
