@@ -627,7 +627,18 @@ const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [num
 };
 
 const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number] }> = ({ url, position }) => {
+  const { camera } = useThree();
   const { scene } = useGLTF(url);
+  const ref = useRef<THREE.Group>(null);
+  const [grabbed, setGrabbed] = useState(false);
+  const grabbedRef = useRef(false);
+  const home = useMemo(() => new THREE.Vector3(...position), [position]);
+  const tmp = useMemo(() => ({
+    camPos: new THREE.Vector3(),
+    camDir: new THREE.Vector3(),
+    worldTarget: new THREE.Vector3(),
+    localTarget: new THREE.Vector3(),
+  }), []);
   const { object, scale, offset } = useMemo(() => {
     const cloned = scene.clone(true);
     cloned.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -645,11 +656,54 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
       offset: new THREE.Vector3(-center.x, -box.min.y, -center.z),
     };
   }, [scene]);
+
+  const setHeld = (held: boolean) => {
+    grabbedRef.current = held;
+    setGrabbed(held);
+  };
+
+  useFrame((_, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    if (grabbedRef.current) {
+      camera.getWorldPosition(tmp.camPos);
+      camera.getWorldDirection(tmp.camDir);
+      tmp.worldTarget.copy(tmp.camPos).addScaledVector(tmp.camDir, 1.05);
+      tmp.worldTarget.y -= 0.12;
+      tmp.localTarget.copy(tmp.worldTarget);
+      g.parent?.worldToLocal(tmp.localTarget);
+      g.position.lerp(tmp.localTarget, 0.32);
+      g.rotation.y += dt * 1.35;
+      g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, -0.18, 0.1);
+      return;
+    }
+    g.position.lerp(home, 0.24);
+    g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, 0, 0.18);
+    g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, 0, 0.18);
+    g.rotation.z = THREE.MathUtils.lerp(g.rotation.z, 0, 0.18);
+  });
+
   return (
-    <group position={position}>
+    <group
+      ref={ref}
+      position={position}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        setHeld(true);
+      }}
+      onPointerUp={(e) => {
+        e.stopPropagation();
+        (e.target as Element).releasePointerCapture?.(e.pointerId);
+        setHeld(false);
+      }}
+      onPointerCancel={() => setHeld(false)}
+      onPointerOver={() => { document.body.style.cursor = 'grab'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+    >
       <mesh position={[0, 0.008, 0]} receiveShadow>
         <cylinderGeometry args={[0.19, 0.21, 0.035, 32]} />
-        <meshStandardMaterial color="#111827" metalness={0.35} roughness={0.45} />
+        <meshStandardMaterial color={grabbed ? '#1d4ed8' : '#111827'} metalness={0.35} roughness={0.45} emissive={grabbed ? '#1d4ed8' : '#000000'} emissiveIntensity={grabbed ? 0.25 : 0} />
       </mesh>
       <primitive object={object} position={[offset.x * scale, 0.035 + offset.y * scale, offset.z * scale]} scale={scale} />
     </group>
