@@ -64,7 +64,7 @@ const useCanvasPortal = () => {
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
 // video → LCD screen, anything else → a static image panel.
 const PanelMedia: React.FC<MediaProps> = (props) =>
-  isHtmlFile(props.url) ? <IframePanel {...props} />
+  isHtmlFile(props.url) ? <HtmlPanel {...props} />
     : isGif(props.url) ? <GifPlane {...props} />
     : isVideoUrl(props.url) ? <BoothScreen {...props} />
     : <SafeImage {...props} />;
@@ -102,61 +102,80 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
   );
 };
 
-// An uploaded HTML page shown on the wall through an iframe transformed onto the surface (the
-// only way to render arbitrary HTML in 3D; like the YouTube path, it's a DOM overlay, so VR
-// headsets see the bezel + 🌐 glyph rather than the live page).
-//
-// We fetch the file and inline it via `srcDoc` instead of pointing the iframe at the Storage URL:
-// Firebase often serves uploaded HTML as a download (octet-stream / Content-Disposition) or with
-// frame restrictions, which leaves a plain `src` iframe blank. Inlining the bytes sidesteps all of
-// that. `<base>` is injected so the page's own relative links still resolve back to its folder.
-const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
-  const portal = useCanvasPortal();
-  const [doc, setDoc] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let cancel = false;
-    setDoc(null); setFailed(false);
-    fetch(url)
-      .then(r => r.ok ? r.text() : Promise.reject(new Error('fetch failed')))
-      .then(html => {
-        if (cancel) return;
-        let out = html;
-        if (!/<base\b/i.test(html)) {
-          const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
-          out = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
-        }
-        setDoc(out);
-      })
-      .catch(() => { if (!cancel) setFailed(true); });
-    return () => { cancel = true; };
-  }, [url]);
+// An uploaded HTML page painted onto the wall as a REAL WebGL texture (works on desktop AND inside
+// the VR headset — unlike a drei <Html> overlay, which does not composite over the canvas here).
+// The page is fetched, rendered in a hidden same-origin iframe, then rasterised with html2canvas
+// onto a CanvasTexture. It's a snapshot (the top of the page, fit to the panel) rather than a live
+// document, but it actually shows on the wall — which is the whole point.
+const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const PX_W = 1280;
+  const PX_H = Math.max(2, Math.round((PX_W * height) / width));
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = PX_W; c.height = PX_H;
+    const ctx = c.getContext('2d');
+    if (ctx) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, PX_W, PX_H); ctx.fillStyle = '#94a3b8'; ctx.font = '600 40px Vazirmatn, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('HTML…', PX_W / 2, PX_H / 2); }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return t;
+  }, [PX_W, PX_H]);
 
-  const PX_W = 1000, PX_H = Math.round((PX_W * height) / width);
-  const scale = width / PX_W;
-  // Inline the fetched markup; only fall back to a direct src if the fetch was blocked.
-  const frameProps = doc != null ? { srcDoc: doc } : failed ? { src: url } : {};
+  useEffect(() => {
+    let cancelled = false;
+    let frame: HTMLIFrameElement | null = null;
+    const dst = tex.image as HTMLCanvasElement;
+
+    (async () => {
+      let html: string;
+      try { const r = await fetch(url); if (!r.ok) return; html = await r.text(); } catch { return; }
+      if (cancelled) return;
+      // inject <base> so the page's own relative links resolve back to its Storage folder
+      if (!/<base\b/i.test(html)) {
+        const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
+        html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
+      }
+      // hidden, laid-out, same-origin iframe so html2canvas can read its computed styles
+      // (allow-same-origin only → no scripts run; we just snapshot the static layout)
+      frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', 'allow-same-origin');
+      Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: PX_W + 'px', height: PX_H + 'px', border: '0', background: '#fff', opacity: '0', pointerEvents: 'none', zIndex: '-1' });
+      frame.srcdoc = html;
+      document.body.appendChild(frame);
+      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 3000); });
+
+      const { default: html2canvas } = await import('html2canvas');
+      const snap = async () => {
+        const cdoc = frame?.contentDocument;
+        if (cancelled || !cdoc?.body) return;
+        try {
+          const rendered = await html2canvas(cdoc.body, { width: PX_W, height: PX_H, windowWidth: PX_W, windowHeight: PX_H, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
+          if (cancelled) return;
+          const ctx = dst.getContext('2d');
+          if (ctx) { ctx.clearRect(0, 0, PX_W, PX_H); ctx.drawImage(rendered, 0, 0, PX_W, PX_H); tex.needsUpdate = true; }
+        } catch { /* leave the placeholder */ }
+      };
+      await snap();
+      window.setTimeout(async () => {
+        if (!cancelled) await snap();                       // second pass for late fonts/images
+        if (frame?.parentNode) frame.parentNode.removeChild(frame);
+        frame = null;
+      }, 1400);
+    })();
+
+    return () => { cancelled = true; if (frame?.parentNode) frame.parentNode.removeChild(frame); };
+  }, [url, tex, PX_W, PX_H]);
+
+  useEffect(() => () => tex.dispose(), [tex]);
+
   return (
     <group position={position} rotation={rotation}>
-      <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
+      <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
         <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
       </RoundedBox>
-      <mesh position={[0, 0, -0.005]}>
-        <planeGeometry args={[width + 0.02, height + 0.02]} />
-        <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
+      <mesh position={[0, 0, 0.005]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={tex} toneMapped={false} />
       </mesh>
-      {/* VR-only fallback glyph; hidden behind the live page once the iframe paints */}
-      <CanvasLabel text="🌐" width={width * 0.35} height={width * 0.35} position={[0, 0, 0.004]} color="#ffffff" />
-      <Html
-        transform
-        portal={portal}
-        position={[0, 0, 0.02]}
-        scale={scale}
-        zIndexRange={[12, 0]}
-        style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 8, boxShadow: '0 0 24px rgba(80,140,255,.25)' }}
-      >
-        <iframe {...frameProps} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" style={{ display: 'block', border: 0, background: '#fff' }} title="booth-html" />
-      </Html>
     </group>
   );
 };
