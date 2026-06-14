@@ -71,8 +71,10 @@ const AdGif: React.FC<{ url: string; w: number; h: number; onClick?: () => void 
 export const WallAd: React.FC<{
   url?: string; image?: string; title?: string; w: number; h: number;
   position: [number, number, number]; rotation: [number, number, number];
-}> = ({ url, image, title, w, h, position, rotation }) => {
+  onAdClick?: () => void;
+}> = ({ url, image, title, w, h, position, rotation, onAdClick }) => {
   const media = image;
+  const click = () => { onAdClick?.(); openNewTab(url); };
   return (
     <group position={position} rotation={rotation}>
       {/* frame border + light board (so a not-yet-loaded/blocked image shows as a blank board, not black) */}
@@ -80,29 +82,29 @@ export const WallAd: React.FC<{
         <planeGeometry args={[w + 0.14, h + 0.14]} />
         <meshStandardMaterial color="#334155" />
       </mesh>
-      <mesh position={[0, 0, 0.01]} onClick={(e) => { e.stopPropagation(); openNewTab(url); }}>
+      <mesh position={[0, 0, 0.01]} onClick={(e) => { e.stopPropagation(); click(); }}>
         <planeGeometry args={[w, h]} />
         <meshStandardMaterial color="#f1f5f9" />
       </mesh>
       {/* caption fallback (covered by media once it loads) */}
-      <CanvasLabel text={title || (url ? 'بنر تبلیغاتی' : 'تبلیغات')} width={w * 0.85} height={Math.min(h * 0.4, 0.7)} position={[0, 0, 0.02]} color="#334155" onClick={() => openNewTab(url)} />
+      <CanvasLabel text={title || (url ? 'بنر تبلیغاتی' : 'تبلیغات')} width={w * 0.85} height={Math.min(h * 0.4, 0.7)} position={[0, 0, 0.02]} color="#334155" onClick={click} />
       {media && (
         <TexBoundary key={media}>
           <Suspense fallback={null}>
             {isPdfFile(media) ? (
               <PresentationScreen url={media} w={w} h={h} position={[0, 0, 0.06]} rotation={[0, 0, 0]} />
             ) : isVideoFile(media) ? (
-              <AdVideo url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+              <AdVideo url={media} w={w} h={h} onClick={click} />
             ) : isGif(media) ? (
-              <AdGif url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+              <AdGif url={media} w={w} h={h} onClick={click} />
             ) : (
-              <AdImage url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+              <AdImage url={media} w={w} h={h} onClick={click} />
             )}
           </Suspense>
         </TexBoundary>
       )}
       {/* tiny "link" hint when clickable */}
-      {url && <CanvasLabel text="🔗" width={0.3} height={0.3} position={[w / 2 - 0.2, -h / 2 + 0.2, 0.08]} color="#1f6f43" onClick={() => openNewTab(url)} />}
+      {url && <CanvasLabel text="🔗" width={0.3} height={0.3} position={[w / 2 - 0.2, -h / 2 + 0.2, 0.08]} color="#1f6f43" onClick={click} />}
     </group>
   );
 };

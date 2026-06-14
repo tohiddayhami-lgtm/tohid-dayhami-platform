@@ -4,7 +4,7 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
@@ -19,6 +19,7 @@ interface Props {
   lang: Language;
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
+  onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -99,7 +100,7 @@ const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; col
   </group>
 );
 
-const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [dims, setDims] = useState({ w: 0, h: 0 });
@@ -168,7 +169,7 @@ const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation
         <meshStandardMaterial color="#0b0e14" metalness={0.45} roughness={0.45} />
       </RoundedBox>
       {ready ? (
-        <mesh position={[0, 0.08, 0.01]}>
+        <mesh position={[0, 0.08, 0.01]} onClick={onClick}>
           <planeGeometry args={[pw, ph]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
@@ -406,7 +407,7 @@ const PanelMedia: React.FC<MediaProps> = (props) =>
 
 // An animated GIF painted onto the wall as a real WebGL texture (so it shows in VR too): an
 // off-DOM <img> animates natively, and we copy its current frame onto a CanvasTexture each tick.
-const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const state = useMemo(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -430,7 +431,7 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
   });
   useEffect(() => () => state.tex.dispose(), [state]);
   return (
-    <mesh position={position} rotation={rotation}>
+    <mesh position={position} rotation={rotation} onClick={onClick}>
       <planeGeometry args={[width, height]} />
       <meshBasicMaterial map={state.tex} transparent toneMapped={false} />
     </mesh>
@@ -442,7 +443,7 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 // mode: CSS3D transform iframes are unreliable in this scene and can leave only the fallback glyph
 // visible. The markup is fetched and inlined via srcDoc (no Storage content-type / X-Frame issues)
 // and run unsandboxed so its scripts work.
-const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const portal = useCanvasPortal();
   const [doc, setDoc] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -473,6 +474,10 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
       <mesh position={[0, 0, -0.02]}>
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
+      </mesh>
+      <mesh position={[0, 0, 0.035]} onClick={onClick}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       <HtmlSnapshotPlane iframeRef={iframeRef} width={width} height={height} />
       {/* VR/static fallback glyph (covered once the snapshot or live iframe paints). */}
@@ -577,7 +582,7 @@ const VideoControls: React.FC<{ video: HTMLVideoElement; width: number; height: 
 
 // A real <video> textured straight onto the 3D plane — looping in-world playback with transport
 // controls. Used ONLY for direct video files (mp4/webm/ogg); YouTube/Vimeo can't be textured (CORS).
-const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const tex = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'anonymous', playsInline: true } as any);
   const video = tex.image as HTMLVideoElement;
   // The controls auto-hide a few seconds after the last interaction so they don't sit over the
@@ -590,7 +595,7 @@ const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
     timer.current = window.setTimeout(() => setShow(false), 3500);
   };
   useEffect(() => { reveal(); return () => { if (timer.current) window.clearTimeout(timer.current); }; }, []);
-  const onPic = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); reveal(); };
+  const onPic = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick?.(e); reveal(); };
   return (
     <group position={position} rotation={rotation}>
       <mesh onClick={onPic}>
@@ -626,7 +631,7 @@ const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [num
   );
 };
 
-const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number] }> = ({ url, position }) => {
+const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number]; onGrab?: () => void }> = ({ url, position, onGrab }) => {
   const { camera } = useThree();
   const inXR = useXR((s) => !!s.session);
   const { scene } = useGLTF(url);
@@ -721,6 +726,7 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
           e.stopPropagation();
           (e.target as Element).setPointerCapture?.(e.pointerId);
           updateControllerGrabTarget(e);
+          onGrab?.();
           setHeld(true);
         }}
         onPointerMove={(e) => {
@@ -748,7 +754,7 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
 // In-world LCD screen that plays a video ON the wall, muted + looping. Direct files are painted
 // as a real WebGL texture; YouTube/Vimeo are shown through an iframe transformed onto the wall
 // surface (the only way to embed them in 3D — they can't be textured due to CORS).
-const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const portal = useCanvasPortal();
   const file = isVideoFile(url);
   const v = useMemo(() => {
@@ -786,7 +792,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
       <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
         <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
       </RoundedBox>
-      <mesh position={[0, 0, -0.005]}>
+      <mesh position={[0, 0, -0.005]} onClick={onClick}>
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#05070b" emissive={'#0a1626'} emissiveIntensity={0.6} />
       </mesh>
@@ -798,7 +804,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
         // Direct video file → genuine playback painted onto the wall, with transport controls.
         <TexBoundary key={url}>
           <Suspense fallback={null}>
-            <VideoScreen url={url} width={width} height={height} position={[0, 0, 0.01]} />
+            <VideoScreen url={url} width={width} height={height} position={[0, 0, 0.01]} onClick={onClick} />
           </Suspense>
         </TexBoundary>
       ) : v ? (
@@ -825,7 +831,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -882,6 +888,18 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     });
   const counterGlbs = managerSlots.map(i => booth.counterGlbs?.[i] || '');
   const counterGlbXs = [-0.82, -0.41, 0, 0.41, 0.82];
+  const trackBase = { boothId: booth.id, boothName: name, boothIndex: index };
+  const trackBoothSelect = (side: string) => {
+    onTrack?.('booth_click', { ...trackBase, targetType: 'shop_entry', side });
+    onSelectBooth(booth);
+  };
+  const trackManager = (i: number, targetType: string) => onTrack?.('booth_character_click', {
+    ...trackBase,
+    targetId: `${booth.id}-manager-${i + 1}`,
+    targetName: managerNames[i] || `Manager ${i + 1}`,
+    targetType,
+    side: 'counter',
+  });
   useEffect(() => () => {
     managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });
   }, []);
@@ -1025,13 +1043,39 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           {counterGlbs.map((url, i) => url ? (
             <TexBoundary key={`${url}-${i}`}>
               <Suspense fallback={null}>
-                <CounterMiniatureGlb url={url} position={[counterGlbXs[i], 1.02, D / 2 - 0.5]} />
+                <CounterMiniatureGlb
+                  url={url}
+                  position={[counterGlbXs[i], 1.02, D / 2 - 0.5]}
+                  onGrab={() => onTrack?.('counter_glb_grab', {
+                    ...trackBase,
+                    targetId: `${booth.id}-counter-glb-${i + 1}`,
+                    targetName: `Counter GLB ${i + 1}`,
+                    targetType: 'counter_glb',
+                    side: 'counter',
+                  })}
+                />
               </Suspense>
             </TexBoundary>
           ) : null)}
 
           {/* Six wall panels (3 inner + 3 outer) — each an image or an in-world auto-playing video */}
-          {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} /> : null; })}
+          {PANEL_SPECS.map(s => {
+            const u = panelUrl(s.face);
+            return u ? (
+              <PanelMedia
+                key={s.face}
+                url={u}
+                width={s.w}
+                height={s.h}
+                position={s.position}
+                rotation={s.rotation}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrack?.('booth_panel_click', { ...trackBase, targetType: 'booth_panel', targetId: s.face, side: s.face });
+                }}
+              />
+            ) : null;
+          })}
 
           {/* Logo plate above the reception desk */}
           {booth.logo && (
@@ -1041,14 +1085,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           {/* Counter / desk front — a clickable 3D link into the booth's shop (works in VR too) */}
           {booth.shopSlug && (
             <group position={[0, 0.62, D / 2 - 0.12]}>
-              <mesh onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
+              <mesh onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }}
                 onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
                 onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
                 <planeGeometry args={[1.74, 0.42]} />
                 <meshStandardMaterial color={accentColor} />
               </mesh>
               <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
-                onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }} />
+                onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
             </group>
           )}
 
@@ -1058,7 +1102,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             width={W * 0.92} height={0.42}
             position={[0, wallH + 0.12, -D / 2 + 0.17]}
             color="#ffffff"
-            onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
+            onClick={(e) => { e.stopPropagation(); trackBoothSelect('header'); }}
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           />
@@ -1075,6 +1119,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           position={[x, 1.05, D / 2 - 1.08]}
           onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
             e.stopPropagation();
+            trackManager(i, managerAudios[i] ? 'manager_audio' : 'manager_link');
             if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
             else openManagerLink(managerLinks[i]);
           } : undefined}
@@ -1095,41 +1140,57 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         <group key={`audio-${managerPngs[i]}-${i}`} position={[x, 2.26, D / 2 - 1.06]}>
           <group position={[-0.3, 0, 0]}>
             <mesh
-              onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }}
+              onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio_seek'); seekManagerAudio(i, managerAudios[i], -5); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
               <circleGeometry args={[0.13, 24]} />
               <meshBasicMaterial color="#0f172a" transparent opacity={0.76} toneMapped={false} />
             </mesh>
-            <CanvasLabel text="-5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }} />
+            <CanvasLabel text="-5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio_seek'); seekManagerAudio(i, managerAudios[i], -5); }} />
           </group>
           <mesh
-            onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }}
+            onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio'); toggleManagerAudio(i, managerAudios[i]); }}
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           >
             <circleGeometry args={[0.17, 32]} />
             <meshBasicMaterial color="#0f172a" transparent opacity={0.86} toneMapped={false} />
           </mesh>
-          <CanvasLabel text="♪" width={0.24} height={0.24} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }} />
+          <CanvasLabel text="♪" width={0.24} height={0.24} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio'); toggleManagerAudio(i, managerAudios[i]); }} />
           <group position={[0.3, 0, 0]}>
             <mesh
-              onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], 5); }}
+              onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio_seek'); seekManagerAudio(i, managerAudios[i], 5); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
               <circleGeometry args={[0.13, 24]} />
               <meshBasicMaterial color="#0f172a" transparent opacity={0.76} toneMapped={false} />
             </mesh>
-            <CanvasLabel text="+5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], 5); }} />
+            <CanvasLabel text="+5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio_seek'); seekManagerAudio(i, managerAudios[i], 5); }} />
           </group>
         </group>
       ) : null)}
 
       {/* Interactive hotspots (positions are local offsets from the booth origin) */}
       {(booth.hotspots || []).map(h => (
-        <Hotspot key={h.id} hotspot={h} lang={lang} onSelect={onSelectHotspot} />
+        <Hotspot
+          key={h.id}
+          hotspot={h}
+          lang={lang}
+          onSelect={(hotspot) => {
+            onTrack?.('hotspot_click', {
+              ...trackBase,
+              targetId: hotspot.id,
+              targetName: bi(hotspot.title, lang, ''),
+              targetType: hotspot.type,
+              side: 'hotspot',
+              x: hotspot.x,
+              z: hotspot.z,
+            });
+            onSelectHotspot(hotspot);
+          }}
+        />
       ))}
     </group>
   );

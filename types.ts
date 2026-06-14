@@ -1094,6 +1094,49 @@ export interface MetaShopEvent {
   via?: 'shop' | 'gsite'; // direct shop page vs embedded Google Site / external site
 }
 
+// Per-metaverse-expo visitor analytics event.
+// Stored in the `metaExpoEvents` collection; powers bazaar/expo behavior reports.
+export type MetaExpoEventType =
+  | 'visit'
+  | 'vr_enter'
+  | 'language_change'
+  | 'booth_click'
+  | 'hotspot_click'
+  | 'wall_ad_click'
+  | 'entrance_ad_click'
+  | 'booth_panel_click'
+  | 'booth_character_click'
+  | 'counter_glb_grab'
+  | 'booth_dwell';
+
+export interface MetaExpoEvent {
+  id: string;
+  timestamp: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  bazaarName?: string;
+  type: MetaExpoEventType;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  device?: 'mobile' | 'tablet' | 'desktop';
+  sessionId?: string;
+  referrer?: string;
+  isVr?: boolean;
+  language?: string;
+  boothId?: string;
+  boothName?: string;
+  boothIndex?: number;
+  wall?: ExpoWall | string;
+  side?: string;
+  targetId?: string;
+  targetName?: string;
+  targetType?: string;
+  dwellSec?: number;
+  x?: number;
+  z?: number;
+}
+
 export interface CustomerAccount {
   id: string;
   fullName: string;

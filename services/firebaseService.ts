@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -1176,6 +1176,55 @@ export const fetchMetaShopEvents = async (shopId: string): Promise<MetaShopEvent
         const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(10000));
         const snap = await getDocs(q);
         return snap.docs.map(d => d.data() as MetaShopEvent)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch { return []; }
+};
+
+// ── Metaverse Expo visitor analytics ───────────────────────────────────────
+export const logMetaExpoEvent = async (
+    type: MetaExpoEvent['type'],
+    bazaar: { id: string; slug: string; name?: string },
+    opts: Partial<Omit<MetaExpoEvent, 'id' | 'timestamp' | 'type' | 'bazaarId' | 'bazaarSlug' | 'bazaarName'>> = {}
+) => {
+    try {
+        if (!bazaar?.id || !bazaar?.slug) return;
+        if (type === 'visit') {
+            const key = `_mevisit_${bazaar.id}`;
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+        }
+        if (type === 'vr_enter') {
+            const key = `_mevr_${bazaar.id}`;
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+        }
+        const geo = await getCountryInfo();
+        const event: MetaExpoEvent = {
+            id: `mee_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            bazaarId: bazaar.id,
+            bazaarSlug: bazaar.slug,
+            bazaarName: bazaar.name || '',
+            type,
+            country: geo.country,
+            countryCode: geo.countryCode,
+            city: geo.city,
+            device: getDevice(),
+            sessionId: getSessionId(),
+            referrer: document.referrer ? new URL(document.referrer).hostname : 'direct',
+            ...opts,
+        };
+        const proxy = await checkProxyMode();
+        if (proxy) await proxyWrite('metaExpoEvents', event.id, sanitizeData(event));
+        else await setDoc(doc(db, 'metaExpoEvents', event.id), sanitizeData(event));
+    } catch {}
+};
+
+export const fetchMetaExpoEvents = async (bazaarId: string): Promise<MetaExpoEvent[]> => {
+    try {
+        const q = query(collection(db, 'metaExpoEvents'), where('bazaarId', '==', bazaarId), limit(20000));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaExpoEvent)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     } catch { return []; }
 };

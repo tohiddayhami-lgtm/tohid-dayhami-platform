@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, MetaExpoEvent, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
@@ -18,6 +18,7 @@ interface Props {
   onSelectBooth: (b: MetaverseBooth) => void;
   onFloorTeleport: (x: number, z: number) => void;   // desktop double-click teleport
   onVrTeleport: (v: THREE.Vector3) => void;           // WebXR controller teleport
+  onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -37,7 +38,7 @@ const DoormanImage: React.FC<{ url: string; position: [number, number, number]; 
   );
 };
 
-const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: number; depth: number }> = ({ expo, lang, width, depth }) => {
+const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: number; depth: number; onTrack?: Props['onTrack'] }> = ({ expo, lang, width, depth, onTrack }) => {
   const z0 = depth / 2 + 7.2;
   const z1 = depth / 2 + 0.55;
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
@@ -118,6 +119,12 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
             h={ad.h || 3.5}
             position={position}
             rotation={rotation}
+            onAdClick={() => onTrack?.('entrance_ad_click', {
+              targetId: ad.id,
+              targetName: bi(ad.title, lang, ''),
+              targetType: 'entrance_ad',
+              side: ad.position,
+            })}
           />
         );
       })}
@@ -163,7 +170,7 @@ const Ceiling: React.FC<{ width: number; depth: number; height: number }> = ({ w
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -204,7 +211,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
 
-      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} />}
+      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
 
       {/* Perimeter walls */}
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
@@ -272,7 +279,23 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
             const u = (i + 1) / (list.length + 1);                                   // even spacing along the wall
             const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55 + adLift)); // comfortable height
             const { position, rotation } = wallTransform(wall as 'back' | 'left' | 'right' | 'front', u, yc / height, dims);
-            out.push(<WallAd key={ad.id} image={ad.image} url={ad.url} title={bi(ad.title, lang, '')} w={w} h={h} position={position} rotation={rotation} />);
+            out.push(<WallAd
+              key={ad.id}
+              image={ad.image}
+              url={ad.url}
+              title={bi(ad.title, lang, '')}
+              w={w}
+              h={h}
+              position={position}
+              rotation={rotation}
+              onAdClick={() => onTrack?.('wall_ad_click', {
+                targetId: ad.id,
+                targetName: bi(ad.title, lang, ''),
+                targetType: 'wall_ad',
+                wall,
+                side: wall,
+              })}
+            />);
           });
         });
         return out;
@@ -287,7 +310,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
       {/* Booths */}
       {(expo.booths || []).map((b, i) => (
-        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} />
+        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} onTrack={onTrack} />
       ))}
     </>
   );

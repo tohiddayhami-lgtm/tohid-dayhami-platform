@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { MetaBazaar, MetaBazaarNode, MetaShop } from '../types';
+import { MetaBazaar, MetaBazaarNode, MetaExpoEvent, MetaShop } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
 import { downloadSample } from './metaShopSamples';
 import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
+import { fetchMetaExpoEvents } from '../services/firebaseService';
 
 interface Props {
   bazaars: MetaBazaar[];
@@ -53,6 +54,10 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const [updTarget, setUpdTarget] = useState<MetaBazaar | null>(null);
   const [shopPanelFor, setShopPanelFor] = useState<string | null>(null);
   const [shopSearch, setShopSearch] = useState('');
+  const [expoAnalyticsId, setExpoAnalyticsId] = useState<string | null>(null);
+  const [expoAnalyticsEvents, setExpoAnalyticsEvents] = useState<MetaExpoEvent[]>([]);
+  const [expoAnalyticsLoading, setExpoAnalyticsLoading] = useState(false);
+  const [expoAnalyticsRange, setExpoAnalyticsRange] = useState<'today' | 'week' | 'month' | 'all'>('week');
   const T = lang === 'fa';
 
   const t = {
@@ -76,6 +81,18 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     nodeFa: T ? 'نام (فارسی)' : 'Name (FA)', nodeEn: T ? 'نام (انگلیسی)' : 'Name (EN)',
     searchShop: T ? 'جستجوی فروشگاه...' : 'Search shop...', noShops: T ? 'فروشگاهی موجود نیست. ابتدا در تب «فروشگاه‌ها» بسازید.' : 'No shops. Create some in the Shops tab first.',
     newCatFa: T ? 'دسته جدید' : 'New category',
+    expoReport: T ? 'گزارش نمایشگاه' : 'Expo report',
+    anLoading: T ? 'در حال بارگذاری آمار...' : 'Loading analytics...',
+    anEmpty: T ? 'هنوز آماری برای این نمایشگاه ثبت نشده است.' : 'No expo analytics yet.',
+    anEmptyRange: T ? 'در این بازه آماری وجود ندارد.' : 'No analytics in this range.',
+    anRefresh: T ? 'به‌روزرسانی' : 'Refresh',
+    anToday: T ? 'امروز' : 'Today', anWeek: T ? '۷ روز' : '7 days', anMonth: T ? '۳۰ روز' : '30 days', anAll: T ? 'همه' : 'All',
+    anVisits: T ? 'بازدید' : 'Visits', anClicks: T ? 'کلیک‌ها' : 'Clicks', anDwell: T ? 'توقف کنار غرفه' : 'Booth dwell',
+    anVr: T ? 'ورود VR' : 'VR entries', anCountries: T ? 'کشورها' : 'Countries', anCities: T ? 'شهرها' : 'Cities',
+    anDevices: T ? 'دستگاه‌ها' : 'Devices', anTopDwell: T ? 'بیشترین توقف کنار غرفه' : 'Top booth dwell',
+    anTopBooths: T ? 'غرفه‌های پربازتعامل' : 'Top booth interactions', anSides: T ? 'سمت‌ها و نقاط پرتکرار' : 'Top sides / zones',
+    anAds: T ? 'تبلیغات پرتکرار' : 'Top ads', anTrend: T ? 'روند ۱۴ روزه بازدید' : '14-day visit trend',
+    anMobile: T ? 'موبایل' : 'Mobile', anDesktop: T ? 'دسکتاپ' : 'Desktop', anTablet: T ? 'تبلت' : 'Tablet',
   };
 
   const url = (b: MetaBazaar) => `${shopBaseUrl}?bazaar=${encodeURIComponent(b.slug)}`;
@@ -142,6 +159,16 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
       alert(T ? 'خطا در ساخت کپی بازارچه' : 'Failed to duplicate bazaar');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openExpoAnalytics = async (bazaar: MetaBazaar) => {
+    setExpoAnalyticsId(bazaar.id);
+    setExpoAnalyticsLoading(true);
+    try {
+      setExpoAnalyticsEvents(await fetchMetaExpoEvents(bazaar.id));
+    } finally {
+      setExpoAnalyticsLoading(false);
     }
   };
 
@@ -302,6 +329,130 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     );
   }
 
+  if (expoAnalyticsId) {
+    const bazaar = bazaars.find(b => b.id === expoAnalyticsId);
+    const rangeMs: Record<typeof expoAnalyticsRange, number> = { today: 86400000, week: 7 * 86400000, month: 30 * 86400000, all: Infinity };
+    const cutoff = Date.now() - rangeMs[expoAnalyticsRange];
+    const ev = expoAnalyticsEvents.filter(e => new Date(e.timestamp).getTime() >= cutoff);
+    const hasAny = expoAnalyticsEvents.length > 0;
+    const visits = ev.filter(e => e.type === 'visit');
+    const clicks = ev.filter(e => !['visit', 'booth_dwell', 'vr_enter', 'language_change'].includes(e.type));
+    const dwell = ev.filter(e => e.type === 'booth_dwell');
+    const vrEntries = ev.filter(e => e.type === 'vr_enter' || e.isVr);
+    const flag = (cc?: string) => (cc && /^[A-Za-z]{2}$/.test(cc))
+      ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : '🌐';
+    const tally = <TItem,>(arr: TItem[], keyFn: (e: TItem) => string | undefined, n = 8) => {
+      const m = new Map<string, number>();
+      for (const e of arr) { const k = keyFn(e); if (!k) continue; m.set(k, (m.get(k) || 0) + 1); }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+    };
+    const sumBy = (arr: MetaExpoEvent[], keyFn: (e: MetaExpoEvent) => string | undefined, valueFn: (e: MetaExpoEvent) => number, n = 8) => {
+      const m = new Map<string, number>();
+      for (const e of arr) { const k = keyFn(e); if (!k) continue; m.set(k, (m.get(k) || 0) + valueFn(e)); }
+      return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+    };
+    const countryAgg = (() => {
+      const m = new Map<string, { count: number; code: string }>();
+      for (const e of visits) {
+        const c = e.country;
+        if (!c || c === 'Unknown') continue;
+        const ex = m.get(c) || { count: 0, code: e.countryCode || 'XX' };
+        ex.count++;
+        m.set(c, ex);
+      }
+      return [...m.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 10);
+    })();
+    const cityAgg = tally(visits, e => e.city?.trim() || undefined, 6);
+    const boothClickAgg = tally(clicks.filter(e => e.boothId), e => e.boothName || e.boothId, 8);
+    const sideAgg = tally(clicks, e => e.side || e.wall, 8);
+    const adAgg = tally(clicks.filter(e => e.type === 'wall_ad_click' || e.type === 'entrance_ad_click'), e => e.targetName || e.targetId, 8);
+    const dwellAgg = sumBy(dwell, e => e.boothName || e.boothId, e => e.dwellSec || 0, 8);
+    const devCount = { mobile: 0, tablet: 0, desktop: 0 } as Record<string, number>;
+    for (const e of visits) if (e.device) devCount[e.device] = (devCount[e.device] || 0) + 1;
+    const devTotal = visits.length || 1;
+    const dayCount = new Map<string, number>();
+    for (const e of expoAnalyticsEvents) { if (e.type !== 'visit') continue; const d = e.timestamp.slice(0, 10); dayCount.set(d, (dayCount.get(d) || 0) + 1); }
+    const trend = Array.from({ length: 14 }, (_, i) => {
+      const dt = new Date(Date.now() - (13 - i) * 86400000);
+      const key = dt.toISOString().slice(0, 10);
+      return { key, label: dt.toLocaleDateString(T ? 'fa-IR' : 'en-US', { month: 'numeric', day: 'numeric' }), count: dayCount.get(key) || 0 };
+    });
+    const maxTrend = Math.max(1, ...trend.map(d => d.count));
+    const totalDwell = Math.round(dwell.reduce((s, e) => s + (e.dwellSec || 0), 0));
+    const fmtSec = (v: number) => v >= 3600 ? `${Math.round(v / 360) / 10}h` : v >= 60 ? `${Math.round(v / 6) / 10}m` : `${Math.round(v)}s`;
+    const barRow = (label: React.ReactNode, value: number, max: number, color = 'bg-sky-500', suffix = '') => (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-600 w-36 shrink-0 truncate" title={typeof label === 'string' ? label : undefined}>{label}</span>
+        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${color} rounded-full`} style={{ width: `${Math.max(4, (value / Math.max(1, max)) * 100)}%` }} /></div>
+        <span className="text-xs font-bold text-gray-700 w-14 text-end">{value.toLocaleString()}{suffix}</span>
+      </div>
+    );
+    const statCard = (label: string, value: React.ReactNode, color: string) => (
+      <div className={card + ' p-4 flex flex-col gap-1'}><span className="text-[11px] text-gray-400">{label}</span><span className={`text-2xl font-extrabold ${color}`}>{value}</span></div>
+    );
+    const panel = (title: string, body: React.ReactNode, empty?: boolean) => (
+      <div className={card + ' p-4'}><h4 className="text-sm font-bold text-gray-700 mb-3">{title}</h4>{empty ? <p className="text-xs text-gray-400 py-3 text-center">{t.anEmptyRange}</p> : body}</div>
+    );
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button onClick={() => setExpoAnalyticsId(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <button onClick={() => bazaar && openExpoAnalytics(bazaar)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">↻ {t.anRefresh}</button>
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-lg font-bold text-gray-800">{t.expoReport} — {bazaar?.name}</h3>
+          <div className="inline-flex bg-gray-100 rounded-lg p-1">
+            {([['today', t.anToday], ['week', t.anWeek], ['month', t.anMonth], ['all', t.anAll]] as const).map(([r, label]) => (
+              <button key={r} onClick={() => setExpoAnalyticsRange(r)} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${expoAnalyticsRange === r ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {expoAnalyticsLoading ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.anLoading}</div>
+        ) : ev.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{hasAny ? t.anEmptyRange : t.anEmpty}</div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {statCard(t.anVisits, visits.length.toLocaleString(), 'text-gray-900')}
+              {statCard(t.anClicks, clicks.length.toLocaleString(), 'text-sky-600')}
+              {statCard(t.anDwell, fmtSec(totalDwell), 'text-emerald-600')}
+              {statCard(t.anVr, vrEntries.length.toLocaleString(), 'text-indigo-600')}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {panel(t.anCountries, <div className="space-y-2">{countryAgg.map(([c, info]) => barRow(<span>{flag(info.code)} {c}</span>, info.count, countryAgg[0]?.[1].count || 1))}</div>, countryAgg.length === 0)}
+              {panel(t.anTopDwell, <div className="space-y-2">{dwellAgg.map(([n, v]) => barRow(n, Math.round(v), Math.round(dwellAgg[0]?.[1] || 1), 'bg-emerald-500', 's'))}</div>, dwellAgg.length === 0)}
+              {panel(t.anTopBooths, <div className="space-y-2">{boothClickAgg.map(([n, v]) => barRow(n, v, boothClickAgg[0]?.[1] || 1, 'bg-indigo-500'))}</div>, boothClickAgg.length === 0)}
+              {panel(t.anSides, <div className="space-y-2">{sideAgg.map(([n, v]) => barRow(n, v, sideAgg[0]?.[1] || 1, 'bg-amber-500'))}</div>, sideAgg.length === 0)}
+              {panel(t.anAds, <div className="space-y-2">{adAgg.map(([n, v]) => barRow(n, v, adAgg[0]?.[1] || 1, 'bg-rose-500'))}</div>, adAgg.length === 0)}
+              {panel(t.anDevices, <div className="space-y-2">
+                {barRow(`📱 ${t.anMobile}`, devCount.mobile, devTotal, 'bg-violet-500')}
+                {barRow(`💻 ${t.anDesktop}`, devCount.desktop, devTotal, 'bg-violet-500')}
+                {barRow(`📟 ${t.anTablet}`, devCount.tablet, devTotal, 'bg-violet-500')}
+              </div>)}
+              {panel(t.anCities, <div className="space-y-2">{cityAgg.map(([n, v]) => barRow(n, v, cityAgg[0]?.[1] || 1, 'bg-cyan-500'))}</div>, cityAgg.length === 0)}
+            </div>
+            <div className={card + ' p-4'}>
+              <h4 className="text-sm font-bold text-gray-700 mb-3">{t.anTrend}</h4>
+              <div className="flex items-end gap-1.5 h-28">
+                {trend.map(d => (
+                  <div key={d.key} className="flex-1 flex flex-col items-center gap-1 group">
+                    <div className="w-full flex items-end justify-center flex-1">
+                      <div className="w-full bg-sky-500/80 group-hover:bg-sky-600 rounded-t transition-colors" style={{ height: `${(d.count / maxTrend) * 100}%`, minHeight: d.count ? 4 : 0 }} title={`${d.count}`} />
+                    </div>
+                    <span className="text-[9px] text-gray-400" dir="ltr">{d.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── LIST ──
   return (
     <div className="space-y-5 animate-fade-in">
@@ -330,6 +481,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                   <a href={url(b)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
                   <button onClick={() => { navigator.clipboard.writeText(url(b)); setCopiedId(b.id); setTimeout(() => setCopiedId(null), 1800); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
                   <button onClick={() => downloadBazaar(b)} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓</button>
+                  <button onClick={() => openExpoAnalytics(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">{t.expoReport}</button>
                   {!readonly && <button onClick={() => { setUpdTarget(b); updFileRef.current?.click(); }} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒</button>}
                   {!readonly && <button onClick={() => duplicateBazaar(b)} disabled={saving} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50" title={t.duplicate}><IconCopy className="w-3.5 h-3.5" /></button>}
                   {!readonly && <button onClick={() => setDraft(JSON.parse(JSON.stringify(b)))} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
