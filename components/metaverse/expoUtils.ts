@@ -118,6 +118,9 @@ export const isVideoFile = (url?: string): boolean => !!url && /\.(mp4|webm|ogg)
 // (a plain image texture would freeze on the first frame).
 export const isGif = (url?: string): boolean => !!url && /\.gif(\?.*)?$/i.test(url);
 
+// PDF files render as page-turnable in-world panels.
+export const isPdfFile = (url?: string): boolean => !!url && /\.pdf(\?.*)?$/i.test(url);
+
 // An uploaded HTML page → embedded through an iframe transformed onto the wall surface.
 export const isHtmlFile = (url?: string): boolean => !!url && /\.html?(\?.*)?$/i.test(url);
 

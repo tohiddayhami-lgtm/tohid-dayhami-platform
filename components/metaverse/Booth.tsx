@@ -6,11 +6,12 @@ import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { BoothTier, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, isVideoUrl, isVideoFile, isGif, isHtmlFile, screenEmbed } from './expoUtils';
+import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { CanvasLabel } from './CanvasLabel';
 import type { BoothFace } from '../../types';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 interface Props {
   booth: MetaverseBooth;
@@ -66,6 +67,109 @@ const SafeImage: React.FC<MediaProps> = (props) => (
     </Suspense>
   </TexBoundary>
 );
+
+let pdfjsPromise: Promise<any> | null = null;
+const getPdfjs = () => {
+  if (!pdfjsPromise) pdfjsPromise = import('pdfjs-dist').then(m => { m.GlobalWorkerOptions.workerSrc = pdfWorkerUrl; return m; });
+  return pdfjsPromise;
+};
+
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string }> = ({ x, glyph, onClick, color }) => (
+  <group position={[x, 0, 0]}>
+    <mesh onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+      <planeGeometry args={[0.34, 0.26]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+    <CanvasLabel text={glyph} width={0.28} height={0.22} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+  </group>
+);
+
+const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
+  const [dims, setDims] = useState({ w: 0, h: 0 });
+  const [cachedCount, setCachedCount] = useState(0);
+  const bitmapsRef = useRef<(ImageBitmap | null)[]>([]);
+  const [tex] = useState(() => {
+    const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 4;
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    setCount(0); setPage(1); setDims({ w: 0, h: 0 }); setCachedCount(0);
+    bitmapsRef.current.forEach(b => b?.close?.()); bitmapsRef.current = [];
+    (async () => {
+      try {
+        const pdfjs = await getPdfjs();
+        const doc = await pdfjs.getDocument({ url }).promise;
+        if (cancelled) return;
+        setCount(doc.numPages);
+        for (let i = 1; i <= doc.numPages; i++) {
+          if (cancelled) return;
+          const pg = await doc.getPage(i);
+          const base = pg.getViewport({ scale: 1 });
+          const vp = pg.getViewport({ scale: 1100 / base.width });
+          const c = document.createElement('canvas');
+          c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+          const ctx = c.getContext('2d')!;
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+          await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+          if (cancelled) return;
+          bitmapsRef.current[i] = await createImageBitmap(c);
+          setCachedCount(i);
+        }
+      } catch { /* placeholder remains visible */ }
+    })();
+    return () => { cancelled = true; bitmapsRef.current.forEach(b => b?.close?.()); bitmapsRef.current = []; };
+  }, [url]);
+
+  useEffect(() => {
+    const bmp = bitmapsRef.current[page];
+    if (!bmp) return;
+    const canvas = tex.image as HTMLCanvasElement;
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0);
+    tex.needsUpdate = true;
+    setDims({ w: bmp.width, h: bmp.height });
+  }, [page, cachedCount, tex]);
+
+  useEffect(() => () => tex.dispose(), [tex]);
+
+  const ready = dims.w > 0;
+  const aspect = ready ? dims.h / dims.w : height / width;
+  let pw = width, ph = width * aspect;
+  if (ph > height) { ph = height; pw = height / aspect; }
+  const prev = () => setPage(p => Math.max(1, p - 1));
+  const next = () => setPage(p => Math.min(count || 1, p + 1));
+
+  return (
+    <group position={position} rotation={rotation}>
+      <RoundedBox args={[width + 0.16, height + 0.42, 0.1]} radius={0.05} smoothness={3} position={[0, -0.08, -0.06]} castShadow>
+        <meshStandardMaterial color="#0b0e14" metalness={0.45} roughness={0.45} />
+      </RoundedBox>
+      {ready ? (
+        <mesh position={[0, 0.08, 0.01]}>
+          <planeGeometry args={[pw, ph]} />
+          <meshBasicMaterial map={tex} toneMapped={false} />
+        </mesh>
+      ) : (
+        <CanvasLabel text="PDF..." width={Math.min(width * 0.55, 1.6)} height={0.32} position={[0, 0.08, 0.02]} color="#ffffff" />
+      )}
+      <group position={[0, -height / 2 - 0.11, 0.03]}>
+        <PdfArrowBtn x={-0.48} glyph="‹" onClick={prev} color="#1f2937" />
+        <CanvasLabel text={count ? `${page}/${count}` : "..."} width={0.55} height={0.2} position={[0, 0, 0]} bg="rgba(15,23,42,.92)" color="#ffffff" />
+        <PdfArrowBtn x={0.48} glyph="›" onClick={next} color="#1f2937" />
+      </group>
+    </group>
+  );
+};
 
 // drei <Html> attaches its DOM layer to the R3F event target, which in this app sits OUTSIDE the
 // z-100 expo container → it ends up BEHIND the WebGL canvas (invisible — only the CanvasLabel
@@ -282,6 +386,7 @@ const HtmlSnapshotPlane: React.FC<{
 // video → LCD screen, anything else → a static image panel.
 const PanelMedia: React.FC<MediaProps> = (props) =>
   isHtmlFile(props.url) ? <HtmlPanel {...props} />
+    : isPdfFile(props.url) ? <PdfPanel {...props} />
     : isGif(props.url) ? <GifPlane {...props} />
     : isVideoUrl(props.url) ? <BoothScreen {...props} />
     : <SafeImage {...props} />;

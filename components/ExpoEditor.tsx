@@ -95,13 +95,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     screenHint: T ? 'لینک یوتیوب/ویمیو یا فایل mp4. روی نمایشگر داخل غرفه به‌صورت خودکار و بی‌صدا پخش می‌شود.' : 'YouTube/Vimeo link or mp4 file. Plays automatically (muted) on the in-booth LCD.',
     screenAuto: T ? 'از ویدئوی محصولات' : 'From product video',
     panels: T ? 'تابلوها و نمایشگرها (۳ داخل + ۳ بیرون)' : 'Panels & screens (3 inside + 3 outside)',
-    panelsHint: T ? 'برای هر دیوار غرفه (داخل و بیرون) یک رسانه بگذارید: 📤 تصویر یا GIF متحرک، 🎬 فایل ویدیو (روی دیوار و بی‌صدا پخش می‌شود)، یا 🌐 فایل HTML. همه مستقیماً روی خودِ دیوار نمایش داده می‌شوند (بدون نیاز به یوتیوب).' : 'Put any media on each booth wall (inside & outside): 📤 image or animated GIF, 🎬 a video file (plays muted on the wall), or 🌐 an HTML page. Everything renders right on the wall (no YouTube needed).',
+    panelsHint: T ? 'برای هر دیوار غرفه رسانه بگذارید: تصویر/GIF، ویدیو، PDF ورق‌خور، یا HTML. همه مستقیماً روی خود دیوار نمایش داده می‌شوند.' : 'Put media on each booth wall: image/GIF, video, page-turnable PDF, or HTML. Everything renders directly on the wall.',
     applyShop: T ? 'پر کردن اطلاعات از فروشگاه' : 'Fill from shop',
     boothFa: T ? 'نام غرفه (فارسی)' : 'Booth name (FA)', boothEn: T ? 'نام غرفه (انگلیسی)' : 'Booth name (EN)',
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
-    uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
+    uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
     htmlErr: T ? 'فقط فایل HTML (html/htm) مجاز است.' : 'Only HTML files (html/htm) allowed.',
@@ -287,6 +287,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const PanelField: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string; product?: string }> = ({ id, value, onUrl, label, product }) => {
     const imgRef = useRef<HTMLInputElement>(null);
     const vidRef = useRef<HTMLInputElement>(null);
+    const pdfRef = useRef<HTMLInputElement>(null);
     const htmlRef = useRef<HTMLInputElement>(null);
     return (
       <div>
@@ -295,10 +296,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <input className={fld + ' dir-ltr'} value={value || ''} onChange={ev => onUrl(ev.target.value)} placeholder={T ? 'لینک، یا از دکمه‌ها آپلود کنید' : 'link, or upload via buttons'} />
           {!readonly && <button type="button" title={t.uploadImg} onClick={() => imgRef.current?.click()} className="shrink-0 text-xs px-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"><IconUpload className="w-3.5 h-3.5" /></button>}
           {!readonly && <button type="button" title={t.uploadVid} onClick={() => vidRef.current?.click()} className="shrink-0 text-[13px] px-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50">🎬</button>}
+          {!readonly && <button type="button" title={t.uploadPdf} onClick={() => pdfRef.current?.click()} className="shrink-0 text-[12px] px-1.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50">PDF</button>}
           {!readonly && <button type="button" title={t.uploadHtml} onClick={() => htmlRef.current?.click()} className="shrink-0 text-[12px] px-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">🌐</button>}
           {product && !readonly && <button type="button" title={t.screenAuto} onClick={() => onUrl(product)} className="shrink-0 text-[11px] px-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">📹</button>}
           <input type="file" ref={imgRef} className="hidden" accept="image/*" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadImage(id, f, onUrl); ev.target.value = ''; }} />
           <input type="file" ref={vidRef} className="hidden" accept="video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadVideo(id, f, onUrl); ev.target.value = ''; }} />
+          <input type="file" ref={pdfRef} className="hidden" accept="application/pdf,.pdf" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadPdf(id, f, onUrl); ev.target.value = ''; }} />
           <input type="file" ref={htmlRef} className="hidden" accept="text/html,.html,.htm" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadHtml(id, f, onUrl); ev.target.value = ''; }} />
         </div>
         {uploading === id && <span className="text-[10px] text-gray-400">{t.uploading} {uploadPct > 0 ? `${uploadPct}%` : ''}</span>}
