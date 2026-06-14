@@ -669,6 +669,8 @@ export interface MetaverseExpo {
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls
+  wallAdScale?: number;         // global multiplier for all environmental wall ads
+  wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads
   presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
   // Seam for future multiplayer (presence + text chat). Not implemented yet:

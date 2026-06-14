@@ -65,6 +65,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     addAd: T ? 'افزودن بنر' : 'Add banner', noAds: T ? 'بنری اضافه نشده.' : 'No banners yet.',
     moveUp: T ? 'انتقال به بالا' : 'Move up', moveDown: T ? 'انتقال به پایین' : 'Move down',
     adWall: T ? 'دیوار' : 'Wall', adSize: T ? 'اندازهٔ بنر' : 'Banner size', adLink: T ? 'لینک (اختیاری)' : 'Link (optional)', adImage: T ? 'تصویر بنر' : 'Banner image',
+    adScaleAll: T ? 'بزرگ‌نمایی همه تابلوها' : 'All banners scale',
+    adLiftAll: T ? 'بالا بردن همه تابلوها (متر)' : 'Lift all banners (m)',
     meter: T ? 'متر' : 'm',
     adPos: T ? 'موقعیت افقی (۰ تا ۱)' : 'Horizontal (0–1)', adHeight: T ? 'ارتفاع (۰ تا ۱)' : 'Height (0–1)', adW: T ? 'عرض (متر)' : 'Width (m)', adH: T ? 'ارتفاع (متر)' : 'Height (m)',
     wallBack: T ? 'دیوار انتهایی' : 'Back', wallLeft: T ? 'چپ' : 'Left', wallRight: T ? 'راست' : 'Right', wallFront: T ? 'ورودی' : 'Front',
@@ -415,6 +417,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               {!readonly && <button onClick={addWallAd} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addAd}</button>}
             </div>
             <p className="text-[11px] text-gray-400 mb-3">{t.adsHint}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
+              <div><label className={lbl}>{t.adScaleAll}</label><input type="number" min={0.5} max={3} step={0.05} className={fld} value={e.wallAdScale ?? 1.35} onChange={ev => patch({ wallAdScale: +ev.target.value || 1 })} /></div>
+              <div><label className={lbl}>{t.adLiftAll}</label><input type="number" min={-4} max={8} step={0.25} className={fld} value={e.wallAdLift ?? 2} onChange={ev => patch({ wallAdLift: +ev.target.value || 0 })} /></div>
+            </div>
             {(e.wallAds || []).length === 0 ? <p className="text-sm text-gray-400 text-center py-2">{t.noAds}</p> : (
               <div className="space-y-2">
                 {(e.wallAds || []).map((ad, idx, ads) => (

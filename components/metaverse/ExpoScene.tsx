@@ -127,15 +127,17 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
       {/* Environmental advertising banners — auto-distributed along each wall, height auto-fit. */}
       {(() => {
         const dims = { width, depth, height };
+        const adScale = expo.wallAdScale ?? 1.35;
+        const adLift = expo.wallAdLift ?? 2;
         const byWall: Record<string, typeof expo.wallAds> = {};
         (expo.wallAds || []).forEach(a => { (byWall[a.wall] = byWall[a.wall] || []).push(a); });
         const out: React.ReactElement[] = [];
         Object.keys(byWall).forEach(wall => {
           const list = byWall[wall]!;
           list.forEach((ad, i) => {
-            const w = ad.w || 3, h = ad.h || 2;
+            const w = (ad.w || 3) * adScale, h = (ad.h || 2) * adScale;
             const u = (i + 1) / (list.length + 1);                                   // even spacing along the wall
-            const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55)); // comfortable height
+            const yc = Math.min(height - h / 2 - 0.4, Math.max(h / 2 + 1.0, height * 0.55 + adLift)); // comfortable height
             const { position, rotation } = wallTransform(wall as 'back' | 'left' | 'right' | 'front', u, yc / height, dims);
             out.push(<WallAd key={ad.id} image={ad.image} url={ad.url} title={bi(ad.title, lang, '')} w={w} h={h} position={position} rotation={rotation} />);
           });
