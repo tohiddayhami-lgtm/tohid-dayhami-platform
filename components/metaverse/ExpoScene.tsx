@@ -252,15 +252,15 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         const sideW = Math.max(0.5, (width - gap) / 2);
         return (
           <>
-            <Wall args={[sideW, 0.25, t + 0.02]} position={[-gap / 2 - sideW / 2, 0.125, depth / 2 - 0.01]} color="#3a4150" />
-            <Wall args={[sideW, 0.25, t + 0.02]} position={[gap / 2 + sideW / 2, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+            <Wall args={[sideW, 0.25, 0.045]} position={[-gap / 2 - sideW / 2, 0.125, depth / 2 + t / 2 + 0.035]} color="#3a4150" />
+            <Wall args={[sideW, 0.25, 0.045]} position={[gap / 2 + sideW / 2, 0.125, depth / 2 + t / 2 + 0.035]} color="#3a4150" />
           </>
         );
       })() : (
-        <Wall args={[width, 0.25, t + 0.02]} position={[0, 0.125, depth / 2 - 0.01]} color="#3a4150" />
+        <Wall args={[width, 0.25, 0.045]} position={[0, 0.125, depth / 2 + t / 2 + 0.035]} color="#3a4150" />
       )}
-      <Wall args={[t + 0.02, 0.25, depth]} position={[-width / 2 + 0.01, 0.125, 0]} color="#3a4150" />
-      <Wall args={[t + 0.02, 0.25, depth]} position={[width / 2 - 0.01, 0.125, 0]} color="#3a4150" />
+      <Wall args={[0.045, 0.25, depth]} position={[-width / 2 + t / 2 + 0.035, 0.125, 0]} color="#3a4150" />
+      <Wall args={[0.045, 0.25, depth]} position={[width / 2 - t / 2 - 0.035, 0.125, 0]} color="#3a4150" />
 
       {/* Ceiling with glowing light panels */}
       <Ceiling width={width} depth={depth} height={height} />
