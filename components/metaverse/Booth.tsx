@@ -151,35 +151,38 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         const tag = `<base href="${url.replace(/[^/]*$/, '')}">`;
         html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, `<head$1>${tag}`) : `${tag}${html}`;
       }
-      // hidden iframe, scripts allowed so a JS-rendered page actually builds its content
+      // hidden iframe — NOT sandboxed, so a self-unpacking bundle (dynamic import / blob / module
+      // loading) can run fully and actually build its content. The admin uploads this file, so it's
+      // trusted. Sized to the panel viewport so position:fixed apps lay out correctly.
       frame = document.createElement('iframe');
-      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
       Object.assign(frame.style, { position: 'fixed', left: '-10000px', top: '0', width: PX_W + 'px', height: PX_H + 'px', border: '0', background: '#fff', opacity: '0', pointerEvents: 'none', zIndex: '-1' });
       frame.srcdoc = html;
       document.body.appendChild(frame);
-      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 4000); });
+      await new Promise<void>(res => { if (frame) frame.onload = () => res(); window.setTimeout(res, 5000); });
 
       const sleep = (ms: number) => new Promise<void>(r => window.setTimeout(r, ms));
-      // Poll until the (possibly JS-rendered) content has appeared and its height is stable.
-      let lastH = -1, stable = 0;
-      for (let i = 0; i < 22 && !cancelled; i++) {
-        await sleep(350);
-        const b = frame?.contentDocument?.body;
-        const h = b ? b.scrollHeight : 0;
-        if (h > 40 && h === lastH) { if (++stable >= 2) break; } else stable = 0;
-        lastH = h;
+      // Poll until the (often JS-built) content has settled: watch the node/text count stabilise.
+      const measure = () => { const b = frame?.contentDocument?.body; return b ? (b.innerText || '').length + b.querySelectorAll('*').length : 0; };
+      let prev = -1, stable = 0;
+      for (let i = 0; i < 30 && !cancelled; i++) {
+        await sleep(400);
+        const n = measure();
+        if (n > 12 && n === prev) { if (++stable >= 2) break; } else stable = 0;
+        prev = n;
       }
       if (cancelled) return;
       const cdoc = frame?.contentDocument;
-      const body = cdoc?.body;
-      if (!body) return;
-      const fullH = Math.min(16000, Math.max(PX_H, cdoc!.documentElement.scrollHeight, body.scrollHeight));
-      frame.style.height = fullH + 'px';   // expand so the whole page is laid out for capture
-      await sleep(200);
+      const root = cdoc?.documentElement;
+      if (!root) return;
+      // Capture the html element (so position:fixed/full-screen layouts are included). Tall flowing
+      // documents grow the capture height so the ▲/▼ scroll can page through them.
+      const docH = Math.min(16000, Math.max(PX_H, root.scrollHeight, cdoc!.body?.scrollHeight || 0));
+      if (docH > PX_H + 4) { frame.style.height = docH + 'px'; await sleep(250); }
       if (cancelled) return;
       try {
         const { default: html2canvas } = await import('html2canvas');
-        const rendered = await html2canvas(body, { width: PX_W, height: fullH, windowWidth: PX_W, windowHeight: fullH, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
+        const capH = (frame.contentDocument?.documentElement.scrollHeight) || docH;
+        const rendered = await html2canvas(frame.contentDocument!.documentElement, { width: PX_W, height: capH, windowWidth: PX_W, windowHeight: capH, backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
         if (cancelled) return;
         fullRef.current = rendered;
         maxScroll.current = Math.max(0, rendered.height - PX_H);
