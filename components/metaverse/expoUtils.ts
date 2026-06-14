@@ -22,8 +22,8 @@ export const EXPO_DEFAULTS = {
 export const hallDims = (expo: MetaverseExpo) => ({
   width: Math.max(8, expo.width || EXPO_DEFAULTS.width),
   depth: Math.max(8, expo.depth || EXPO_DEFAULTS.depth),
-  // Clamp to a tall minimum so halls feel like real exhibition spaces, not low rooms.
-  height: Math.max(8, expo.height || EXPO_DEFAULTS.height),
+  // Keep a sane minimum, but let admins intentionally choose lower/taller ceilings.
+  height: Math.max(4, expo.height || EXPO_DEFAULTS.height),
 });
 
 export const boothPos = (b: MetaverseBooth): [number, number, number] => [b.x || 0, b.y || 0, b.z || 0];

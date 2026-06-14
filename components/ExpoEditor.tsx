@@ -54,7 +54,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     hall: T ? 'تنظیمات سالن' : 'Hall settings',
     titleFa: T ? 'عنوان (فارسی)' : 'Title (FA)', titleEn: T ? 'عنوان (انگلیسی)' : 'Title (EN)',
     subFa: T ? 'زیرعنوان (فارسی)' : 'Subtitle (FA)', subEn: T ? 'زیرعنوان (انگلیسی)' : 'Subtitle (EN)',
-    width: T ? 'عرض سالن (متر)' : 'Width (m)', depth: T ? 'عمق سالن (متر)' : 'Depth (m)', height: T ? 'ارتفاع (متر)' : 'Height (m)',
+    width: T ? 'عرض سالن (متر)' : 'Width (m)', depth: T ? 'عمق سالن (متر)' : 'Depth (m)', height: T ? 'ارتفاع سقف (متر)' : 'Ceiling height (m)',
     preset: T ? 'محیط/نور' : 'Environment', ground: T ? 'رنگ کف' : 'Ground color', wall: T ? 'رنگ دیوار' : 'Wall color',
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
     spawn: T ? 'نقطه‌ی شروع بازدیدکننده' : 'Visitor start point',
@@ -72,19 +72,19 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
-    quickHint: T ? 'تعداد، سبک چیدمان و نوع غرفه را انتخاب کنید. برای غرفه‌های فعلی از دکمه‌های اعمال استفاده کنید؛ دکمه ساخت، چیدمان را از نو می‌سازد.' : 'Pick count, layout style, and booth type. Use the apply buttons for current booths; build recreates the layout.',
+    quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
     quickLayout: T ? 'سبک چیدمان' : 'Layout style',
     layoutFacing: T ? 'راهرویی روبه‌رو' : 'Facing aisles',
     layoutGrid: T ? 'شبکه‌ای فشرده' : 'Compact grid',
     layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
-    applyLayout: T ? 'اعمال چیدمان روی غرفه‌های فعلی' : 'Apply layout to current booths',
+    applyLayout: T ? 'تغییر چیدمان غرفه‌های فعلی' : 'Rearrange current booths',
     applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
     boothTier: T ? 'نوع غرفه' : 'Booth type',
     tierBasic: T ? 'پایه' : 'Basic',
     tierStandard: T ? 'استاندارد' : 'Standard',
     tierPremium: T ? 'پریمیوم' : 'Premium',
-    quickBuild: T ? 'ساخت و چیدمان خودکار' : 'Build & arrange',
+    quickBuild: T ? 'ساخت از نو' : 'Rebuild from scratch',
     quickConfirm: T ? 'غرفه‌های فعلی پاک و دوباره چیده می‌شوند. ادامه می‌دهید؟' : 'Existing booths will be replaced and re-arranged. Continue?',
     screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
     screenHint: T ? 'لینک یوتیوب/ویمیو یا فایل mp4. روی نمایشگر داخل غرفه به‌صورت خودکار و بی‌صدا پخش می‌شود.' : 'YouTube/Vimeo link or mp4 file. Plays automatically (muted) on the in-booth LCD.',
@@ -387,7 +387,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <div className="grid grid-cols-3 gap-2">
                 <div><label className={lbl}>{t.width}</label><input type="number" className={fld} value={e.width ?? 30} onChange={ev => patch({ width: +ev.target.value })} /></div>
                 <div><label className={lbl}>{t.depth}</label><input type="number" className={fld} value={e.depth ?? 30} onChange={ev => patch({ depth: +ev.target.value })} /></div>
-                <div><label className={lbl}>{t.height}</label><input type="number" className={fld} value={e.height ?? 6} onChange={ev => patch({ height: +ev.target.value })} /></div>
+                <div><label className={lbl}>{t.height}</label><input type="number" min={4} step={0.5} className={fld} value={e.height ?? 9} onChange={ev => patch({ height: +ev.target.value })} /></div>
               </div>
               <div><label className={lbl}>{t.ground}</label><div className="flex gap-2"><input type="color" value={e.groundColor || '#cfd4dc'} onChange={ev => patch({ groundColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.groundColor || ''} onChange={ev => patch({ groundColor: ev.target.value })} /></div></div>
               <div><label className={lbl}>{t.wall}</label><div className="flex gap-2"><input type="color" value={e.wallColor || '#e9edf3'} onChange={ev => patch({ wallColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.wallColor || ''} onChange={ev => patch({ wallColor: ev.target.value })} /></div></div>
@@ -476,7 +476,6 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <h5 className="font-bold text-indigo-700 text-sm mb-1">⚡ {t.quickTitle}</h5>
               <p className="text-[12px] text-indigo-600/80 mb-3 max-w-2xl">{t.quickHint}</p>
               <div className="flex items-end gap-2 flex-wrap">
-                <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
                 <div><label className={lbl}>{t.quickLayout}</label>
                   <select className={fld + ' bg-white min-w-40'} value={quickLayout} onChange={ev => setQuickLayout(ev.target.value as ExpoBoothLayout)}>
                     <option value="facing">{t.layoutFacing}</option>
@@ -484,6 +483,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     <option value="perimeter">{t.layoutPerimeter}</option>
                   </select>
                 </div>
+                {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold">{t.applyLayout}</button>}
+                <div className="w-px h-9 bg-indigo-200 mx-1 hidden sm:block" />
+                <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
                 <div><label className={lbl}>{t.boothTier}</label>
                   <select className={fld + ' bg-white min-w-32'} value={quickTier} onChange={ev => setQuickTier(ev.target.value as BoothTier)}>
                     <option value="basic">{t.tierBasic}</option>
@@ -491,9 +493,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     <option value="premium">{t.tierPremium}</option>
                   </select>
                 </div>
-                {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-white font-bold">{t.applyLayout}</button>}
                 {(e.booths || []).length > 0 && <button type="button" onClick={() => setTierAndApply(quickTier)} className="text-sm px-3 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-white font-bold">{t.applyTierAll}</button>}
-                <button onClick={quickBuild} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold flex items-center gap-1"><IconPlus className="w-4 h-4" />{t.quickBuild}</button>
+                <button onClick={quickBuild} className="text-sm px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-bold flex items-center gap-1"><IconPlus className="w-4 h-4" />{t.quickBuild}</button>
               </div>
             </div>
           )}
