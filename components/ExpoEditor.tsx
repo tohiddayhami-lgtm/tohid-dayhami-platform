@@ -58,6 +58,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     preset: T ? 'محیط/نور' : 'Environment', ground: T ? 'رنگ کف' : 'Ground color', wall: T ? 'رنگ دیوار' : 'Wall color',
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
     spawn: T ? 'نقطه‌ی شروع بازدیدکننده' : 'Visitor start point',
+    entranceT: T ? 'ورودی حرفه‌ای نمایشگاه' : 'Professional expo entrance',
+    entranceHint: T ? 'یک راهروی ورود با سردر برگزارکننده و دربان PNG قبل از ورود به سالن نمایش داده می‌شود.' : 'Shows an entry corridor with organizer arch signage and PNG doorman before visitors enter the hall.',
+    entranceEnable: T ? 'فعال‌سازی ورودی' : 'Enable entrance',
+    organizerFa: T ? 'متن سردر / برگزارکننده (فارسی)' : 'Arch / organizer text (FA)',
+    organizerEn: T ? 'متن سردر / برگزارکننده (انگلیسی)' : 'Arch / organizer text (EN)',
+    doormanPng: T ? 'تصویر PNG دربان' : 'Doorman PNG',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
@@ -124,6 +130,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
   const patch = (p: Partial<MetaverseExpo>) => onChange({ ...e, ...p });
   const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);
+  const setEntranceOrganizer = (which: 'fa' | 'en', val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [which]: val } });
   const setSpawn = (k: 'x' | 'z', v: number) => patch({ spawn: { x: e.spawn?.x ?? 0, y: 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), [k]: v } });
 
   // ── Booths ──
@@ -435,6 +442,27 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <div><label className={lbl}>{t.skybox}</label><input className={fld + ' dir-ltr'} value={e.skyboxUrl || ''} onChange={ev => patch({ skyboxUrl: ev.target.value || undefined })} placeholder="https://…/sky.hdr" /></div>
               <div><label className={lbl}>{t.music}</label><input className={fld + ' dir-ltr'} value={e.music || ''} onChange={ev => patch({ music: ev.target.value || undefined })} placeholder="https://…/ambient.mp3" /></div>
             </div>
+          </div>
+
+          {/* Entrance corridor */}
+          <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <h5 className="font-bold text-emerald-800 text-sm">🚪 {t.entranceT}</h5>
+                <p className="text-[11px] text-emerald-700/70 mt-0.5">{t.entranceHint}</p>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                <input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={!!e.entranceEnabled} onChange={ev => patch({ entranceEnabled: ev.target.checked })} />
+                {t.entranceEnable}
+              </label>
+            </div>
+            {e.entranceEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
+                <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
+                <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
+              </div>
+            )}
           </div>
 
           {/* Floor plan */}

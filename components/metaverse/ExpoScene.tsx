@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Environment, Sky, Grid } from '@react-three/drei';
+import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -9,6 +9,7 @@ import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi } from './expoUtils';
+import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
   expo: MetaverseExpo;
@@ -25,6 +26,72 @@ const Wall: React.FC<{ args: [number, number, number]; position: [number, number
     <meshStandardMaterial color={color} side={THREE.DoubleSide} />
   </mesh>
 );
+
+const DoormanImage: React.FC<{ url: string; position: [number, number, number]; mirror?: boolean }> = ({ url, position, mirror }) => {
+  const tex = useTexture(url);
+  return (
+    <mesh position={position} scale={[mirror ? -1 : 1, 1, 1]}>
+      <planeGeometry args={[1.35, 2.55]} />
+      <meshBasicMaterial map={tex as THREE.Texture} transparent toneMapped={false} side={THREE.DoubleSide} />
+    </mesh>
+  );
+};
+
+const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: number; depth: number }> = ({ expo, lang, width, depth }) => {
+  const z0 = depth / 2 - 3.4;
+  const z1 = z0 - 5.8;
+  const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
+  const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
+  const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
+  return (
+    <group>
+      {/* Welcome carpet / guided corridor */}
+      <mesh position={[0, 0.035, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[4.6, Math.abs(z0 - z1) + 1.2]} />
+        <meshStandardMaterial color="#0f5132" roughness={0.75} metalness={0.04} />
+      </mesh>
+      <mesh position={[0, 0.045, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.16, Math.abs(z0 - z1) + 0.8]} />
+        <meshStandardMaterial color="#f8fafc" emissive="#dbeafe" emissiveIntensity={0.35} toneMapped={false} />
+      </mesh>
+      {/* Low side rails keep the corridor readable without blocking walking. */}
+      {[-2.55, 2.55].map(x => (
+        <group key={x}>
+          <RoundedBox args={[0.12, 0.72, Math.abs(z0 - z1) + 0.6]} radius={0.04} smoothness={3} position={[x, 0.38, (z0 + z1) / 2]} castShadow>
+            <meshStandardMaterial color="#064e3b" metalness={0.2} roughness={0.5} />
+          </RoundedBox>
+          <mesh position={[x, 0.78, (z0 + z1) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.045, 0.045, Math.abs(z0 - z1) + 0.9, 16]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#f59e0b" emissiveIntensity={0.28} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+      {/* Professional arch with organizer information. */}
+      <RoundedBox args={[5.8, 0.38, 0.34]} radius={0.08} smoothness={4} position={[0, 3.25, z1]} castShadow>
+        <meshStandardMaterial color="#064e3b" emissive="#052e1f" emissiveIntensity={0.18} metalness={0.25} roughness={0.4} />
+      </RoundedBox>
+      {[-2.72, 2.72].map(x => (
+        <RoundedBox key={x} args={[0.32, 3.1, 0.32]} radius={0.08} smoothness={4} position={[x, 1.68, z1]} castShadow>
+          <meshStandardMaterial color="#064e3b" metalness={0.25} roughness={0.45} />
+        </RoundedBox>
+      ))}
+      <CanvasLabel text={organizer} width={5.35} height={0.33} position={[0, 3.25, z1 + 0.19]} bg="rgba(15,23,42,.86)" color="#ffffff" />
+      <CanvasLabel text={title} width={3.8} height={0.3} position={[0, 2.78, z1 + 0.2]} bg="rgba(251,191,36,.92)" color="#102015" />
+      <mesh position={[0, 1.55, z1 + 0.03]}>
+        <planeGeometry args={[4.8, 2.55]} />
+        <meshStandardMaterial color={primary} transparent opacity={0.34} roughness={0.7} side={THREE.DoubleSide} />
+      </mesh>
+      {expo.entranceDoormanImage && (
+        <TexBoundary key={expo.entranceDoormanImage}>
+          <Suspense fallback={null}>
+            <DoormanImage url={expo.entranceDoormanImage} position={[-3.35, 1.34, z1 + 0.42]} />
+            <DoormanImage url={expo.entranceDoormanImage} position={[3.35, 1.34, z1 + 0.42]} mirror />
+          </Suspense>
+        </TexBoundary>
+      )}
+    </group>
+  );
+};
 
 // Ceiling + a regular grid of glowing light panels, so the hall reads as a real lit exhibition
 // space rather than an open box. Pure emissive planes (no extra real lights → cheap).
@@ -96,6 +163,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         </mesh>
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
+
+      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} />}
 
       {/* Perimeter walls */}
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />

@@ -666,6 +666,9 @@ export interface MetaverseExpo {
   wallColor?: string;
   width?: number; depth?: number; height?: number; // hall dimensions (meters)
   spawn?: { x: number; y: number; z: number; ry?: number }; // visitor start position
+  entranceEnabled?: boolean;     // optional professional entry corridor/gate
+  entranceOrganizer?: MetaShopDirCat; // organizer text shown on the entry arch
+  entranceDoormanImage?: string; // PNG/transparent character shown as doorman
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls
