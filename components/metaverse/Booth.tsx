@@ -82,6 +82,7 @@ const ProjectedHtmlPanel: React.FC<{
     tl: new THREE.Vector3(),
     tr: new THREE.Vector3(),
     bl: new THREE.Vector3(),
+    br: new THREE.Vector3(),
     center: new THREE.Vector3(),
     camPos: new THREE.Vector3(),
     camDir: new THREE.Vector3(),
@@ -123,10 +124,11 @@ const ProjectedHtmlPanel: React.FC<{
     anchor.updateWorldMatrix(true, false);
     camera.updateMatrixWorld();
 
-    const { tl, tr, bl, center, camPos, camDir } = cornerRefs.current;
+    const { tl, tr, bl, br, center, camPos, camDir } = cornerRefs.current;
     tl.set(-width / 2, height / 2, 0).applyMatrix4(anchor.matrixWorld);
     tr.set(width / 2, height / 2, 0).applyMatrix4(anchor.matrixWorld);
     bl.set(-width / 2, -height / 2, 0).applyMatrix4(anchor.matrixWorld);
+    br.set(width / 2, -height / 2, 0).applyMatrix4(anchor.matrixWorld);
     center.set(0, 0, 0).applyMatrix4(anchor.matrixWorld);
 
     camera.getWorldPosition(camPos);
@@ -148,19 +150,33 @@ const ProjectedHtmlPanel: React.FC<{
     const p0 = toScreen(tl);
     const p1 = toScreen(tr);
     const p2 = toScreen(bl);
-    if (p0.z < -1 || p0.z > 1 || p1.z < -1 || p1.z > 1 || p2.z < -1 || p2.z > 1) {
+    const p3 = toScreen(br);
+    if (p0.z < -1 || p0.z > 1 || p1.z < -1 || p1.z > 1 || p2.z < -1 || p2.z > 1 || p3.z < -1 || p3.z > 1) {
       el.style.display = 'none';
       return;
     }
 
-    const a = (p1.x - p0.x) / pxW;
-    const b = (p1.y - p0.y) / pxW;
-    const c = (p2.x - p0.x) / pxH;
-    const d = (p2.y - p0.y) / pxH;
+    const dx1 = p1.x - p3.x;
+    const dy1 = p1.y - p3.y;
+    const dx2 = p2.x - p3.x;
+    const dy2 = p2.y - p3.y;
+    const sx = p0.x - p1.x + p3.x - p2.x;
+    const sy = p0.y - p1.y + p3.y - p2.y;
+    const denom = dx1 * dy2 - dx2 * dy1;
+    if (Math.abs(denom) < 1e-6) {
+      el.style.display = 'none';
+      return;
+    }
+    const g = (sx * dy2 - dx2 * sy) / denom;
+    const h = (dx1 * sy - sx * dy1) / denom;
+    const a = p1.x - p0.x + g * p1.x;
+    const b = p1.y - p0.y + g * p1.y;
+    const c = p2.x - p0.x + h * p2.x;
+    const d = p2.y - p0.y + h * p2.y;
     const dist = center.distanceTo(camPos);
     el.style.display = 'block';
     el.style.zIndex = String(Math.max(5, Math.min(35, Math.round(36 - dist * 0.25))));
-    el.style.transform = `matrix(${a},${b},${c},${d},${p0.x},${p0.y})`;
+    el.style.transform = `matrix3d(${a / pxW},${b / pxW},0,${g / pxW},${c / pxH},${d / pxH},0,${h / pxH},0,0,1,0,${p0.x},${p0.y},0,1)`;
   });
 
   return <group ref={anchorRef} position={[0, 0, 0.035]} />;
