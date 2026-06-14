@@ -136,8 +136,6 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
   const scale = width / PX_W;
   // Inline the fetched markup; only fall back to a direct src if the fetch was blocked.
   const frameProps = doc != null ? { srcDoc: doc } : failed ? { src: url } : {};
-  const openTab = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); try { window.open(url, '_blank', 'noopener,noreferrer'); } catch {} };
-  const btnW = Math.min(width * 0.92, 2.2), btnH = Math.min(height * 0.16, 0.3);
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
@@ -147,6 +145,7 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
         <planeGeometry args={[width + 0.02, height + 0.02]} />
         <meshStandardMaterial color="#0b1220" emissive={'#0a1626'} emissiveIntensity={0.5} />
       </mesh>
+      {/* VR-only fallback glyph; hidden behind the live page once the iframe paints */}
       <CanvasLabel text="🌐" width={width * 0.35} height={width * 0.35} position={[0, 0, 0.004]} color="#ffffff" />
       <Html
         transform
@@ -158,17 +157,6 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
       >
         <iframe {...frameProps} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" style={{ display: 'block', border: 0, background: '#fff' }} title="booth-html" />
       </Html>
-      {/* Guaranteed-visible "open the page" button BELOW the panel (renders even if the embedded
-          iframe is blocked by the browser). Sits outside the iframe area so it's always clickable. */}
-      <group position={[0, -(height / 2) - btnH * 0.85, 0.02]}>
-        <mesh onClick={openTab}
-          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-          onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
-          <planeGeometry args={[btnW, btnH]} />
-          <meshBasicMaterial color="#1d4ed8" toneMapped={false} />
-        </mesh>
-        <CanvasLabel text="↗ باز کردن صفحه" width={btnW * 0.92} height={btnH * 0.7} position={[0, 0, 0.01]} color="#ffffff" onClick={openTab} />
-      </group>
     </group>
   );
 };
