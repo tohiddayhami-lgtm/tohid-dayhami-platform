@@ -43,7 +43,9 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
-  const archMediaW = Math.min(Math.max(width - 4, 5.2), 8.2);
+  const archMediaW = Math.max(3, expo.entranceArchMediaW || Math.min(Math.max(width - 3, 7), 12));
+  const archMediaH = Math.max(1, expo.entranceArchMediaH || 2.25);
+  const archMediaY = 3.65 + archMediaH / 2;
   const entranceAds = expo.entranceAds || [];
   const railTotals = entranceAds.reduce<Record<string, number>>((acc, ad) => {
     if (ad.position === 'railLeft' || ad.position === 'railRight') acc[ad.position] = (acc[ad.position] || 0) + 1;
@@ -105,8 +107,8 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
           image={expo.entranceArchMedia}
           title={organizer}
           w={archMediaW}
-          h={1.35}
-          position={[0, 4.1, z1 + 0.32]}
+          h={archMediaH}
+          position={[0, archMediaY, z1 + 0.34]}
           rotation={[0, 0, 0]}
         />
       )}

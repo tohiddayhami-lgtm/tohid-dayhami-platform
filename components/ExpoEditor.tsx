@@ -72,6 +72,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     organizerEn: T ? 'متن سردر / برگزارکننده (انگلیسی)' : 'Arch / organizer text (EN)',
     doormanPng: T ? 'تصویر PNG دربان' : 'Doorman PNG',
     entranceArchMedia: T ? 'رسانه بزرگ سردر' : 'Main arch media',
+    entranceArchW: T ? 'عرض رسانه سردر (متر)' : 'Arch media width (m)',
+    entranceArchH: T ? 'ارتفاع رسانه سردر (متر)' : 'Arch media height (m)',
     entranceAdsT: T ? 'بنرهای تبلیغاتی ورودی' : 'Entrance advertising banners',
     addEntranceAd: T ? 'افزودن بنر ورودی' : 'Add entrance banner',
     noEntranceAds: T ? 'بنر ورودی اضافه نشده.' : 'No entrance banners yet.',
@@ -485,11 +487,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             </div>
             {e.entranceEnabled && (
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                   <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
                   <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
                   <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
                   <AdMediaUpload id="entrance-arch-media" value={e.entranceArchMedia} onUrl={u => patch({ entranceArchMedia: u || undefined })} label={t.entranceArchMedia} />
+                  <div><label className={lbl}>{t.entranceArchW}</label><input type="number" min={3} max={18} step={0.25} className={fld} value={e.entranceArchMediaW ?? 10} onChange={ev => patch({ entranceArchMediaW: +ev.target.value || undefined })} /></div>
+                  <div><label className={lbl}>{t.entranceArchH}</label><input type="number" min={1} max={6} step={0.25} className={fld} value={e.entranceArchMediaH ?? 2.25} onChange={ev => patch({ entranceArchMediaH: +ev.target.value || undefined })} /></div>
                 </div>
                 <div className="rounded-xl border border-emerald-100 bg-white/70 p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">

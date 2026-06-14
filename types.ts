@@ -683,6 +683,8 @@ export interface MetaverseExpo {
   entranceOrganizer?: MetaShopDirCat; // organizer text shown on the entry arch
   entranceDoormanImage?: string; // PNG/transparent character shown as doorman
   entranceArchMedia?: string;    // image/video/GIF/PDF billboard shown above the entry arch
+  entranceArchMediaW?: number;   // width of the large media billboard above the arch (meters)
+  entranceArchMediaH?: number;   // height of the large media billboard above the arch (meters)
   entranceAds?: ExpoEntranceAd[]; // side/standing advertising banners around the entry corridor
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
