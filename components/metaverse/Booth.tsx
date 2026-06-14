@@ -730,6 +730,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     { face: 'innerRight', position: [W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
     { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
+  const managerPngs = (booth.managerPngs || []).filter(Boolean).slice(0, 2);
 
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
@@ -871,6 +872,18 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           />
         </group>
       )}
+
+      {/* Optional life-size transparent PNG people behind the booth. */}
+      {managerPngs.map((url, i) => (
+        <SafeImage
+          key={`${url}-${i}`}
+          url={url}
+          width={0.85}
+          height={1.85}
+          position={[managerPngs.length === 1 ? 0 : (i === 0 ? -0.72 : 0.72), 0.925, -D / 2 - 0.48]}
+          rotation={[0, Math.PI, 0]}
+        />
+      ))}
 
       {/* Interactive hotspots (positions are local offsets from the booth origin) */}
       {(booth.hotspots || []).map(h => (

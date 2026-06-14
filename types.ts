@@ -614,6 +614,7 @@ export interface MetaverseBooth {
   premiumSignText?: MetaShopDirCat; // optional rotating LCD text for premium booths
   premiumSignColor?: string;     // rotating LCD background/accent color
   logo?: string;                // logo image URL (Storage images/)
+  managerPngs?: string[];       // up to 2 life-size transparent PNG people shown behind the booth
   bannerImage?: string;         // banner image URL (Storage images/)
   screenUrl?: string;           // (legacy) video link for the in-world LCD — now the innerBack panel fallback
   // Per-face media: each value is an image URL or a video link (YouTube/Vimeo/mp4). Videos

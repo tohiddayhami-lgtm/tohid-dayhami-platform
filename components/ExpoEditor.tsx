@@ -124,6 +124,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
+    managerPng1: T ? 'PNG مدیرعامل / شخص ۱ پشت غرفه' : 'Manager/person PNG 1 behind booth',
+    managerPng2: T ? 'PNG مدیرعامل / شخص ۲ پشت غرفه' : 'Manager/person PNG 2 behind booth',
     uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
@@ -177,6 +179,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
+  const setBoothManagerPng = (b: MetaverseBooth, index: 0 | 1, url: string) => {
+    const next = [...(b.managerPngs || [])].slice(0, 2);
+    if (url) next[index] = url; else delete next[index];
+    updBooth(b.id, { managerPngs: next.filter(Boolean) });
+  };
 
   // ── Environmental wall ads ──
   const WALLS: ExpoWall[] = ['back', 'left', 'right', 'front'];
@@ -700,6 +707,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               <div><label className={lbl}>{t.posZ}</label><input type="number" step="0.5" className={fld} value={b.z ?? 0} onChange={ev => updBooth(b.id, { z: +ev.target.value })} /></div>
                             </div>
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
+                            <ImgUpload id={`manager-1-${b.id}`} value={b.managerPngs?.[0]} onUrl={u => setBoothManagerPng(b, 0, u)} label={t.managerPng1} />
+                            <ImgUpload id={`manager-2-${b.id}`} value={b.managerPngs?.[1]} onUrl={u => setBoothManagerPng(b, 1, u)} label={t.managerPng2} />
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
                           </div>
 
