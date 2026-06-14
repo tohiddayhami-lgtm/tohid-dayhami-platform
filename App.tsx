@@ -33,7 +33,6 @@ import { MetaShopDirectory } from './components/MetaShopDirectory';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
-import { ExpoDoorsLoader } from './components/metaverse/ExpoDoorsLoader';
 import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
@@ -1305,9 +1304,8 @@ const App: React.FC = () => {
     const expo = publicExpoBazaar?.expo;
     if (publicExpoBazaar && publicExpoBazaar.isActive !== false && expo && expo.enabled) {
       const expoTitle = (lang === 'fa' ? expo.title?.fa : expo.title?.en) || publicExpoBazaar.name;
-      const expoSub = (lang === 'fa' ? expo.subtitle?.fa : expo.subtitle?.en) || undefined;
       return (
-        <React.Suspense fallback={<ExpoDoorsLoader lang={lang} title={expoTitle} subtitle={expoSub} primary={publicExpoBazaar.theme?.primary || '#2d4a1a'} />}>
+        <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={expoTitle} />}>
           <MetaverseExpoView
             bazaar={publicExpoBazaar}
             shops={metaShops}

@@ -14,7 +14,7 @@ import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { VrRig, VRButton } from './XRControls';
-import { ExpoDoorsLoader } from './ExpoDoorsLoader';
+import { BazaarPassageLoader } from '../BazaarPassageLoader';
 
 interface Props {
   bazaar: MetaBazaar;
@@ -39,7 +39,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
   // then slide them apart and remove the overlay. A hard cap prevents getting stuck. ──
-  const { active: loadActive, progress: loadProgress } = useProgress();
+  const { active: loadActive } = useProgress();
   const [openDoors, setOpenDoors] = useState(false);
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
@@ -160,16 +160,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}
 
-      {/* Grand "mall doors" reveal overlay (CSS-only — opens when the scene is ready) */}
+      {/* Minimal container-ship loader (same as the Meta Shop pages) — fades out once the scene
+          is ready, then unmounts. */}
       {!revealed && (
-        <ExpoDoorsLoader
-          lang={lang}
-          title={bi(expo.title, lang, bazaar.name)}
-          subtitle={bi(expo.subtitle, lang, '') || undefined}
-          open={openDoors}
-          progress={loadActive ? loadProgress : undefined}
-          primary={bazaar.theme?.primary || '#2d4a1a'}
-        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, opacity: openDoors ? 0 : 1, transition: 'opacity .9s ease', pointerEvents: openDoors ? 'none' : 'auto' }}>
+          <BazaarPassageLoader lang={lang} title={bi(expo.title, lang, bazaar.name)} />
+        </div>
       )}
     </div>
   );
