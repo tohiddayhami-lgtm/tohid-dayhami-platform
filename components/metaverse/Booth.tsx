@@ -644,7 +644,15 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
   }), []);
   const { object, scale, offset } = useMemo(() => {
     const cloned = scene.clone(true);
-    cloned.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    cloned.traverse((o: any) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        // Keep controller/mouse raycasts cheap in VR: the visible GLB can contain thousands
+        // of triangles, so interaction is handled by the small collider below instead.
+        o.raycast = () => null;
+      }
+    });
     const box = new THREE.Box3().setFromObject(cloned);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -701,35 +709,38 @@ const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, nu
   });
 
   return (
-    <group
-      ref={ref}
-      position={position}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        (e.target as Element).setPointerCapture?.(e.pointerId);
-        updateControllerGrabTarget(e);
-        setHeld(true);
-      }}
-      onPointerMove={(e) => {
-        if (!grabbedRef.current) return;
-        e.stopPropagation();
-        updateControllerGrabTarget(e);
-      }}
-      onPointerUp={(e) => {
-        e.stopPropagation();
-        (e.target as Element).releasePointerCapture?.(e.pointerId);
-        setHeld(false);
-      }}
-      onPointerCancel={() => setHeld(false)}
-      onLostPointerCapture={() => setHeld(false)}
-      onPointerOver={() => { document.body.style.cursor = 'grab'; }}
-      onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-    >
+    <group ref={ref} position={position}>
       <mesh position={[0, 0.008, 0]} receiveShadow>
         <cylinderGeometry args={[0.19, 0.21, 0.035, 32]} />
         <meshStandardMaterial color={grabbed ? '#1d4ed8' : '#111827'} metalness={0.35} roughness={0.45} emissive={grabbed ? '#1d4ed8' : '#000000'} emissiveIntensity={grabbed ? 0.25 : 0} />
       </mesh>
       <primitive object={object} position={[offset.x * scale, 0.035 + offset.y * scale, offset.z * scale]} scale={scale} />
+      <mesh
+        position={[0, 0.25, 0]}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          (e.target as Element).setPointerCapture?.(e.pointerId);
+          updateControllerGrabTarget(e);
+          setHeld(true);
+        }}
+        onPointerMove={(e) => {
+          if (!grabbedRef.current) return;
+          e.stopPropagation();
+          updateControllerGrabTarget(e);
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          (e.target as Element).releasePointerCapture?.(e.pointerId);
+          setHeld(false);
+        }}
+        onPointerCancel={() => setHeld(false)}
+        onLostPointerCapture={() => setHeld(false)}
+        onPointerOver={() => { document.body.style.cursor = 'grab'; }}
+        onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+      >
+        <boxGeometry args={[0.42, 0.52, 0.42]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
     </group>
   );
 };
