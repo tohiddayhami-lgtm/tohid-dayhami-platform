@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -41,6 +41,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [quickN, setQuickN] = useState(6);
+  const [quickLayout, setQuickLayout] = useState<ExpoBoothLayout>('facing');
+  const [quickTier, setQuickTier] = useState<BoothTier>('basic');
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const t = {
@@ -72,6 +74,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'تعداد غرفه‌ها را وارد کنید؛ فضای نمایشگاه به‌صورت خودکار اندازه و غرفه‌ها مرتب چیده می‌شوند. سپس هر غرفه را به یک فروشگاه وصل کنید.' : 'Enter how many booths — the hall is auto-sized and booths are laid out in tidy aisles. Then link each booth to a shop.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
+    quickLayout: T ? 'سبک چیدمان' : 'Layout style',
+    layoutFacing: T ? 'راهرویی روبه‌رو' : 'Facing aisles',
+    layoutGrid: T ? 'شبکه‌ای فشرده' : 'Compact grid',
+    layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
+    boothTier: T ? 'نوع غرفه' : 'Booth type',
+    tierBasic: T ? 'پایه' : 'Basic',
+    tierStandard: T ? 'استاندارد' : 'Standard',
+    tierPremium: T ? 'پریمیوم' : 'Premium',
     quickBuild: T ? 'ساخت و چیدمان خودکار' : 'Build & arrange',
     quickConfirm: T ? 'غرفه‌های فعلی پاک و دوباره چیده می‌شوند. ادامه می‌دهید؟' : 'Existing booths will be replaced and re-arranged. Continue?',
     screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
@@ -113,7 +123,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const addBooth = () => {
     const W = e.width || 30, D = e.depth || 30;
     const idx = (e.booths || []).length;
-    const b: MetaverseBooth = { id: newId('booth'), name: { fa: T ? `غرفه ${idx + 1}` : `Booth ${idx + 1}`, en: `Booth ${idx + 1}` }, x: ((idx % 4) - 1.5) * (W / 5), y: 0, z: ((Math.floor(idx / 4)) - 1) * (D / 5), ry: 0, color: '#2d4a1a', hotspots: [] };
+    const b: MetaverseBooth = { id: newId('booth'), name: { fa: T ? `غرفه ${idx + 1}` : `Booth ${idx + 1}`, en: `Booth ${idx + 1}` }, x: ((idx % 4) - 1.5) * (W / 5), y: 0, z: ((Math.floor(idx / 4)) - 1) * (D / 5), ry: 0, color: '#2d4a1a', tier: 'basic', hotspots: [] };
     updBooths([...(e.booths || []), b]);
     setOpenBooth(b.id);
   };
@@ -148,10 +158,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   // Quick setup: ask "how many booths", auto-size the hall and arrange empty booths in aisles.
   const quickBuild = () => {
     if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
-    const { width, depth, spawn, cells } = autoArrangeBooths(quickN);
+    const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
     const booths: MetaverseBooth[] = cells.map((c, i) => ({
       id: newId('booth'), name: { fa: `غرفه ${i + 1}`, en: `Booth ${i + 1}` },
-      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', hotspots: [],
+      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', tier: quickTier, hotspots: [],
     }));
     patch({ width, depth, spawn, booths });
     setOpenBooth(null);
@@ -281,6 +291,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const svgRef = useRef<SVGSVGElement>(null);
     const W = Math.max(8, e.width || 30), D = Math.max(8, e.depth || 30);
     const dragId = useRef<string | null>(null);
+    const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
     const toWorld = (clientX: number, clientY: number) => {
       const r = svgRef.current!.getBoundingClientRect();
       const nx = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
@@ -305,13 +316,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         onPointerLeave={() => { dragId.current = null; }}
       >
         <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke="#cbd5e1" strokeWidth={0.6} />
-        {!readonly && (e.booths || []).map(b => (
+        {!readonly && (e.booths || []).map((b, i) => (
           <g key={b.id} transform={`translate(${wx(b.x || 0)} ${wz(b.z || 0)})`} style={{ cursor: 'grab' }}
             onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
             onClick={() => setOpenBooth(b.id)}
           >
             <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
-            <text x={0} y={6.5} textAnchor="middle" fontSize={3} fill="#475569">{(T ? b.name?.fa : b.name?.en) || (b.name?.fa || b.name?.en) || ''}</text>
+            <text x={0} y={6.5} textAnchor="middle" fontSize={2.9} fill="#475569">{T ? `غ ${i + 1}` : `B${i + 1}`}</text>
+            <text x={0} y={10.2} textAnchor="middle" fontSize={2.1} fill="#64748b">{tierMark(b.tier)}</text>
           </g>
         ))}
         {/* spawn marker */}
@@ -452,6 +464,20 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <p className="text-[12px] text-indigo-600/80 mb-3 max-w-2xl">{t.quickHint}</p>
               <div className="flex items-end gap-2 flex-wrap">
                 <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
+                <div><label className={lbl}>{t.quickLayout}</label>
+                  <select className={fld + ' bg-white min-w-40'} value={quickLayout} onChange={ev => setQuickLayout(ev.target.value as ExpoBoothLayout)}>
+                    <option value="facing">{t.layoutFacing}</option>
+                    <option value="grid">{t.layoutGrid}</option>
+                    <option value="perimeter">{t.layoutPerimeter}</option>
+                  </select>
+                </div>
+                <div><label className={lbl}>{t.boothTier}</label>
+                  <select className={fld + ' bg-white min-w-32'} value={quickTier} onChange={ev => setQuickTier(ev.target.value as BoothTier)}>
+                    <option value="basic">{t.tierBasic}</option>
+                    <option value="standard">{t.tierStandard}</option>
+                    <option value="premium">{t.tierPremium}</option>
+                  </select>
+                </div>
                 <button onClick={quickBuild} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold flex items-center gap-1"><IconPlus className="w-4 h-4" />{t.quickBuild}</button>
               </div>
             </div>
@@ -472,6 +498,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                       <div className="flex items-center gap-2 p-2.5">
                         <span className="w-4 h-4 rounded shrink-0" style={{ background: b.color || '#2d4a1a' }} />
                         <span className="text-sm font-medium text-gray-700 flex-1 truncate">{(T ? b.name?.fa : b.name?.en) || b.name?.fa || b.name?.en || '—'}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{b.tier === 'premium' ? t.tierPremium : b.tier === 'standard' ? t.tierStandard : t.tierBasic}</span>
                         {b.shopSlug && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{b.shopSlug}</span>}
                         <span className="text-[10px] text-gray-400">{(b.hotspots || []).length} ⭐</span>
                         <button onClick={() => setOpenBooth(open ? null : b.id)} className="text-xs px-2 py-1 rounded-lg text-indigo-500 hover:bg-indigo-50 flex items-center gap-1"><IconEdit className="w-3.5 h-3.5" />{t.edit}</button>
@@ -491,6 +518,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 </select>
                                 {b.shopSlug && !readonly && <button type="button" title={t.applyShop} onClick={() => applyShopToBooth(b, b.shopSlug!)} className="shrink-0 text-xs px-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">↻</button>}
                               </div>
+                            </div>
+                            <div><label className={lbl}>{t.boothTier}</label>
+                              <select className={fld + ' bg-white'} value={b.tier || 'basic'} onChange={ev => updBooth(b.id, { tier: ev.target.value as BoothTier })}>
+                                <option value="basic">{t.tierBasic}</option>
+                                <option value="standard">{t.tierStandard}</option>
+                                <option value="premium">{t.tierPremium}</option>
+                              </select>
                             </div>
                             <div><label className={lbl}>{t.color}</label><div className="flex gap-2"><input type="color" value={b.color || '#2d4a1a'} onChange={ev => updBooth(b.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.color || ''} onChange={ev => updBooth(b.id, { color: ev.target.value })} /></div></div>
                             <div className="grid grid-cols-2 gap-2">

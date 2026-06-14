@@ -142,17 +142,62 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-// Auto-arrange `count` booths into tidy exhibition aisles and size the hall to fit.
-// Booths face +Z (toward the entrance/spawn) in a cols×rows grid with walking aisles between.
-export const autoArrangeBooths = (count: number): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number }[] } => {
+export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter';
+
+// Auto-arrange `count` booths and size the hall to fit. `facing` creates paired booths across
+// walking aisles; `perimeter` uses the outside walls; `grid` keeps the older compact rows.
+export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number }[] } => {
   const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
-  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(n))));
+  const cells: { x: number; z: number; ry: number }[] = [];
+
+  if (layout === 'facing') {
+    const pairCount = Math.ceil(n / 2);
+    const cols = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(pairCount))));
+    const rows = Math.ceil(pairCount / cols);
+    const cellW = 6.5;
+    const cellD = 9;
+    const aisle = 4.4;
+    const width = Math.max(16, cols * cellW + 7);
+    const depth = Math.max(18, rows * cellD + 10);
+    for (let i = 0; i < n; i++) {
+      const pair = Math.floor(i / 2);
+      const r = Math.floor(pair / cols), c = pair % cols;
+      const colsThisRow = Math.min(cols, pairCount - r * cols);
+      const x = (c - (colsThisRow - 1) / 2) * cellW;
+      const zCenter = ((rows - 1) / 2 - r) * cellD;
+      const side = i % 2;
+      cells.push({ x: +x.toFixed(2), z: +(zCenter + (side === 0 ? -aisle / 2 : aisle / 2)).toFixed(2), ry: side === 0 ? 0 : Math.PI });
+    }
+    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+    return { width, depth, spawn, cells };
+  }
+
+  if (layout === 'perimeter') {
+    const perSide = Math.max(2, Math.ceil(n / 4));
+    const width = Math.max(18, perSide * 6 + 8);
+    const depth = Math.max(18, perSide * 6 + 8);
+    const margin = 4;
+    for (let i = 0; i < n; i++) {
+      const side = i % 4;
+      const slot = Math.floor(i / 4);
+      const u = perSide <= 1 ? 0 : slot / (perSide - 1);
+      const alongW = (u - 0.5) * (width - margin * 2);
+      const alongD = (u - 0.5) * (depth - margin * 2);
+      if (side === 0) cells.push({ x: +alongW.toFixed(2), z: +(-depth / 2 + margin).toFixed(2), ry: 0 });
+      else if (side === 1) cells.push({ x: +(width / 2 - margin).toFixed(2), z: +alongD.toFixed(2), ry: -Math.PI / 2 });
+      else if (side === 2) cells.push({ x: +(-alongW).toFixed(2), z: +(depth / 2 - margin).toFixed(2), ry: Math.PI });
+      else cells.push({ x: +(-width / 2 + margin).toFixed(2), z: +(-alongD).toFixed(2), ry: Math.PI / 2 });
+    }
+    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+    return { width, depth, spawn, cells };
+  }
+
+  const cols = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(n))));
   const rows = Math.ceil(n / cols);
-  const cellW = 7;   // booth (4m) + side aisle
-  const cellD = 8;   // booth (4m) + walking aisle in front
+  const cellW = 6.5; // booth (4m) + side aisle
+  const cellD = 7.5; // booth (4m) + walking aisle in front
   const width = Math.max(14, cols * cellW + 6);
   const depth = Math.max(16, rows * cellD + 10);
-  const cells: { x: number; z: number; ry: number }[] = [];
   for (let i = 0; i < n; i++) {
     const r = Math.floor(i / cols), c = i % cols;
     const colsThisRow = Math.min(cols, n - r * cols);

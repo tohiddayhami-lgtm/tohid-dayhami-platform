@@ -4,7 +4,7 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { bi, isVideoUrl, isVideoFile, isGif, isHtmlFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
@@ -568,8 +568,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
+  const tier: BoothTier = booth.tier || 'basic';
+  const tierSpec = {
+    basic: { w: 4, d: 4, wallH: 3.2, panel: 1, side: 1, glow: 1.4, trim: 0, label: lang === 'fa' ? 'پایه' : 'Basic' },
+    standard: { w: 4.35, d: 4.25, wallH: 3.45, panel: 1.13, side: 1.12, glow: 1.9, trim: 0.12, label: lang === 'fa' ? 'استاندارد' : 'Standard' },
+    premium: { w: 4.75, d: 4.55, wallH: 3.75, panel: 1.26, side: 1.24, glow: 2.5, trim: 0.22, label: lang === 'fa' ? 'پریمیوم' : 'Premium' },
+  }[tier];
   const scale = booth.scale || 1;
-  const W = 4, D = 4, wallH = 3.2;          // procedural booth footprint (meters)
+  const W = tierSpec.w, D = tierSpec.d, wallH = tierSpec.wallH; // procedural booth footprint (meters)
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
@@ -579,14 +585,19 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const P = booth.panels || {};
   const panelUrl = (face: BoothFace): string | undefined =>
     P[face] || (face === 'innerBack' ? (booth.screenUrl || booth.bannerImage) : undefined);
-  const backW = W * 0.78, backH = backW * 9 / 16, sideW = 1.9, sideH = 1.15;
+  const backW = Math.min(W * 0.9, W * 0.78 * tierSpec.panel);
+  const backH = backW * 9 / 16;
+  const sideW = Math.min(D * 0.58, 1.9 * tierSpec.side);
+  const sideH = 1.15 * tierSpec.side;
+  const backY = Math.min(wallH - backH / 2 - 0.35, 1.62 + tierSpec.trim * 1.4);
+  const sideY = Math.min(wallH - sideH / 2 - 0.35, 1.45 + tierSpec.trim);
   const PANEL_SPECS: { face: BoothFace; position: [number, number, number]; rotation: [number, number, number]; w: number; h: number }[] = [
-    { face: 'innerBack',  position: [0, 1.62, -D / 2 + 0.09], rotation: [0, 0, 0],             w: backW, h: backH },
-    { face: 'outerBack',  position: [0, 1.62, -D / 2 - 0.09], rotation: [0, Math.PI, 0],       w: backW, h: backH },
-    { face: 'innerLeft',  position: [-W / 2 + 0.09, 1.45, -D / 6], rotation: [0, Math.PI / 2, 0],  w: sideW, h: sideH },
-    { face: 'outerLeft',  position: [-W / 2 - 0.09, 1.45, -D / 6], rotation: [0, -Math.PI / 2, 0], w: sideW, h: sideH },
-    { face: 'innerRight', position: [W / 2 - 0.09, 1.45, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
-    { face: 'outerRight', position: [W / 2 + 0.09, 1.45, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
+    { face: 'innerBack',  position: [0, backY, -D / 2 + 0.09], rotation: [0, 0, 0],             w: backW, h: backH },
+    { face: 'outerBack',  position: [0, backY, -D / 2 - 0.09], rotation: [0, Math.PI, 0],       w: backW, h: backH },
+    { face: 'innerLeft',  position: [-W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],  w: sideW, h: sideH },
+    { face: 'outerLeft',  position: [-W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0], w: sideW, h: sideH },
+    { face: 'innerRight', position: [W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
+    { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
 
   return (
@@ -610,7 +621,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           </mesh>
           <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[W * 0.74, D * 0.74]} />
-            <meshStandardMaterial color="#f7f8fa" roughness={0.9} />
+            <meshStandardMaterial color={tier === 'premium' ? '#fff7ed' : '#f7f8fa'} roughness={0.9} />
           </mesh>
 
           {/* Back wall (framed) */}
@@ -633,16 +644,32 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <boxGeometry args={[0.12, wallH / 1.3, D * 0.66]} />
             <meshStandardMaterial color="#eef0f3" roughness={0.85} />
           </mesh>
+          {tier !== 'basic' && (
+            <>
+              <RoundedBox args={[0.18, wallH * 0.78, 0.18]} radius={0.04} smoothness={3} position={[-W / 2 + 0.12, wallH * 0.39, D / 2 - 0.32]} castShadow>
+                <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={tier === 'premium' ? 0.55 : 0.25} metalness={0.2} roughness={0.45} />
+              </RoundedBox>
+              <RoundedBox args={[0.18, wallH * 0.78, 0.18]} radius={0.04} smoothness={3} position={[W / 2 - 0.12, wallH * 0.39, D / 2 - 0.32]} castShadow>
+                <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={tier === 'premium' ? 0.55 : 0.25} metalness={0.2} roughness={0.45} />
+              </RoundedBox>
+            </>
+          )}
 
           {/* Lit header sign across the top */}
-          <RoundedBox args={[W + 0.1, 0.56, 0.18]} radius={0.07} smoothness={3} position={[0, wallH + 0.12, -D / 2 + 0.06]} castShadow>
-            <meshStandardMaterial color={accentColor} metalness={0.2} roughness={0.5} />
+          <RoundedBox args={[W + 0.1 + tierSpec.trim * 2, 0.56 + tierSpec.trim, 0.18 + tierSpec.trim * 0.4]} radius={0.07} smoothness={3} position={[0, wallH + 0.12, -D / 2 + 0.06]} castShadow>
+            <meshStandardMaterial color={accentColor} emissive={accentColor} emissiveIntensity={tier === 'premium' ? 0.35 : 0.08} metalness={tier === 'premium' ? 0.4 : 0.2} roughness={0.5} />
           </RoundedBox>
           {/* Emissive light strip under the header (booth glow) */}
           <mesh position={[0, wallH - 0.12, -D / 2 + 0.14]}>
             <boxGeometry args={[W * 0.92, 0.06, 0.04]} />
-            <meshStandardMaterial color={'#ffffff'} emissive={accentColor} emissiveIntensity={1.4} toneMapped={false} />
+            <meshStandardMaterial color={'#ffffff'} emissive={accentColor} emissiveIntensity={tierSpec.glow} toneMapped={false} />
           </mesh>
+          {tier === 'premium' && (
+            <mesh position={[0, wallH + 0.52, -D / 2 + 0.02]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[W * 0.38, 0.025, 8, 80]} />
+              <meshStandardMaterial color="#f8fafc" emissive={accentColor} emissiveIntensity={0.8} toneMapped={false} />
+            </mesh>
+          )}
 
           {/* Reception desk / podium */}
           <RoundedBox args={[W * 0.52, 0.95, 0.6]} radius={0.05} smoothness={3} position={[0, 0.48, D / 2 - 0.5]} castShadow receiveShadow>
@@ -685,6 +712,15 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           />
+          {tier !== 'basic' && (
+            <CanvasLabel
+              text={tierSpec.label}
+              width={Math.min(W * 0.34, 1.55)} height={0.22}
+              position={[W / 2 - Math.min(W * 0.2, 0.85), wallH + 0.48, -D / 2 + 0.18]}
+              bg={tier === 'premium' ? 'rgba(146,64,14,.92)' : 'rgba(30,64,175,.9)'}
+              color="#ffffff"
+            />
+          )}
         </group>
       )}
 
