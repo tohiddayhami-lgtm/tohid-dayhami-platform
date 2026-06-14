@@ -45,6 +45,10 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const entranceAds = expo.entranceAds || [];
+  const apronStart = depth / 2 + 0.08;
+  const apronEnd = z0 + 0.55;
+  const apronLen = apronEnd - apronStart;
+  const apronZ = (apronStart + apronEnd) / 2;
   const railTotals = entranceAds.reduce<Record<string, number>>((acc, ad) => {
     if (ad.position === 'railLeft' || ad.position === 'railRight') acc[ad.position] = (acc[ad.position] || 0) + 1;
     return acc;
@@ -72,8 +76,8 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   return (
     <group>
       {/* Light entrance apron covers the whole outside corridor, including behind the rails. */}
-      <mesh position={[0, 0.018, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[Math.min(width, 9.5), Math.abs(z0 - z1) + 1.7]} />
+      <mesh position={[0, 0.018, apronZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[Math.min(width, 9.5), apronLen]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.62} metalness={0} />
       </mesh>
       {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
