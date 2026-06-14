@@ -64,7 +64,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     adsHint: T ? 'فقط دیوار، اندازهٔ بنر، تصویر و لینک را بدهید؛ جای‌گذاری روی دیوار به‌صورت خودکار و متناسب با سالن انجام می‌شود. هر بنر لینک‌دار است (در تب جدید باز می‌شود).' : 'Just pick a wall, a banner size, an image and a link — placement on the wall is automatic and fits the hall. Each banner is clickable (opens in a new tab).',
     addAd: T ? 'افزودن بنر' : 'Add banner', noAds: T ? 'بنری اضافه نشده.' : 'No banners yet.',
     moveUp: T ? 'انتقال به بالا' : 'Move up', moveDown: T ? 'انتقال به پایین' : 'Move down',
-    adWall: T ? 'دیوار' : 'Wall', adSize: T ? 'اندازهٔ بنر' : 'Banner size', adLink: T ? 'لینک (اختیاری)' : 'Link (optional)', adImage: T ? 'تصویر بنر' : 'Banner image',
+    adWall: T ? 'دیوار' : 'Wall', adSize: T ? 'اندازهٔ بنر' : 'Banner size', adLink: T ? 'لینک (اختیاری)' : 'Link (optional)', adImage: T ? 'رسانه تابلو' : 'Banner media',
+    adTitleFa: T ? 'متن تابلو (فارسی)' : 'Banner text (FA)', adTitleEn: T ? 'متن تابلو (انگلیسی)' : 'Banner text (EN)',
     adScaleAll: T ? 'بزرگ‌نمایی همه تابلوها' : 'All banners scale',
     adLiftAll: T ? 'بالا بردن همه تابلوها (متر)' : 'Lift all banners (m)',
     meter: T ? 'متر' : 'm',
@@ -144,6 +145,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const updWallAds = (wallAds: ExpoWallAd[]) => patch({ wallAds });
   const addWallAd = () => { const s = bannerSize('standard'); updWallAds([...(e.wallAds || []), { id: newId('ad'), wall: 'back', size: s.key, w: s.w, h: s.h }]); };
   const updWallAd = (id: string, p: Partial<ExpoWallAd>) => updWallAds((e.wallAds || []).map(a => a.id === id ? { ...a, ...p } : a));
+  const setWallAdTitle = (ad: ExpoWallAd, which: 'fa' | 'en', val: string) =>
+    updWallAd(ad.id, { title: { ...(ad.title || {}), [which]: val } });
   const setAdSize = (id: string, key: string) => { const s = bannerSize(key); updWallAd(id, { size: key, w: s.w, h: s.h }); };
   const moveWallAd = (id: string, dir: -1 | 1) => {
     const ads = [...(e.wallAds || [])];
@@ -278,6 +281,33 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           {value && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
           <input type="file" ref={ref} className="hidden" accept=".glb,.gltf,model/gltf-binary" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadGlb(id, f, onUrl); ev.target.value = ''; }} />
         </div>
+      </div>
+    );
+  };
+
+  const AdMediaUpload: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string }> = ({ id, value, onUrl, label }) => {
+    const imgRef = useRef<HTMLInputElement>(null);
+    const vidRef = useRef<HTMLInputElement>(null);
+    const pdfRef = useRef<HTMLInputElement>(null);
+    const isImage = !!value && /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(value);
+    const isPdf = !!value && /\.pdf(\?.*)?$/i.test(value);
+    const isVideo = !!value && /\.(mp4|webm|ogg)(\?.*)?$/i.test(value);
+    return (
+      <div>
+        <label className={lbl}>{label}</label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {isImage && <img src={value} alt="" className="w-9 h-9 rounded object-cover border border-gray-200" />}
+          {isPdf && <span className="text-[11px] px-2 py-1 rounded bg-amber-50 text-amber-700 font-bold">PDF</span>}
+          {isVideo && <span className="text-[11px] px-2 py-1 rounded bg-rose-50 text-rose-700 font-bold">VIDEO</span>}
+          {!readonly && <button type="button" title={t.uploadImg} onClick={() => imgRef.current?.click()} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"><IconUpload className="w-3.5 h-3.5" /></button>}
+          {!readonly && <button type="button" title={t.uploadVid} onClick={() => vidRef.current?.click()} className="text-[13px] px-1.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50">🎬</button>}
+          {!readonly && <button type="button" title={t.uploadPdf} onClick={() => pdfRef.current?.click()} className="text-[12px] px-1.5 py-1.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50">PDF</button>}
+          {value && !readonly && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
+          <input type="file" ref={imgRef} className="hidden" accept="image/*" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadImage(id, f, onUrl); ev.target.value = ''; }} />
+          <input type="file" ref={vidRef} className="hidden" accept="video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadVideo(id, f, onUrl); ev.target.value = ''; }} />
+          <input type="file" ref={pdfRef} className="hidden" accept="application/pdf,.pdf" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadPdf(id, f, onUrl); ev.target.value = ''; }} />
+        </div>
+        {uploading === id && <span className="text-[10px] text-gray-400">{t.uploading} {uploadPct > 0 ? `${uploadPct}%` : ''}</span>}
       </div>
     );
   };
@@ -427,7 +457,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             {(e.wallAds || []).length === 0 ? <p className="text-sm text-gray-400 text-center py-2">{t.noAds}</p> : (
               <div className="space-y-2">
                 {(e.wallAds || []).map((ad, idx, ads) => (
-                  <div key={ad.id} className="rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                  <div key={ad.id} className="rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
                     <div><label className={lbl}>{t.adWall}</label>
                       <select className={fld + ' bg-white'} value={ad.wall} onChange={ev => updWallAd(ad.id, { wall: ev.target.value as ExpoWall })}>
                         <option value="back">{t.wallBack}</option><option value="left">{t.wallLeft}</option><option value="right">{t.wallRight}</option><option value="front">{t.wallFront}</option>
@@ -438,8 +468,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                         {BANNER_SIZES.map(s => <option key={s.key} value={s.key}>{(T ? s.fa : s.en)} ({s.w}×{s.h} {t.meter})</option>)}
                       </select>
                     </div>
-                    <ImgUpload id={`ad-${ad.id}`} value={ad.image} onUrl={u => updWallAd(ad.id, { image: u || undefined })} label={t.adImage} />
-                    <div className="flex items-end gap-2">
+                    <div><label className={lbl}>{t.adTitleFa}</label><input className={fld} value={ad.title?.fa || ''} onChange={ev => setWallAdTitle(ad, 'fa', ev.target.value)} placeholder="محل تبلیغات" /></div>
+                    <div><label className={lbl}>{t.adTitleEn}</label><input className={fld + ' dir-ltr'} value={ad.title?.en || ''} onChange={ev => setWallAdTitle(ad, 'en', ev.target.value)} placeholder="Advertising space" /></div>
+                    <AdMediaUpload id={`ad-${ad.id}`} value={ad.image} onUrl={u => updWallAd(ad.id, { image: u || undefined })} label={t.adImage} />
+                    <div className="flex items-end gap-2 lg:col-span-2">
                       <div className="flex-1"><label className={lbl}>{t.adLink}</label><input className={fld + ' dir-ltr'} value={ad.url || ''} onChange={ev => updWallAd(ad.id, { url: ev.target.value || undefined })} placeholder="https://…" /></div>
                       {!readonly && <div className="flex items-center gap-1 pb-2">
                         <button type="button" onClick={() => moveWallAd(ad.id, -1)} disabled={idx === 0} className="w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:hover:bg-white" title={t.moveUp}>↑</button>

@@ -1,8 +1,10 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
-import { useTexture } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { useTexture, useVideoTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { TexBoundary } from './Booth';
 import { CanvasLabel } from './CanvasLabel';
+import { isGif, isPdfFile, isVideoFile } from './expoUtils';
 // Static asset URL for the pdf.js worker (Vite emits it); pdf.js core is loaded on demand below.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -21,33 +23,89 @@ const AdImage: React.FC<{ url: string; w: number; h: number; onClick?: () => voi
   );
 };
 
+const AdVideo: React.FC<{ url: string; w: number; h: number; onClick?: () => void }> = ({ url, w, h, onClick }) => {
+  const tex = useVideoTexture(url, { muted: true, loop: true, start: true, crossOrigin: 'anonymous', playsInline: true } as any);
+  return (
+    <mesh position={[0, 0, 0.04]} onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      onPointerOver={() => { if (onClick) document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+      <planeGeometry args={[w, h]} />
+      <meshBasicMaterial map={tex as THREE.Texture} toneMapped={false} />
+    </mesh>
+  );
+};
+
+const AdGif: React.FC<{ url: string; w: number; h: number; onClick?: () => void }> = ({ url, w, h, onClick }) => {
+  const state = useState(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const canvas = document.createElement('canvas');
+    canvas.width = 2; canvas.height = 2;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const o = { img, canvas, tex, ready: false };
+    img.onload = () => { canvas.width = img.naturalWidth || 256; canvas.height = img.naturalHeight || 256; o.ready = true; };
+    img.src = url;
+    return o;
+  })[0];
+  const acc = useRef(0);
+  useFrame((_, dt) => {
+    if (!state.ready) return;
+    acc.current += dt;
+    if (acc.current < 1 / 15) return;
+    acc.current = 0;
+    const ctx = state.canvas.getContext('2d');
+    if (ctx) { ctx.drawImage(state.img, 0, 0, state.canvas.width, state.canvas.height); state.tex.needsUpdate = true; }
+  });
+  useEffect(() => () => state.tex.dispose(), [state]);
+  return (
+    <mesh position={[0, 0, 0.04]} onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      onPointerOver={() => { if (onClick) document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+      <planeGeometry args={[w, h]} />
+      <meshBasicMaterial map={state.tex} transparent toneMapped={false} />
+    </mesh>
+  );
+};
+
 export const WallAd: React.FC<{
   url?: string; image?: string; title?: string; w: number; h: number;
   position: [number, number, number]; rotation: [number, number, number];
-}> = ({ url, image, title, w, h, position, rotation }) => (
-  <group position={position} rotation={rotation}>
-    {/* frame border + light board (so a not-yet-loaded/blocked image shows as a blank board, not black) */}
-    <mesh position={[0, 0, 0]}>
-      <planeGeometry args={[w + 0.14, h + 0.14]} />
-      <meshStandardMaterial color="#334155" />
-    </mesh>
-    <mesh position={[0, 0, 0.01]} onClick={(e) => { e.stopPropagation(); openNewTab(url); }}>
-      <planeGeometry args={[w, h]} />
-      <meshStandardMaterial color="#f1f5f9" />
-    </mesh>
-    {/* caption fallback (covered by the image once it loads) */}
-    <CanvasLabel text={title || (url ? 'بنر تبلیغاتی' : 'تبلیغات')} width={w * 0.85} height={Math.min(h * 0.4, 0.7)} position={[0, 0, 0.02]} color="#334155" onClick={() => openNewTab(url)} />
-    {image && (
-      <TexBoundary key={image}>
-        <Suspense fallback={null}>
-          <AdImage url={image} w={w} h={h} onClick={() => openNewTab(url)} />
-        </Suspense>
-      </TexBoundary>
-    )}
-    {/* tiny "link" hint when clickable */}
-    {url && <CanvasLabel text="🔗" width={0.3} height={0.3} position={[w / 2 - 0.2, -h / 2 + 0.2, 0.05]} color="#1f6f43" onClick={() => openNewTab(url)} />}
-  </group>
-);
+}> = ({ url, image, title, w, h, position, rotation }) => {
+  const media = image;
+  return (
+    <group position={position} rotation={rotation}>
+      {/* frame border + light board (so a not-yet-loaded/blocked image shows as a blank board, not black) */}
+      <mesh position={[0, 0, 0]}>
+        <planeGeometry args={[w + 0.14, h + 0.14]} />
+        <meshStandardMaterial color="#334155" />
+      </mesh>
+      <mesh position={[0, 0, 0.01]} onClick={(e) => { e.stopPropagation(); openNewTab(url); }}>
+        <planeGeometry args={[w, h]} />
+        <meshStandardMaterial color="#f1f5f9" />
+      </mesh>
+      {/* caption fallback (covered by media once it loads) */}
+      <CanvasLabel text={title || (url ? 'بنر تبلیغاتی' : 'تبلیغات')} width={w * 0.85} height={Math.min(h * 0.4, 0.7)} position={[0, 0, 0.02]} color="#334155" onClick={() => openNewTab(url)} />
+      {media && (
+        <TexBoundary key={media}>
+          <Suspense fallback={null}>
+            {isPdfFile(media) ? (
+              <PresentationScreen url={media} w={w} h={h} position={[0, 0, 0.06]} rotation={[0, 0, 0]} />
+            ) : isVideoFile(media) ? (
+              <AdVideo url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+            ) : isGif(media) ? (
+              <AdGif url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+            ) : (
+              <AdImage url={media} w={w} h={h} onClick={() => openNewTab(url)} />
+            )}
+          </Suspense>
+        </TexBoundary>
+      )}
+      {/* tiny "link" hint when clickable */}
+      {url && <CanvasLabel text="🔗" width={0.3} height={0.3} position={[w / 2 - 0.2, -h / 2 + 0.2, 0.08]} color="#1f6f43" onClick={() => openNewTab(url)} />}
+    </group>
+  );
+};
 
 // ── Page-turnable PDF presentation ─────────────────────────────────────────
 let pdfjsPromise: Promise<any> | null = null;
