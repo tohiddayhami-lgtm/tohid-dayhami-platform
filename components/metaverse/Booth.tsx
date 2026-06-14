@@ -863,8 +863,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
   const managerSlots = [0, 1, 2, 3, 4];
-  const managerXs = [-1.45, -0.72, 0, 0.72, 1.45];
   const managerPngs = managerSlots.map(i => booth.managerPngs?.[i] || '');
+  const managerVisible = managerSlots.map(i => booth.managerEnabled?.[i] !== false);
   const managerNames = managerSlots.map(i => bi(booth.managerNames?.[i], lang, ''));
   const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
   const managerLinks = managerSlots.map(i => booth.managerLinks?.[i] || legacyWhatsapps?.[i] || '');
@@ -874,6 +874,12 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       : (booth.managerAudiosEn?.[i] || booth.managerAudios?.[i] || booth.managerAudiosFa?.[i] || '')
   ));
   const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null, null, null, null]);
+  const activeManagers = managerSlots
+    .filter(i => managerPngs[i] && managerVisible[i])
+    .map((slot, order, arr) => {
+      const spacing = arr.length <= 2 ? 1.55 : arr.length === 3 ? 1.05 : arr.length === 4 ? 0.82 : 0.68;
+      return { slot, x: (order - (arr.length - 1) / 2) * spacing };
+    });
   const counterGlbs = managerSlots.map(i => booth.counterGlbs?.[i] || '');
   const counterGlbXs = [-0.82, -0.41, 0, 0.41, 0.82];
   useEffect(() => () => {
@@ -1060,33 +1066,33 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       )}
 
       {/* Optional life-size transparent PNG people standing behind the reception counter. */}
-      {managerPngs.map((url, i) => url ? (
+      {activeManagers.map(({ slot: i, x }) => (
         <SafeImage
-          key={`${url}-${i}`}
-          url={url}
+          key={`${managerPngs[i]}-${i}`}
+          url={managerPngs[i]}
           width={1.12}
           height={2.1}
-          position={[managerXs[i], 1.05, D / 2 - 1.08]}
+          position={[x, 1.05, D / 2 - 1.08]}
           onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
             e.stopPropagation();
             if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
             else openManagerLink(managerLinks[i]);
           } : undefined}
         />
-      ) : null)}
-      {managerPngs.map((url, i) => (url && managerNames[i]) ? (
+      ))}
+      {activeManagers.map(({ slot: i, x }) => managerNames[i] ? (
         <CanvasLabel
-          key={`name-${url}-${i}`}
+          key={`name-${managerPngs[i]}-${i}`}
           text={managerNames[i]}
           width={0.68}
           height={0.22}
-          position={[managerXs[i], 2.5, D / 2 - 1.055]}
+          position={[x, 2.5, D / 2 - 1.055]}
           bg="rgba(15,23,42,.82)"
           color="#ffffff"
         />
       ) : null)}
-      {managerPngs.map((url, i) => (url && managerAudios[i]) ? (
-        <group key={`audio-${url}-${i}`} position={[managerXs[i], 2.26, D / 2 - 1.06]}>
+      {activeManagers.map(({ slot: i, x }) => managerAudios[i] ? (
+        <group key={`audio-${managerPngs[i]}-${i}`} position={[x, 2.26, D / 2 - 1.06]}>
           <group position={[-0.3, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }}

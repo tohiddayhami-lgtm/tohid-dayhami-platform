@@ -615,6 +615,7 @@ export interface MetaverseBooth {
   premiumSignColor?: string;     // rotating LCD background/accent color
   logo?: string;                // logo image URL (Storage images/)
   managerPngs?: string[];       // up to 5 life-size transparent PNG people shown behind the counter
+  managerEnabled?: boolean[];   // optional visibility toggle per counter person (default: enabled)
   managerNames?: MetaShopDirCat[]; // optional names displayed above those PNG people
   managerLinks?: string[];      // optional clickable links for those PNG people
   managerAudios?: string[];     // legacy/fallback audio files played when those PNG people are clicked

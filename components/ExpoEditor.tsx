@@ -128,6 +128,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,
+    managerActive: (n: number) => T ? `نمایش شخص ${n}` : `Show person ${n}`,
     managerNameFa: (n: number) => T ? `نام شخص ${n} (فارسی)` : `Person ${n} name (FA)`,
     managerNameEn: (n: number) => T ? `نام شخص ${n} (انگلیسی)` : `Person ${n} name (EN)`,
     managerLink: (n: number) => T ? `لینک شخص ${n}` : `Person ${n} link`,
@@ -196,6 +197,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const next = Array.from({ length: 5 }, (_, i) => b.managerPngs?.[i] || '');
     next[index] = url || '';
     updBooth(b.id, { managerPngs: compactFive(next) });
+  };
+  const setBoothManagerEnabled = (b: MetaverseBooth, index: number, enabled: boolean) => {
+    const next = Array.from({ length: 5 }, (_, i) => b.managerEnabled?.[i] !== false);
+    next[index] = enabled;
+    updBooth(b.id, { managerEnabled: next });
   };
   const setBoothManagerName = (b: MetaverseBooth, index: number, which: 'fa' | 'en', val: string) => {
     const next = Array.from({ length: 5 }, (_, i) => b.managerNames?.[i] || {});
@@ -775,6 +781,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             ))}
                             {MANAGER_SLOTS.map(i => (
                               <React.Fragment key={`manager-slot-${b.id}-${i}`}>
+                                <label className="flex items-center gap-2 text-xs font-bold text-gray-700 self-end pb-2">
+                                  <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={b.managerEnabled?.[i] !== false} onChange={ev => setBoothManagerEnabled(b, i, ev.target.checked)} />
+                                  {t.managerActive(i + 1)}
+                                </label>
                                 <ImgUpload id={`manager-${i + 1}-${b.id}`} value={b.managerPngs?.[i]} onUrl={u => setBoothManagerPng(b, i, u)} label={t.managerPng(i + 1)} />
                                 <div><label className={lbl}>{t.managerNameFa(i + 1)}</label><input className={fld} value={b.managerNames?.[i]?.fa || ''} onChange={ev => setBoothManagerName(b, i, 'fa', ev.target.value)} /></div>
                                 <div><label className={lbl}>{t.managerNameEn(i + 1)}</label><input className={fld + ' dir-ltr'} value={b.managerNames?.[i]?.en || ''} onChange={ev => setBoothManagerName(b, i, 'en', ev.target.value)} /></div>
