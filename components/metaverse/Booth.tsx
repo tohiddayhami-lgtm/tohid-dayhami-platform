@@ -103,10 +103,10 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 };
 
 // An uploaded HTML page shown on the wall as a LIVE, interactive iframe (so even a self-unpacking
-// JS bundle runs and renders for real, and the page scrolls natively). Uses drei <Html> in
-// NON-transform mode — a plain 2D overlay billboarded at the panel — which composites over the
-// canvas far more reliably here than the CSS-3D transform mode. The markup is fetched and inlined
-// via srcDoc (no Storage content-type / X-Frame issues) and run unsandboxed so its scripts work.
+// JS bundle runs and renders for real, and the page scrolls natively). Use drei <Html> in transform
+// mode so the DOM panel inherits the wall's local position/rotation instead of billboard-orbiting
+// around the booth as a 2D overlay. The markup is fetched and inlined via srcDoc (no Storage
+// content-type / X-Frame issues) and run unsandboxed so its scripts work.
 const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
   const portal = useCanvasPortal();
   const [doc, setDoc] = useState<string | null>(null);
@@ -129,6 +129,7 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
 
   const PX_W = 1100;
   const PX_H = Math.max(2, Math.round((PX_W * height) / width));
+  const scale = width / PX_W;
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
@@ -141,10 +142,11 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
       {/* VR-only fallback glyph (DOM can't render inside an immersive XR session) */}
       <CanvasLabel text="🌐" width={width * 0.32} height={width * 0.32} position={[0, 0, 0.004]} color="#ffffff" />
       <Html
+        transform
         portal={portal}
         position={[0, 0, 0.03]}
+        scale={scale}
         center
-        distanceFactor={width}
         zIndexRange={[24, 0]}
         style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)' }}
       >
