@@ -29,6 +29,7 @@ const deleteNodeIn = (nodes: MetaBazaarNode[], id: string): MetaBazaarNode[] =>
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || `bazaar-${Date.now().toString(36)}`;
 const blank = (): MetaBazaar => ({ id: `bz-${Date.now()}`, slug: '', name: '', isActive: true, defaultLang: 'en', theme: { primary: '#2d4a1a', cover: '#1f2a18' }, levelLabels: [], tree: [], createdAt: new Date().toISOString() });
+const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
 const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
   const j = JSON.parse(raw);
@@ -57,7 +58,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     newBlank: T ? 'بازارچه جدید' : 'New bazaar', newJson: T ? 'ساخت از فایل JSON' : 'Create from JSON', sample: T ? 'دانلود نمونه بازارچه' : 'Bazaar sample',
     empty: T ? 'هنوز بازارچه‌ای نساخته‌اید.' : 'No bazaars yet.',
     open: T ? 'باز کردن' : 'Open', copy: T ? 'کپی لینک' : 'Copy link', copied: T ? 'کپی شد ✓' : 'Copied ✓',
-    edit: T ? 'ویرایش' : 'Edit', del: T ? 'حذف' : 'Delete', download: T ? 'دانلود JSON' : 'Download JSON', update: T ? 'به‌روزرسانی از JSON' : 'Update from JSON',
+    edit: T ? 'ویرایش' : 'Edit', duplicate: T ? 'Duplicate' : 'Duplicate', del: T ? 'حذف' : 'Delete', download: T ? 'دانلود JSON' : 'Download JSON', update: T ? 'به‌روزرسانی از JSON' : 'Update from JSON',
     back: T ? 'بازگشت' : 'Back', save: T ? 'ذخیره بازارچه' : 'Save bazaar', active: T ? 'فعال' : 'Active',
     name: T ? 'نام بازارچه' : 'Bazaar name', slug: T ? 'شناسه لینک (slug)' : 'Link slug', defLang: T ? 'زبان پیش‌فرض' : 'Default language',
     titleFa: T ? 'عنوان (فارسی)' : 'Title (FA)', titleEn: T ? 'عنوان (انگلیسی)' : 'Title (EN)', subFa: T ? 'زیرعنوان (فارسی)' : 'Subtitle (FA)', subEn: T ? 'زیرعنوان (انگلیسی)' : 'Subtitle (EN)',
@@ -108,6 +109,38 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
     setSaving(true);
     try { await onSave({ ...draft, slug }); setDraft(null); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
+  };
+
+  const uniqueSlug = (base: string, excludeId?: string) => {
+    const root = slugify(base);
+    let candidate = root;
+    let i = 2;
+    while (bazaars.some(b => b.id !== excludeId && b.slug === candidate)) {
+      candidate = `${root}-${i++}`;
+    }
+    return candidate;
+  };
+
+  const duplicateBazaar = async (source: MetaBazaar) => {
+    const suffix = T ? 'کپی' : 'Copy';
+    const copyName = `${source.name || (T ? 'بازارچه' : 'Bazaar')} ${suffix}`;
+    const copy: MetaBazaar = {
+      ...cloneJson(source),
+      id: `bz-${Date.now()}`,
+      name: copyName,
+      slug: uniqueSlug(`${source.slug || source.name}-copy`),
+      isActive: false,
+      createdAt: new Date().toISOString(),
+    };
+    setSaving(true);
+    try {
+      await onSave(copy);
+      setDraft(copy);
+    } catch {
+      alert(T ? 'خطا در ساخت کپی بازارچه' : 'Failed to duplicate bazaar');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Save the bazaar (without leaving the editor), then open the 3D expo in a new tab.
@@ -296,6 +329,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                   <button onClick={() => { navigator.clipboard.writeText(url(b)); setCopiedId(b.id); setTimeout(() => setCopiedId(null), 1800); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
                   <button onClick={() => downloadBazaar(b)} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓</button>
                   {!readonly && <button onClick={() => { setUpdTarget(b); updFileRef.current?.click(); }} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒</button>}
+                  {!readonly && <button onClick={() => duplicateBazaar(b)} disabled={saving} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50" title={t.duplicate}><IconCopy className="w-3.5 h-3.5" /></button>}
                   {!readonly && <button onClick={() => setDraft(JSON.parse(JSON.stringify(b)))} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
                   {!readonly && <button onClick={() => { if (confirm(t.deleteConfirm)) onDelete(b.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                 </div>
