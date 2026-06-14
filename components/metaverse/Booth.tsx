@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useFrame, ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -52,6 +52,15 @@ const SafeImage: React.FC<MediaProps> = (props) => (
   </TexBoundary>
 );
 
+// drei <Html> attaches its DOM layer to the R3F event target, which in this app sits OUTSIDE the
+// z-100 expo container → it ends up BEHIND the WebGL canvas (invisible — only the CanvasLabel
+// glyph showed). Portal it into the canvas's own parent instead so the transformed iframe paints
+// on top of the scene where it belongs.
+const useCanvasPortal = () => {
+  const gl = useThree(s => s.gl);
+  return useRef<HTMLElement | null>(gl.domElement.parentElement);
+};
+
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
 // video → LCD screen, anything else → a static image panel.
 const PanelMedia: React.FC<MediaProps> = (props) =>
@@ -102,6 +111,7 @@ const GifPlane: React.FC<MediaProps> = ({ url, width, height, position, rotation
 // frame restrictions, which leaves a plain `src` iframe blank. Inlining the bytes sidesteps all of
 // that. `<base>` is injected so the page's own relative links still resolve back to its folder.
 const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const portal = useCanvasPortal();
   const [doc, setDoc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -126,6 +136,8 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
   const scale = width / PX_W;
   // Inline the fetched markup; only fall back to a direct src if the fetch was blocked.
   const frameProps = doc != null ? { srcDoc: doc } : failed ? { src: url } : {};
+  const openTab = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); try { window.open(url, '_blank', 'noopener,noreferrer'); } catch {} };
+  const btnW = Math.min(width * 0.92, 2.2), btnH = Math.min(height * 0.16, 0.3);
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
@@ -138,6 +150,7 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
       <CanvasLabel text="🌐" width={width * 0.35} height={width * 0.35} position={[0, 0, 0.004]} color="#ffffff" />
       <Html
         transform
+        portal={portal}
         position={[0, 0, 0.02]}
         scale={scale}
         zIndexRange={[12, 0]}
@@ -145,6 +158,17 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
       >
         <iframe {...frameProps} width={PX_W} height={PX_H} frameBorder={0} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals" style={{ display: 'block', border: 0, background: '#fff' }} title="booth-html" />
       </Html>
+      {/* Guaranteed-visible "open the page" button BELOW the panel (renders even if the embedded
+          iframe is blocked by the browser). Sits outside the iframe area so it's always clickable. */}
+      <group position={[0, -(height / 2) - btnH * 0.85, 0.02]}>
+        <mesh onClick={openTab}
+          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+          onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+          <planeGeometry args={[btnW, btnH]} />
+          <meshBasicMaterial color="#1d4ed8" toneMapped={false} />
+        </mesh>
+        <CanvasLabel text="↗ باز کردن صفحه" width={btnW * 0.92} height={btnH * 0.7} position={[0, 0, 0.01]} color="#ffffff" onClick={openTab} />
+      </group>
     </group>
   );
 };
@@ -268,6 +292,7 @@ const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // as a real WebGL texture; YouTube/Vimeo are shown through an iframe transformed onto the wall
 // surface (the only way to embed them in 3D — they can't be textured due to CORS).
 const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotation }) => {
+  const portal = useCanvasPortal();
   const file = isVideoFile(url);
   const v = useMemo(() => {
     if (file) return null;
@@ -323,6 +348,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
         // YouTube/Vimeo → iframe transformed onto the wall surface, autoplaying muted.
         <Html
           transform
+          portal={portal}
           position={[0, 0, 0.02]}
           scale={scale}
           zIndexRange={[12, 0]}
