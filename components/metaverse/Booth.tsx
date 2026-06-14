@@ -108,7 +108,7 @@ const IframePanel: React.FC<MediaProps> = ({ url, width, height, position, rotat
     let cancel = false;
     setDoc(null); setFailed(false);
     fetch(url)
-      .then(r => r.text())
+      .then(r => r.ok ? r.text() : Promise.reject(new Error('fetch failed')))
       .then(html => {
         if (cancel) return;
         let out = html;

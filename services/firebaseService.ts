@@ -363,11 +363,14 @@ const getStorageErrorMessage = (error: unknown) => {
 export const uploadFile = (
     file: File,
     folder: CentralStorageFolder = "uploads",
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    contentType?: string
 ): Promise<{ url: string; path: string }> => {
     const path = buildCentralStoragePath(file.name, folder);
     const storageRef = ref(storage, path);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    // Force the stored content-type when given (e.g. text/html) so the download URL is served
+    // inline/renderable rather than as an octet-stream the browser would just download.
+    const uploadTask = uploadBytesResumable(storageRef, file, contentType ? { contentType } : undefined);
 
     return new Promise((resolve, reject) => {
         uploadTask.on(
@@ -402,14 +405,15 @@ export const deleteFile = async (pathOrUrl: string) => {
 };
 
 export const uploadFileWithProgress = async (
-    file: File, 
+    file: File,
     onProgress: (progress: number) => void,
     onSuccess: (url: string) => void,
     onError: (error: Error) => void,
-    folder: CentralStorageFolder = "uploads"
+    folder: CentralStorageFolder = "uploads",
+    contentType?: string
 ) => {
     try {
-        const { url } = await uploadFile(file, folder, onProgress);
+        const { url } = await uploadFile(file, folder, onProgress, contentType);
         onProgress(100);
         onSuccess(url);
     } catch (error) {

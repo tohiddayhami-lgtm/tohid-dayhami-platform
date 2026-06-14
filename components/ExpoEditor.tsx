@@ -205,12 +205,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       'documents',
     );
   };
-  // Upload an HTML page → shown on the booth wall through an iframe.
+  // Upload an HTML page → shown on the booth wall through an iframe. Force text/html so Firebase
+  // serves it inline (renderable in the iframe) instead of as a download.
   const uploadHtml = (key: string, file: File, onUrl: (u: string) => void) => {
     if (!/\.html?$/i.test(file.name) && !/html/.test(file.type)) { alert(t.htmlErr); return; }
     if (file.size > 10 * 1024 * 1024) { alert(t.tooBig); return; }
     setUploading(key);
-    uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents');
+    uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents', 'text/html; charset=utf-8');
   };
 
   const ImgUpload: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string }> = ({ id, value, onUrl, label }) => {
