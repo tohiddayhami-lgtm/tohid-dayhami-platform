@@ -770,6 +770,18 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
   };
+  const seekManagerAudio = (index: number, raw: string | undefined, delta: number) => {
+    const url = (raw || '').trim();
+    if (!url) return;
+    let audio = managerAudioRefs.current[index];
+    if (!audio || audio.src !== url) {
+      audio?.pause();
+      audio = new Audio(url);
+      managerAudioRefs.current[index] = audio;
+    }
+    const max = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number.POSITIVE_INFINITY;
+    audio.currentTime = Math.min(max, Math.max(0, audio.currentTime + delta));
+  };
 
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
@@ -929,6 +941,17 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       ) : null)}
       {managerPngs.map((url, i) => (url && managerAudios[i]) ? (
         <group key={`audio-${url}-${i}`} position={[i === 0 ? -1.05 : 1.05, 2.26, D / 2 - 1.06]}>
+          <group position={[-0.3, 0, 0]}>
+            <mesh
+              onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+              <circleGeometry args={[0.13, 24]} />
+              <meshBasicMaterial color="#0f172a" transparent opacity={0.76} toneMapped={false} />
+            </mesh>
+            <CanvasLabel text="-5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }} />
+          </group>
           <mesh
             onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }}
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
@@ -938,6 +961,17 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <meshBasicMaterial color="#0f172a" transparent opacity={0.86} toneMapped={false} />
           </mesh>
           <CanvasLabel text="♪" width={0.24} height={0.24} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); toggleManagerAudio(i, managerAudios[i]); }} />
+          <group position={[0.3, 0, 0]}>
+            <mesh
+              onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], 5); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+              <circleGeometry args={[0.13, 24]} />
+              <meshBasicMaterial color="#0f172a" transparent opacity={0.76} toneMapped={false} />
+            </mesh>
+            <CanvasLabel text="+5" width={0.2} height={0.16} position={[0, 0, 0.01]} color="#ffffff" onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], 5); }} />
+          </group>
         </group>
       ) : null)}
 
