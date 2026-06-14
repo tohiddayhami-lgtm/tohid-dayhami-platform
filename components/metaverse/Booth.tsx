@@ -129,7 +129,6 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
 
   const PX_W = 1100;
   const PX_H = Math.max(2, Math.round((PX_W * height) / width));
-  const scale = width / PX_W;
   return (
     <group position={position} rotation={rotation}>
       <RoundedBox args={[width + 0.16, height + 0.16, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.08]} castShadow>
@@ -145,7 +144,7 @@ const HtmlPanel: React.FC<MediaProps> = ({ url, width, height, position, rotatio
         transform
         portal={portal}
         position={[0, 0, 0.03]}
-        scale={scale}
+        distanceFactor={Math.max(1.1, width * 0.42)}
         center
         zIndexRange={[1000, 0]}
         style={{ width: PX_W, height: PX_H, background: '#ffffff', overflow: 'hidden', borderRadius: 10, boxShadow: '0 0 28px rgba(80,140,255,.3)', pointerEvents: 'auto' }}
