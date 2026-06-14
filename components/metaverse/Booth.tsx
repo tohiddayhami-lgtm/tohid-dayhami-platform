@@ -743,11 +743,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     { face: 'innerRight', position: [W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
     { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
-  const managerPngs = [booth.managerPngs?.[0] || '', booth.managerPngs?.[1] || ''];
+  const managerSlots = [0, 1, 2, 3, 4];
+  const managerXs = [-1.45, -0.72, 0, 0.72, 1.45];
+  const managerPngs = managerSlots.map(i => booth.managerPngs?.[i] || '');
+  const managerNames = managerSlots.map(i => bi(booth.managerNames?.[i], lang, ''));
   const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
-  const managerLinks = [booth.managerLinks?.[0] || legacyWhatsapps?.[0] || '', booth.managerLinks?.[1] || legacyWhatsapps?.[1] || ''];
-  const managerAudios = [booth.managerAudios?.[0] || '', booth.managerAudios?.[1] || ''];
-  const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null]);
+  const managerLinks = managerSlots.map(i => booth.managerLinks?.[i] || legacyWhatsapps?.[i] || '');
+  const managerAudios = managerSlots.map(i => booth.managerAudios?.[i] || '');
+  const managerAudioRefs = useRef<(HTMLAudioElement | null)[]>([null, null, null, null, null]);
   useEffect(() => () => {
     managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });
   }, []);
@@ -931,7 +934,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           url={url}
           width={1.12}
           height={2.1}
-          position={[i === 0 ? -1.05 : 1.05, 1.05, D / 2 - 1.08]}
+          position={[managerXs[i], 1.05, D / 2 - 1.08]}
           onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
             e.stopPropagation();
             if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
@@ -939,8 +942,19 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           } : undefined}
         />
       ) : null)}
+      {managerPngs.map((url, i) => (url && managerNames[i]) ? (
+        <CanvasLabel
+          key={`name-${url}-${i}`}
+          text={managerNames[i]}
+          width={0.68}
+          height={0.22}
+          position={[managerXs[i], 2.5, D / 2 - 1.055]}
+          bg="rgba(15,23,42,.82)"
+          color="#ffffff"
+        />
+      ) : null)}
       {managerPngs.map((url, i) => (url && managerAudios[i]) ? (
-        <group key={`audio-${url}-${i}`} position={[i === 0 ? -1.05 : 1.05, 2.26, D / 2 - 1.06]}>
+        <group key={`audio-${url}-${i}`} position={[managerXs[i], 2.26, D / 2 - 1.06]}>
           <group position={[-0.3, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); seekManagerAudio(i, managerAudios[i], -5); }}

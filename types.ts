@@ -614,7 +614,8 @@ export interface MetaverseBooth {
   premiumSignText?: MetaShopDirCat; // optional rotating LCD text for premium booths
   premiumSignColor?: string;     // rotating LCD background/accent color
   logo?: string;                // logo image URL (Storage images/)
-  managerPngs?: string[];       // up to 2 life-size transparent PNG people shown behind the counter
+  managerPngs?: string[];       // up to 5 life-size transparent PNG people shown behind the counter
+  managerNames?: MetaShopDirCat[]; // optional names displayed above those PNG people
   managerLinks?: string[];      // optional clickable links for those PNG people
   managerAudios?: string[];     // optional audio files played when those PNG people are clicked
   bannerImage?: string;         // banner image URL (Storage images/)

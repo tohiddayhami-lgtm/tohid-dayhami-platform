@@ -35,6 +35,8 @@ const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: stri
   { key: 'railRight', fa: 'کنار ریل — راست', en: 'Rail side — right' },
 ];
 
+const MANAGER_SLOTS = [0, 1, 2, 3, 4] as const;
+
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, preset: 'warehouse', width: 30, depth: 30, height: 9,
   groundColor: '#cfd4dc', wallColor: '#e9edf3', spawn: { x: 0, y: 0, z: 8 }, booths: [], schemaVersion: 1,
@@ -124,12 +126,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
-    managerPng1: T ? 'PNG مدیرعامل / شخص ۱ پشت کانتر' : 'Manager/person PNG 1 behind counter',
-    managerPng2: T ? 'PNG مدیرعامل / شخص ۲ پشت کانتر' : 'Manager/person PNG 2 behind counter',
-    managerLink1: T ? 'لینک شخص ۱' : 'Person 1 link',
-    managerLink2: T ? 'لینک شخص ۲' : 'Person 2 link',
-    managerAudio1: T ? 'فایل صوتی شخص ۱' : 'Person 1 audio',
-    managerAudio2: T ? 'فایل صوتی شخص ۲' : 'Person 2 audio',
+    managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,
+    managerNameFa: (n: number) => T ? `نام شخص ${n} (فارسی)` : `Person ${n} name (FA)`,
+    managerNameEn: (n: number) => T ? `نام شخص ${n} (انگلیسی)` : `Person ${n} name (EN)`,
+    managerLink: (n: number) => T ? `لینک شخص ${n}` : `Person ${n} link`,
+    managerAudio: (n: number) => T ? `فایل صوتی شخص ${n}` : `Person ${n} audio`,
     uploadImg: T ? 'آپلود تصویر / GIF' : 'Upload image / GIF', uploadVid: T ? 'آپلود ویدیو' : 'Upload video', uploadPdf: T ? 'آپلود PDF' : 'Upload PDF', uploadHtml: T ? 'آپلود فایل HTML' : 'Upload HTML file',
     vidErr: T ? 'فقط فایل ویدیویی (mp4/webm/ogg) مجاز است.' : 'Only video files (mp4/webm/ogg) allowed.',
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
@@ -184,24 +185,32 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
-  const setBoothManagerPng = (b: MetaverseBooth, index: 0 | 1, url: string) => {
-    const next = [b.managerPngs?.[0] || '', b.managerPngs?.[1] || ''];
-    next[index] = url || '';
+  const compactFive = (values: string[]) => {
+    const next = values.slice(0, 5);
     while (next.length && !next[next.length - 1]) next.pop();
-    updBooth(b.id, { managerPngs: next });
+    return next;
   };
-  const setBoothManagerLink = (b: MetaverseBooth, index: 0 | 1, val: string) => {
+  const setBoothManagerPng = (b: MetaverseBooth, index: number, url: string) => {
+    const next = Array.from({ length: 5 }, (_, i) => b.managerPngs?.[i] || '');
+    next[index] = url || '';
+    updBooth(b.id, { managerPngs: compactFive(next) });
+  };
+  const setBoothManagerName = (b: MetaverseBooth, index: number, which: 'fa' | 'en', val: string) => {
+    const next = Array.from({ length: 5 }, (_, i) => b.managerNames?.[i] || {});
+    next[index] = { ...next[index], [which]: val };
+    while (next.length && !next[next.length - 1]?.fa && !next[next.length - 1]?.en) next.pop();
+    updBooth(b.id, { managerNames: next });
+  };
+  const setBoothManagerLink = (b: MetaverseBooth, index: number, val: string) => {
     const legacy = (b as any).managerWhatsapps as string[] | undefined;
-    const next = [b.managerLinks?.[0] || legacy?.[0] || '', b.managerLinks?.[1] || legacy?.[1] || ''];
+    const next = Array.from({ length: 5 }, (_, i) => b.managerLinks?.[i] || legacy?.[i] || '');
     next[index] = val;
-    while (next.length && !next[next.length - 1]) next.pop();
-    updBooth(b.id, { managerLinks: next });
+    updBooth(b.id, { managerLinks: compactFive(next) });
   };
-  const setBoothManagerAudio = (b: MetaverseBooth, index: 0 | 1, url: string) => {
-    const next = [b.managerAudios?.[0] || '', b.managerAudios?.[1] || ''];
+  const setBoothManagerAudio = (b: MetaverseBooth, index: number, url: string) => {
+    const next = Array.from({ length: 5 }, (_, i) => b.managerAudios?.[i] || '');
     next[index] = url || '';
-    while (next.length && !next[next.length - 1]) next.pop();
-    updBooth(b.id, { managerAudios: next });
+    updBooth(b.id, { managerAudios: compactFive(next) });
   };
 
   // ── Environmental wall ads ──
@@ -753,12 +762,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               <div><label className={lbl}>{t.posZ}</label><input type="number" step="0.5" className={fld} value={b.z ?? 0} onChange={ev => updBooth(b.id, { z: +ev.target.value })} /></div>
                             </div>
                             <ImgUpload id={`logo-${b.id}`} value={b.logo} onUrl={u => updBooth(b.id, { logo: u || undefined })} label={t.logo} />
-                            <ImgUpload id={`manager-1-${b.id}`} value={b.managerPngs?.[0]} onUrl={u => setBoothManagerPng(b, 0, u)} label={t.managerPng1} />
-                            <div><label className={lbl}>{t.managerLink1}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[0] || (b as any).managerWhatsapps?.[0] || ''} onChange={ev => setBoothManagerLink(b, 0, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
-                            <AudioUpload id={`manager-audio-1-${b.id}`} value={b.managerAudios?.[0]} onUrl={u => setBoothManagerAudio(b, 0, u)} label={t.managerAudio1} />
-                            <ImgUpload id={`manager-2-${b.id}`} value={b.managerPngs?.[1]} onUrl={u => setBoothManagerPng(b, 1, u)} label={t.managerPng2} />
-                            <div><label className={lbl}>{t.managerLink2}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[1] || (b as any).managerWhatsapps?.[1] || ''} onChange={ev => setBoothManagerLink(b, 1, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
-                            <AudioUpload id={`manager-audio-2-${b.id}`} value={b.managerAudios?.[1]} onUrl={u => setBoothManagerAudio(b, 1, u)} label={t.managerAudio2} />
+                            {MANAGER_SLOTS.map(i => (
+                              <React.Fragment key={`manager-slot-${b.id}-${i}`}>
+                                <ImgUpload id={`manager-${i + 1}-${b.id}`} value={b.managerPngs?.[i]} onUrl={u => setBoothManagerPng(b, i, u)} label={t.managerPng(i + 1)} />
+                                <div><label className={lbl}>{t.managerNameFa(i + 1)}</label><input className={fld} value={b.managerNames?.[i]?.fa || ''} onChange={ev => setBoothManagerName(b, i, 'fa', ev.target.value)} /></div>
+                                <div><label className={lbl}>{t.managerNameEn(i + 1)}</label><input className={fld + ' dir-ltr'} value={b.managerNames?.[i]?.en || ''} onChange={ev => setBoothManagerName(b, i, 'en', ev.target.value)} /></div>
+                                <div><label className={lbl}>{t.managerLink(i + 1)}</label><input className={fld + ' dir-ltr'} value={b.managerLinks?.[i] || (b as any).managerWhatsapps?.[i] || ''} onChange={ev => setBoothManagerLink(b, i, ev.target.value)} placeholder="https://meet.google.com/… / https://wa.me/…" /></div>
+                                <AudioUpload id={`manager-audio-${i + 1}-${b.id}`} value={b.managerAudios?.[i]} onUrl={u => setBoothManagerAudio(b, i, u)} label={t.managerAudio(i + 1)} />
+                              </React.Fragment>
+                            ))}
                             <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
                           </div>
 
