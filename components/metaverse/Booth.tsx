@@ -484,6 +484,30 @@ const VideoScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
   );
 };
 
+const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [number, number, number] }> = ({ text, color, position }) => {
+  const ref = useRef<THREE.Group>(null);
+  const bg = useMemo(() => {
+    const c = new THREE.Color(color);
+    return `rgba(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)},.96)`;
+  }, [color]);
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.75;
+  });
+  return (
+    <group ref={ref} position={position}>
+      <RoundedBox args={[2.45, 0.72, 0.12]} radius={0.06} smoothness={3} castShadow>
+        <meshStandardMaterial color="#05070b" metalness={0.55} roughness={0.35} emissive={color} emissiveIntensity={0.25} />
+      </RoundedBox>
+      <CanvasLabel text={text} width={2.25} height={0.5} position={[0, 0, 0.075]} bg={bg} color="#ffffff" />
+      <CanvasLabel text={text} width={2.25} height={0.5} position={[0, 0, -0.075]} rotation={[0, Math.PI, 0]} bg={bg} color="#ffffff" />
+      <mesh position={[0, -0.48, 0]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.7, 12]} />
+        <meshStandardMaterial color="#111827" metalness={0.55} roughness={0.35} />
+      </mesh>
+    </group>
+  );
+};
+
 // In-world LCD screen that plays a video ON the wall, muted + looping. Direct files are painted
 // as a real WebGL texture; YouTube/Vimeo are shown through an iframe transformed onto the wall
 // surface (the only way to embed them in 3D — they can't be textured due to CORS).
@@ -579,6 +603,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
+  const premiumSignText = bi(booth.premiumSignText, lang, name);
+  const premiumSignColor = booth.premiumSignColor || accent;
 
   // Media for each of the 6 wall faces (3 inner + 3 outer). innerBack falls back to the legacy
   // screenUrl / bannerImage so older booths keep working.
@@ -692,6 +718,9 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               <torusGeometry args={[W * 0.38, 0.025, 8, 80]} />
               <meshStandardMaterial color="#f8fafc" emissive={accentColor} emissiveIntensity={0.8} toneMapped={false} />
             </mesh>
+          )}
+          {tier === 'premium' && (
+            <RotatingPremiumLcd text={premiumSignText} color={premiumSignColor} position={[0, wallH + 0.9, D / 2 - 0.75]} />
           )}
 
           {/* Reception desk / podium */}

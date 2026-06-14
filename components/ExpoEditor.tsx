@@ -84,6 +84,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     tierBasic: T ? 'پایه' : 'Basic',
     tierStandard: T ? 'استاندارد' : 'Standard',
     tierPremium: T ? 'پریمیوم' : 'Premium',
+    premiumSignFa: T ? 'متن LCD پریمیوم (فارسی)' : 'Premium LCD text (FA)',
+    premiumSignEn: T ? 'متن LCD پریمیوم (انگلیسی)' : 'Premium LCD text (EN)',
+    premiumSignColor: T ? 'رنگ LCD پریمیوم' : 'Premium LCD color',
     quickBuild: T ? 'ساخت از نو' : 'Rebuild from scratch',
     quickConfirm: T ? 'غرفه‌های فعلی پاک و دوباره چیده می‌شوند. ادامه می‌دهید؟' : 'Existing booths will be replaced and re-arranged. Continue?',
     screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
@@ -131,6 +134,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const updBooth = (id: string, p: Partial<MetaverseBooth>) => updBooths((e.booths || []).map(b => b.id === id ? { ...b, ...p } : b));
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
+  const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
+    updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
 
   // ── Environmental wall ads ──
   const WALLS: ExpoWall[] = ['back', 'left', 'right', 'front'];
@@ -542,6 +547,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <option value="premium">{t.tierPremium}</option>
                               </select>
                             </div>
+                            {(b.tier || 'basic') === 'premium' && <>
+                              <div><label className={lbl}>{t.premiumSignFa}</label><input className={fld} value={b.premiumSignText?.fa || ''} onChange={ev => setBoothPremiumSign(b, 'fa', ev.target.value)} placeholder={b.name?.fa || ''} /></div>
+                              <div><label className={lbl}>{t.premiumSignEn}</label><input className={fld + ' dir-ltr'} value={b.premiumSignText?.en || ''} onChange={ev => setBoothPremiumSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>
+                              <div><label className={lbl}>{t.premiumSignColor}</label><div className="flex gap-2"><input type="color" value={b.premiumSignColor || b.color || '#0f766e'} onChange={ev => updBooth(b.id, { premiumSignColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.premiumSignColor || ''} onChange={ev => updBooth(b.id, { premiumSignColor: ev.target.value || undefined })} placeholder={b.color || '#0f766e'} /></div></div>
+                            </>}
                             <div><label className={lbl}>{t.color}</label><div className="flex gap-2"><input type="color" value={b.color || '#2d4a1a'} onChange={ev => updBooth(b.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.color || ''} onChange={ev => updBooth(b.id, { color: ev.target.value })} /></div></div>
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.scale}</label><input type="number" step="0.1" className={fld} value={b.scale ?? 1} onChange={ev => updBooth(b.id, { scale: +ev.target.value })} /></div>

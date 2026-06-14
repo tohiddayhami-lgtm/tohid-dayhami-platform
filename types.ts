@@ -611,6 +611,8 @@ export interface MetaverseBooth {
   // visuals
   modelUrl?: string;            // optional custom GLB/GLTF (Storage documents/ URL) — overrides procedural booth
   color?: string;               // accent color for the procedural booth
+  premiumSignText?: MetaShopDirCat; // optional rotating LCD text for premium booths
+  premiumSignColor?: string;     // rotating LCD background/accent color
   logo?: string;                // logo image URL (Storage images/)
   bannerImage?: string;         // banner image URL (Storage images/)
   screenUrl?: string;           // (legacy) video link for the in-world LCD — now the innerBack panel fallback
