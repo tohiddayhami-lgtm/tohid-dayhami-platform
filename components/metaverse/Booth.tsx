@@ -570,9 +570,9 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
   const tier: BoothTier = booth.tier || 'basic';
   const tierSpec = {
-    basic: { panel: 1, side: 1, glow: 1.4, trim: 0, label: lang === 'fa' ? 'پایه' : 'Basic' },
-    standard: { panel: 1.12, side: 1.12, glow: 1.9, trim: 0.12, label: lang === 'fa' ? 'استاندارد' : 'Standard' },
-    premium: { panel: 1.2, side: 1.18, glow: 2.5, trim: 0.2, label: lang === 'fa' ? 'پریمیوم' : 'Premium' },
+    basic: { panel: 1, side: 1, glow: 1.4, trim: 0 },
+    standard: { panel: 1.12, side: 1.12, glow: 1.9, trim: 0.12 },
+    premium: { panel: 1.2, side: 1.18, glow: 2.5, trim: 0.2 },
   }[tier];
   const scale = booth.scale || 1;
   const W = 4, D = 4, wallH = 3.2;          // keep the core footprint stable so layout/buttons don't shift
@@ -702,15 +702,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <boxGeometry args={[W * 0.54, 0.06, 0.66]} />
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
-          {tier !== 'basic' && (
-            <CanvasLabel
-              text={tier === 'premium' ? (lang === 'fa' ? 'VIP' : 'VIP') : (lang === 'fa' ? 'STD' : 'STD')}
-              width={0.72} height={0.28}
-              position={[0, 1.15, D / 2 - 0.22]}
-              bg={tier === 'premium' ? 'rgba(180,83,9,.96)' : 'rgba(37,99,235,.94)'}
-              color="#ffffff"
-            />
-          )}
 
           {/* Six wall panels (3 inner + 3 outer) — each an image or an in-world auto-playing video */}
           {PANEL_SPECS.map(s => { const u = panelUrl(s.face); return u ? <PanelMedia key={s.face} url={u} width={s.w} height={s.h} position={s.position} rotation={s.rotation} /> : null; })}
@@ -722,7 +713,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
 
           {/* Counter / desk front — a clickable 3D link into the booth's shop (works in VR too) */}
           {booth.shopSlug && (
-            <group position={[0, 0.62, D / 2 - 0.19]}>
+            <group position={[0, 0.62, D / 2 - 0.12]}>
               <mesh onClick={(e) => { e.stopPropagation(); onSelectBooth(booth); }}
                 onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
                 onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
@@ -744,15 +735,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           />
-          {tier !== 'basic' && (
-            <CanvasLabel
-              text={tierSpec.label}
-              width={Math.min(W * 0.34, 1.55)} height={0.22}
-              position={[W / 2 - Math.min(W * 0.2, 0.85), wallH + 0.48, -D / 2 + 0.18]}
-              bg={tier === 'premium' ? 'rgba(146,64,14,.92)' : 'rgba(30,64,175,.9)'}
-              color="#ffffff"
-            />
-          )}
         </group>
       )}
 
