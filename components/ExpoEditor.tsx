@@ -28,6 +28,7 @@ const PANEL_FACES: { face: BoothFace; fa: string; en: string }[] = [
 ];
 
 const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: string }[] = [
+  { key: 'aboveArch', fa: 'دیوار بالای سردر', en: 'Wall above arch' },
   { key: 'archLeft', fa: 'کنار سردر — چپ', en: 'Arch side — left' },
   { key: 'archRight', fa: 'کنار سردر — راست', en: 'Arch side — right' },
   { key: 'railLeft', fa: 'کنار ریل — چپ', en: 'Rail side — left' },
@@ -150,8 +151,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   // ── Entrance media / ads ──
   const updEntranceAds = (entranceAds: ExpoEntranceAd[]) => patch({ entranceAds });
   const addEntranceAd = () => {
-    const s = bannerSize('portrait');
-    updEntranceAds([...(e.entranceAds || []), { id: newId('entrance-ad'), position: 'railLeft', size: s.key, w: s.w, h: s.h }]);
+    const s = bannerSize('billboard');
+    updEntranceAds([...(e.entranceAds || []), { id: newId('entrance-ad'), position: 'aboveArch', size: s.key, w: s.w, h: s.h }]);
   };
   const updEntranceAd = (id: string, p: Partial<ExpoEntranceAd>) => updEntranceAds((e.entranceAds || []).map(a => a.id === id ? { ...a, ...p } : a));
   const setEntranceAdTitle = (ad: ExpoEntranceAd, which: 'fa' | 'en', val: string) =>
@@ -487,13 +488,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             </div>
             {e.entranceEnabled && (
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
                   <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
                   <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
-                  <AdMediaUpload id="entrance-arch-media" value={e.entranceArchMedia} onUrl={u => patch({ entranceArchMedia: u || undefined })} label={t.entranceArchMedia} />
-                  <div><label className={lbl}>{t.entranceArchW}</label><input type="number" min={3} max={18} step={0.25} className={fld} value={e.entranceArchMediaW ?? 10} onChange={ev => patch({ entranceArchMediaW: +ev.target.value || undefined })} /></div>
-                  <div><label className={lbl}>{t.entranceArchH}</label><input type="number" min={1} max={6} step={0.25} className={fld} value={e.entranceArchMediaH ?? 2.25} onChange={ev => patch({ entranceArchMediaH: +ev.target.value || undefined })} /></div>
                 </div>
                 <div className="rounded-xl border border-emerald-100 bg-white/70 p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -503,7 +501,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   {(e.entranceAds || []).length === 0 ? <p className="text-sm text-emerald-700/50 text-center py-2">{t.noEntranceAds}</p> : (
                     <div className="space-y-2">
                       {(e.entranceAds || []).map(ad => (
-                        <div key={ad.id} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
+                        <div key={ad.id} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-2 items-end">
                           <div><label className={lbl}>{t.entranceAdPos}</label>
                             <select className={fld + ' bg-white'} value={ad.position} onChange={ev => updEntranceAd(ad.id, { position: ev.target.value as ExpoEntranceAdPosition })}>
                               {ENTRANCE_AD_POSITIONS.map(p => <option key={p.key} value={p.key}>{T ? p.fa : p.en}</option>)}
@@ -514,6 +512,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               {BANNER_SIZES.map(s => <option key={s.key} value={s.key}>{(T ? s.fa : s.en)} ({s.w}×{s.h} {t.meter})</option>)}
                             </select>
                           </div>
+                          <div><label className={lbl}>{t.adW}</label><input type="number" min={0.8} max={18} step={0.25} className={fld} value={ad.w ?? bannerSize(ad.size).w} onChange={ev => updEntranceAd(ad.id, { w: +ev.target.value || undefined })} /></div>
+                          <div><label className={lbl}>{t.adH}</label><input type="number" min={0.8} max={8} step={0.25} className={fld} value={ad.h ?? bannerSize(ad.size).h} onChange={ev => updEntranceAd(ad.id, { h: +ev.target.value || undefined })} /></div>
                           <div><label className={lbl}>{t.adTitleFa}</label><input className={fld} value={ad.title?.fa || ''} onChange={ev => setEntranceAdTitle(ad, 'fa', ev.target.value)} placeholder="تبلیغات ورودی" /></div>
                           <div><label className={lbl}>{t.adTitleEn}</label><input className={fld + ' dir-ltr'} value={ad.title?.en || ''} onChange={ev => setEntranceAdTitle(ad, 'en', ev.target.value)} placeholder="Entrance ad" /></div>
                           <AdMediaUpload id={`entrance-ad-${ad.id}`} value={ad.image} onUrl={u => updEntranceAd(ad.id, { image: u || undefined })} label={t.adImage} />

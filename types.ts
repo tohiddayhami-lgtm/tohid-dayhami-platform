@@ -641,7 +641,7 @@ export interface ExpoWallAd {
   // Position is auto-distributed along the wall based on the hall — no manual u/v needed.
 }
 
-export type ExpoEntranceAdPosition = 'archLeft' | 'archRight' | 'railLeft' | 'railRight';
+export type ExpoEntranceAdPosition = 'aboveArch' | 'archLeft' | 'archRight' | 'railLeft' | 'railRight';
 
 export interface ExpoEntranceAd {
   id: string;

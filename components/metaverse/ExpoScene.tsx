@@ -43,9 +43,6 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
-  const archMediaW = Math.max(3, expo.entranceArchMediaW || Math.min(Math.max(width - 3, 7), 12));
-  const archMediaH = Math.max(1, expo.entranceArchMediaH || 2.25);
-  const archMediaY = 3.65 + archMediaH / 2;
   const entranceAds = expo.entranceAds || [];
   const railTotals = entranceAds.reduce<Record<string, number>>((acc, ad) => {
     if (ad.position === 'railLeft' || ad.position === 'railRight') acc[ad.position] = (acc[ad.position] || 0) + 1;
@@ -56,6 +53,9 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
     const w = ad.w || 2;
     const h = ad.h || 3.5;
     const y = h / 2 + 0.18;
+    if (ad.position === 'aboveArch') {
+      return { position: [0, 3.65 + h / 2, depth / 2 + 0.24], rotation: [0, 0, 0] };
+    }
     if (ad.position === 'archLeft' || ad.position === 'archRight') {
       const side = ad.position === 'archLeft' ? -1 : 1;
       const x = side * Math.min(width / 2 - w / 2 - 0.45, 5.7);
@@ -102,16 +102,6 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
       ))}
       <CanvasLabel text={organizer} width={5.35} height={0.33} position={[0, 3.25, z1 + 0.19]} bg="rgba(15,23,42,.86)" color="#ffffff" />
       <CanvasLabel text={title} width={3.8} height={0.3} position={[0, 2.78, z1 + 0.2]} bg="rgba(251,191,36,.92)" color="#102015" />
-      {expo.entranceArchMedia && (
-        <WallAd
-          image={expo.entranceArchMedia}
-          title={organizer}
-          w={archMediaW}
-          h={archMediaH}
-          position={[0, archMediaY, z1 + 0.34]}
-          rotation={[0, 0, 0]}
-        />
-      )}
       <mesh position={[0, 1.55, z1 + 0.03]}>
         <planeGeometry args={[4.8, 2.55]} />
         <meshStandardMaterial color={primary} transparent opacity={0.34} roughness={0.7} side={THREE.DoubleSide} />
