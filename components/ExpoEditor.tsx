@@ -72,12 +72,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
-    quickHint: T ? 'تعداد غرفه‌ها را وارد کنید؛ فضای نمایشگاه به‌صورت خودکار اندازه و غرفه‌ها مرتب چیده می‌شوند. سپس هر غرفه را به یک فروشگاه وصل کنید.' : 'Enter how many booths — the hall is auto-sized and booths are laid out in tidy aisles. Then link each booth to a shop.',
+    quickHint: T ? 'تعداد، سبک چیدمان و نوع غرفه را انتخاب کنید. تغییر سبک روی غرفه‌های فعلی هم اعمال می‌شود و دکمه ساخت، چیدمان را از نو می‌سازد.' : 'Pick count, layout style, and booth type. Changing layout also rearranges existing booths; build recreates the layout.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
     quickLayout: T ? 'سبک چیدمان' : 'Layout style',
     layoutFacing: T ? 'راهرویی روبه‌رو' : 'Facing aisles',
     layoutGrid: T ? 'شبکه‌ای فشرده' : 'Compact grid',
     layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
+    applyLayout: T ? 'اعمال چیدمان روی غرفه‌های فعلی' : 'Apply layout to current booths',
+    applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
     boothTier: T ? 'نوع غرفه' : 'Booth type',
     tierBasic: T ? 'پایه' : 'Basic',
     tierStandard: T ? 'استاندارد' : 'Standard',
@@ -155,7 +157,22 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents');
   };
 
-  // Quick setup: ask "how many booths", auto-size the hall and arrange empty booths in aisles.
+  // Quick setup: auto-size the hall and arrange booths in the selected pattern.
+  const applyLayoutToBooths = (layout = quickLayout, tier?: BoothTier) => {
+    const current = e.booths || [];
+    if (current.length === 0) return;
+    const { width, depth, spawn, cells } = autoArrangeBooths(current.length, layout);
+    const booths = current.map((b, i) => ({ ...b, x: cells[i]?.x ?? b.x, z: cells[i]?.z ?? b.z, ry: cells[i]?.ry ?? b.ry, tier: tier || b.tier || 'basic' }));
+    patch({ width, depth, spawn, booths });
+  };
+  const setLayoutAndApply = (layout: ExpoBoothLayout) => {
+    setQuickLayout(layout);
+    if ((e.booths || []).length > 0) applyLayoutToBooths(layout);
+  };
+  const setTierAndApply = (tier: BoothTier) => {
+    setQuickTier(tier);
+    if ((e.booths || []).length > 0) patch({ booths: (e.booths || []).map(b => ({ ...b, tier })) });
+  };
   const quickBuild = () => {
     if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
     const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
@@ -465,19 +482,21 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <div className="flex items-end gap-2 flex-wrap">
                 <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
                 <div><label className={lbl}>{t.quickLayout}</label>
-                  <select className={fld + ' bg-white min-w-40'} value={quickLayout} onChange={ev => setQuickLayout(ev.target.value as ExpoBoothLayout)}>
+                  <select className={fld + ' bg-white min-w-40'} value={quickLayout} onChange={ev => setLayoutAndApply(ev.target.value as ExpoBoothLayout)}>
                     <option value="facing">{t.layoutFacing}</option>
                     <option value="grid">{t.layoutGrid}</option>
                     <option value="perimeter">{t.layoutPerimeter}</option>
                   </select>
                 </div>
                 <div><label className={lbl}>{t.boothTier}</label>
-                  <select className={fld + ' bg-white min-w-32'} value={quickTier} onChange={ev => setQuickTier(ev.target.value as BoothTier)}>
+                  <select className={fld + ' bg-white min-w-32'} value={quickTier} onChange={ev => setTierAndApply(ev.target.value as BoothTier)}>
                     <option value="basic">{t.tierBasic}</option>
                     <option value="standard">{t.tierStandard}</option>
                     <option value="premium">{t.tierPremium}</option>
                   </select>
                 </div>
+                {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-white font-bold">{t.applyLayout}</button>}
+                {(e.booths || []).length > 0 && <button type="button" onClick={() => setTierAndApply(quickTier)} className="text-sm px-3 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-white font-bold">{t.applyTierAll}</button>}
                 <button onClick={quickBuild} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold flex items-center gap-1"><IconPlus className="w-4 h-4" />{t.quickBuild}</button>
               </div>
             </div>
