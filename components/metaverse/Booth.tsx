@@ -873,15 +873,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         </group>
       )}
 
-      {/* Optional life-size transparent PNG people behind the booth. */}
+      {/* Optional life-size transparent PNG people standing behind the reception counter. */}
       {managerPngs.map((url, i) => (
         <SafeImage
           key={`${url}-${i}`}
           url={url}
           width={0.85}
           height={1.85}
-          position={[managerPngs.length === 1 ? 0 : (i === 0 ? -0.72 : 0.72), 0.925, -D / 2 - 0.48]}
-          rotation={[0, Math.PI, 0]}
+          position={[managerPngs.length === 1 ? 0 : (i === 0 ? -0.58 : 0.58), 0.925, D / 2 - 1.08]}
         />
       ))}
 
