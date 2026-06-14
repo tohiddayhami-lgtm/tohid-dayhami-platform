@@ -641,6 +641,19 @@ export interface ExpoWallAd {
   // Position is auto-distributed along the wall based on the hall — no manual u/v needed.
 }
 
+export type ExpoEntranceAdPosition = 'archLeft' | 'archRight' | 'railLeft' | 'railRight';
+
+export interface ExpoEntranceAd {
+  id: string;
+  position: ExpoEntranceAdPosition;
+  size?: string;
+  w?: number;
+  h?: number;
+  image?: string;
+  url?: string;
+  title?: MetaShopDirCat;
+}
+
 // A large page-turnable PDF presentation mounted on a hall wall (default the far/end wall).
 // Pages are rasterized to textures so it works on phone AND in VR; arrows flip pages.
 export interface ExpoPresentation {
@@ -669,6 +682,8 @@ export interface MetaverseExpo {
   entranceEnabled?: boolean;     // optional professional entry corridor/gate
   entranceOrganizer?: MetaShopDirCat; // organizer text shown on the entry arch
   entranceDoormanImage?: string; // PNG/transparent character shown as doorman
+  entranceArchMedia?: string;    // image/video/GIF/PDF billboard shown above the entry arch
+  entranceAds?: ExpoEntranceAd[]; // side/standing advertising banners around the entry corridor
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls

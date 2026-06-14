@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
@@ -43,6 +43,29 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
+  const archMediaW = Math.min(Math.max(width - 4, 5.2), 8.2);
+  const entranceAds = expo.entranceAds || [];
+  const railTotals = entranceAds.reduce<Record<string, number>>((acc, ad) => {
+    if (ad.position === 'railLeft' || ad.position === 'railRight') acc[ad.position] = (acc[ad.position] || 0) + 1;
+    return acc;
+  }, {});
+  const railSeen: Record<string, number> = {};
+  const entranceAdTransform = (ad: ExpoEntranceAd): { position: [number, number, number]; rotation: [number, number, number] } => {
+    const w = ad.w || 2;
+    const h = ad.h || 3.5;
+    const y = h / 2 + 0.18;
+    if (ad.position === 'archLeft' || ad.position === 'archRight') {
+      const side = ad.position === 'archLeft' ? -1 : 1;
+      const x = side * Math.min(width / 2 - w / 2 - 0.45, 5.7);
+      return { position: [x, y + 0.15, depth / 2 + 0.32], rotation: [0, 0, 0] };
+    }
+    const side = ad.position === 'railLeft' ? -1 : 1;
+    const total = Math.max(1, railTotals[ad.position] || 1);
+    const i = railSeen[ad.position] || 0;
+    railSeen[ad.position] = i + 1;
+    const z = z1 + ((i + 1) / (total + 1)) * (z0 - z1);
+    return { position: [side * 3.55, y, z], rotation: [0, side < 0 ? Math.PI / 2 : -Math.PI / 2, 0] };
+  };
   return (
     <group>
       {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
@@ -77,10 +100,35 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
       ))}
       <CanvasLabel text={organizer} width={5.35} height={0.33} position={[0, 3.25, z1 + 0.19]} bg="rgba(15,23,42,.86)" color="#ffffff" />
       <CanvasLabel text={title} width={3.8} height={0.3} position={[0, 2.78, z1 + 0.2]} bg="rgba(251,191,36,.92)" color="#102015" />
+      {expo.entranceArchMedia && (
+        <WallAd
+          image={expo.entranceArchMedia}
+          title={organizer}
+          w={archMediaW}
+          h={1.35}
+          position={[0, 4.1, z1 + 0.32]}
+          rotation={[0, 0, 0]}
+        />
+      )}
       <mesh position={[0, 1.55, z1 + 0.03]}>
         <planeGeometry args={[4.8, 2.55]} />
         <meshStandardMaterial color={primary} transparent opacity={0.34} roughness={0.7} side={THREE.DoubleSide} />
       </mesh>
+      {entranceAds.map(ad => {
+        const { position, rotation } = entranceAdTransform(ad);
+        return (
+          <WallAd
+            key={ad.id}
+            image={ad.image}
+            url={ad.url}
+            title={bi(ad.title, lang, lang === 'fa' ? 'تبلیغات ورودی' : 'Entrance ad')}
+            w={ad.w || 2}
+            h={ad.h || 3.5}
+            position={position}
+            rotation={rotation}
+          />
+        );
+      })}
       {expo.entranceDoormanImage && (
         <TexBoundary key={expo.entranceDoormanImage}>
           <Suspense fallback={null}>

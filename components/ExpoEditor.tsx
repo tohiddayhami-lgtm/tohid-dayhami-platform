@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -25,6 +25,13 @@ const PANEL_FACES: { face: BoothFace; fa: string; en: string }[] = [
   { face: 'outerBack', fa: 'دیوار پشت — بیرون', en: 'Back wall — outside' },
   { face: 'outerLeft', fa: 'دیوار چپ — بیرون', en: 'Left wall — outside' },
   { face: 'outerRight', fa: 'دیوار راست — بیرون', en: 'Right wall — outside' },
+];
+
+const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: string }[] = [
+  { key: 'archLeft', fa: 'کنار سردر — چپ', en: 'Arch side — left' },
+  { key: 'archRight', fa: 'کنار سردر — راست', en: 'Arch side — right' },
+  { key: 'railLeft', fa: 'کنار ریل — چپ', en: 'Rail side — left' },
+  { key: 'railRight', fa: 'کنار ریل — راست', en: 'Rail side — right' },
 ];
 
 const blankExpo = (): MetaverseExpo => ({
@@ -59,11 +66,16 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
     spawn: T ? 'نقطه‌ی شروع بازدیدکننده' : 'Visitor start point',
     entranceT: T ? 'ورودی حرفه‌ای نمایشگاه' : 'Professional expo entrance',
-    entranceHint: T ? 'یک راهروی ورود با سردر برگزارکننده و دربان PNG قبل از ورود به سالن نمایش داده می‌شود.' : 'Shows an entry corridor with organizer arch signage and PNG doorman before visitors enter the hall.',
+    entranceHint: T ? 'یک راهروی ورود با سردر قابل تبلیغ، بنرهای کنار مسیر و دربان PNG قبل از ورود به سالن نمایش داده می‌شود.' : 'Shows an entry corridor with media arch signage, side ads and PNG doorman before visitors enter the hall.',
     entranceEnable: T ? 'فعال‌سازی ورودی' : 'Enable entrance',
     organizerFa: T ? 'متن سردر / برگزارکننده (فارسی)' : 'Arch / organizer text (FA)',
     organizerEn: T ? 'متن سردر / برگزارکننده (انگلیسی)' : 'Arch / organizer text (EN)',
     doormanPng: T ? 'تصویر PNG دربان' : 'Doorman PNG',
+    entranceArchMedia: T ? 'رسانه بزرگ سردر' : 'Main arch media',
+    entranceAdsT: T ? 'بنرهای تبلیغاتی ورودی' : 'Entrance advertising banners',
+    addEntranceAd: T ? 'افزودن بنر ورودی' : 'Add entrance banner',
+    noEntranceAds: T ? 'بنر ورودی اضافه نشده.' : 'No entrance banners yet.',
+    entranceAdPos: T ? 'جایگاه بنر' : 'Banner position',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
@@ -132,6 +144,21 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);
   const setEntranceOrganizer = (which: 'fa' | 'en', val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [which]: val } });
   const setSpawn = (k: 'x' | 'z', v: number) => patch({ spawn: { x: e.spawn?.x ?? 0, y: 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), [k]: v } });
+
+  // ── Entrance media / ads ──
+  const updEntranceAds = (entranceAds: ExpoEntranceAd[]) => patch({ entranceAds });
+  const addEntranceAd = () => {
+    const s = bannerSize('portrait');
+    updEntranceAds([...(e.entranceAds || []), { id: newId('entrance-ad'), position: 'railLeft', size: s.key, w: s.w, h: s.h }]);
+  };
+  const updEntranceAd = (id: string, p: Partial<ExpoEntranceAd>) => updEntranceAds((e.entranceAds || []).map(a => a.id === id ? { ...a, ...p } : a));
+  const setEntranceAdTitle = (ad: ExpoEntranceAd, which: 'fa' | 'en', val: string) =>
+    updEntranceAd(ad.id, { title: { ...(ad.title || {}), [which]: val } });
+  const setEntranceAdSize = (id: string, key: string) => {
+    const s = bannerSize(key);
+    updEntranceAd(id, { size: s.key, w: s.w, h: s.h });
+  };
+  const delEntranceAd = (id: string) => updEntranceAds((e.entranceAds || []).filter(a => a.id !== id));
 
   // ── Booths ──
   const updBooths = (booths: MetaverseBooth[]) => patch({ booths });
@@ -457,10 +484,44 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               </label>
             </div>
             {e.entranceEnabled && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
-                <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
-                <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
+                  <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
+                  <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
+                  <AdMediaUpload id="entrance-arch-media" value={e.entranceArchMedia} onUrl={u => patch({ entranceArchMedia: u || undefined })} label={t.entranceArchMedia} />
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/70 p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h6 className="text-xs font-bold text-emerald-800">{t.entranceAdsT} <span className="text-[11px] text-emerald-500">({(e.entranceAds || []).length})</span></h6>
+                    {!readonly && <button type="button" onClick={addEntranceAd} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addEntranceAd}</button>}
+                  </div>
+                  {(e.entranceAds || []).length === 0 ? <p className="text-sm text-emerald-700/50 text-center py-2">{t.noEntranceAds}</p> : (
+                    <div className="space-y-2">
+                      {(e.entranceAds || []).map(ad => (
+                        <div key={ad.id} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
+                          <div><label className={lbl}>{t.entranceAdPos}</label>
+                            <select className={fld + ' bg-white'} value={ad.position} onChange={ev => updEntranceAd(ad.id, { position: ev.target.value as ExpoEntranceAdPosition })}>
+                              {ENTRANCE_AD_POSITIONS.map(p => <option key={p.key} value={p.key}>{T ? p.fa : p.en}</option>)}
+                            </select>
+                          </div>
+                          <div><label className={lbl}>{t.adSize}</label>
+                            <select className={fld + ' bg-white'} value={ad.size || 'portrait'} onChange={ev => setEntranceAdSize(ad.id, ev.target.value)}>
+                              {BANNER_SIZES.map(s => <option key={s.key} value={s.key}>{(T ? s.fa : s.en)} ({s.w}×{s.h} {t.meter})</option>)}
+                            </select>
+                          </div>
+                          <div><label className={lbl}>{t.adTitleFa}</label><input className={fld} value={ad.title?.fa || ''} onChange={ev => setEntranceAdTitle(ad, 'fa', ev.target.value)} placeholder="تبلیغات ورودی" /></div>
+                          <div><label className={lbl}>{t.adTitleEn}</label><input className={fld + ' dir-ltr'} value={ad.title?.en || ''} onChange={ev => setEntranceAdTitle(ad, 'en', ev.target.value)} placeholder="Entrance ad" /></div>
+                          <AdMediaUpload id={`entrance-ad-${ad.id}`} value={ad.image} onUrl={u => updEntranceAd(ad.id, { image: u || undefined })} label={t.adImage} />
+                          <div className="flex items-end gap-2">
+                            <div className="flex-1"><label className={lbl}>{t.adLink}</label><input className={fld + ' dir-ltr'} value={ad.url || ''} onChange={ev => updEntranceAd(ad.id, { url: ev.target.value || undefined })} placeholder="https://…" /></div>
+                            {!readonly && <button type="button" onClick={() => delEntranceAd(ad.id)} className="text-red-400 hover:text-red-600 pb-2" title={t.clear}><IconTrash className="w-4 h-4" /></button>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
