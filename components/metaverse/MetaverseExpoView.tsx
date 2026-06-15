@@ -76,9 +76,11 @@ const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> 
   </>
 );
 
-const VrPoseSync: React.FC<{ originRef: React.RefObject<THREE.Group | null>; poseRef: PlayerPoseRef }> = ({ originRef, poseRef }) => {
+const VrPoseSync: React.FC<{ originRef: React.RefObject<THREE.Group | null>; poseRef: PlayerPoseRef; xrActiveRef?: React.MutableRefObject<boolean> }> = ({ originRef, poseRef, xrActiveRef }) => {
   const inXR = useXR((s) => !!s.session);
+  useEffect(() => { if (xrActiveRef) xrActiveRef.current = inXR; }, [inXR, xrActiveRef]);
   useFrame(() => {
+    if (xrActiveRef) xrActiveRef.current = inXR;
     if (!inXR || !originRef.current) return;
     const p = originRef.current.position;
     poseRef.current = { ...poseRef.current, x: p.x, z: p.z };
@@ -95,10 +97,12 @@ const useExpoVoice = (args: {
   bazaar: MetaBazaar;
   visitor: { id: string; name: string; color: string };
   visitors: MetaExpoPresence[];
+  xrActiveRef: React.MutableRefObject<boolean>;
 }) => {
-  const { enabled, roomId, bazaar, visitor, visitors } = args;
+  const { enabled, roomId, bazaar, visitor, visitors, xrActiveRef } = args;
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [voiceReady, setVoiceReady] = useState(false);
   const activeRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, VoicePeer>>(new Map());
@@ -121,7 +125,7 @@ const useExpoVoice = (args: {
       payload: payload == null ? undefined : JSON.stringify(payload),
       timestamp: new Date().toISOString(),
     });
-  }, [bazaar.id, bazaar.slug, roomId, visitor.id]);
+  }, [bazaar.id, bazaar.slug, enabled, roomId, visitor.id]);
 
   const closeCall = useCallback((callId: string, notify = false) => {
     const entry = peersRef.current.get(callId);
@@ -180,16 +184,44 @@ const useExpoVoice = (args: {
     }
   }, [ensurePeer, roomId, signal, visitor.id]);
 
-  const startVoice = useCallback(async () => {
-    if (!enabled || activeRef.current) return;
+  const prepareVoice = useCallback(async () => {
+    if (!enabled) return false;
     try {
       setVoiceError('');
       if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
         setVoiceError('unsupported');
-        return;
+        return false;
+      }
+      if (streamRef.current && streamRef.current.getAudioTracks().some(t => t.readyState === 'live')) {
+        streamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
+        setVoiceReady(true);
+        return true;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      stream.getAudioTracks().forEach(t => { t.enabled = false; });
       streamRef.current = stream;
+      setVoiceReady(true);
+      return true;
+    } catch {
+      setVoiceError('microphone');
+      setVoiceReady(false);
+      return false;
+    }
+  }, [enabled]);
+
+  const startVoice = useCallback(async () => {
+    if (!enabled || activeRef.current) return;
+    try {
+      setVoiceError('');
+      if (!streamRef.current || !streamRef.current.getAudioTracks().some(t => t.readyState === 'live')) {
+        if (xrActiveRef.current) {
+          setVoiceError('prepare');
+          return;
+        }
+        const ok = await prepareVoice();
+        if (!ok) return;
+      }
+      streamRef.current?.getAudioTracks().forEach(t => { t.enabled = true; });
       activeRef.current = true;
       setVoiceActive(true);
       await Promise.allSettled(visitorsRef.current.filter(v => v.visitorId !== visitor.id).map(v => startOutboundCall(v.visitorId)));
@@ -198,14 +230,13 @@ const useExpoVoice = (args: {
       activeRef.current = false;
       setVoiceActive(false);
     }
-  }, [enabled, startOutboundCall, visitor.id]);
+  }, [enabled, prepareVoice, startOutboundCall, visitor.id, xrActiveRef]);
 
   const stopVoice = useCallback(() => {
     if (!activeRef.current && !streamRef.current) return;
     activeRef.current = false;
     setVoiceActive(false);
-    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
-    streamRef.current = null;
+    try { streamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; }); } catch {}
     [...peersRef.current.entries()].forEach(([callId, entry]) => {
       if (entry.outbound) closeCall(callId, true);
     });
@@ -249,7 +280,7 @@ const useExpoVoice = (args: {
     [...peersRef.current.keys()].forEach(callId => closeCall(callId, true));
   }, [closeCall]);
 
-  return { voiceActive, voiceError, startVoice, stopVoice };
+  return { voiceActive, voiceError, voiceReady, prepareVoice, startVoice, stopVoice };
 };
 
 const ExpoAnalyticsTracker: React.FC<{
@@ -346,6 +377,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const poseRef: PlayerPoseRef = useRef({ x: expo.spawn?.x ?? 0, z: startZ, heading: startRy });
   const teleportRef: TeleportRef = useRef(null);
   const originRef = useRef<THREE.Group>(null);
+  const xrActiveRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   // foveation: render the periphery at lower resolution so the headset reliably hits its frame
   // budget — this is what keeps walking smooth (no judder). The centre of vision stays sharp.
@@ -360,7 +392,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const voiceEnabled = presenceEnabled && expo.presence?.voiceEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
   const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
-  const { voiceActive, voiceError, startVoice, stopVoice } = useExpoVoice({ enabled: voiceEnabled, roomId, bazaar, visitor, visitors });
+  const { voiceActive, voiceError, voiceReady, prepareVoice, startVoice, stopVoice } = useExpoVoice({ enabled: voiceEnabled, roomId, bazaar, visitor, visitors, xrActiveRef });
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
     logMetaExpoEvent(type, { id: bazaar.id, slug: bazaar.slug, name: bazaar.name }, opts);
   }, [bazaar.id, bazaar.slug, bazaar.name]);
@@ -441,6 +473,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     seated: T ? 'نشسته' : 'Seated',
     standing: T ? 'ایستاده' : 'Standing',
     heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
+    micReady: T ? 'میکروفون آماده' : 'Mic ready',
+    micPrepare: T ? 'آماده‌سازی میکروفون' : 'Prepare mic',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
     helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
@@ -469,7 +503,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
-          <VrPoseSync originRef={originRef} poseRef={poseRef} />
+          <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
         </XR>
       </Canvas>
@@ -492,12 +526,15 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             <button onClick={() => setPointerLock(p => !p)} className={chip + (pointerLock ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🔒 {ui.lock}</button>
           )}
           {expo.music && <button onClick={toggleMusic} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{muted ? '🔇' : '🔊'}</button>}
+          {voiceEnabled && (
+            <button onClick={() => prepareVoice()} className={chip + (voiceReady ? ' bg-emerald-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🎙 {voiceReady ? ui.micReady : ui.micPrepare}</button>
+          )}
           {caps.vrSupported && (
             <button onClick={() => setSeated(s => !s)} title={ui.heightHint} className={chip + (seated ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>
               {seated ? '🪑 ' + ui.seated : '🧍 ' + ui.standing}
             </button>
           )}
-          {caps.vrSupported && <VRButton store={store} label={ui.vr} />}
+          {caps.vrSupported && <VRButton store={store} label={ui.vr} onBeforeEnter={voiceEnabled ? prepareVoice : undefined} />}
         </div>
       </div>
 
@@ -522,7 +559,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
       {voiceError && (
         <div className="absolute left-1/2 -translate-x-1/2 top-20 z-50 rounded-xl bg-red-600/90 text-white text-xs font-bold px-4 py-2 shadow-lg">
-          {T ? 'دسترسی میکروفون فعال نشد. اجازه میکروفون مرورگر را بررسی کنید.' : 'Microphone could not start. Check browser microphone permission.'}
+          {voiceError === 'prepare'
+            ? (T ? 'برای صحبت در عینک، قبل از ورود به VR دکمه «آماده‌سازی میکروفون» را بزنید.' : 'To speak in VR, press "Prepare mic" before entering VR.')
+            : (T ? 'دسترسی میکروفون فعال نشد. اجازه میکروفون مرورگر را بررسی کنید.' : 'Microphone could not start. Check browser microphone permission.')}
         </div>
       )}
 
