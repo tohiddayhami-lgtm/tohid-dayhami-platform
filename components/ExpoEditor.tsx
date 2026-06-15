@@ -189,9 +189,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
   const patch = (p: Partial<MetaverseExpo>) => onChange({ ...e, ...p });
   const defaultRetailCategories = (): ExpoRetailCategory[] => [
+    { id: 'retail-fresh', title: { fa: 'میوه و سبزی تازه', en: 'Fresh Fruit & Veg' }, description: { fa: 'ورودی سمت راست، محصولات تازه روز', en: 'Right-side fresh produce' }, color: '#22c55e', shopSlugs: [] },
+    { id: 'retail-dairy', title: { fa: 'لبنیات و یخچالی', en: 'Dairy & Chilled' }, description: { fa: 'شیر، پنیر، ماست، کالاهای سردخانه‌ای', en: 'Milk, cheese, yogurt, chilled goods' }, color: '#0ea5e9', shopSlugs: [] },
     { id: 'retail-legumes', title: { fa: 'حبوبات و خشکبار', en: 'Legumes & Nuts' }, description: { fa: 'لوبیا، عدس، نخود، خشکبار', en: 'Beans, lentils, chickpeas, nuts' }, color: '#16a34a', shopSlugs: [] },
-    { id: 'retail-grocery', title: { fa: 'مواد غذایی', en: 'Grocery' }, description: { fa: 'کالاهای مصرفی روزانه', en: 'Daily food essentials' }, color: '#f59e0b', shopSlugs: [] },
-    { id: 'retail-beverage', title: { fa: 'نوشیدنی و لبنیات', en: 'Beverage & Dairy' }, description: { fa: 'نوشیدنی، لبنیات، سردخانه', en: 'Drinks, dairy, chilled goods' }, color: '#0ea5e9', shopSlugs: [] },
+    { id: 'retail-grocery', title: { fa: 'مواد غذایی', en: 'Grocery' }, description: { fa: 'برنج، روغن، کنسرو، کالاهای مصرفی', en: 'Rice, oil, canned goods, essentials' }, color: '#f59e0b', shopSlugs: [] },
+    { id: 'retail-bakery', title: { fa: 'نان و شیرینی', en: 'Bakery' }, description: { fa: 'نان، شیرینی، کیک و اسنک', en: 'Bread, pastry, cakes and snacks' }, color: '#d97706', shopSlugs: [] },
     { id: 'retail-care', title: { fa: 'بهداشتی و خانه', en: 'Care & Home' }, description: { fa: 'بهداشت، شوینده، لوازم خانه', en: 'Care, cleaning, home items' }, color: '#a855f7', shopSlugs: [] },
   ];
   const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);

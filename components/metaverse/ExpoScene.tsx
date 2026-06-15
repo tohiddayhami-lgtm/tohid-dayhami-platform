@@ -181,6 +181,18 @@ const Ceiling: React.FC<{ width: number; depth: number; height: number }> = ({ w
   );
 };
 
+const retailZoneFrame = (cat: ExpoRetailCategory, index: number, total: number, width: number, depth: number) => {
+  const cols = Math.min(2, Math.max(1, total));
+  const rows = Math.max(1, Math.ceil(total / cols));
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  const zoneW = cat.w || Math.max(7.2, (width - 8) / cols - 1.5);
+  const zoneD = cat.d || Math.max(7.4, (depth - 10) / rows - 1.8);
+  const x = cat.x ?? ((col - (cols - 1) / 2) * (zoneW + 1.8));
+  const z = cat.z ?? (depth / 2 - 7.8 - row * (zoneD + 2.1));
+  return { x, z, zoneW, zoneD, col, row, rows, cols };
+};
+
 const RetailCategoryZone: React.FC<{
   cat: ExpoRetailCategory;
   index: number;
@@ -191,18 +203,12 @@ const RetailCategoryZone: React.FC<{
   onSelectBooth: (b: MetaverseBooth) => void;
   onTrack?: Props['onTrack'];
 }> = ({ cat, index, total, width, depth, lang, onSelectBooth, onTrack }) => {
-  const cols = Math.min(2, Math.max(1, total));
-  const rows = Math.max(1, Math.ceil(total / cols));
-  const col = index % cols;
-  const row = Math.floor(index / cols);
-  const zoneW = cat.w || Math.max(5.8, (width - 8) / cols - 1.5);
-  const zoneD = cat.d || Math.max(6.2, (depth - 10) / rows - 1.8);
-  const x = cat.x ?? ((col - (cols - 1) / 2) * (zoneW + 1.8));
-  const z = cat.z ?? (depth / 2 - 7.8 - row * (zoneD + 2.1));
+  const { x, z, zoneW, zoneD } = retailZoneFrame(cat, index, total, width, depth);
   const color = cat.color || '#16a34a';
   const title = bi(cat.title, lang, lang === 'fa' ? 'دسته‌بندی' : 'Department');
   const desc = bi(cat.description, lang, '');
   const shopSlugs = (cat.shopSlugs || []).slice(0, 8);
+  const aisleLabel = lang === 'fa' ? `راهروی ${index + 1}` : `Aisle ${index + 1}`;
   const openShop = (slug: string, tileIndex: number) => {
     onTrack?.('hotspot_click', {
       targetId: `${cat.id}-${slug}`,
@@ -225,22 +231,13 @@ const RetailCategoryZone: React.FC<{
         <ringGeometry args={[Math.min(zoneW, zoneD) * 0.18, Math.min(zoneW, zoneD) * 0.22, 72]} />
         <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.45} transparent opacity={0.58} toneMapped={false} />
       </mesh>
-      {[-0.27, 0.27].map(offset => (
-        <RoundedBox key={offset} args={[zoneW * 0.8, 0.9, 0.34]} radius={0.04} smoothness={3} position={[0, 0.46, offset * zoneD]} castShadow>
-          <meshStandardMaterial color="#f8fafc" roughness={0.58} metalness={0.06} />
-        </RoundedBox>
-      ))}
-      {[-0.34, 0, 0.34].map((sx, i) => (
-        <mesh key={i} position={[sx * zoneW, 1.05, -zoneD * 0.27]}>
-          <boxGeometry args={[0.18, 0.22, 0.22]} />
-          <meshStandardMaterial color={i % 2 ? '#f59e0b' : color} roughness={0.55} />
-        </mesh>
-      ))}
       <RoundedBox args={[Math.min(zoneW * 0.78, 5.2), 0.62, 0.14]} radius={0.07} smoothness={3} position={[0, 2.65, -zoneD / 2 + 0.18]} castShadow>
         <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.28} metalness={0.4} roughness={0.35} />
       </RoundedBox>
       <CanvasLabel text={title} width={Math.min(zoneW * 0.72, 4.8)} height={0.44} position={[0, 2.65, -zoneD / 2 + 0.265]} bg="rgba(15,23,42,.9)" color="#ffffff" />
       {desc && <CanvasLabel text={desc} width={Math.min(zoneW * 0.68, 4.4)} height={0.24} position={[0, 2.22, -zoneD / 2 + 0.27]} bg="rgba(255,255,255,.82)" color="#0f172a" />}
+      <CanvasLabel text={aisleLabel} width={1.25} height={0.26} position={[-zoneW / 2 + 0.8, 0.05, -zoneD / 2 + 0.55]} rotation={[-Math.PI / 2, 0, 0]} bg={color} color="#ffffff" />
+      <CanvasLabel text={title} width={Math.min(zoneW * 0.55, 3.8)} height={0.34} position={[0, 0.06, zoneD / 2 - 0.5]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.88)" color="#0f172a" />
       {shopSlugs.map((slug, i) => {
         const colsTile = Math.min(4, Math.max(1, shopSlugs.length));
         const tx = (i % colsTile - (colsTile - 1) / 2) * Math.min(1.35, zoneW / Math.max(4, colsTile));
@@ -264,6 +261,37 @@ const RetailCategoryZone: React.FC<{
   );
 };
 
+const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: number; depth: number; lang: Language }> = ({ categories, width, depth, lang }) => {
+  if (categories.length === 0) return null;
+  const title = lang === 'fa' ? 'راهنمای بخش‌های فروشگاه' : 'Store Department Guide';
+  const z = depth / 2 - 2.15;
+  return (
+    <group position={[Math.min(width / 2 - 2.1, 5.4), 0, z]} rotation={[0, Math.PI, 0]}>
+      <RoundedBox args={[3.6, 2.55, 0.18]} radius={0.08} smoothness={3} position={[0, 1.55, 0]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive="#0f172a" emissiveIntensity={0.18} metalness={0.35} roughness={0.38} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={3.25} height={0.34} position={[0, 2.55, -0.105]} bg="rgba(255,255,255,.08)" color="#ffffff" />
+      {categories.slice(0, 8).map((cat, i) => {
+        const y = 2.1 - i * 0.24;
+        const label = `${lang === 'fa' ? 'راهرو' : 'Aisle'} ${i + 1} · ${bi(cat.title, lang, '')}`;
+        return (
+          <group key={cat.id} position={[0, y, -0.11]}>
+            <mesh position={[-1.46, 0, 0]}>
+              <circleGeometry args={[0.065, 18]} />
+              <meshBasicMaterial color={cat.color || '#16a34a'} toneMapped={false} />
+            </mesh>
+            <CanvasLabel text={label} width={2.72} height={0.18} position={[0.15, 0, 0.004]} bg="rgba(255,255,255,.9)" color="#0f172a" bold={false} />
+          </group>
+        );
+      })}
+      <mesh position={[0, 0.17, 0]}>
+        <boxGeometry args={[3.35, 0.12, 0.16]} />
+        <meshStandardMaterial color="#334155" metalness={0.25} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+};
+
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
 export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
@@ -274,6 +302,26 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
   const visualStyle = expo.visualStyle || 'exhibition';
   const retailCategories = expo.retailCategories || [];
   const categoryById = new Map(retailCategories.map(c => [c.id, c]));
+  const categoryIndexById = new Map(retailCategories.map((c, i) => [c.id, i]));
+  const boothForRender = (b: MetaverseBooth, index: number): MetaverseBooth => {
+    if (visualStyle !== 'supermarket' || !b.categoryId) return b;
+    const catIndex = categoryIndexById.get(b.categoryId);
+    const cat = categoryById.get(b.categoryId);
+    if (catIndex == null || !cat) return b;
+    const zone = retailZoneFrame(cat, catIndex, retailCategories.length, width, depth);
+    const categoryBooths = (expo.booths || []).filter(item => item.categoryId === b.categoryId);
+    const localIndex = Math.max(0, categoryBooths.findIndex(item => item.id === b.id));
+    const cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(categoryBooths.length))));
+    const row = Math.floor(localIndex / cols);
+    const col = localIndex % cols;
+    const xStep = Math.min(5.8, zone.zoneW / Math.max(1.6, cols));
+    const zStep = 2.55;
+    const x = zone.x + (col - (cols - 1) / 2) * xStep;
+    const zMin = zone.z - zone.zoneD / 2 + 1.8;
+    const zMax = zone.z + zone.zoneD / 2 - 1.7;
+    const z = Math.max(zMin, Math.min(zMax, zone.z + zone.zoneD * 0.2 - row * zStep));
+    return { ...b, x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI, scale: b.scale ?? 0.95 };
+  };
 
   return (
     <>
@@ -442,22 +490,26 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
           onTrack={onTrack}
         />
       ))}
+      {visualStyle === 'supermarket' && <SupermarketDirectory categories={retailCategories} width={width} depth={depth} lang={lang} />}
 
       {/* Booths */}
-      {(expo.booths || []).map((b, i) => (
-        <Booth
-          key={b.id}
-          booth={b}
-          index={i}
-          lang={lang}
-          onSelectHotspot={onSelectHotspot}
-          onSelectBooth={onSelectBooth}
-          onTrack={onTrack}
-          visualStyle={visualStyle}
-          categoryName={b.categoryId ? bi(categoryById.get(b.categoryId)?.title, lang, '') : undefined}
-          categoryColor={b.categoryId ? categoryById.get(b.categoryId)?.color : undefined}
-        />
-      ))}
+      {(expo.booths || []).map((b, i) => {
+        const renderBooth = boothForRender(b, i);
+        return (
+          <Booth
+            key={b.id}
+            booth={renderBooth}
+            index={i}
+            lang={lang}
+            onSelectHotspot={onSelectHotspot}
+            onSelectBooth={onSelectBooth}
+            onTrack={onTrack}
+            visualStyle={visualStyle}
+            categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
+            categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
+          />
+        );
+      })}
     </>
   );
 };

@@ -941,6 +941,99 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     audio.currentTime = Math.min(max, Math.max(0, audio.currentTime + delta));
   };
 
+  if (visualStyle === 'supermarket') {
+    const shelfW = 4.8;
+    const shelfD = 1.15;
+    const shelfH = 2.25;
+    const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6'];
+    const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
+    return (
+      <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
+        <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[shelfW + 0.75, shelfD + 1.05]} />
+          <meshStandardMaterial color={categoryColor || accent} transparent opacity={0.16} roughness={0.82} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        </mesh>
+
+        <RoundedBox args={[shelfW, shelfH, shelfD]} radius={0.08} smoothness={3} position={[0, shelfH / 2, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#f8fafc" roughness={0.52} metalness={0.08} />
+        </RoundedBox>
+        <mesh position={[0, shelfH + 0.06, -shelfD / 2 - 0.04]}>
+          <boxGeometry args={[shelfW + 0.18, 0.18, 0.16]} />
+          <meshStandardMaterial color={categoryColor || accent} emissive={categoryColor || accent} emissiveIntensity={0.22} toneMapped={false} />
+        </mesh>
+
+        {[0.42, 0.88, 1.34, 1.8].map((y, row) => (
+          <group key={row}>
+            <mesh position={[0, y - 0.2, -shelfD / 2 - 0.02]}>
+              <boxGeometry args={[shelfW * 0.92, 0.055, 0.22]} />
+              <meshStandardMaterial color="#cbd5e1" roughness={0.45} metalness={0.18} />
+            </mesh>
+            {Array.from({ length: 8 }).map((_, i) => {
+              const px = (i - 3.5) * 0.52;
+              const color = productColors[(i + row + (index ?? 0)) % productColors.length];
+              return (
+                <mesh key={i} position={[px, y, -shelfD / 2 - 0.14]}>
+                  <boxGeometry args={[0.34, 0.36 + (i % 3) * 0.06, 0.22]} />
+                  <meshStandardMaterial color={color} roughness={0.48} metalness={0.03} />
+                </mesh>
+              );
+            })}
+          </group>
+        ))}
+
+        <CanvasLabel text={categoryLabel} width={2.55} height={0.3} position={[0, shelfH + 0.43, -shelfD / 2 - 0.12]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <CanvasLabel
+          text={name}
+          width={shelfW * 0.82}
+          height={0.38}
+          position={[0, shelfH + 0.08, -shelfD / 2 - 0.14]}
+          bg="rgba(15,23,42,.9)"
+          color="#ffffff"
+          onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf_sign'); }}
+          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+          onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+        />
+        {booth.logo && (
+          <SafeImage url={booth.logo} width={0.52} height={0.52} position={[-shelfW / 2 + 0.42, shelfH + 0.08, -shelfD / 2 - 0.13]} />
+        )}
+        {booth.shopSlug && (
+          <group position={[0, 0.18, -shelfD / 2 - 0.34]}>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf'); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+              <planeGeometry args={[2.2, 0.52]} />
+              <meshStandardMaterial color="#ffffff" emissive={categoryColor || accent} emissiveIntensity={0.18} roughness={0.42} />
+            </mesh>
+            <CanvasLabel text={lang === 'fa' ? 'مشاهده محصولات' : 'View products'} width={1.9} height={0.28} position={[0, 0.022, 0]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.94)" color="#0f172a" onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf'); }} />
+          </group>
+        )}
+
+        {(booth.hotspots || []).map(h => (
+          <Hotspot
+            key={h.id}
+            hotspot={h}
+            lang={lang}
+            onSelect={(hotspot) => {
+              onTrack?.('hotspot_click', {
+                ...trackBase,
+                targetId: hotspot.id,
+                targetName: bi(hotspot.title, lang, ''),
+                targetType: hotspot.type,
+                side: 'shelf_hotspot',
+                x: hotspot.x,
+                z: hotspot.z,
+              });
+              onSelectHotspot(hotspot);
+            }}
+          />
+        ))}
+      </group>
+    );
+  }
+
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
       {booth.modelUrl ? (
