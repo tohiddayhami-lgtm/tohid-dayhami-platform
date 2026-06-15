@@ -634,6 +634,57 @@ const RotatingPremiumLcd: React.FC<{ text: string; color: string; position: [num
   );
 };
 
+const ShelfStockFace: React.FC<{
+  width: number;
+  height: number;
+  seed: number;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+}> = ({ width, height, seed, position, rotation }) => {
+  const texture = useMemo(() => {
+    const W = 1024;
+    const H = 512;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d')!;
+    const colors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16'];
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, W, H);
+    for (let row = 0; row < 5; row++) {
+      const top = 34 + row * 92;
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(42, top + 66, W - 84, 10);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(62, top + 78, W - 124, 9);
+      for (let i = 0; i < 12; i++) {
+        const x = 70 + i * 74;
+        const h = 42 + ((i + row + seed) % 3) * 12;
+        ctx.fillStyle = colors[(i + row + seed) % colors.length];
+        if ((i + row + seed) % 4 === 0) {
+          ctx.beginPath();
+          ctx.ellipse(x + 26, top + 64 - h / 2, 22, h / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, top + 64 - h, 46, h);
+        }
+        ctx.fillStyle = 'rgba(255,255,255,.86)';
+        ctx.fillRect(x + 8, top + 53, 30, 8);
+      }
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    tex.needsUpdate = true;
+    return tex;
+  }, [seed]);
+  useEffect(() => () => texture.dispose(), [texture]);
+  return (
+    <mesh position={position} rotation={rotation}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  );
+};
+
 const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number]; onGrab?: () => void }> = ({ url, position, onGrab }) => {
   const { camera } = useThree();
   const inXR = useXR((s) => !!s.session);
@@ -947,8 +998,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const shelfH = 2.35;
     const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16'];
     const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
-    const productRows = [0.46, 0.86, 1.26, 1.66, 2.02];
-    const productSlots = Array.from({ length: 10 });
     const shopAction = lang === 'fa' ? 'مشاهده محصولات' : 'View products';
     return (
       <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
@@ -964,46 +1013,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         <RoundedBox args={[shelfW + 0.18, 0.18, shelfD + 0.12]} radius={0.045} smoothness={3} position={[0, 0.12, 0]} castShadow receiveShadow>
           <meshStandardMaterial color="#64748b" roughness={0.42} metalness={0.18} />
         </RoundedBox>
-        {[-1, 1].map(side => (
-          <group key={side}>
-            {productRows.map((y, row) => (
-              <group key={row}>
-                <mesh position={[0, y - 0.18, side * (shelfD / 2 - 0.1)]}>
-                  <boxGeometry args={[shelfW * 0.92, 0.06, 0.46]} />
-                  <meshStandardMaterial color="#d1d5db" roughness={0.42} metalness={0.18} />
-                </mesh>
-                <mesh position={[0, y - 0.03, side * (shelfD / 2 + 0.155)]}>
-                  <boxGeometry args={[shelfW * 0.88, 0.055, 0.045]} />
-                  <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.25} toneMapped={false} />
-                </mesh>
-                {productSlots.map((_, i) => {
-                  const px = (i - 4.5) * 0.45;
-                  const color = productColors[(i + row + (index ?? 0)) % productColors.length];
-                  const h = 0.28 + ((i + row) % 3) * 0.08;
-                  return (
-                    <group key={i} position={[px, y, side * (shelfD / 2 + 0.02)]}>
-                      {(i + row) % 4 === 0 ? (
-                        <mesh rotation={[Math.PI / 2, 0, 0]}>
-                          <cylinderGeometry args={[0.13, 0.13, 0.22, 18]} />
-                          <meshStandardMaterial color={color} roughness={0.42} metalness={0.04} />
-                        </mesh>
-                      ) : (
-                        <mesh>
-                          <boxGeometry args={[0.28, h, 0.2]} />
-                          <meshStandardMaterial color={color} roughness={0.46} metalness={0.03} />
-                        </mesh>
-                      )}
-                      <mesh position={[0, -h / 2 + 0.08, side * 0.105]}>
-                        <boxGeometry args={[0.2, 0.045, 0.018]} />
-                        <meshBasicMaterial color="#ffffff" toneMapped={false} />
-                      </mesh>
-                    </group>
-                  );
-                })}
-              </group>
-            ))}
-          </group>
-        ))}
+        <ShelfStockFace width={shelfW * 0.92} height={shelfH * 0.78} seed={index ?? 0} position={[0, shelfH * 0.5, -shelfD / 2 - 0.035]} rotation={[0, Math.PI, 0]} />
+        <ShelfStockFace width={shelfW * 0.92} height={shelfH * 0.78} seed={(index ?? 0) + 3} position={[0, shelfH * 0.5, shelfD / 2 + 0.035]} />
         {[-1, 1].map(x => (
           <group key={x} position={[x * (shelfW / 2 + 0.16), 0, 0]}>
             <RoundedBox args={[0.36, shelfH * 0.88, shelfD + 0.22]} radius={0.055} smoothness={3} position={[0, shelfH * 0.45, 0]} castShadow>
