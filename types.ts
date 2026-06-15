@@ -692,6 +692,7 @@ export interface ExpoPresenceSettings {
   enabled?: boolean;
   chatEnabled?: boolean;
   avatarsEnabled?: boolean;
+  voiceEnabled?: boolean;
 }
 
 export interface MetaverseExpo {
@@ -737,6 +738,7 @@ export interface MetaExpoPresence {
   z: number;
   heading: number;
   isVr?: boolean;
+  voiceActive?: boolean;
   lastSeen: string;
   active?: boolean;
 }
@@ -750,6 +752,21 @@ export interface MetaExpoChatMessage {
   name: string;
   color: string;
   text: string;
+  timestamp: string;
+}
+
+export type MetaExpoVoiceSignalType = 'offer' | 'answer' | 'ice' | 'hangup';
+
+export interface MetaExpoVoiceSignal {
+  id: string;
+  roomId: string;
+  callId: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  fromVisitorId: string;
+  toVisitorId: string;
+  type: MetaExpoVoiceSignalType;
+  payload?: string;
   timestamp: string;
 }
 

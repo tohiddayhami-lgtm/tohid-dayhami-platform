@@ -19,6 +19,9 @@ interface Props {
   onFloorTeleport: (x: number, z: number) => void;   // desktop double-click teleport
   onVrTeleport: (v: THREE.Vector3) => void;           // WebXR controller teleport
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
+  onVoiceStart?: () => void;
+  onVoiceEnd?: () => void;
+  voiceActive?: boolean;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -183,7 +186,7 @@ const Ceiling: React.FC<{ width: number; depth: number; height: number }> = ({ w
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack, onVoiceStart, onVoiceEnd, voiceActive }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -344,7 +347,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
 
       {/* Booths */}
       {(expo.booths || []).map((b, i) => (
-        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} onTrack={onTrack} />
+        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} onTrack={onTrack} onVoiceStart={onVoiceStart} onVoiceEnd={onVoiceEnd} voiceActive={voiceActive} />
       ))}
     </>
   );

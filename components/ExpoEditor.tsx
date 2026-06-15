@@ -106,6 +106,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presenceEnable: T ? 'نمایش کاربران آنلاین' : 'Show online visitors',
     chatEnable: T ? 'فعال‌سازی چت آنلاین' : 'Enable live chat',
     avatarsEnable: T ? 'نمایش کاراکتر دیجیتال کاربران' : 'Show visitor avatars',
+    voiceEnable: T ? 'فعال‌سازی میکروفون آنلاین' : 'Enable live microphone',
     meetEnable: T ? 'نمایش تماس Google Meet روی دیوار' : 'Show Google Meet wall screen',
     meetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
     meetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
@@ -767,6 +768,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.enabled !== false} onChange={ev => setPresence({ enabled: ev.target.checked })} />{t.presenceEnable}</label>
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.chatEnabled !== false} onChange={ev => setPresence({ chatEnabled: ev.target.checked })} />{t.chatEnable}</label>
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.avatarsEnabled !== false} onChange={ev => setPresence({ avatarsEnabled: ev.target.checked })} />{t.avatarsEnable}</label>
+                <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.voiceEnabled !== false} onChange={ev => setPresence({ voiceEnabled: ev.target.checked })} />{t.voiceEnable}</label>
               </div>
             </div>
             <p className="text-[11px] text-emerald-700/75 mb-3">{t.liveHint}</p>

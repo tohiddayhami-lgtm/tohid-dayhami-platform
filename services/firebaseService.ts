@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoChatMessage, MetaExpoPresence } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoChatMessage, MetaExpoPresence, MetaExpoVoiceSignal } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -1298,6 +1298,41 @@ export const subscribeMetaExpoChatMessages = (
             inner = onSnapshot(
                 query(collection(db, 'metaExpoChatMessages'), where('roomId', '==', roomId), limit(120)),
                 snap => normalize(snap.docs.map(d => d.data() as MetaExpoChatMessage)),
+                () => {}
+            );
+        }
+    });
+    return () => { gone = true; inner?.(); };
+};
+
+export const sendMetaExpoVoiceSignal = async (signal: MetaExpoVoiceSignal): Promise<void> => {
+    try {
+        const data = sanitizeData(signal);
+        const proxy = await checkProxyMode();
+        if (proxy) await proxyWrite('metaExpoVoiceSignals', signal.id, data);
+        else await setDoc(doc(db, 'metaExpoVoiceSignals', signal.id), data);
+    } catch {}
+};
+
+export const subscribeMetaExpoVoiceSignals = (
+    roomId: string,
+    visitorId: string,
+    callback: (signals: MetaExpoVoiceSignal[]) => void
+): (() => void) => {
+    const startedAt = Date.now() - 10_000;
+    const normalize = (items: MetaExpoVoiceSignal[]) => callback(items
+        .filter(s => s.roomId === roomId && s.toVisitorId === visitorId && new Date(s.timestamp).getTime() >= startedAt)
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .slice(-120));
+    let inner: (() => void) | null = null;
+    let gone = false;
+    checkProxyMode().then(proxy => {
+        if (gone) return;
+        if (proxy) inner = proxyPoll<MetaExpoVoiceSignal>('metaExpoVoiceSignals', normalize, { intervalMs: 1500 });
+        else {
+            inner = onSnapshot(
+                query(collection(db, 'metaExpoVoiceSignals'), where('toVisitorId', '==', visitorId), limit(160)),
+                snap => normalize(snap.docs.map(d => d.data() as MetaExpoVoiceSignal)),
                 () => {}
             );
         }
