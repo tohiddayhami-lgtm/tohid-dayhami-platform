@@ -1,4 +1,5 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
@@ -194,6 +195,28 @@ const retailZoneFrame = (cat: ExpoRetailCategory, index: number, total: number, 
   return { x, z, zoneW, zoneD, col, row, rows, cols };
 };
 
+const RotatingDepartmentSign: React.FC<{ title: string; subtitle?: string; color: string; position: [number, number, number] }> = ({ title, subtitle, color, position }) => {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.45;
+  });
+  return (
+    <group ref={ref} position={position}>
+      <mesh position={[0, -0.7, 0]}>
+        <cylinderGeometry args={[0.045, 0.045, 1.35, 14]} />
+        <meshStandardMaterial color="#334155" metalness={0.45} roughness={0.35} />
+      </mesh>
+      <RoundedBox args={[5.6, 0.7, 0.22]} radius={0.08} smoothness={3} position={[0, 0, 0]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.38} metalness={0.45} roughness={0.32} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={5.25} height={0.5} position={[0, 0.06, 0.13]} bg={color} color="#ffffff" />
+      <CanvasLabel text={title} width={5.25} height={0.5} position={[0, 0.06, -0.13]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
+      {subtitle && <CanvasLabel text={subtitle} width={3.8} height={0.22} position={[0, -0.48, 0.14]} bg="rgba(255,255,255,.9)" color="#0f172a" bold={false} />}
+      {subtitle && <CanvasLabel text={subtitle} width={3.8} height={0.22} position={[0, -0.48, -0.14]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.9)" color="#0f172a" bold={false} />}
+    </group>
+  );
+};
+
 const RetailCategoryZone: React.FC<{
   cat: ExpoRetailCategory;
   index: number;
@@ -201,27 +224,12 @@ const RetailCategoryZone: React.FC<{
   width: number;
   depth: number;
   lang: Language;
-  onSelectBooth: (b: MetaverseBooth) => void;
-  onTrack?: Props['onTrack'];
-}> = ({ cat, index, total, width, depth, lang, onSelectBooth, onTrack }) => {
+}> = ({ cat, index, total, width, depth, lang }) => {
   const { x, z, zoneW, zoneD } = retailZoneFrame(cat, index, total, width, depth);
   const color = cat.color || '#16a34a';
   const title = bi(cat.title, lang, lang === 'fa' ? 'دسته‌بندی' : 'Department');
   const desc = bi(cat.description, lang, '');
-  const shopSlugs = (cat.shopSlugs || []).slice(0, 8);
   const aisleLabel = lang === 'fa' ? `راهروی ${index + 1}` : `Aisle ${index + 1}`;
-  const openShop = (slug: string, tileIndex: number) => {
-    onTrack?.('hotspot_click', {
-      targetId: `${cat.id}-${slug}`,
-      targetName: slug,
-      targetType: 'retail_department_shop',
-      side: title,
-      boothIndex: tileIndex,
-      x,
-      z,
-    });
-    onSelectBooth({ id: `${cat.id}-${slug}`, name: { fa: slug, en: slug }, shopSlug: slug, x, y: 0, z, hotspots: [] });
-  };
   return (
     <group position={[x, 0.025, z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -236,74 +244,9 @@ const RetailCategoryZone: React.FC<{
         <ringGeometry args={[Math.min(zoneW, zoneD) * 0.18, Math.min(zoneW, zoneD) * 0.22, 72]} />
         <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.45} transparent opacity={0.58} toneMapped={false} />
       </mesh>
-      {/* Large department signage on all sides, like overhead supermarket wayfinding. */}
-      <group position={[0, 0, 0]}>
-        <mesh position={[0, 2.45, 0]}>
-          <cylinderGeometry args={[0.055, 0.055, 2.5, 14]} />
-          <meshStandardMaterial color="#334155" metalness={0.48} roughness={0.32} />
-        </mesh>
-        <RoundedBox args={[Math.min(zoneW * 0.78, 6.8), 0.76, 0.22]} radius={0.07} smoothness={3} position={[0, 3.7, 0.34]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
-        </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.72, 6.3)} height={0.56} position={[0, 3.7, 0.47]} bg={color} color="#ffffff" />
-        <RoundedBox args={[Math.min(zoneW * 0.78, 6.8), 0.76, 0.22]} radius={0.07} smoothness={3} position={[0, 3.7, -0.34]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
-        </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.72, 6.3)} height={0.56} position={[0, 3.7, -0.47]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
-        <RoundedBox args={[0.22, 0.76, Math.min(zoneD * 0.7, 6.0)]} radius={0.07} smoothness={3} position={[0.44, 3.7, 0]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
-        </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.62, 5.4)} height={0.54} position={[0.57, 3.7, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
-        <RoundedBox args={[0.22, 0.76, Math.min(zoneD * 0.7, 6.0)]} radius={0.07} smoothness={3} position={[-0.44, 3.7, 0]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
-        </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.62, 5.4)} height={0.54} position={[-0.57, 3.7, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
-
-        {[[-zoneW / 2 + 0.35, -zoneD / 2 + 0.35], [zoneW / 2 - 0.35, -zoneD / 2 + 0.35], [-zoneW / 2 + 0.35, zoneD / 2 - 0.35], [zoneW / 2 - 0.35, zoneD / 2 - 0.35]].map(([px, pz], i) => (
-          <mesh key={i} position={[px, 1.45, pz]}>
-            <cylinderGeometry args={[0.045, 0.045, 2.75, 14]} />
-            <meshStandardMaterial color="#334155" metalness={0.45} roughness={0.35} />
-          </mesh>
-        ))}
-        <RoundedBox args={[Math.min(zoneW * 0.72, 6.2), 0.14, 0.26]} radius={0.05} smoothness={3} position={[0, 3.0, -zoneD / 2 + 0.18]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
-        </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, -zoneD / 2 + 0.335]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
-        <RoundedBox args={[Math.min(zoneW * 0.72, 6.2), 0.14, 0.26]} radius={0.05} smoothness={3} position={[0, 3.0, zoneD / 2 - 0.18]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
-        </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, zoneD / 2 - 0.335]} bg={color} color="#ffffff" />
-        <RoundedBox args={[0.26, 0.14, Math.min(zoneD * 0.6, 5.5)]} radius={0.05} smoothness={3} position={[-zoneW / 2 + 0.18, 3.0, 0]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
-        </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[-zoneW / 2 + 0.335, 3.0, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
-        <RoundedBox args={[0.26, 0.14, Math.min(zoneD * 0.6, 5.5)]} radius={0.05} smoothness={3} position={[zoneW / 2 - 0.18, 3.0, 0]} castShadow>
-          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
-        </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[zoneW / 2 - 0.335, 3.0, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
-        {desc && <CanvasLabel text={desc} width={Math.min(zoneW * 0.58, 4.6)} height={0.26} position={[0, 2.48, -zoneD / 2 + 0.35]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.9)" color="#0f172a" />}
-      </group>
+      <RotatingDepartmentSign title={`${aisleLabel} · ${title}`} subtitle={desc} color={color} position={[0, 3.35, 0]} />
       <CanvasLabel text={aisleLabel} width={1.35} height={0.3} position={[-zoneW / 2 + 0.8, 0.055, -zoneD / 2 + 0.55]} rotation={[-Math.PI / 2, 0, 0]} bg={color} color="#ffffff" />
       <CanvasLabel text={title} width={Math.min(zoneW * 0.55, 3.8)} height={0.34} position={[0, 0.06, zoneD / 2 - 0.5]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.88)" color="#0f172a" />
-      {shopSlugs.map((slug, i) => {
-        const colsTile = Math.min(4, Math.max(1, shopSlugs.length));
-        const tx = (i % colsTile - (colsTile - 1) / 2) * Math.min(1.35, zoneW / Math.max(4, colsTile));
-        const tz = zoneD / 2 - 0.55 - Math.floor(i / colsTile) * 0.48;
-        return (
-          <group key={slug} position={[tx, 0.12, tz]}>
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              onClick={(e) => { e.stopPropagation(); openShop(slug, i); }}
-              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-            >
-              <planeGeometry args={[1.18, 0.34]} />
-              <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.12} roughness={0.45} />
-            </mesh>
-            <CanvasLabel text={slug} width={1.08} height={0.22} position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" onClick={(e) => { e.stopPropagation(); openShop(slug, i); }} />
-          </group>
-        );
-      })}
     </group>
   );
 };
@@ -580,8 +523,6 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
           width={width}
           depth={depth}
           lang={lang}
-          onSelectBooth={onSelectBooth}
-          onTrack={onTrack}
         />
       ))}
       {visualStyle === 'supermarket' && <SupermarketDirectory categories={retailCategories} width={width} depth={depth} lang={lang} />}
