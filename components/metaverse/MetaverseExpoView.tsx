@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoChatMessage, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -15,7 +15,8 @@ import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
-import { logMetaExpoEvent } from '../../services/firebaseService';
+import { logMetaExpoEvent, markMetaExpoPresenceInactive, sendMetaExpoChatMessage, subscribeMetaExpoChatMessages, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
+import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
   bazaar: MetaBazaar;
@@ -26,6 +27,117 @@ interface Props {
 }
 
 type ExpoTrackFn = (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
+
+const visitorColors = ['#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2', '#be123c', '#4f46e5'];
+const liveVisitor = (bazaarId: string) => {
+  const key = `_meta_expo_visitor_${bazaarId}`;
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved) as { id: string; name: string; color: string };
+  } catch {}
+  const n = Math.floor(100 + Math.random() * 900);
+  const visitor = {
+    id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: `Guest ${n}`,
+    color: visitorColors[n % visitorColors.length],
+  };
+  try { localStorage.setItem(key, JSON.stringify(visitor)); } catch {}
+  return visitor;
+};
+
+const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> = ({ visitors, selfId }) => (
+  <>
+    {visitors.filter(v => v.visitorId !== selfId).map(v => (
+      <group key={v.visitorId} position={[v.x || 0, 0, v.z || 0]} rotation={[0, v.heading || 0, 0]}>
+        <mesh position={[0, 0.85, 0]} castShadow>
+          <capsuleGeometry args={[0.22, 0.72, 8, 16]} />
+          <meshStandardMaterial color={v.color || '#2563eb'} roughness={0.48} metalness={0.08} />
+        </mesh>
+        <mesh position={[0, 1.38, 0]} castShadow>
+          <sphereGeometry args={[0.2, 24, 16]} />
+          <meshStandardMaterial color="#f4c7a1" roughness={0.6} />
+        </mesh>
+        <mesh position={[0, 0.82, -0.24]}>
+          <boxGeometry args={[0.08, 0.08, 0.18]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+        <CanvasLabel text={v.name || 'Guest'} width={0.95} height={0.24} position={[0, 1.72, 0]} bg="rgba(15,23,42,.82)" color="#ffffff" />
+      </group>
+    ))}
+  </>
+);
+
+const VrPoseSync: React.FC<{ originRef: React.RefObject<THREE.Group | null>; poseRef: PlayerPoseRef }> = ({ originRef, poseRef }) => {
+  const inXR = useXR((s) => !!s.session);
+  useFrame(() => {
+    if (!inXR || !originRef.current) return;
+    const p = originRef.current.position;
+    poseRef.current = { ...poseRef.current, x: p.x, z: p.z };
+  });
+  return null;
+};
+
+const LiveChatPanel: React.FC<{
+  enabled: boolean;
+  messages: MetaExpoChatMessage[];
+  visitors: MetaExpoPresence[];
+  visitor: { id: string; name: string; color: string };
+  onSend: (text: string) => void;
+  lang: Language;
+}> = ({ enabled, messages, visitors, visitor, onSend, lang }) => {
+  const [open, setOpen] = useState(true);
+  const [text, setText] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
+  const T = lang === 'fa';
+  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }); }, [messages.length, open]);
+  if (!enabled) return null;
+  const send = () => {
+    const v = text.trim();
+    if (!v) return;
+    onSend(v.slice(0, 500));
+    setText('');
+  };
+  return (
+    <div className={`absolute ${T ? 'left-3' : 'right-3'} bottom-3 z-50 pointer-events-auto w-[min(360px,calc(100vw-24px))]`}>
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="w-full rounded-2xl bg-white/95 text-gray-900 shadow-lg px-4 py-3 text-sm font-bold flex items-center justify-between">
+          <span>{T ? 'چت آنلاین نمایشگاه' : 'Expo live chat'}</span>
+          <span className="text-xs text-emerald-600">{visitors.length} online</span>
+        </button>
+      ) : (
+        <div className="rounded-2xl bg-white/95 backdrop-blur shadow-2xl border border-white/70 overflow-hidden">
+          <div className="px-3 py-2 bg-slate-900 text-white flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-sm font-extrabold">{T ? 'چت آنلاین نمایشگاه' : 'Expo live chat'}</div>
+              <div className="text-[11px] text-white/65 truncate">{visitors.length} {T ? 'نفر آنلاین' : 'online'} · {visitor.name}</div>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-white/70 hover:text-white text-lg leading-none">×</button>
+          </div>
+          <div ref={listRef} className="h-56 overflow-y-auto px-3 py-2 space-y-2">
+            {messages.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-8">{T ? 'هنوز پیامی ارسال نشده.' : 'No messages yet.'}</p>
+            ) : messages.map(m => (
+              <div key={m.id} className={`text-xs ${m.visitorId === visitor.id ? 'text-end' : 'text-start'}`}>
+                <div className="font-bold mb-0.5" style={{ color: m.color || '#2563eb' }}>{m.name}</div>
+                <div className={`inline-block max-w-[86%] rounded-2xl px-3 py-2 ${m.visitorId === visitor.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>{m.text}</div>
+              </div>
+            ))}
+          </div>
+          <div className="p-2 border-t border-gray-100 flex gap-2">
+            <input
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') send(); }}
+              placeholder={T ? 'پیام بنویسید...' : 'Write a message...'}
+            />
+            <button onClick={send} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold">{T ? 'ارسال' : 'Send'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ExpoAnalyticsTracker: React.FC<{
   bazaar: MetaBazaar;
@@ -128,6 +240,14 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, startZ];
   const T = lang === 'fa';
+  const roomId = `expo_${bazaar.id}`;
+  const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
+  const presenceEnabled = expo.presence?.enabled !== false;
+  const chatEnabled = presenceEnabled && expo.presence?.chatEnabled !== false;
+  const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
+  const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
+  const [messages, setMessages] = useState<MetaExpoChatMessage[]>([]);
+  const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
     logMetaExpoEvent(type, { id: bazaar.id, slug: bazaar.slug, name: bazaar.name }, opts);
   }, [bazaar.id, bazaar.slug, bazaar.name]);
@@ -149,6 +269,64 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     window.open(href, '_blank', 'noopener,noreferrer');
   };
   const onSelectBooth = (b: MetaverseBooth) => { if (b.shopSlug) openShopNewTab(b.shopSlug); };
+
+  useEffect(() => {
+    if (!presenceEnabled) return;
+    const unsubPresence = subscribeMetaExpoPresence(roomId, setVisitors);
+    const unsubChat = chatEnabled ? subscribeMetaExpoChatMessages(roomId, setMessages) : undefined;
+    return () => { unsubPresence(); unsubChat?.(); };
+  }, [chatEnabled, presenceEnabled, roomId]);
+
+  useEffect(() => {
+    if (!presenceEnabled) return;
+    const pushPresence = () => {
+      const pose = poseRef.current;
+      const presence: MetaExpoPresence = {
+        id: `${roomId}_${visitor.id}`,
+        roomId,
+        bazaarId: bazaar.id,
+        bazaarSlug: bazaar.slug,
+        visitorId: visitor.id,
+        name: visitor.name,
+        color: visitor.color,
+        x: pose.x,
+        z: pose.z,
+        heading: pose.heading,
+        isVr: !!originRef.current && Math.abs(originRef.current.position.z - startZ) > 0.02,
+        lastSeen: new Date().toISOString(),
+        active: true,
+      };
+      latestPresenceRef.current = presence;
+      upsertMetaExpoPresence(presence);
+    };
+    pushPresence();
+    const id = window.setInterval(pushPresence, 2500);
+    const markInactive = () => { if (latestPresenceRef.current) markMetaExpoPresenceInactive(latestPresenceRef.current); };
+    const onVisibilityChange = () => { if (document.visibilityState === 'hidden') markInactive(); else pushPresence(); };
+    window.addEventListener('beforeunload', markInactive);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('beforeunload', markInactive);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      markInactive();
+    };
+  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, visitor.name]);
+
+  const sendChat = useCallback((text: string) => {
+    if (!chatEnabled) return;
+    sendMetaExpoChatMessage({
+      id: `mec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      roomId,
+      bazaarId: bazaar.id,
+      bazaarSlug: bazaar.slug,
+      visitorId: visitor.id,
+      name: visitor.name,
+      color: visitor.color,
+      text,
+      timestamp: new Date().toISOString(),
+    });
+  }, [bazaar.id, bazaar.slug, chatEnabled, roomId, visitor.color, visitor.id, visitor.name]);
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -189,6 +367,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
+          {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
+          <VrPoseSync originRef={originRef} poseRef={poseRef} />
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
         </XR>
       </Canvas>
@@ -239,6 +419,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
       {/* Hotspot modal */}
       <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
+
+      <LiveChatPanel enabled={chatEnabled} messages={messages} visitors={visitors} visitor={visitor} onSend={sendChat} lang={lang} />
 
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}

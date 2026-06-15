@@ -677,6 +677,23 @@ export interface ExpoPresentation {
   h?: number;            // height (meters)
 }
 
+export interface ExpoMeetWall {
+  enabled?: boolean;
+  url?: string;          // Google Meet / video call URL
+  wall?: ExpoWall;       // wall that shows the call screen
+  u?: number;            // 0..1 horizontal position along the wall
+  v?: number;            // 0..1 vertical center
+  w?: number;            // width (meters)
+  h?: number;            // height (meters)
+  title?: MetaShopDirCat;
+}
+
+export interface ExpoPresenceSettings {
+  enabled?: boolean;
+  chatEnabled?: boolean;
+  avatarsEnabled?: boolean;
+}
+
 export interface MetaverseExpo {
   enabled: boolean;
   defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
@@ -703,9 +720,37 @@ export interface MetaverseExpo {
   wallAdScale?: number;         // global multiplier for all environmental wall ads
   wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads
   presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
+  meetWall?: ExpoMeetWall;      // Google Meet call screen on a selected wall
+  presence?: ExpoPresenceSettings; // realtime visitors + chat + simple digital avatars
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
-  // Seam for future multiplayer (presence + text chat). Not implemented yet:
-  // presence?: { roomId?: string; chatEnabled?: boolean };
+}
+
+export interface MetaExpoPresence {
+  id: string;
+  roomId: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  visitorId: string;
+  name: string;
+  color: string;
+  x: number;
+  z: number;
+  heading: number;
+  isVr?: boolean;
+  lastSeen: string;
+  active?: boolean;
+}
+
+export interface MetaExpoChatMessage {
+  id: string;
+  roomId: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  visitorId: string;
+  name: string;
+  color: string;
+  text: string;
+  timestamp: string;
 }
 
 // A language a shop can be displayed in (beyond the default fa/en)

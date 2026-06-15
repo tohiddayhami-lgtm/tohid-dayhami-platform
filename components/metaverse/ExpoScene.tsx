@@ -322,6 +322,26 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         return <PresentationScreen url={p.pdfUrl!} w={p.w || Math.min(width * 0.5, 7)} h={p.h || Math.min(height * 0.6, 4)} position={position} rotation={rotation} />;
       })()}
 
+      {/* Google Meet / live call wall. Meet itself opens in a new tab; the wall acts as the in-world call screen. */}
+      {expo.meetWall?.enabled && expo.meetWall.url && (() => {
+        const m = expo.meetWall;
+        const mw = m.w || Math.min(width * 0.45, 6);
+        const mh = m.h || Math.min(height * 0.42, 3.2);
+        const { position, rotation } = wallTransform(m.wall || 'front', m.u ?? 0.5, m.v ?? 0.55, { width, depth, height });
+        return (
+          <WallAd
+            key={`meet-${m.url}`}
+            url={m.url}
+            title={bi(m.title, lang, lang === 'fa' ? 'تماس تصویری زنده Google Meet' : 'Live Google Meet call')}
+            w={mw}
+            h={mh}
+            position={position}
+            rotation={rotation}
+            onAdClick={() => onTrack?.('hotspot_click', { targetType: 'google_meet', targetName: bi(m.title, lang, 'Google Meet'), wall: m.wall || 'front', side: m.wall || 'front' })}
+          />
+        );
+      })()}
+
       {/* Booths */}
       {(expo.booths || []).map((b, i) => (
         <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} onTrack={onTrack} />
