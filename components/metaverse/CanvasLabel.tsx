@@ -64,7 +64,7 @@ export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, ro
   return (
     <mesh position={position} rotation={rotation} onClick={handleClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <planeGeometry args={[width, height]} />
-      <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} />
+      <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} side={THREE.DoubleSide} />
     </mesh>
   );
 };

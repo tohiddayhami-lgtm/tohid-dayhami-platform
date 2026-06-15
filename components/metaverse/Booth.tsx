@@ -942,73 +942,133 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   };
 
   if (visualStyle === 'supermarket') {
-    const shelfW = 4.8;
-    const shelfD = 1.15;
-    const shelfH = 2.25;
-    const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6'];
+    const shelfW = 5.2;
+    const shelfD = 1.38;
+    const shelfH = 2.35;
+    const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16'];
     const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
+    const productRows = [0.46, 0.86, 1.26, 1.66, 2.02];
+    const productSlots = Array.from({ length: 10 });
+    const shopAction = lang === 'fa' ? 'مشاهده محصولات' : 'View products';
     return (
       <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
         <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[shelfW + 0.75, shelfD + 1.05]} />
-          <meshStandardMaterial color={categoryColor || accent} transparent opacity={0.16} roughness={0.82} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+          <planeGeometry args={[shelfW + 1.1, shelfD + 1.45]} />
+          <meshStandardMaterial color={categoryColor || accent} transparent opacity={0.13} roughness={0.82} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         </mesh>
 
-        <RoundedBox args={[shelfW, shelfH, shelfD]} radius={0.08} smoothness={3} position={[0, shelfH / 2, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#f8fafc" roughness={0.52} metalness={0.08} />
+        {/* Double-sided supermarket gondola shelf with end caps, price rails and stocked rows. */}
+        <RoundedBox args={[shelfW, shelfH, 0.22]} radius={0.055} smoothness={3} position={[0, shelfH / 2, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#e5e7eb" roughness={0.46} metalness={0.12} />
         </RoundedBox>
-        <mesh position={[0, shelfH + 0.06, -shelfD / 2 - 0.04]}>
-          <boxGeometry args={[shelfW + 0.18, 0.18, 0.16]} />
-          <meshStandardMaterial color={categoryColor || accent} emissive={categoryColor || accent} emissiveIntensity={0.22} toneMapped={false} />
-        </mesh>
-
-        {[0.42, 0.88, 1.34, 1.8].map((y, row) => (
-          <group key={row}>
-            <mesh position={[0, y - 0.2, -shelfD / 2 - 0.02]}>
-              <boxGeometry args={[shelfW * 0.92, 0.055, 0.22]} />
-              <meshStandardMaterial color="#cbd5e1" roughness={0.45} metalness={0.18} />
-            </mesh>
-            {Array.from({ length: 8 }).map((_, i) => {
-              const px = (i - 3.5) * 0.52;
-              const color = productColors[(i + row + (index ?? 0)) % productColors.length];
-              return (
-                <mesh key={i} position={[px, y, -shelfD / 2 - 0.14]}>
-                  <boxGeometry args={[0.34, 0.36 + (i % 3) * 0.06, 0.22]} />
-                  <meshStandardMaterial color={color} roughness={0.48} metalness={0.03} />
+        <RoundedBox args={[shelfW + 0.18, 0.18, shelfD + 0.12]} radius={0.045} smoothness={3} position={[0, 0.12, 0]} castShadow receiveShadow>
+          <meshStandardMaterial color="#64748b" roughness={0.42} metalness={0.18} />
+        </RoundedBox>
+        {[-1, 1].map(side => (
+          <group key={side}>
+            {productRows.map((y, row) => (
+              <group key={row}>
+                <mesh position={[0, y - 0.18, side * (shelfD / 2 - 0.1)]}>
+                  <boxGeometry args={[shelfW * 0.92, 0.06, 0.46]} />
+                  <meshStandardMaterial color="#d1d5db" roughness={0.42} metalness={0.18} />
                 </mesh>
-              );
-            })}
+                <mesh position={[0, y - 0.03, side * (shelfD / 2 + 0.155)]}>
+                  <boxGeometry args={[shelfW * 0.88, 0.055, 0.045]} />
+                  <meshStandardMaterial color="#facc15" emissive="#f59e0b" emissiveIntensity={0.25} toneMapped={false} />
+                </mesh>
+                {productSlots.map((_, i) => {
+                  const px = (i - 4.5) * 0.45;
+                  const color = productColors[(i + row + (index ?? 0)) % productColors.length];
+                  const h = 0.28 + ((i + row) % 3) * 0.08;
+                  return (
+                    <group key={i} position={[px, y, side * (shelfD / 2 + 0.02)]}>
+                      {(i + row) % 4 === 0 ? (
+                        <mesh rotation={[Math.PI / 2, 0, 0]}>
+                          <cylinderGeometry args={[0.13, 0.13, 0.22, 18]} />
+                          <meshStandardMaterial color={color} roughness={0.42} metalness={0.04} />
+                        </mesh>
+                      ) : (
+                        <mesh>
+                          <boxGeometry args={[0.28, h, 0.2]} />
+                          <meshStandardMaterial color={color} roughness={0.46} metalness={0.03} />
+                        </mesh>
+                      )}
+                      <mesh position={[0, -h / 2 + 0.08, side * 0.105]}>
+                        <boxGeometry args={[0.2, 0.045, 0.018]} />
+                        <meshBasicMaterial color="#ffffff" toneMapped={false} />
+                      </mesh>
+                    </group>
+                  );
+                })}
+              </group>
+            ))}
+          </group>
+        ))}
+        {[-1, 1].map(x => (
+          <group key={x} position={[x * (shelfW / 2 + 0.16), 0, 0]}>
+            <RoundedBox args={[0.36, shelfH * 0.88, shelfD + 0.22]} radius={0.055} smoothness={3} position={[0, shelfH * 0.45, 0]} castShadow>
+              <meshStandardMaterial color="#f8fafc" roughness={0.48} metalness={0.08} />
+            </RoundedBox>
+            {[0.56, 1.02, 1.48].map((y, row) => (
+              <mesh key={row} position={[0, y, 0]}>
+                <boxGeometry args={[0.28, 0.24, shelfD * 0.72]} />
+                <meshStandardMaterial color={productColors[(row + (index ?? 0)) % productColors.length]} roughness={0.5} />
+              </mesh>
+            ))}
           </group>
         ))}
 
-        <CanvasLabel text={categoryLabel} width={2.55} height={0.3} position={[0, shelfH + 0.43, -shelfD / 2 - 0.12]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <mesh position={[0, shelfH + 0.12, 0]}>
+          <boxGeometry args={[shelfW + 0.36, 0.16, shelfD + 0.24]} />
+          <meshStandardMaterial color={categoryColor || accent} emissive={categoryColor || accent} emissiveIntensity={0.25} toneMapped={false} />
+        </mesh>
+
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, -shelfD / 2 - 0.2]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, shelfD / 2 + 0.2]} rotation={[0, Math.PI, 0]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
         <CanvasLabel
           text={name}
           width={shelfW * 0.82}
           height={0.38}
-          position={[0, shelfH + 0.08, -shelfD / 2 - 0.14]}
+          position={[0, shelfH + 0.14, -shelfD / 2 - 0.21]}
           bg="rgba(15,23,42,.9)"
           color="#ffffff"
           onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf_sign'); }}
           onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
           onPointerOut={() => { document.body.style.cursor = 'auto'; }}
         />
+        <CanvasLabel
+          text={name}
+          width={shelfW * 0.82}
+          height={0.38}
+          position={[0, shelfH + 0.14, shelfD / 2 + 0.21]}
+          rotation={[0, Math.PI, 0]}
+          bg="rgba(15,23,42,.9)"
+          color="#ffffff"
+          onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf_sign_back'); }}
+          onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+          onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+        />
         {booth.logo && (
-          <SafeImage url={booth.logo} width={0.52} height={0.52} position={[-shelfW / 2 + 0.42, shelfH + 0.08, -shelfD / 2 - 0.13]} />
+          <>
+            <SafeImage url={booth.logo} width={0.52} height={0.52} position={[-shelfW / 2 + 0.42, shelfH + 0.14, -shelfD / 2 - 0.2]} />
+            <SafeImage url={booth.logo} width={0.52} height={0.52} position={[shelfW / 2 - 0.42, shelfH + 0.14, shelfD / 2 + 0.2]} rotation={[0, Math.PI, 0]} />
+          </>
         )}
         {booth.shopSlug && (
-          <group position={[0, 0.18, -shelfD / 2 - 0.34]}>
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf'); }}
-              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-            >
-              <planeGeometry args={[2.2, 0.52]} />
-              <meshStandardMaterial color="#ffffff" emissive={categoryColor || accent} emissiveIntensity={0.18} roughness={0.42} />
-            </mesh>
-            <CanvasLabel text={lang === 'fa' ? 'مشاهده محصولات' : 'View products'} width={1.9} height={0.28} position={[0, 0.022, 0]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.94)" color="#0f172a" onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf'); }} />
-          </group>
+          [-1, 1].map(side => (
+            <group key={side} position={[0, 0.16, side * (shelfD / 2 + 0.42)]}>
+              <mesh
+                rotation={[-Math.PI / 2, 0, 0]}
+                onClick={(e) => { e.stopPropagation(); trackBoothSelect(side < 0 ? 'supermarket_shelf_front' : 'supermarket_shelf_back'); }}
+                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+                onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+              >
+                <planeGeometry args={[2.35, 0.54]} />
+                <meshStandardMaterial color="#ffffff" emissive={categoryColor || accent} emissiveIntensity={0.2} roughness={0.42} />
+              </mesh>
+              <CanvasLabel text={shopAction} width={2.02} height={0.28} position={[0, 0.022, 0]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.94)" color="#0f172a" onClick={(e) => { e.stopPropagation(); trackBoothSelect(side < 0 ? 'supermarket_shelf_front' : 'supermarket_shelf_back'); }} />
+            </group>
+          ))
         )}
 
         {(booth.hotspots || []).map(h => (
