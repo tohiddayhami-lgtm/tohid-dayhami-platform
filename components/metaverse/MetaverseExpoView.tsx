@@ -211,6 +211,10 @@ const useExpoVoice = (args: {
 
   const startVoice = useCallback(async () => {
     if (!enabled || activeRef.current) return;
+    if (xrActiveRef.current) {
+      setVoiceError('');
+      return;
+    }
     try {
       setVoiceError('');
       if (!streamRef.current || !streamRef.current.getAudioTracks().some(t => t.readyState === 'live')) {
