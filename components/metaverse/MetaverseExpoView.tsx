@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoPresence, MetaExpoVoiceSignal, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -15,7 +15,7 @@ import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
-import { logMetaExpoEvent, markMetaExpoPresenceInactive, sendMetaExpoVoiceSignal, subscribeMetaExpoPresence, subscribeMetaExpoVoiceSignals, upsertMetaExpoPresence } from '../../services/firebaseService';
+import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
@@ -51,15 +51,15 @@ const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> 
       <group key={v.visitorId} position={[v.x || 0, 0, v.z || 0]} rotation={[0, v.heading || 0, 0]}>
         <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.34, 0.43, 48]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} transparent opacity={0.82} toneMapped={false} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={v.color || '#38bdf8'} transparent opacity={0.82} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
         <mesh position={[0, 0.86, 0]}>
           <cylinderGeometry args={[0.13, 0.28, 1.55, 36, 1, true]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} transparent opacity={0.18} toneMapped={false} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={v.color || '#38bdf8'} transparent opacity={0.18} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
         <mesh position={[0, 1.12, 0]} castShadow>
           <sphereGeometry args={[0.2, 32, 16]} />
-          <meshStandardMaterial color="#f8fafc" emissive={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} emissiveIntensity={0.35} metalness={0.18} roughness={0.25} />
+          <meshStandardMaterial color="#f8fafc" emissive={v.color || '#38bdf8'} emissiveIntensity={0.35} metalness={0.18} roughness={0.25} />
         </mesh>
         <mesh position={[0, 0.68, 0]}>
           <cylinderGeometry args={[0.16, 0.16, 0.42, 32]} />
@@ -67,9 +67,8 @@ const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> 
         </mesh>
         <mesh position={[0, 1.52, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.28, 0.31, 48]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#ffffff'} transparent opacity={0.72} toneMapped={false} side={THREE.DoubleSide} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.72} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
-        {v.voiceActive && <CanvasLabel text="LIVE" width={0.48} height={0.14} position={[0, 1.78, 0]} bg="rgba(22,163,74,.9)" color="#ffffff" />}
         <CanvasLabel text={v.name || 'Guest'} width={0.9} height={0.22} position={[0, 1.98, 0]} bg="rgba(15,23,42,.78)" color="#ffffff" />
       </group>
     ))}
@@ -86,205 +85,6 @@ const VrPoseSync: React.FC<{ originRef: React.RefObject<THREE.Group | null>; pos
     poseRef.current = { ...poseRef.current, x: p.x, z: p.z };
   });
   return null;
-};
-
-type VoicePeer = { pc: RTCPeerConnection; remoteId: string; outbound: boolean };
-const rtcConfig: RTCConfiguration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-const useExpoVoice = (args: {
-  enabled: boolean;
-  roomId: string;
-  bazaar: MetaBazaar;
-  visitor: { id: string; name: string; color: string };
-  visitors: MetaExpoPresence[];
-  xrActiveRef: React.MutableRefObject<boolean>;
-}) => {
-  const { enabled, roomId, bazaar, visitor, visitors, xrActiveRef } = args;
-  const [voiceActive, setVoiceActive] = useState(false);
-  const [voiceError, setVoiceError] = useState('');
-  const [voiceReady, setVoiceReady] = useState(false);
-  const activeRef = useRef(false);
-  const streamRef = useRef<MediaStream | null>(null);
-  const peersRef = useRef<Map<string, VoicePeer>>(new Map());
-  const processedRef = useRef<Set<string>>(new Set());
-  const audiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
-  const visitorsRef = useRef<MetaExpoPresence[]>(visitors);
-  useEffect(() => { visitorsRef.current = visitors; }, [visitors]);
-
-  const signal = useCallback((toVisitorId: string, type: MetaExpoVoiceSignal['type'], callId: string, payload?: unknown) => {
-    if (!enabled || !toVisitorId) return;
-    sendMetaExpoVoiceSignal({
-      id: `mev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      roomId,
-      callId,
-      bazaarId: bazaar.id,
-      bazaarSlug: bazaar.slug,
-      fromVisitorId: visitor.id,
-      toVisitorId,
-      type,
-      payload: payload == null ? undefined : JSON.stringify(payload),
-      timestamp: new Date().toISOString(),
-    });
-  }, [bazaar.id, bazaar.slug, enabled, roomId, visitor.id]);
-
-  const closeCall = useCallback((callId: string, notify = false) => {
-    const entry = peersRef.current.get(callId);
-    if (!entry) return;
-    if (notify) signal(entry.remoteId, 'hangup', callId);
-    try {
-      entry.pc.ontrack = null;
-      entry.pc.onicecandidate = null;
-      entry.pc.close();
-    } catch {}
-    peersRef.current.delete(callId);
-    const audio = audiosRef.current.get(callId);
-    if (audio) { audio.pause(); audio.srcObject = null; audiosRef.current.delete(callId); }
-  }, [signal]);
-
-  const ensurePeer = useCallback((callId: string, remoteId: string, outbound: boolean) => {
-    const existing = peersRef.current.get(callId);
-    if (existing) return existing.pc;
-    if (typeof RTCPeerConnection === 'undefined') throw new Error('rtc-unavailable');
-    const pc = new RTCPeerConnection(rtcConfig);
-    pc.onicecandidate = (e) => { if (e.candidate) signal(remoteId, 'ice', callId, e.candidate.toJSON()); };
-    pc.ontrack = (e) => {
-      const stream = e.streams[0];
-      if (!stream) return;
-      let audio = audiosRef.current.get(callId);
-      if (!audio) {
-        audio = new Audio();
-        audio.autoplay = true;
-        audio.playsInline = true;
-        audiosRef.current.set(callId, audio);
-      }
-      audio.srcObject = stream;
-      audio.play().catch(() => {});
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') closeCall(callId);
-    };
-    if (outbound && streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => pc.addTrack(track, streamRef.current!));
-    }
-    peersRef.current.set(callId, { pc, remoteId, outbound });
-    return pc;
-  }, [closeCall, signal]);
-
-  const startOutboundCall = useCallback(async (remoteId: string) => {
-    if (!streamRef.current || remoteId === visitor.id) return;
-    const callId = `${roomId}_${visitor.id}_${remoteId}`;
-    if (peersRef.current.has(callId)) return;
-    try {
-      const pc = ensurePeer(callId, remoteId, true);
-      const offer = await pc.createOffer({ offerToReceiveAudio: false });
-      await pc.setLocalDescription(offer);
-      signal(remoteId, 'offer', callId, offer);
-    } catch {
-      closeCall(callId);
-    }
-  }, [ensurePeer, roomId, signal, visitor.id]);
-
-  const prepareVoice = useCallback(async () => {
-    if (!enabled) return false;
-    try {
-      setVoiceError('');
-      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
-        setVoiceError('unsupported');
-        return false;
-      }
-      if (streamRef.current && streamRef.current.getAudioTracks().some(t => t.readyState === 'live')) {
-        streamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
-        setVoiceReady(true);
-        return true;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      stream.getAudioTracks().forEach(t => { t.enabled = false; });
-      streamRef.current = stream;
-      setVoiceReady(true);
-      return true;
-    } catch {
-      setVoiceError('microphone');
-      setVoiceReady(false);
-      return false;
-    }
-  }, [enabled]);
-
-  const startVoice = useCallback(async () => {
-    if (!enabled || activeRef.current) return;
-    if (xrActiveRef.current) {
-      setVoiceError('');
-      return;
-    }
-    try {
-      setVoiceError('');
-      if (!streamRef.current || !streamRef.current.getAudioTracks().some(t => t.readyState === 'live')) {
-        if (xrActiveRef.current) {
-          setVoiceError('prepare');
-          return;
-        }
-        const ok = await prepareVoice();
-        if (!ok) return;
-      }
-      streamRef.current?.getAudioTracks().forEach(t => { t.enabled = true; });
-      activeRef.current = true;
-      setVoiceActive(true);
-      await Promise.allSettled(visitorsRef.current.filter(v => v.visitorId !== visitor.id).map(v => startOutboundCall(v.visitorId)));
-    } catch {
-      setVoiceError('microphone');
-      activeRef.current = false;
-      setVoiceActive(false);
-    }
-  }, [enabled, prepareVoice, startOutboundCall, visitor.id, xrActiveRef]);
-
-  const stopVoice = useCallback(() => {
-    if (!activeRef.current && !streamRef.current) return;
-    activeRef.current = false;
-    setVoiceActive(false);
-    try { streamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; }); } catch {}
-    [...peersRef.current.entries()].forEach(([callId, entry]) => {
-      if (entry.outbound) closeCall(callId, true);
-    });
-  }, [closeCall]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    return subscribeMetaExpoVoiceSignals(roomId, visitor.id, async (signals) => {
-      for (const s of signals) {
-        if (processedRef.current.has(s.id) || s.fromVisitorId === visitor.id) continue;
-        processedRef.current.add(s.id);
-        try {
-          if (s.type === 'hangup') { closeCall(s.callId); continue; }
-          if (s.type === 'offer') {
-            if (typeof RTCPeerConnection === 'undefined') continue;
-            const pc = ensurePeer(s.callId, s.fromVisitorId, false);
-            await pc.setRemoteDescription(JSON.parse(s.payload || '{}') as RTCSessionDescriptionInit);
-            const answer = await pc.createAnswer({ offerToReceiveAudio: true });
-            await pc.setLocalDescription(answer);
-            signal(s.fromVisitorId, 'answer', s.callId, answer);
-          } else if (s.type === 'answer') {
-            const entry = peersRef.current.get(s.callId);
-            if (entry) await entry.pc.setRemoteDescription(JSON.parse(s.payload || '{}') as RTCSessionDescriptionInit);
-          } else if (s.type === 'ice') {
-            const entry = peersRef.current.get(s.callId);
-            if (entry && s.payload) await entry.pc.addIceCandidate(JSON.parse(s.payload) as RTCIceCandidateInit);
-          }
-        } catch {}
-      }
-      if (processedRef.current.size > 500) processedRef.current = new Set([...processedRef.current].slice(-220));
-    });
-  }, [closeCall, enabled, ensurePeer, roomId, signal, visitor.id]);
-
-  useEffect(() => {
-    if (!voiceActive) return;
-    visitors.forEach(v => { if (v.visitorId !== visitor.id) startOutboundCall(v.visitorId); });
-  }, [startOutboundCall, visitor.id, visitors, voiceActive]);
-
-  useEffect(() => () => {
-    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
-    [...peersRef.current.keys()].forEach(callId => closeCall(callId, true));
-  }, [closeCall]);
-
-  return { voiceActive, voiceError, voiceReady, prepareVoice, startVoice, stopVoice };
 };
 
 const ExpoAnalyticsTracker: React.FC<{
@@ -393,10 +193,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
   const presenceEnabled = expo.presence?.enabled !== false;
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
-  const voiceEnabled = presenceEnabled && expo.presence?.voiceEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
   const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
-  const { voiceActive, voiceError, voiceReady, prepareVoice, startVoice, stopVoice } = useExpoVoice({ enabled: voiceEnabled, roomId, bazaar, visitor, visitors, xrActiveRef });
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
     logMetaExpoEvent(type, { id: bazaar.id, slug: bazaar.slug, name: bazaar.name }, opts);
   }, [bazaar.id, bazaar.slug, bazaar.name]);
@@ -441,7 +239,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         z: pose.z,
         heading: pose.heading,
         isVr: !!originRef.current && Math.abs(originRef.current.position.z - startZ) > 0.02,
-        voiceActive,
         lastSeen: new Date().toISOString(),
         active: true,
       };
@@ -460,7 +257,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       document.removeEventListener('visibilitychange', onVisibilityChange);
       markInactive();
     };
-  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, visitor.name, voiceActive]);
+  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, visitor.name]);
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -477,8 +274,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     seated: T ? 'نشسته' : 'Seated',
     standing: T ? 'ایستاده' : 'Standing',
     heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
-    micReady: T ? 'میکروفون آماده' : 'Mic ready',
-    micPrepare: T ? 'آماده‌سازی میکروفون' : 'Prepare mic',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
     helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
@@ -499,9 +294,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onFloorTeleport={(x, z) => teleportRef.current?.(x, z)}
               onVrTeleport={(v) => { originRef.current?.position.copy(v); }}
               onTrack={trackExpoEvent}
-              onVoiceStart={voiceEnabled ? startVoice : undefined}
-              onVoiceEnd={voiceEnabled ? stopVoice : undefined}
-              voiceActive={voiceActive}
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
@@ -530,15 +322,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             <button onClick={() => setPointerLock(p => !p)} className={chip + (pointerLock ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🔒 {ui.lock}</button>
           )}
           {expo.music && <button onClick={toggleMusic} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{muted ? '🔇' : '🔊'}</button>}
-          {voiceEnabled && (
-            <button onClick={() => prepareVoice()} className={chip + (voiceReady ? ' bg-emerald-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🎙 {voiceReady ? ui.micReady : ui.micPrepare}</button>
-          )}
           {caps.vrSupported && (
             <button onClick={() => setSeated(s => !s)} title={ui.heightHint} className={chip + (seated ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>
               {seated ? '🪑 ' + ui.seated : '🧍 ' + ui.standing}
             </button>
           )}
-          {caps.vrSupported && <VRButton store={store} label={ui.vr} onBeforeEnter={voiceEnabled ? prepareVoice : undefined} />}
+          {caps.vrSupported && <VRButton store={store} label={ui.vr} />}
         </div>
       </div>
 
@@ -561,14 +350,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
       {/* Hotspot modal */}
       <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
-      {voiceError && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-20 z-50 rounded-xl bg-red-600/90 text-white text-xs font-bold px-4 py-2 shadow-lg">
-          {voiceError === 'prepare'
-            ? (T ? 'برای صحبت در عینک، قبل از ورود به VR دکمه «آماده‌سازی میکروفون» را بزنید.' : 'To speak in VR, press "Prepare mic" before entering VR.')
-            : (T ? 'دسترسی میکروفون فعال نشد. اجازه میکروفون مرورگر را بررسی کنید.' : 'Microphone could not start. Check browser microphone permission.')}
-        </div>
-      )}
-
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}
 

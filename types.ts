@@ -691,7 +691,6 @@ export interface ExpoMeetWall {
 export interface ExpoPresenceSettings {
   enabled?: boolean;
   avatarsEnabled?: boolean;
-  voiceEnabled?: boolean;
 }
 
 export interface MetaverseExpo {
@@ -721,7 +720,7 @@ export interface MetaverseExpo {
   wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads
   presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
   meetWall?: ExpoMeetWall;      // Google Meet call screen on a selected wall
-  presence?: ExpoPresenceSettings; // realtime visitors + minimal digital markers + push-to-talk voice
+  presence?: ExpoPresenceSettings; // realtime visitors + minimal digital markers
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
 }
 
@@ -737,24 +736,8 @@ export interface MetaExpoPresence {
   z: number;
   heading: number;
   isVr?: boolean;
-  voiceActive?: boolean;
   lastSeen: string;
   active?: boolean;
-}
-
-export type MetaExpoVoiceSignalType = 'offer' | 'answer' | 'ice' | 'hangup';
-
-export interface MetaExpoVoiceSignal {
-  id: string;
-  roomId: string;
-  callId: string;
-  bazaarId: string;
-  bazaarSlug: string;
-  fromVisitorId: string;
-  toVisitorId: string;
-  type: MetaExpoVoiceSignalType;
-  payload?: string;
-  timestamp: string;
 }
 
 // A language a shop can be displayed in (beyond the default fa/en)

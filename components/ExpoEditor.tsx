@@ -102,10 +102,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
     liveT: T ? 'حضور آنلاین و تماس تصویری' : 'Live presence & video call',
-    liveHint: T ? 'بازدیدکننده‌ها در نمایشگاه با نشانگر دیجیتال مینیمال دیده می‌شوند، می‌توانند با دکمه میکروفون جلوی غرفه صحبت کنند و از نمایشگر روی دیوار وارد Google Meet شوند.' : 'Visitors appear with minimal digital markers, can speak through booth microphone buttons, and can join Google Meet from a wall screen.',
+    liveHint: T ? 'بازدیدکننده‌ها در نمایشگاه با نشانگر دیجیتال مینیمال دیده می‌شوند و برای تماس صوتی/تصویری از نمایشگر Google Meet روی دیوار استفاده می‌کنند.' : 'Visitors appear with minimal digital markers and use the Google Meet wall screen for voice/video calls.',
     presenceEnable: T ? 'نمایش کاربران آنلاین' : 'Show online visitors',
     avatarsEnable: T ? 'نمایش نشانگر دیجیتال کاربران' : 'Show visitor markers',
-    voiceEnable: T ? 'فعال‌سازی میکروفون آنلاین' : 'Enable live microphone',
     meetEnable: T ? 'نمایش تماس Google Meet روی دیوار' : 'Show Google Meet wall screen',
     meetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
     meetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
@@ -759,14 +758,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             )}
           </div>
 
-          {/* Live presence / voice / Google Meet wall */}
+          {/* Live presence / Google Meet wall */}
           <div className="border border-emerald-100 bg-emerald-50/35 rounded-xl p-4">
             <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
               <h5 className="font-bold text-emerald-800 text-sm">💬 {t.liveT}</h5>
               <div className="flex items-center gap-3 flex-wrap">
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.enabled !== false} onChange={ev => setPresence({ enabled: ev.target.checked })} />{t.presenceEnable}</label>
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.avatarsEnabled !== false} onChange={ev => setPresence({ avatarsEnabled: ev.target.checked })} />{t.avatarsEnable}</label>
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.voiceEnabled !== false} onChange={ev => setPresence({ voiceEnabled: ev.target.checked })} />{t.voiceEnable}</label>
               </div>
             </div>
             <p className="text-[11px] text-emerald-700/75 mb-3">{t.liveHint}</p>

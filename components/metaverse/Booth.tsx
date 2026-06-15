@@ -20,9 +20,6 @@ interface Props {
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
-  onVoiceStart?: () => void;
-  onVoiceEnd?: () => void;
-  voiceActive?: boolean;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -834,8 +831,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, onVoiceStart, onVoiceEnd, voiceActive }) => {
-  const inXR = useXR((s) => !!s.session);
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -904,16 +900,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     targetType,
     side: 'counter',
   });
-  const pressVoice = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
-    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch {}
-    onVoiceStart?.();
-  };
-  const releaseVoice = (e?: ThreeEvent<PointerEvent>) => {
-    e?.stopPropagation();
-    try { if (e) (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
-    onVoiceEnd?.();
-  };
   useEffect(() => () => {
     managerAudioRefs.current.forEach(a => { if (a) { a.pause(); a.src = ''; } });
   }, []);
@@ -1120,39 +1106,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           />
-        </group>
-      )}
-
-      {/* Push-to-talk microphone: hold mouse / VR trigger to speak, release to cut the mic. */}
-      {onVoiceStart && onVoiceEnd && (
-        <group position={[W / 2 - 0.42, 1.22, D / 2 + 0.16]}>
-          {inXR ? (
-            <mesh>
-              <circleGeometry args={[0.19, 32]} />
-              <meshBasicMaterial color="#475569" transparent opacity={0.55} toneMapped={false} />
-            </mesh>
-          ) : (
-            <mesh
-              onPointerDown={pressVoice}
-              onPointerUp={releaseVoice}
-              onPointerCancel={releaseVoice}
-              onLostPointerCapture={() => onVoiceEnd?.()}
-              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-            >
-              <circleGeometry args={[0.19, 32]} />
-              <meshBasicMaterial color={voiceActive ? '#16a34a' : '#0f172a'} transparent opacity={0.9} toneMapped={false} />
-            </mesh>
-          )}
-          <mesh position={[0, 0.035, 0.012]}>
-            <capsuleGeometry args={[0.045, 0.1, 8, 16]} />
-            <meshBasicMaterial color="#ffffff" toneMapped={false} />
-          </mesh>
-          <mesh position={[0, -0.075, 0.012]}>
-            <boxGeometry args={[0.13, 0.018, 0.012]} />
-            <meshBasicMaterial color="#ffffff" toneMapped={false} />
-          </mesh>
-          <CanvasLabel text={inXR ? (lang === 'fa' ? 'غیرفعال در VR' : 'VR safe') : (lang === 'fa' ? 'نگه دار' : 'HOLD')} width={0.56} height={0.12} position={[0, -0.28, 0.01]} bg="rgba(15,23,42,.72)" color="#ffffff" bold={false} />
         </group>
       )}
 
