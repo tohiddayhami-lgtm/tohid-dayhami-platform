@@ -690,7 +690,6 @@ export interface ExpoMeetWall {
 
 export interface ExpoPresenceSettings {
   enabled?: boolean;
-  chatEnabled?: boolean;
   avatarsEnabled?: boolean;
   voiceEnabled?: boolean;
 }
@@ -722,7 +721,7 @@ export interface MetaverseExpo {
   wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads
   presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
   meetWall?: ExpoMeetWall;      // Google Meet call screen on a selected wall
-  presence?: ExpoPresenceSettings; // realtime visitors + chat + simple digital avatars
+  presence?: ExpoPresenceSettings; // realtime visitors + minimal digital markers + push-to-talk voice
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
 }
 
@@ -741,18 +740,6 @@ export interface MetaExpoPresence {
   voiceActive?: boolean;
   lastSeen: string;
   active?: boolean;
-}
-
-export interface MetaExpoChatMessage {
-  id: string;
-  roomId: string;
-  bazaarId: string;
-  bazaarSlug: string;
-  visitorId: string;
-  name: string;
-  color: string;
-  text: string;
-  timestamp: string;
 }
 
 export type MetaExpoVoiceSignalType = 'offer' | 'answer' | 'ice' | 'hangup';

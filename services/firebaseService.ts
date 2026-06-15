@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoChatMessage, MetaExpoPresence, MetaExpoVoiceSignal } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoVoiceSignal } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -1229,7 +1229,7 @@ export const fetchMetaExpoEvents = async (bazaarId: string): Promise<MetaExpoEve
     } catch { return []; }
 };
 
-// ── Metaverse Expo live presence + chat ────────────────────────────────────
+// ── Metaverse Expo live presence + voice signaling ─────────────────────────
 export const upsertMetaExpoPresence = async (presence: MetaExpoPresence): Promise<void> => {
     try {
         const data = sanitizeData(presence);
@@ -1265,39 +1265,6 @@ export const subscribeMetaExpoPresence = (
             inner = onSnapshot(
                 query(collection(db, 'metaExpoPresence'), where('roomId', '==', roomId), limit(80)),
                 snap => normalize(snap.docs.map(d => d.data() as MetaExpoPresence)),
-                () => {}
-            );
-        }
-    });
-    return () => { gone = true; inner?.(); };
-};
-
-export const sendMetaExpoChatMessage = async (message: MetaExpoChatMessage): Promise<void> => {
-    try {
-        const data = sanitizeData(message);
-        const proxy = await checkProxyMode();
-        if (proxy) await proxyWrite('metaExpoChatMessages', message.id, data);
-        else await setDoc(doc(db, 'metaExpoChatMessages', message.id), data);
-    } catch {}
-};
-
-export const subscribeMetaExpoChatMessages = (
-    roomId: string,
-    callback: (messages: MetaExpoChatMessage[]) => void
-): (() => void) => {
-    const normalize = (items: MetaExpoChatMessage[]) => callback(items
-        .filter(m => m.roomId === roomId)
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-        .slice(-80));
-    let inner: (() => void) | null = null;
-    let gone = false;
-    checkProxyMode().then(proxy => {
-        if (gone) return;
-        if (proxy) inner = proxyPoll<MetaExpoChatMessage>('metaExpoChatMessages', normalize, { intervalMs: 2500 });
-        else {
-            inner = onSnapshot(
-                query(collection(db, 'metaExpoChatMessages'), where('roomId', '==', roomId), limit(120)),
-                snap => normalize(snap.docs.map(d => d.data() as MetaExpoChatMessage)),
                 () => {}
             );
         }

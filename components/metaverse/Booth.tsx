@@ -905,12 +905,12 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   });
   const pressVoice = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch {}
     onVoiceStart?.();
   };
   const releaseVoice = (e?: ThreeEvent<PointerEvent>) => {
     e?.stopPropagation();
-    if (e) (e.target as Element).releasePointerCapture?.(e.pointerId);
+    try { if (e) (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
     onVoiceEnd?.();
   };
   useEffect(() => () => {

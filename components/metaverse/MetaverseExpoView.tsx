@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoChatMessage, MetaExpoPresence, MetaExpoVoiceSignal, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaExpoVoiceSignal, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -15,7 +15,7 @@ import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
-import { logMetaExpoEvent, markMetaExpoPresenceInactive, sendMetaExpoChatMessage, sendMetaExpoVoiceSignal, subscribeMetaExpoChatMessages, subscribeMetaExpoPresence, subscribeMetaExpoVoiceSignals, upsertMetaExpoPresence } from '../../services/firebaseService';
+import { logMetaExpoEvent, markMetaExpoPresenceInactive, sendMetaExpoVoiceSignal, subscribeMetaExpoPresence, subscribeMetaExpoVoiceSignals, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
@@ -49,47 +49,28 @@ const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> 
   <>
     {visitors.filter(v => v.visitorId !== selfId).map(v => (
       <group key={v.visitorId} position={[v.x || 0, 0, v.z || 0]} rotation={[0, v.heading || 0, 0]}>
-        <mesh position={[0, 1.02, 0]} castShadow>
-          <boxGeometry args={[0.5, 0.62, 0.32]} />
-          <meshStandardMaterial color={v.color || '#2563eb'} roughness={0.32} metalness={0.38} />
+        <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.34, 0.43, 48]} />
+          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} transparent opacity={0.82} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
-        <mesh position={[0, 1.53, 0]} castShadow>
-          <boxGeometry args={[0.42, 0.34, 0.36]} />
-          <meshStandardMaterial color="#cbd5e1" roughness={0.25} metalness={0.7} />
+        <mesh position={[0, 0.86, 0]}>
+          <cylinderGeometry args={[0.13, 0.28, 1.55, 36, 1, true]} />
+          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} transparent opacity={0.18} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
-        <mesh position={[-0.1, 1.55, -0.19]}>
-          <boxGeometry args={[0.08, 0.055, 0.018]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#38bdf8'} />
+        <mesh position={[0, 1.12, 0]} castShadow>
+          <sphereGeometry args={[0.2, 32, 16]} />
+          <meshStandardMaterial color="#f8fafc" emissive={v.voiceActive ? '#22c55e' : (v.color || '#38bdf8')} emissiveIntensity={0.35} metalness={0.18} roughness={0.25} />
         </mesh>
-        <mesh position={[0.1, 1.55, -0.19]}>
-          <boxGeometry args={[0.08, 0.055, 0.018]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#38bdf8'} />
+        <mesh position={[0, 0.68, 0]}>
+          <cylinderGeometry args={[0.16, 0.16, 0.42, 32]} />
+          <meshStandardMaterial color="#e2e8f0" emissive={v.color || '#38bdf8'} emissiveIntensity={0.12} metalness={0.35} roughness={0.3} />
         </mesh>
-        <mesh position={[0, 1.78, 0]}>
-          <cylinderGeometry args={[0.018, 0.018, 0.22, 8]} />
-          <meshStandardMaterial color="#94a3b8" metalness={0.6} roughness={0.3} />
+        <mesh position={[0, 1.52, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.28, 0.31, 48]} />
+          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#ffffff'} transparent opacity={0.72} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
-        <mesh position={[0, 1.91, 0]}>
-          <sphereGeometry args={[0.045, 12, 8]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#facc15'} />
-        </mesh>
-        {[-0.42, 0.42].map((x) => (
-          <mesh key={x} position={[x, 1.02, 0]} rotation={[0, 0, x < 0 ? -0.25 : 0.25]} castShadow>
-            <boxGeometry args={[0.12, 0.56, 0.12]} />
-            <meshStandardMaterial color="#64748b" metalness={0.45} roughness={0.35} />
-          </mesh>
-        ))}
-        {[-0.16, 0.16].map((x) => (
-          <mesh key={x} position={[x, 0.48, 0]} castShadow>
-            <cylinderGeometry args={[0.08, 0.08, 0.18, 18]} />
-            <meshStandardMaterial color="#111827" metalness={0.4} roughness={0.45} />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.86, -0.18]}>
-          <circleGeometry args={[0.09, 24]} />
-          <meshBasicMaterial color={v.voiceActive ? '#22c55e' : '#e5e7eb'} />
-        </mesh>
-        <CanvasLabel text={v.name || 'Guest'} width={1} height={0.24} position={[0, 2.1, 0]} bg="rgba(15,23,42,.82)" color="#ffffff" />
+        {v.voiceActive && <CanvasLabel text="LIVE" width={0.48} height={0.14} position={[0, 1.78, 0]} bg="rgba(22,163,74,.9)" color="#ffffff" />}
+        <CanvasLabel text={v.name || 'Guest'} width={0.9} height={0.22} position={[0, 1.98, 0]} bg="rgba(15,23,42,.78)" color="#ffffff" />
       </group>
     ))}
   </>
@@ -103,120 +84,6 @@ const VrPoseSync: React.FC<{ originRef: React.RefObject<THREE.Group | null>; pos
     poseRef.current = { ...poseRef.current, x: p.x, z: p.z };
   });
   return null;
-};
-
-const XrChatBoard: React.FC<{ enabled: boolean; messages: MetaExpoChatMessage[]; lang: Language; voiceActive: boolean }> = ({ enabled, messages, lang, voiceActive }) => {
-  const inXR = useXR((s) => !!s.session);
-  const { camera } = useThree();
-  const ref = useRef<THREE.Group>(null);
-  const tmp = useMemo(() => ({
-    pos: new THREE.Vector3(),
-    dir: new THREE.Vector3(),
-    right: new THREE.Vector3(),
-    up: new THREE.Vector3(),
-  }), []);
-  useFrame(() => {
-    if (!ref.current || !inXR) return;
-    camera.getWorldPosition(tmp.pos);
-    camera.getWorldDirection(tmp.dir);
-    tmp.right.setFromMatrixColumn(camera.matrixWorld, 0);
-    tmp.up.setFromMatrixColumn(camera.matrixWorld, 1);
-    ref.current.position.copy(tmp.pos)
-      .addScaledVector(tmp.dir, 1.9)
-      .addScaledVector(tmp.right, lang === 'fa' ? -0.72 : 0.72)
-      .addScaledVector(tmp.up, -0.28);
-    ref.current.quaternion.copy(camera.quaternion);
-  });
-  if (!enabled || !inXR) return null;
-  const latest = messages.slice(-4);
-  const title = lang === 'fa' ? (voiceActive ? 'میکروفون روشن است' : 'چت زنده نمایشگاه') : (voiceActive ? 'Microphone live' : 'Expo live chat');
-  const trim = (s: string, n = 42) => s.length > n ? `${s.slice(0, n - 1)}…` : s;
-  return (
-    <group ref={ref}>
-      <mesh position={[0, 0, -0.015]}>
-        <planeGeometry args={[1.72, 0.88]} />
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.72} depthWrite={false} />
-      </mesh>
-      <CanvasLabel text={title} width={1.56} height={0.16} position={[0, 0.32, 0]} bg={voiceActive ? 'rgba(22,163,74,.92)' : 'rgba(30,41,59,.92)'} color="#ffffff" />
-      {latest.length === 0 ? (
-        <CanvasLabel text={lang === 'fa' ? 'هنوز پیامی نیست' : 'No messages yet'} width={1.32} height={0.14} position={[0, 0.08, 0]} bg="rgba(255,255,255,.12)" color="#e5e7eb" bold={false} />
-      ) : latest.map((m, i) => (
-        <CanvasLabel
-          key={m.id}
-          text={`${trim(m.name, 10)}: ${trim(m.text, 34)}`}
-          width={1.48}
-          height={0.12}
-          position={[0, 0.13 - i * 0.15, 0]}
-          bg="rgba(255,255,255,.10)"
-          color="#ffffff"
-          bold={false}
-          radius={16}
-        />
-      ))}
-    </group>
-  );
-};
-
-const LiveChatPanel: React.FC<{
-  enabled: boolean;
-  messages: MetaExpoChatMessage[];
-  visitors: MetaExpoPresence[];
-  visitor: { id: string; name: string; color: string };
-  onSend: (text: string) => void;
-  lang: Language;
-}> = ({ enabled, messages, visitors, visitor, onSend, lang }) => {
-  const [open, setOpen] = useState(true);
-  const [text, setText] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
-  const T = lang === 'fa';
-  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }); }, [messages.length, open]);
-  if (!enabled) return null;
-  const send = () => {
-    const v = text.trim();
-    if (!v) return;
-    onSend(v.slice(0, 500));
-    setText('');
-  };
-  return (
-    <div className={`absolute ${T ? 'left-3' : 'right-3'} bottom-3 z-50 pointer-events-auto w-[min(360px,calc(100vw-24px))]`}>
-      {!open ? (
-        <button onClick={() => setOpen(true)} className="w-full rounded-2xl bg-white/95 text-gray-900 shadow-lg px-4 py-3 text-sm font-bold flex items-center justify-between">
-          <span>{T ? 'چت آنلاین نمایشگاه' : 'Expo live chat'}</span>
-          <span className="text-xs text-emerald-600">{visitors.length} online</span>
-        </button>
-      ) : (
-        <div className="rounded-2xl bg-white/95 backdrop-blur shadow-2xl border border-white/70 overflow-hidden">
-          <div className="px-3 py-2 bg-slate-900 text-white flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-sm font-extrabold">{T ? 'چت آنلاین نمایشگاه' : 'Expo live chat'}</div>
-              <div className="text-[11px] text-white/65 truncate">{visitors.length} {T ? 'نفر آنلاین' : 'online'} · {visitor.name}</div>
-            </div>
-            <button onClick={() => setOpen(false)} className="text-white/70 hover:text-white text-lg leading-none">×</button>
-          </div>
-          <div ref={listRef} className="h-56 overflow-y-auto px-3 py-2 space-y-2">
-            {messages.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-8">{T ? 'هنوز پیامی ارسال نشده.' : 'No messages yet.'}</p>
-            ) : messages.map(m => (
-              <div key={m.id} className={`text-xs ${m.visitorId === visitor.id ? 'text-end' : 'text-start'}`}>
-                <div className="font-bold mb-0.5" style={{ color: m.color || '#2563eb' }}>{m.name}</div>
-                <div className={`inline-block max-w-[86%] rounded-2xl px-3 py-2 ${m.visitorId === visitor.id ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'}`}>{m.text}</div>
-              </div>
-            ))}
-          </div>
-          <div className="p-2 border-t border-gray-100 flex gap-2">
-            <input
-              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white"
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') send(); }}
-              placeholder={T ? 'پیام بنویسید...' : 'Write a message...'}
-            />
-            <button onClick={send} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold">{T ? 'ارسال' : 'Send'}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 };
 
 type VoicePeer = { pc: RTCPeerConnection; remoteId: string; outbound: boolean };
@@ -241,6 +108,7 @@ const useExpoVoice = (args: {
   useEffect(() => { visitorsRef.current = visitors; }, [visitors]);
 
   const signal = useCallback((toVisitorId: string, type: MetaExpoVoiceSignal['type'], callId: string, payload?: unknown) => {
+    if (!enabled || !toVisitorId) return;
     sendMetaExpoVoiceSignal({
       id: `mev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       roomId,
@@ -259,9 +127,11 @@ const useExpoVoice = (args: {
     const entry = peersRef.current.get(callId);
     if (!entry) return;
     if (notify) signal(entry.remoteId, 'hangup', callId);
-    entry.pc.ontrack = null;
-    entry.pc.onicecandidate = null;
-    entry.pc.close();
+    try {
+      entry.pc.ontrack = null;
+      entry.pc.onicecandidate = null;
+      entry.pc.close();
+    } catch {}
     peersRef.current.delete(callId);
     const audio = audiosRef.current.get(callId);
     if (audio) { audio.pause(); audio.srcObject = null; audiosRef.current.delete(callId); }
@@ -270,6 +140,7 @@ const useExpoVoice = (args: {
   const ensurePeer = useCallback((callId: string, remoteId: string, outbound: boolean) => {
     const existing = peersRef.current.get(callId);
     if (existing) return existing.pc;
+    if (typeof RTCPeerConnection === 'undefined') throw new Error('rtc-unavailable');
     const pc = new RTCPeerConnection(rtcConfig);
     pc.onicecandidate = (e) => { if (e.candidate) signal(remoteId, 'ice', callId, e.candidate.toJSON()); };
     pc.ontrack = (e) => {
@@ -299,21 +170,29 @@ const useExpoVoice = (args: {
     if (!streamRef.current || remoteId === visitor.id) return;
     const callId = `${roomId}_${visitor.id}_${remoteId}`;
     if (peersRef.current.has(callId)) return;
-    const pc = ensurePeer(callId, remoteId, true);
-    const offer = await pc.createOffer({ offerToReceiveAudio: false });
-    await pc.setLocalDescription(offer);
-    signal(remoteId, 'offer', callId, offer);
+    try {
+      const pc = ensurePeer(callId, remoteId, true);
+      const offer = await pc.createOffer({ offerToReceiveAudio: false });
+      await pc.setLocalDescription(offer);
+      signal(remoteId, 'offer', callId, offer);
+    } catch {
+      closeCall(callId);
+    }
   }, [ensurePeer, roomId, signal, visitor.id]);
 
   const startVoice = useCallback(async () => {
     if (!enabled || activeRef.current) return;
     try {
       setVoiceError('');
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
+        setVoiceError('unsupported');
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       streamRef.current = stream;
       activeRef.current = true;
       setVoiceActive(true);
-      await Promise.all(visitorsRef.current.filter(v => v.visitorId !== visitor.id).map(v => startOutboundCall(v.visitorId)));
+      await Promise.allSettled(visitorsRef.current.filter(v => v.visitorId !== visitor.id).map(v => startOutboundCall(v.visitorId)));
     } catch {
       setVoiceError('microphone');
       activeRef.current = false;
@@ -325,7 +204,7 @@ const useExpoVoice = (args: {
     if (!activeRef.current && !streamRef.current) return;
     activeRef.current = false;
     setVoiceActive(false);
-    streamRef.current?.getTracks().forEach(t => t.stop());
+    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
     streamRef.current = null;
     [...peersRef.current.entries()].forEach(([callId, entry]) => {
       if (entry.outbound) closeCall(callId, true);
@@ -341,6 +220,7 @@ const useExpoVoice = (args: {
         try {
           if (s.type === 'hangup') { closeCall(s.callId); continue; }
           if (s.type === 'offer') {
+            if (typeof RTCPeerConnection === 'undefined') continue;
             const pc = ensurePeer(s.callId, s.fromVisitorId, false);
             await pc.setRemoteDescription(JSON.parse(s.payload || '{}') as RTCSessionDescriptionInit);
             const answer = await pc.createAnswer({ offerToReceiveAudio: true });
@@ -365,7 +245,7 @@ const useExpoVoice = (args: {
   }, [startOutboundCall, visitor.id, visitors, voiceActive]);
 
   useEffect(() => () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
+    try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
     [...peersRef.current.keys()].forEach(callId => closeCall(callId, true));
   }, [closeCall]);
 
@@ -476,11 +356,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const roomId = `expo_${bazaar.id}`;
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
   const presenceEnabled = expo.presence?.enabled !== false;
-  const chatEnabled = presenceEnabled && expo.presence?.chatEnabled !== false;
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
   const voiceEnabled = presenceEnabled && expo.presence?.voiceEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
-  const [messages, setMessages] = useState<MetaExpoChatMessage[]>([]);
   const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
   const { voiceActive, voiceError, startVoice, stopVoice } = useExpoVoice({ enabled: voiceEnabled, roomId, bazaar, visitor, visitors });
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
@@ -508,9 +386,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   useEffect(() => {
     if (!presenceEnabled) return;
     const unsubPresence = subscribeMetaExpoPresence(roomId, setVisitors);
-    const unsubChat = chatEnabled ? subscribeMetaExpoChatMessages(roomId, setMessages) : undefined;
-    return () => { unsubPresence(); unsubChat?.(); };
-  }, [chatEnabled, presenceEnabled, roomId]);
+    return () => { unsubPresence(); };
+  }, [presenceEnabled, roomId]);
 
   useEffect(() => {
     if (!presenceEnabled) return;
@@ -548,21 +425,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       markInactive();
     };
   }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, visitor.name, voiceActive]);
-
-  const sendChat = useCallback((text: string) => {
-    if (!chatEnabled) return;
-    sendMetaExpoChatMessage({
-      id: `mec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      roomId,
-      bazaarId: bazaar.id,
-      bazaarSlug: bazaar.slug,
-      visitorId: visitor.id,
-      name: visitor.name,
-      color: visitor.color,
-      text,
-      timestamp: new Date().toISOString(),
-    });
-  }, [bazaar.id, bazaar.slug, chatEnabled, roomId, visitor.color, visitor.id, visitor.name]);
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -607,7 +469,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
-          <XrChatBoard enabled={chatEnabled} messages={messages} lang={lang} voiceActive={voiceActive} />
           <VrPoseSync originRef={originRef} poseRef={poseRef} />
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
         </XR>
@@ -659,8 +520,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
       {/* Hotspot modal */}
       <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
-
-      <LiveChatPanel enabled={chatEnabled} messages={messages} visitors={visitors} visitor={visitor} onSend={sendChat} lang={lang} />
       {voiceError && (
         <div className="absolute left-1/2 -translate-x-1/2 top-20 z-50 rounded-xl bg-red-600/90 text-white text-xs font-bold px-4 py-2 shadow-lg">
           {T ? 'دسترسی میکروفون فعال نشد. اجازه میکروفون مرورگر را بررسی کنید.' : 'Microphone could not start. Check browser microphone permission.'}
