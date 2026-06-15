@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
@@ -13,6 +13,7 @@ import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
   expo: MetaverseExpo;
+  shops?: MetaShop[];
   lang: Language;
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
@@ -246,20 +247,20 @@ const RetailCategoryZone: React.FC<{
         <RoundedBox args={[Math.min(zoneW * 0.72, 6.2), 0.14, 0.26]} radius={0.05} smoothness={3} position={[0, 3.0, -zoneD / 2 + 0.18]} castShadow>
           <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
         </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, -zoneD / 2 + 0.335]} bg={color} color="#ffffff" />
+        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, -zoneD / 2 + 0.335]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
         <RoundedBox args={[Math.min(zoneW * 0.72, 6.2), 0.14, 0.26]} radius={0.05} smoothness={3} position={[0, 3.0, zoneD / 2 - 0.18]} castShadow>
           <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
         </RoundedBox>
-        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, zoneD / 2 - 0.335]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
+        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.68, 5.7)} height={0.46} position={[0, 3.0, zoneD / 2 - 0.335]} bg={color} color="#ffffff" />
         <RoundedBox args={[0.26, 0.14, Math.min(zoneD * 0.6, 5.5)]} radius={0.05} smoothness={3} position={[-zoneW / 2 + 0.18, 3.0, 0]} castShadow>
           <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
         </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[-zoneW / 2 + 0.335, 3.0, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
+        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[-zoneW / 2 + 0.335, 3.0, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
         <RoundedBox args={[0.26, 0.14, Math.min(zoneD * 0.6, 5.5)]} radius={0.05} smoothness={3} position={[zoneW / 2 - 0.18, 3.0, 0]} castShadow>
           <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.42} metalness={0.45} roughness={0.32} />
         </RoundedBox>
-        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[zoneW / 2 - 0.335, 3.0, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
-        {desc && <CanvasLabel text={desc} width={Math.min(zoneW * 0.58, 4.6)} height={0.26} position={[0, 2.48, -zoneD / 2 + 0.35]} bg="rgba(255,255,255,.9)" color="#0f172a" />}
+        <CanvasLabel text={title} width={Math.min(zoneD * 0.56, 4.8)} height={0.42} position={[zoneW / 2 - 0.335, 3.0, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
+        {desc && <CanvasLabel text={desc} width={Math.min(zoneW * 0.58, 4.6)} height={0.26} position={[0, 2.48, -zoneD / 2 + 0.35]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.9)" color="#0f172a" />}
       </group>
       <CanvasLabel text={aisleLabel} width={1.35} height={0.3} position={[-zoneW / 2 + 0.8, 0.055, -zoneD / 2 + 0.55]} rotation={[-Math.PI / 2, 0, 0]} bg={color} color="#ffffff" />
       <CanvasLabel text={title} width={Math.min(zoneW * 0.55, 3.8)} height={0.34} position={[0, 0.06, zoneD / 2 - 0.5]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.88)" color="#0f172a" />
@@ -295,8 +296,8 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
       <RoundedBox args={[4.3, 2.75, 0.22]} radius={0.08} smoothness={3} position={[0, 1.62, 0]} castShadow>
         <meshStandardMaterial color="#0f172a" emissive="#0f172a" emissiveIntensity={0.18} metalness={0.35} roughness={0.38} />
       </RoundedBox>
-      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, -0.13]} bg="rgba(255,255,255,.1)" color="#ffffff" />
-      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, 0.13]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.1)" color="#ffffff" />
+      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, -0.13]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.1)" color="#ffffff" />
+      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, 0.13]} bg="rgba(255,255,255,.1)" color="#ffffff" />
       {categories.slice(0, 8).map((cat, i) => {
         const y = 2.26 - i * 0.26;
         const label = `${lang === 'fa' ? 'راهرو' : 'Aisle'} ${i + 1} · ${bi(cat.title, lang, '')}`;
@@ -310,8 +311,8 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
               <circleGeometry args={[0.065, 18]} />
               <meshBasicMaterial color={cat.color || '#16a34a'} toneMapped={false} />
             </mesh>
-            <CanvasLabel text={label} width={3.25} height={0.2} position={[0.12, 0, -0.14]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
-            <CanvasLabel text={label} width={3.25} height={0.2} position={[-0.12, 0, 0.14]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+            <CanvasLabel text={label} width={3.25} height={0.2} position={[0.12, 0, -0.14]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+            <CanvasLabel text={label} width={3.25} height={0.2} position={[-0.12, 0, 0.14]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
           </group>
         );
       })}
@@ -325,7 +326,7 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -334,13 +335,54 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
   const retailCategories = expo.retailCategories || [];
   const categoryById = new Map(retailCategories.map(c => [c.id, c]));
   const categoryIndexById = new Map(retailCategories.map((c, i) => [c.id, i]));
+  const shopBySlug = new Map(shops.map(s => [s.slug, s]));
+  const boothBySlug = new Map((expo.booths || []).filter(b => b.shopSlug).map(b => [b.shopSlug!, b]));
+  const supermarketShelves: MetaverseBooth[] = (() => {
+    if (visualStyle !== 'supermarket') return expo.booths || [];
+    const used = new Set<string>();
+    const shelves: MetaverseBooth[] = [];
+    retailCategories.forEach(cat => {
+      const slugs = [
+        ...(cat.shopSlugs || []),
+        ...(expo.booths || []).filter(b => b.categoryId === cat.id && b.shopSlug).map(b => b.shopSlug!),
+      ].filter(slug => {
+        if (!slug || used.has(`${cat.id}:${slug}`)) return false;
+        used.add(`${cat.id}:${slug}`);
+        return true;
+      });
+      slugs.forEach(slug => {
+        const shop = shopBySlug.get(slug);
+        const existing = boothBySlug.get(slug);
+        const name = existing?.name || {
+          fa: (shop as any)?.i18n?.fa?.title || shop?.name || shop?.title || slug,
+          en: shop?.title || shop?.name || slug,
+        };
+        shelves.push({
+          ...(existing || {}),
+          id: existing?.id || `brand-shelf-${cat.id}-${slug}`,
+          name,
+          shopSlug: slug,
+          categoryId: cat.id,
+          x: existing?.x ?? 0,
+          y: existing?.y ?? 0,
+          z: existing?.z ?? 0,
+          ry: existing?.ry ?? Math.PI,
+          color: existing?.color || shop?.storefrontColor || shop?.theme?.primary || cat.color || '#16a34a',
+          logo: existing?.logo || shop?.logo || undefined,
+          hotspots: existing?.hotspots || [],
+        });
+      });
+    });
+    if (shelves.length) return shelves;
+    return expo.booths || [];
+  })();
   const boothForRender = (b: MetaverseBooth, index: number): MetaverseBooth => {
     if (visualStyle !== 'supermarket' || !b.categoryId) return b;
     const catIndex = categoryIndexById.get(b.categoryId);
     const cat = categoryById.get(b.categoryId);
     if (catIndex == null || !cat) return b;
     const zone = retailZoneFrame(cat, catIndex, retailCategories.length, width, depth);
-    const categoryBooths = (expo.booths || []).filter(item => item.categoryId === b.categoryId);
+    const categoryBooths = supermarketShelves.filter(item => item.categoryId === b.categoryId);
     const localIndex = Math.max(0, categoryBooths.findIndex(item => item.id === b.id));
     const cols = Math.min(2, Math.max(1, Math.ceil(Math.sqrt(categoryBooths.length))));
     const row = Math.floor(localIndex / cols);
@@ -523,8 +565,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
       ))}
       {visualStyle === 'supermarket' && <SupermarketDirectory categories={retailCategories} width={width} depth={depth} lang={lang} />}
 
-      {/* Booths */}
-      {(expo.booths || []).map((b, i) => {
+      {/* Brand shelves / booths */}
+      {supermarketShelves.map((b, i) => {
         const renderBooth = boothForRender(b, i);
         return (
           <Booth

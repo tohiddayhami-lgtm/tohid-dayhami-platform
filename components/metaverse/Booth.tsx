@@ -998,7 +998,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const shelfH = 2.35;
     const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16'];
     const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
-    const shopAction = lang === 'fa' ? 'مشاهده محصولات' : 'View products';
+    const shopAction = lang === 'fa' ? 'محصولات برند' : 'Brand products';
+    const brandMark = (name || 'B').trim().slice(0, 2);
     return (
       <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
         <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -1034,13 +1035,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           <meshStandardMaterial color={categoryColor || accent} emissive={categoryColor || accent} emissiveIntensity={0.25} toneMapped={false} />
         </mesh>
 
-        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, -shelfD / 2 - 0.2]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
-        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, shelfD / 2 + 0.2]} rotation={[0, Math.PI, 0]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, -shelfD / 2 - 0.2]} rotation={[0, Math.PI, 0]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, shelfD / 2 + 0.2]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
         <CanvasLabel
           text={name}
           width={shelfW * 0.82}
           height={0.38}
           position={[0, shelfH + 0.14, -shelfD / 2 - 0.21]}
+          rotation={[0, Math.PI, 0]}
           bg="rgba(15,23,42,.9)"
           color="#ffffff"
           onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf_sign'); }}
@@ -1052,7 +1054,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           width={shelfW * 0.82}
           height={0.38}
           position={[0, shelfH + 0.14, shelfD / 2 + 0.21]}
-          rotation={[0, Math.PI, 0]}
           bg="rgba(15,23,42,.9)"
           color="#ffffff"
           onClick={(e) => { e.stopPropagation(); trackBoothSelect('supermarket_shelf_sign_back'); }}
@@ -1061,8 +1062,22 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         />
         {booth.logo && (
           <>
-            <SafeImage url={booth.logo} width={0.52} height={0.52} position={[-shelfW / 2 + 0.42, shelfH + 0.14, -shelfD / 2 - 0.2]} />
-            <SafeImage url={booth.logo} width={0.52} height={0.52} position={[shelfW / 2 - 0.42, shelfH + 0.14, shelfD / 2 + 0.2]} rotation={[0, Math.PI, 0]} />
+            <mesh position={[-shelfW / 2 + 0.42, shelfH + 0.14, -shelfD / 2 - 0.215]} rotation={[0, Math.PI, 0]}>
+              <circleGeometry args={[0.34, 32]} />
+              <meshBasicMaterial color="#ffffff" toneMapped={false} side={THREE.DoubleSide} />
+            </mesh>
+            <SafeImage url={booth.logo} width={0.48} height={0.48} position={[-shelfW / 2 + 0.42, shelfH + 0.14, -shelfD / 2 - 0.23]} rotation={[0, Math.PI, 0]} />
+            <mesh position={[shelfW / 2 - 0.42, shelfH + 0.14, shelfD / 2 + 0.215]}>
+              <circleGeometry args={[0.34, 32]} />
+              <meshBasicMaterial color="#ffffff" toneMapped={false} side={THREE.DoubleSide} />
+            </mesh>
+            <SafeImage url={booth.logo} width={0.48} height={0.48} position={[shelfW / 2 - 0.42, shelfH + 0.14, shelfD / 2 + 0.23]} />
+          </>
+        )}
+        {!booth.logo && (
+          <>
+            <CanvasLabel text={brandMark} width={0.62} height={0.46} position={[-shelfW / 2 + 0.42, shelfH + 0.14, -shelfD / 2 - 0.23]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.96)" color={categoryColor || accent} />
+            <CanvasLabel text={brandMark} width={0.62} height={0.46} position={[shelfW / 2 - 0.42, shelfH + 0.14, shelfD / 2 + 0.23]} bg="rgba(255,255,255,.96)" color={categoryColor || accent} />
           </>
         )}
         {booth.shopSlug && (

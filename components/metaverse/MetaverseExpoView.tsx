@@ -288,6 +288,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <Suspense fallback={null}>
             <ExpoScene
               expo={expo}
+              shops={shops}
               lang={lang}
               onSelectHotspot={setActive}
               onSelectBooth={onSelectBooth}
