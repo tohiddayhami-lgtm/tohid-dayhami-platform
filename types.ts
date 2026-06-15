@@ -598,6 +598,19 @@ export interface MetaverseHotspot {
 // interior) and an outer face (the aisle side). Each can show an image OR a video link.
 export type BoothFace = 'innerBack' | 'innerLeft' | 'innerRight' | 'outerBack' | 'outerLeft' | 'outerRight';
 export type BoothTier = 'basic' | 'standard' | 'premium';
+export type ExpoVisualStyle = 'exhibition' | 'storefront' | 'supermarket';
+
+export interface ExpoRetailCategory {
+  id: string;
+  title: MetaShopDirCat;
+  description?: MetaShopDirCat;
+  color?: string;
+  shopSlugs?: string[];
+  x?: number;
+  z?: number;
+  w?: number;
+  d?: number;
+}
 
 export interface MetaverseBooth {
   id: string;
@@ -611,6 +624,9 @@ export interface MetaverseBooth {
   // visuals
   modelUrl?: string;            // optional custom GLB/GLTF (Storage documents/ URL) — overrides procedural booth
   color?: string;               // accent color for the procedural booth
+  categoryId?: string;          // supermarket/mall department this booth belongs to
+  storefrontSignText?: MetaShopDirCat;  // optional storefront signboard text
+  storefrontGlassText?: MetaShopDirCat; // optional service text printed on the glass facade
   premiumSignText?: MetaShopDirCat; // optional rotating LCD text for premium booths
   premiumSignColor?: string;     // rotating LCD background/accent color
   logo?: string;                // logo image URL (Storage images/)
@@ -696,6 +712,7 @@ export interface ExpoPresenceSettings {
 export interface MetaverseExpo {
   enabled: boolean;
   defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
+  visualStyle?: ExpoVisualStyle; // exhibition booths, glass storefronts, or supermarket departments
   title?: MetaShopDirCat;
   subtitle?: MetaShopDirCat;
   // environment
@@ -715,6 +732,7 @@ export interface MetaverseExpo {
   entranceAds?: ExpoEntranceAd[]; // side/standing advertising banners around the entry corridor
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
+  retailCategories?: ExpoRetailCategory[]; // supermarket/mall department zones linked to MetaShops
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls
   wallAdScale?: number;         // global multiplier for all environmental wall ads
   wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads

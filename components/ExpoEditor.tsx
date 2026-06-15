@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -38,7 +38,7 @@ const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: stri
 const MANAGER_SLOTS = [0, 1, 2, 3, 4] as const;
 
 const blankExpo = (): MetaverseExpo => ({
-  enabled: true, preset: 'warehouse', width: 30, depth: 30, height: 9,
+  enabled: true, visualStyle: 'exhibition', preset: 'warehouse', width: 30, depth: 30, height: 9,
   groundColor: '#cfd4dc', wallColor: '#e9edf3', spawn: { x: 0, y: 0, z: 8 }, booths: [], schemaVersion: 1,
 });
 
@@ -64,6 +64,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     hall: T ? 'تنظیمات سالن' : 'Hall settings',
     titleFa: T ? 'عنوان (فارسی)' : 'Title (FA)', titleEn: T ? 'عنوان (انگلیسی)' : 'Title (EN)',
     subFa: T ? 'زیرعنوان (فارسی)' : 'Subtitle (FA)', subEn: T ? 'زیرعنوان (انگلیسی)' : 'Subtitle (EN)',
+    visualStyle: T ? 'استایل نمایشگاه' : 'Expo style',
+    styleExhibition: T ? 'نمایشگاهی کلاسیک' : 'Classic exhibition',
+    styleStorefront: T ? 'مغازه شیشه‌ای' : 'Glass storefront shops',
+    styleSupermarket: T ? 'مرکز خرید / فروشگاه زنجیره‌ای' : 'Mall / supermarket departments',
     width: T ? 'عرض سالن (متر)' : 'Width (m)', depth: T ? 'عمق سالن (متر)' : 'Depth (m)', height: T ? 'ارتفاع سقف (متر)' : 'Ceiling height (m)',
     preset: T ? 'محیط/نور' : 'Environment', ground: T ? 'رنگ کف' : 'Ground color', wall: T ? 'رنگ دیوار' : 'Wall color',
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
@@ -116,6 +120,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     layoutFacing: T ? 'راهرویی روبه‌رو' : 'Facing aisles',
     layoutGrid: T ? 'شبکه‌ای فشرده' : 'Compact grid',
     layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
+    layoutStorefront: T ? 'خیابان مغازه‌ای' : 'Storefront street',
+    layoutSupermarket: T ? 'فروشگاه زنجیره‌ای' : 'Supermarket aisles',
     applyLayout: T ? 'تغییر چیدمان غرفه‌های فعلی' : 'Rearrange current booths',
     applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
     boothTier: T ? 'نوع غرفه' : 'Booth type',
@@ -125,6 +131,21 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     premiumSignFa: T ? 'متن LCD پریمیوم (فارسی)' : 'Premium LCD text (FA)',
     premiumSignEn: T ? 'متن LCD پریمیوم (انگلیسی)' : 'Premium LCD text (EN)',
     premiumSignColor: T ? 'رنگ LCD پریمیوم' : 'Premium LCD color',
+    storefrontSignFa: T ? 'تابلو سردر مغازه (فارسی)' : 'Storefront sign (FA)',
+    storefrontSignEn: T ? 'تابلو سردر مغازه (انگلیسی)' : 'Storefront sign (EN)',
+    storefrontGlassFa: T ? 'متن خدمات روی شیشه (فارسی)' : 'Glass services text (FA)',
+    storefrontGlassEn: T ? 'متن خدمات روی شیشه (انگلیسی)' : 'Glass services text (EN)',
+    retailT: T ? 'دسته‌بندی‌های فروشگاه زنجیره‌ای' : 'Supermarket departments',
+    retailHint: T ? 'برای سبک مرکز خرید/لولو، هر دسته یک بخش رنگی داخل سالن می‌سازد و فروشگاه‌های متاشاپ انتخاب‌شده از همان بخش قابل کلیک هستند.' : 'For the mall/supermarket style, each category creates a colored department zone and selected MetaShops become clickable from that zone.',
+    addRetailCat: T ? 'افزودن دسته‌بندی' : 'Add department',
+    noRetailCat: T ? 'هنوز دسته‌بندی تعریف نشده.' : 'No departments yet.',
+    retailTitleFa: T ? 'نام دسته (فارسی)' : 'Department name (FA)',
+    retailTitleEn: T ? 'نام دسته (انگلیسی)' : 'Department name (EN)',
+    retailDescFa: T ? 'توضیح کوتاه (فارسی)' : 'Short description (FA)',
+    retailDescEn: T ? 'توضیح کوتاه (انگلیسی)' : 'Short description (EN)',
+    retailColor: T ? 'رنگ دسته' : 'Department color',
+    retailShops: T ? 'فروشگاه‌های متصل' : 'Linked MetaShops',
+    retailCategory: T ? 'دسته‌بندی فروشگاهی' : 'Retail department',
     quickBuild: T ? 'ساخت از نو' : 'Rebuild from scratch',
     quickConfirm: T ? 'غرفه‌های فعلی پاک و دوباره چیده می‌شوند. ادامه می‌دهید؟' : 'Existing booths will be replaced and re-arranged. Continue?',
     screen: T ? 'ویدئوی ال‌سی‌دی غرفه' : 'Booth LCD video',
@@ -167,6 +188,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 
   const patch = (p: Partial<MetaverseExpo>) => onChange({ ...e, ...p });
+  const defaultRetailCategories = (): ExpoRetailCategory[] => [
+    { id: 'retail-legumes', title: { fa: 'حبوبات و خشکبار', en: 'Legumes & Nuts' }, description: { fa: 'لوبیا، عدس، نخود، خشکبار', en: 'Beans, lentils, chickpeas, nuts' }, color: '#16a34a', shopSlugs: [] },
+    { id: 'retail-grocery', title: { fa: 'مواد غذایی', en: 'Grocery' }, description: { fa: 'کالاهای مصرفی روزانه', en: 'Daily food essentials' }, color: '#f59e0b', shopSlugs: [] },
+    { id: 'retail-beverage', title: { fa: 'نوشیدنی و لبنیات', en: 'Beverage & Dairy' }, description: { fa: 'نوشیدنی، لبنیات، سردخانه', en: 'Drinks, dairy, chilled goods' }, color: '#0ea5e9', shopSlugs: [] },
+    { id: 'retail-care', title: { fa: 'بهداشتی و خانه', en: 'Care & Home' }, description: { fa: 'بهداشت، شوینده، لوازم خانه', en: 'Care, cleaning, home items' }, color: '#a855f7', shopSlugs: [] },
+  ];
   const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);
   const setEntranceOrganizer = (which: 'fa' | 'en', val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [which]: val } });
   const setSpawn = (k: 'x' | 'z', v: number) => patch({ spawn: { x: e.spawn?.x ?? 0, y: 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), [k]: v } });
@@ -199,6 +226,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
+  const setBoothStorefrontSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
+    updBooth(b.id, { storefrontSignText: { ...(b.storefrontSignText || {}), [which]: val } });
+  const setBoothGlassText = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
+    updBooth(b.id, { storefrontGlassText: { ...(b.storefrontGlassText || {}), [which]: val } });
   const compactFive = (values: string[]) => {
     const next = values.slice(0, 5);
     while (next.length && !next[next.length - 1]) next.pop();
@@ -261,6 +292,25 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const setMeet = (p: Partial<ExpoMeetWall>) => patch({ meetWall: { ...(e.meetWall || {}), ...p } });
   const setMeetTitle = (which: 'fa' | 'en', val: string) => setMeet({ title: { ...(e.meetWall?.title || {}), [which]: val } });
   const setPresence = (p: Partial<NonNullable<MetaverseExpo['presence']>>) => patch({ presence: { ...(e.presence || {}), ...p } });
+  const updRetailCategories = (retailCategories: ExpoRetailCategory[]) => patch({ retailCategories });
+  const addRetailCategory = () => {
+    const i = (e.retailCategories || []).length + 1;
+    updRetailCategories([...(e.retailCategories || []), {
+      id: newId('retail-cat'),
+      title: { fa: `دسته ${i}`, en: `Department ${i}` },
+      color: ['#16a34a', '#f59e0b', '#0ea5e9', '#a855f7', '#ef4444'][i % 5],
+      shopSlugs: [],
+    }]);
+  };
+  const updRetailCategory = (id: string, p: Partial<ExpoRetailCategory>) => updRetailCategories((e.retailCategories || []).map(c => c.id === id ? { ...c, ...p } : c));
+  const delRetailCategory = (id: string) => {
+    patch({
+      retailCategories: (e.retailCategories || []).filter(c => c.id !== id),
+      booths: (e.booths || []).map(b => b.categoryId === id ? { ...b, categoryId: undefined } : b),
+    });
+  };
+  const setRetailBi = (cat: ExpoRetailCategory, field: 'title' | 'description', which: 'fa' | 'en', val: string) =>
+    updRetailCategory(cat.id, { [field]: { ...((cat[field] as MetaShopDirCat) || {}), [which]: val } } as Partial<ExpoRetailCategory>);
   const uploadPdf = (key: string, file: File, onUrl: (u: string) => void) => {
     if (!/\.pdf$/i.test(file.name)) { alert(T ? 'فقط فایل PDF مجاز است.' : 'Only PDF files allowed.'); return; }
     if (file.size > 40 * 1024 * 1024) { alert(t.tooBig); return; }
@@ -273,8 +323,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const current = e.booths || [];
     if (current.length === 0) return;
     const { width, depth, spawn, cells } = autoArrangeBooths(current.length, layout);
-    const booths = current.map((b, i) => ({ ...b, x: cells[i]?.x ?? b.x, z: cells[i]?.z ?? b.z, ry: cells[i]?.ry ?? b.ry, tier: tier || b.tier || 'basic' }));
-    patch({ width, depth, spawn, booths });
+    const cats = layout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
+    const booths = current.map((b, i) => ({
+      ...b,
+      x: cells[i]?.x ?? b.x,
+      z: cells[i]?.z ?? b.z,
+      ry: cells[i]?.ry ?? b.ry,
+      tier: tier || b.tier || 'basic',
+      categoryId: layout === 'supermarket' && cats.length ? (b.categoryId || cats[i % cats.length].id) : b.categoryId,
+    }));
+    const visualStyle: ExpoVisualStyle | undefined = layout === 'storefront' ? 'storefront' : layout === 'supermarket' ? 'supermarket' : undefined;
+    patch({ width, depth, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(layout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
   };
   const setTierAndApply = (tier: BoothTier) => {
     setQuickTier(tier);
@@ -283,11 +342,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const quickBuild = () => {
     if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
     const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
+    const cats = quickLayout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
     const booths: MetaverseBooth[] = cells.map((c, i) => ({
       id: newId('booth'), name: { fa: `غرفه ${i + 1}`, en: `Booth ${i + 1}` },
-      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', tier: quickTier, hotspots: [],
+      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', tier: quickTier,
+      categoryId: quickLayout === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
+      hotspots: [],
     }));
-    patch({ width, depth, spawn, booths });
+    const visualStyle: ExpoVisualStyle | undefined = quickLayout === 'storefront' ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : undefined;
+    patch({ width, depth, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
     setOpenBooth(null);
   };
 
@@ -295,8 +358,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const applyShopToBooth = (booth: MetaverseBooth, slug: string) => {
     if (!slug) { updBooth(booth.id, { shopSlug: undefined }); return; }
     const shop = shops.find(s => s.slug === slug);
-    if (!shop) { updBooth(booth.id, { shopSlug: slug }); return; }
-    updBooth(booth.id, shopToBoothFields(shop, lang));
+    const categoryId = booth.categoryId || (e.retailCategories || []).find(c => (c.shopSlugs || []).includes(slug))?.id;
+    if (!shop) { updBooth(booth.id, { shopSlug: slug, categoryId }); return; }
+    updBooth(booth.id, { ...shopToBoothFields(shop, lang), categoryId });
   };
   const firstProductVideo = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []).find(p => p.videoUrl)?.videoUrl : undefined);
 
@@ -487,6 +551,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     };
     const wx = (x: number) => ((x + W / 2) / W) * 100;
     const wz = (z: number) => ((z + D / 2) / D) * 100;
+    const cats = e.retailCategories || [];
     return (
       <svg
         ref={svgRef} viewBox="0 0 100 100" preserveAspectRatio="none"
@@ -497,6 +562,20 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         onPointerLeave={() => { dragId.current = null; }}
       >
         <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke="#cbd5e1" strokeWidth={0.6} />
+        {e.visualStyle === 'supermarket' && cats.map((c, i) => {
+          const rows = Math.max(1, Math.ceil(cats.length / 2));
+          const col = i % 2;
+          const row = Math.floor(i / 2);
+          const x = col === 0 ? 6 : 52;
+          const y = 8 + row * (84 / rows);
+          const h = Math.max(12, 72 / rows);
+          return (
+            <g key={c.id}>
+              <rect x={x} y={y} width={42} height={h} rx={2} fill={c.color || '#16a34a'} opacity={0.12} stroke={c.color || '#16a34a'} strokeWidth={0.4} />
+              <text x={x + 21} y={y + 4.2} textAnchor="middle" fontSize={2.8} fill={c.color || '#166534'} fontWeight="bold">{(T ? c.title?.fa : c.title?.en) || c.title?.fa || c.title?.en || ''}</text>
+            </g>
+          );
+        })}
         {!readonly && (e.booths || []).map((b, i) => (
           <g key={b.id} transform={`translate(${wx(b.x || 0)} ${wz(b.z || 0)})`} style={{ cursor: 'grab' }}
             onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
@@ -603,6 +682,16 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <div><label className={lbl}>{t.titleFa}</label><input className={fld} value={e.title?.fa || ''} onChange={ev => setBi('title', 'fa', ev.target.value)} /></div>
               <div><label className={lbl}>{t.titleEn}</label><input className={fld + ' dir-ltr'} value={e.title?.en || ''} onChange={ev => setBi('title', 'en', ev.target.value)} /></div>
               <div><label className={lbl}>{t.preset}</label><select className={fld + ' bg-white'} value={e.preset || 'warehouse'} onChange={ev => patch({ preset: ev.target.value as EnvPreset })}>{PRESETS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+              <div><label className={lbl}>{t.visualStyle}</label>
+                <select className={fld + ' bg-white'} value={e.visualStyle || 'exhibition'} onChange={ev => {
+                  const visualStyle = ev.target.value as ExpoVisualStyle;
+                  patch({ visualStyle, ...(visualStyle === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: defaultRetailCategories() } : {}) });
+                }}>
+                  <option value="exhibition">{t.styleExhibition}</option>
+                  <option value="storefront">{t.styleStorefront}</option>
+                  <option value="supermarket">{t.styleSupermarket}</option>
+                </select>
+              </div>
               <div><label className={lbl}>{t.subFa}</label><input className={fld} value={e.subtitle?.fa || ''} onChange={ev => setBi('subtitle', 'fa', ev.target.value)} /></div>
               <div><label className={lbl}>{t.subEn}</label><input className={fld + ' dir-ltr'} value={e.subtitle?.en || ''} onChange={ev => setBi('subtitle', 'en', ev.target.value)} /></div>
               <div className="grid grid-cols-3 gap-2">
@@ -681,6 +770,34 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <div className="border border-gray-100 rounded-xl p-4">
             <h5 className="font-bold text-gray-700 text-sm mb-3">{t.floorplan}</h5>
             <FloorPlan />
+          </div>
+
+          {/* Supermarket / mall departments */}
+          <div className="border border-lime-100 bg-lime-50/35 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
+              <h5 className="font-bold text-lime-800 text-sm">🛒 {t.retailT} <span className="text-xs text-lime-500">({(e.retailCategories || []).length})</span></h5>
+              {!readonly && <button type="button" onClick={addRetailCategory} className="text-xs px-3 py-1.5 rounded-lg bg-lime-600 text-white hover:bg-lime-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addRetailCat}</button>}
+            </div>
+            <p className="text-[11px] text-lime-700/75 mb-3">{t.retailHint}</p>
+            {(e.retailCategories || []).length === 0 ? <p className="text-sm text-lime-700/50 text-center py-2">{t.noRetailCat}</p> : (
+              <div className="space-y-2">
+                {(e.retailCategories || []).map(cat => (
+                  <div key={cat.id} className="rounded-lg border border-lime-100 bg-white/80 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-2 items-end">
+                    <div><label className={lbl}>{t.retailTitleFa}</label><input className={fld} value={cat.title?.fa || ''} onChange={ev => setRetailBi(cat, 'title', 'fa', ev.target.value)} /></div>
+                    <div><label className={lbl}>{t.retailTitleEn}</label><input className={fld + ' dir-ltr'} value={cat.title?.en || ''} onChange={ev => setRetailBi(cat, 'title', 'en', ev.target.value)} /></div>
+                    <div><label className={lbl}>{t.retailDescFa}</label><input className={fld} value={cat.description?.fa || ''} onChange={ev => setRetailBi(cat, 'description', 'fa', ev.target.value)} placeholder="مثلاً حبوبات، برنج، خشکبار" /></div>
+                    <div><label className={lbl}>{t.retailDescEn}</label><input className={fld + ' dir-ltr'} value={cat.description?.en || ''} onChange={ev => setRetailBi(cat, 'description', 'en', ev.target.value)} placeholder="Legumes, rice, nuts" /></div>
+                    <div><label className={lbl}>{t.retailColor}</label><div className="flex gap-2"><input type="color" value={cat.color || '#16a34a'} onChange={ev => updRetailCategory(cat.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={cat.color || ''} onChange={ev => updRetailCategory(cat.id, { color: ev.target.value || undefined })} placeholder="#16a34a" /></div></div>
+                    <div className="lg:col-span-2"><label className={lbl}>{t.retailShops}</label>
+                      <select multiple className={fld + ' bg-white min-h-[76px]'} value={cat.shopSlugs || []} onChange={ev => updRetailCategory(cat.id, { shopSlugs: Array.from(ev.target.selectedOptions).map(o => o.value) })}>
+                        {shops.map(s => <option key={s.id} value={s.slug}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    {!readonly && <button type="button" onClick={() => delRetailCategory(cat.id)} className="text-red-400 hover:text-red-600 pb-2 justify-self-end" title={t.clear}><IconTrash className="w-4 h-4" /></button>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Environmental wall ads */}
@@ -804,6 +921,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     <option value="facing">{t.layoutFacing}</option>
                     <option value="grid">{t.layoutGrid}</option>
                     <option value="perimeter">{t.layoutPerimeter}</option>
+                    <option value="storefront">{t.layoutStorefront}</option>
+                    <option value="supermarket">{t.layoutSupermarket}</option>
                   </select>
                 </div>
                 {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold">{t.applyLayout}</button>}
@@ -870,6 +989,16 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               <div><label className={lbl}>{t.premiumSignEn}</label><input className={fld + ' dir-ltr'} value={b.premiumSignText?.en || ''} onChange={ev => setBoothPremiumSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>
                               <div><label className={lbl}>{t.premiumSignColor}</label><div className="flex gap-2"><input type="color" value={b.premiumSignColor || b.color || '#0f766e'} onChange={ev => updBooth(b.id, { premiumSignColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.premiumSignColor || ''} onChange={ev => updBooth(b.id, { premiumSignColor: ev.target.value || undefined })} placeholder={b.color || '#0f766e'} /></div></div>
                             </>}
+                            <div><label className={lbl}>{t.retailCategory}</label>
+                              <select className={fld + ' bg-white'} value={b.categoryId || ''} onChange={ev => updBooth(b.id, { categoryId: ev.target.value || undefined })}>
+                                <option value="">—</option>
+                                {(e.retailCategories || []).map(c => <option key={c.id} value={c.id}>{(T ? c.title?.fa : c.title?.en) || c.title?.fa || c.title?.en || c.id}</option>)}
+                              </select>
+                            </div>
+                            <div><label className={lbl}>{t.storefrontSignFa}</label><input className={fld} value={b.storefrontSignText?.fa || ''} onChange={ev => setBoothStorefrontSign(b, 'fa', ev.target.value)} placeholder={b.name?.fa || ''} /></div>
+                            <div><label className={lbl}>{t.storefrontSignEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontSignText?.en || ''} onChange={ev => setBoothStorefrontSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>
+                            <div><label className={lbl}>{t.storefrontGlassFa}</label><input className={fld} value={b.storefrontGlassText?.fa || ''} onChange={ev => setBoothGlassText(b, 'fa', ev.target.value)} placeholder="خدمات، محصولات ویژه، مشاوره" /></div>
+                            <div><label className={lbl}>{t.storefrontGlassEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontGlassText?.en || ''} onChange={ev => setBoothGlassText(b, 'en', ev.target.value)} placeholder="Services, offers, consultation" /></div>
                             <div><label className={lbl}>{t.color}</label><div className="flex gap-2"><input type="color" value={b.color || '#2d4a1a'} onChange={ev => updBooth(b.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.color || ''} onChange={ev => updBooth(b.id, { color: ev.target.value })} /></div></div>
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.scale}</label><input type="number" step="0.1" className={fld} value={b.scale ?? 1} onChange={ev => updBooth(b.id, { scale: +ev.target.value })} /></div>

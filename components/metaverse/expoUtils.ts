@@ -145,7 +145,7 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter';
+export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket';
 
 // Auto-arrange `count` booths and size the hall to fit. `facing` creates paired booths across
 // walking aisles; `perimeter` uses the outside walls; `grid` keeps the older compact rows.
@@ -153,6 +153,38 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
   const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
   const cells: { x: number; z: number; ry: number }[] = [];
   const booth = 4;
+
+  if (layout === 'storefront') {
+    const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n * 1.4))));
+    const rows = Math.ceil(n / cols);
+    const width = Math.max(24, cols * 5.8 + 8);
+    const depth = Math.max(24, rows * 8.2 + 12);
+    for (let i = 0; i < n; i++) {
+      const r = Math.floor(i / cols), c = i % cols;
+      const colsThisRow = Math.min(cols, n - r * cols);
+      const x = (c - (colsThisRow - 1) / 2) * 5.8;
+      const z = depth / 2 - 7.2 - r * 8.2;
+      cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
+    }
+    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+    return { width, depth, spawn, cells };
+  }
+
+  if (layout === 'supermarket') {
+    const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(n))));
+    const rows = Math.ceil(n / cols);
+    const width = Math.max(28, cols * 7 + 12);
+    const depth = Math.max(30, rows * 9 + 14);
+    for (let i = 0; i < n; i++) {
+      const r = Math.floor(i / cols), c = i % cols;
+      const colsThisRow = Math.min(cols, n - r * cols);
+      const x = (c - (colsThisRow - 1) / 2) * 7;
+      const z = depth / 2 - 8.5 - r * 9;
+      cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
+    }
+    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+    return { width, depth, spawn, cells };
+  }
 
   if (layout === 'facing') {
     const pairCount = Math.ceil(n / 2);

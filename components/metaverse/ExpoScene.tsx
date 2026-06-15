@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, MetaExpoEvent, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
@@ -181,6 +181,89 @@ const Ceiling: React.FC<{ width: number; depth: number; height: number }> = ({ w
   );
 };
 
+const RetailCategoryZone: React.FC<{
+  cat: ExpoRetailCategory;
+  index: number;
+  total: number;
+  width: number;
+  depth: number;
+  lang: Language;
+  onSelectBooth: (b: MetaverseBooth) => void;
+  onTrack?: Props['onTrack'];
+}> = ({ cat, index, total, width, depth, lang, onSelectBooth, onTrack }) => {
+  const cols = Math.min(2, Math.max(1, total));
+  const rows = Math.max(1, Math.ceil(total / cols));
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  const zoneW = cat.w || Math.max(5.8, (width - 8) / cols - 1.5);
+  const zoneD = cat.d || Math.max(6.2, (depth - 10) / rows - 1.8);
+  const x = cat.x ?? ((col - (cols - 1) / 2) * (zoneW + 1.8));
+  const z = cat.z ?? (depth / 2 - 7.8 - row * (zoneD + 2.1));
+  const color = cat.color || '#16a34a';
+  const title = bi(cat.title, lang, lang === 'fa' ? 'دسته‌بندی' : 'Department');
+  const desc = bi(cat.description, lang, '');
+  const shopSlugs = (cat.shopSlugs || []).slice(0, 8);
+  const openShop = (slug: string, tileIndex: number) => {
+    onTrack?.('hotspot_click', {
+      targetId: `${cat.id}-${slug}`,
+      targetName: slug,
+      targetType: 'retail_department_shop',
+      side: title,
+      boothIndex: tileIndex,
+      x,
+      z,
+    });
+    onSelectBooth({ id: `${cat.id}-${slug}`, name: { fa: slug, en: slug }, shopSlug: slug, x, y: 0, z, hotspots: [] });
+  };
+  return (
+    <group position={[x, 0.025, z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[zoneW, zoneD]} />
+        <meshStandardMaterial color={color} transparent opacity={0.15} roughness={0.72} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+      </mesh>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[Math.min(zoneW, zoneD) * 0.18, Math.min(zoneW, zoneD) * 0.22, 72]} />
+        <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.45} transparent opacity={0.58} toneMapped={false} />
+      </mesh>
+      {[-0.27, 0.27].map(offset => (
+        <RoundedBox key={offset} args={[zoneW * 0.8, 0.9, 0.34]} radius={0.04} smoothness={3} position={[0, 0.46, offset * zoneD]} castShadow>
+          <meshStandardMaterial color="#f8fafc" roughness={0.58} metalness={0.06} />
+        </RoundedBox>
+      ))}
+      {[-0.34, 0, 0.34].map((sx, i) => (
+        <mesh key={i} position={[sx * zoneW, 1.05, -zoneD * 0.27]}>
+          <boxGeometry args={[0.18, 0.22, 0.22]} />
+          <meshStandardMaterial color={i % 2 ? '#f59e0b' : color} roughness={0.55} />
+        </mesh>
+      ))}
+      <RoundedBox args={[Math.min(zoneW * 0.78, 5.2), 0.62, 0.14]} radius={0.07} smoothness={3} position={[0, 2.65, -zoneD / 2 + 0.18]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.28} metalness={0.4} roughness={0.35} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={Math.min(zoneW * 0.72, 4.8)} height={0.44} position={[0, 2.65, -zoneD / 2 + 0.265]} bg="rgba(15,23,42,.9)" color="#ffffff" />
+      {desc && <CanvasLabel text={desc} width={Math.min(zoneW * 0.68, 4.4)} height={0.24} position={[0, 2.22, -zoneD / 2 + 0.27]} bg="rgba(255,255,255,.82)" color="#0f172a" />}
+      {shopSlugs.map((slug, i) => {
+        const colsTile = Math.min(4, Math.max(1, shopSlugs.length));
+        const tx = (i % colsTile - (colsTile - 1) / 2) * Math.min(1.35, zoneW / Math.max(4, colsTile));
+        const tz = zoneD / 2 - 0.55 - Math.floor(i / colsTile) * 0.48;
+        return (
+          <group key={slug} position={[tx, 0.12, tz]}>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              onClick={(e) => { e.stopPropagation(); openShop(slug, i); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+              <planeGeometry args={[1.18, 0.34]} />
+              <meshStandardMaterial color="#ffffff" emissive={color} emissiveIntensity={0.12} roughness={0.45} />
+            </mesh>
+            <CanvasLabel text={slug} width={1.08} height={0.22} position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" onClick={(e) => { e.stopPropagation(); openShop(slug, i); }} />
+          </group>
+        );
+      })}
+    </group>
+  );
+};
+
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
 export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
@@ -188,6 +271,9 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const t = 0.2; // wall thickness
+  const visualStyle = expo.visualStyle || 'exhibition';
+  const retailCategories = expo.retailCategories || [];
+  const categoryById = new Map(retailCategories.map(c => [c.id, c]));
 
   return (
     <>
@@ -342,9 +428,35 @@ export const ExpoScene: React.FC<Props> = ({ expo, lang, onSelectHotspot, onSele
         );
       })()}
 
+      {/* Supermarket / mall department zones */}
+      {visualStyle === 'supermarket' && retailCategories.map((cat, i) => (
+        <RetailCategoryZone
+          key={cat.id}
+          cat={cat}
+          index={i}
+          total={retailCategories.length}
+          width={width}
+          depth={depth}
+          lang={lang}
+          onSelectBooth={onSelectBooth}
+          onTrack={onTrack}
+        />
+      ))}
+
       {/* Booths */}
       {(expo.booths || []).map((b, i) => (
-        <Booth key={b.id} booth={b} index={i} lang={lang} onSelectHotspot={onSelectHotspot} onSelectBooth={onSelectBooth} onTrack={onTrack} />
+        <Booth
+          key={b.id}
+          booth={b}
+          index={i}
+          lang={lang}
+          onSelectHotspot={onSelectHotspot}
+          onSelectBooth={onSelectBooth}
+          onTrack={onTrack}
+          visualStyle={visualStyle}
+          categoryName={b.categoryId ? bi(categoryById.get(b.categoryId)?.title, lang, '') : undefined}
+          categoryColor={b.categoryId ? categoryById.get(b.categoryId)?.color : undefined}
+        />
       ))}
     </>
   );

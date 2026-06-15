@@ -4,7 +4,7 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed } from './expoUtils';
 import { Hotspot } from './Hotspot';
@@ -20,6 +20,9 @@ interface Props {
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
+  visualStyle?: ExpoVisualStyle;
+  categoryName?: string;
+  categoryColor?: string;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -831,7 +834,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -846,6 +849,9 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
+  const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket';
+  const signText = bi(booth.storefrontSignText, lang, name);
+  const glassText = bi(booth.storefrontGlassText, lang, lang === 'fa' ? 'خدمات و محصولات ویژه' : 'Services & special offers');
   const premiumSignText = bi(booth.premiumSignText, lang, name);
   const premiumSignColor = booth.premiumSignColor || accent;
 
@@ -1106,6 +1112,42 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
           />
+          {storefront && (
+            <group>
+              {/* Glass storefront facade: side panes + central clickable door. */}
+              <RoundedBox args={[W + 0.18, 0.72, 0.2]} radius={0.08} smoothness={3} position={[0, wallH + 0.54, D / 2 - 0.16]} castShadow>
+                <meshStandardMaterial color="#111827" emissive={accentColor} emissiveIntensity={0.22} metalness={0.48} roughness={0.32} />
+              </RoundedBox>
+              <CanvasLabel text={signText} width={W * 0.92} height={0.48} position={[0, wallH + 0.54, D / 2 - 0.045]} bg="rgba(15,23,42,.92)" color="#ffffff" onClick={(e) => { e.stopPropagation(); trackBoothSelect('storefront_sign'); }} />
+              {[-1, 1].map(side => (
+                <mesh key={side} position={[side * 1.28, 1.72, D / 2 - 0.08]} onClick={(e) => { e.stopPropagation(); trackBoothSelect('glass'); }}>
+                  <planeGeometry args={[1.18, 2.34]} />
+                  <meshStandardMaterial color="#bff3ff" transparent opacity={0.28} roughness={0.05} metalness={0.12} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+              ))}
+              <mesh
+                position={[0, 1.58, D / 2 - 0.06]}
+                onClick={(e) => { e.stopPropagation(); trackBoothSelect('glass_door'); }}
+                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+                onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+              >
+                <planeGeometry args={[1.12, 2.1]} />
+                <meshStandardMaterial color="#e0fbff" transparent opacity={0.34} roughness={0.03} metalness={0.18} side={THREE.DoubleSide} depthWrite={false} />
+              </mesh>
+              <mesh position={[0, 0.56, D / 2 - 0.035]}>
+                <boxGeometry args={[0.045, 1.76, 0.025]} />
+                <meshStandardMaterial color="#f8fafc" emissive="#dbeafe" emissiveIntensity={0.3} toneMapped={false} />
+              </mesh>
+              <mesh position={[0.42, 1.45, D / 2 - 0.02]}>
+                <sphereGeometry args={[0.045, 16, 8]} />
+                <meshStandardMaterial color="#fbbf24" emissive="#f59e0b" emissiveIntensity={0.8} toneMapped={false} />
+              </mesh>
+              <CanvasLabel text={glassText} width={2.45} height={0.34} position={[0, 2.06, D / 2 - 0.01]} bg="rgba(255,255,255,.72)" color="#0f172a" onClick={(e) => { e.stopPropagation(); trackBoothSelect('glass_text'); }} />
+              {visualStyle === 'supermarket' && categoryName && (
+                <CanvasLabel text={categoryName} width={2.25} height={0.28} position={[0, 2.48, D / 2 - 0.005]} bg={categoryColor || 'rgba(22,163,74,.9)'} color="#ffffff" />
+              )}
+            </group>
+          )}
         </group>
       )}
 
