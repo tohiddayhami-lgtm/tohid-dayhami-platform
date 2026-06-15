@@ -685,6 +685,47 @@ const ShelfStockFace: React.FC<{
   );
 };
 
+const FourWayBrandSign: React.FC<{
+  title: string;
+  subtitle: string;
+  color: string;
+  position: [number, number, number];
+}> = ({ title, subtitle, color, position }) => {
+  const w = 3.75;
+  const h = 0.58;
+  const z = 0.34;
+  const x = 1.98;
+  return (
+    <group position={position}>
+      <mesh position={[0, -0.45, 0]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.9, 12]} />
+        <meshStandardMaterial color="#334155" metalness={0.45} roughness={0.35} />
+      </mesh>
+      <RoundedBox args={[w + 0.18, h + 0.12, 0.18]} radius={0.055} smoothness={3} position={[0, 0, z]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.34} metalness={0.42} roughness={0.32} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={w} height={h} position={[0, 0, z + 0.1]} bg={color} color="#ffffff" />
+      <CanvasLabel text={subtitle} width={w * 0.72} height={0.22} position={[0, -0.47, z + 0.11]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+
+      <RoundedBox args={[w + 0.18, h + 0.12, 0.18]} radius={0.055} smoothness={3} position={[0, 0, -z]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.34} metalness={0.42} roughness={0.32} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={w} height={h} position={[0, 0, -z - 0.1]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
+      <CanvasLabel text={subtitle} width={w * 0.72} height={0.22} position={[0, -0.47, -z - 0.11]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+
+      <RoundedBox args={[0.18, h + 0.12, 1.95]} radius={0.055} smoothness={3} position={[x, 0, 0]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.34} metalness={0.42} roughness={0.32} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={1.78} height={h} position={[x + 0.1, 0, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
+
+      <RoundedBox args={[0.18, h + 0.12, 1.95]} radius={0.055} smoothness={3} position={[-x, 0, 0]} castShadow>
+        <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.34} metalness={0.42} roughness={0.32} />
+      </RoundedBox>
+      <CanvasLabel text={title} width={1.78} height={h} position={[-x - 0.1, 0, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
+    </group>
+  );
+};
+
 const CounterMiniatureGlb: React.FC<{ url: string; position: [number, number, number]; onGrab?: () => void }> = ({ url, position, onGrab }) => {
   const { camera } = useThree();
   const inXR = useXR((s) => !!s.session);
@@ -1000,6 +1041,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
     const shopAction = lang === 'fa' ? 'محصولات برند' : 'Brand products';
     const brandMark = (name || 'B').trim().slice(0, 2);
+    const signColor = categoryColor || accent;
     return (
       <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
         <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -1032,11 +1074,12 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
 
         <mesh position={[0, shelfH + 0.12, 0]}>
           <boxGeometry args={[shelfW + 0.36, 0.16, shelfD + 0.24]} />
-          <meshStandardMaterial color={categoryColor || accent} emissive={categoryColor || accent} emissiveIntensity={0.25} toneMapped={false} />
+          <meshStandardMaterial color={signColor} emissive={signColor} emissiveIntensity={0.25} toneMapped={false} />
         </mesh>
+        <FourWayBrandSign title={name} subtitle={categoryLabel} color={signColor} position={[0, shelfH + 1.18, 0]} />
 
-        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, -shelfD / 2 - 0.2]} rotation={[0, Math.PI, 0]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
-        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, shelfD / 2 + 0.2]} bg={categoryColor || 'rgba(22,163,74,.92)'} color="#ffffff" />
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, -shelfD / 2 - 0.2]} rotation={[0, Math.PI, 0]} bg={signColor} color="#ffffff" />
+        <CanvasLabel text={categoryLabel} width={2.75} height={0.32} position={[0, shelfH + 0.52, shelfD / 2 + 0.2]} bg={signColor} color="#ffffff" />
         <CanvasLabel
           text={name}
           width={shelfW * 0.82}

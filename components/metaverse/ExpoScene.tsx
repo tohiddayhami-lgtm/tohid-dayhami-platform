@@ -238,6 +238,27 @@ const RetailCategoryZone: React.FC<{
       </mesh>
       {/* Large department signage on all sides, like overhead supermarket wayfinding. */}
       <group position={[0, 0, 0]}>
+        <mesh position={[0, 2.45, 0]}>
+          <cylinderGeometry args={[0.055, 0.055, 2.5, 14]} />
+          <meshStandardMaterial color="#334155" metalness={0.48} roughness={0.32} />
+        </mesh>
+        <RoundedBox args={[Math.min(zoneW * 0.78, 6.8), 0.76, 0.22]} radius={0.07} smoothness={3} position={[0, 3.7, 0.34]} castShadow>
+          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
+        </RoundedBox>
+        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.72, 6.3)} height={0.56} position={[0, 3.7, 0.47]} bg={color} color="#ffffff" />
+        <RoundedBox args={[Math.min(zoneW * 0.78, 6.8), 0.76, 0.22]} radius={0.07} smoothness={3} position={[0, 3.7, -0.34]} castShadow>
+          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
+        </RoundedBox>
+        <CanvasLabel text={`${aisleLabel} · ${title}`} width={Math.min(zoneW * 0.72, 6.3)} height={0.56} position={[0, 3.7, -0.47]} rotation={[0, Math.PI, 0]} bg={color} color="#ffffff" />
+        <RoundedBox args={[0.22, 0.76, Math.min(zoneD * 0.7, 6.0)]} radius={0.07} smoothness={3} position={[0.44, 3.7, 0]} castShadow>
+          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
+        </RoundedBox>
+        <CanvasLabel text={title} width={Math.min(zoneD * 0.62, 5.4)} height={0.54} position={[0.57, 3.7, 0]} rotation={[0, Math.PI / 2, 0]} bg={color} color="#ffffff" />
+        <RoundedBox args={[0.22, 0.76, Math.min(zoneD * 0.7, 6.0)]} radius={0.07} smoothness={3} position={[-0.44, 3.7, 0]} castShadow>
+          <meshStandardMaterial color="#0f172a" emissive={color} emissiveIntensity={0.5} metalness={0.45} roughness={0.3} />
+        </RoundedBox>
+        <CanvasLabel text={title} width={Math.min(zoneD * 0.62, 5.4)} height={0.54} position={[-0.57, 3.7, 0]} rotation={[0, -Math.PI / 2, 0]} bg={color} color="#ffffff" />
+
         {[[-zoneW / 2 + 0.35, -zoneD / 2 + 0.35], [zoneW / 2 - 0.35, -zoneD / 2 + 0.35], [-zoneW / 2 + 0.35, zoneD / 2 - 0.35], [zoneW / 2 - 0.35, zoneD / 2 - 0.35]].map(([px, pz], i) => (
           <mesh key={i} position={[px, 1.45, pz]}>
             <cylinderGeometry args={[0.045, 0.045, 2.75, 14]} />
@@ -293,31 +314,31 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
   const z = depth / 2 - 2.15;
   return (
     <group position={[Math.min(width / 2 - 2.1, 5.4), 0, z]} rotation={[0, Math.PI, 0]}>
-      <RoundedBox args={[4.3, 2.75, 0.22]} radius={0.08} smoothness={3} position={[0, 1.62, 0]} castShadow>
+      <RoundedBox args={[4.8, 3.05, 0.24]} radius={0.08} smoothness={3} position={[0, 1.78, 0]} castShadow>
         <meshStandardMaterial color="#0f172a" emissive="#0f172a" emissiveIntensity={0.18} metalness={0.35} roughness={0.38} />
       </RoundedBox>
-      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, -0.13]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.1)" color="#ffffff" />
-      <CanvasLabel text={title} width={3.85} height={0.38} position={[0, 2.75, 0.13]} bg="rgba(255,255,255,.1)" color="#ffffff" />
+      <CanvasLabel text={title} width={4.25} height={0.44} position={[0, 3.02, -0.145]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.1)" color="#ffffff" />
+      <CanvasLabel text={title} width={4.25} height={0.44} position={[0, 3.02, 0.145]} bg="rgba(255,255,255,.1)" color="#ffffff" />
       {categories.slice(0, 8).map((cat, i) => {
-        const y = 2.26 - i * 0.26;
+        const y = 2.46 - i * 0.28;
         const label = `${lang === 'fa' ? 'راهرو' : 'Aisle'} ${i + 1} · ${bi(cat.title, lang, '')}`;
         return (
           <group key={cat.id} position={[0, y, 0]}>
-            <mesh position={[-1.78, 0, -0.135]}>
+            <mesh position={[-2.0, 0, -0.15]}>
               <circleGeometry args={[0.065, 18]} />
               <meshBasicMaterial color={cat.color || '#16a34a'} toneMapped={false} />
             </mesh>
-            <mesh position={[1.78, 0, 0.135]}>
+            <mesh position={[2.0, 0, 0.15]}>
               <circleGeometry args={[0.065, 18]} />
               <meshBasicMaterial color={cat.color || '#16a34a'} toneMapped={false} />
             </mesh>
-            <CanvasLabel text={label} width={3.25} height={0.2} position={[0.12, 0, -0.14]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
-            <CanvasLabel text={label} width={3.25} height={0.2} position={[-0.12, 0, 0.14]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+            <CanvasLabel text={label} width={3.65} height={0.22} position={[0.12, 0, -0.155]} rotation={[0, Math.PI, 0]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
+            <CanvasLabel text={label} width={3.65} height={0.22} position={[-0.12, 0, 0.155]} bg="rgba(255,255,255,.92)" color="#0f172a" bold={false} />
           </group>
         );
       })}
       <mesh position={[0, 0.17, 0]}>
-        <boxGeometry args={[4.05, 0.12, 0.18]} />
+        <boxGeometry args={[4.45, 0.12, 0.2]} />
         <meshStandardMaterial color="#334155" metalness={0.25} roughness={0.4} />
       </mesh>
     </group>
