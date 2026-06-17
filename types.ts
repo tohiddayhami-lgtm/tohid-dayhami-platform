@@ -174,9 +174,18 @@ export interface Invoice {
   paymentTerms?: string;                   // payment terms box (defaults from template)
   vatInclusive?: boolean;                  // true => VAT is included in the line amounts
   adjustments?: InvoiceAdjustment[];       // extra fees / discounts below line items
+  paymentDetails?: InvoicePaymentDetails;  // bank block on this invoice (preset-able)
 }
 
-export type InvoiceSectionKey = 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat';
+export interface InvoicePaymentDetails {
+  bankName?: string;
+  accountHolder?: string;
+  accountNumber?: string;
+  swiftCode?: string;
+  iban?: string;
+}
+
+export type InvoiceSectionKey = 'paymentTerms' | 'paymentDetails' | 'items' | 'adjustments' | 'notes' | 'vat';
 
 /** Named snapshot of one invoice section — stored in Firebase for reuse across invoices. */
 export interface InvoiceSectionPreset {
@@ -193,6 +202,7 @@ export interface InvoiceSectionPreset {
     customerEmail?: string;
   };
   paymentTerms?: string;
+  paymentDetails?: InvoicePaymentDetails;
   items?: InvoiceItem[];
   adjustments?: InvoiceAdjustment[];
   note?: string;
