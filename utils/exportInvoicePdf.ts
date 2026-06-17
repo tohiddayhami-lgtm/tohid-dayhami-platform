@@ -29,6 +29,7 @@ const flattenInputsForExport = (root: HTMLElement) => {
       span.textContent = node.value;
     }
     const inline = node.classList.contains('invoice-inline-field');
+    const block = node.classList.contains('invoice-block-field');
     const cs = window.getComputedStyle(node);
     span.style.font = cs.font;
     span.style.color = cs.color;
@@ -36,14 +37,15 @@ const flattenInputsForExport = (root: HTMLElement) => {
     span.style.padding = '0';
     span.style.margin = '0';
     span.style.lineHeight = cs.lineHeight;
-    if (node.tagName === 'TEXTAREA') {
+    if (node.tagName === 'TEXTAREA' || block) {
       span.style.display = 'block';
       span.style.width = '100%';
+      if (block) span.style.marginBottom = '3px';
     } else if (inline || node.tagName === 'SELECT') {
       span.style.display = 'inline';
     } else {
-      span.style.display = 'inline';
-      span.style.width = 'auto';
+      span.style.display = 'block';
+      span.style.width = '100%';
     }
     node.replaceWith(span);
   });
