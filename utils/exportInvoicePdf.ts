@@ -28,22 +28,34 @@ const flattenInputsForExport = (root: HTMLElement) => {
   });
 };
 
-const capturePage = async (pageEl: HTMLElement): Promise<HTMLCanvasElement> =>
-  html2canvas(pageEl, {
+const capturePage = async (pageEl: HTMLElement): Promise<HTMLCanvasElement> => {
+  pageEl.scrollIntoView({ block: 'nearest' });
+  await new Promise((r) => setTimeout(r, 80));
+  const pageNum = pageEl.getAttribute('data-pdf-page');
+  return html2canvas(pageEl, {
     scale: 2,
     useCORS: true,
     allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
     imageTimeout: 15000,
+    scrollX: 0,
+    scrollY: -window.scrollY,
     ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
     onclone: (_clonedDoc, cloneEl) => {
       const clone = cloneEl as HTMLElement;
-      clone.style.padding = '0';
       clone.style.margin = '0';
+      clone.style.overflow = 'visible';
+      clone.style.padding = pageNum === '2' ? '20px 0 0 0' : '0';
+      let node: HTMLElement | null = clone.parentElement;
+      while (node) {
+        node.style.overflow = 'visible';
+        node = node.parentElement;
+      }
       flattenInputsForExport(clone);
     },
   });
+};
 
 const addCanvasToPdf = (
   pdf: jsPDF,

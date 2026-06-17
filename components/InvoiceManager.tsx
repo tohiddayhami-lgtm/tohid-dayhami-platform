@@ -738,19 +738,23 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
             {/* ── PAGE 1 ── */}
             <div className="invoice-pdf-page" data-pdf-page="1">
-              {/* Header row: logo (left) + INVOICE meta (right) */}
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col shrink-0">
-                  {template.logoUrl ? (
-                    <img src={template.logoUrl} alt="logo" className="h-14 object-contain self-start mb-1" />
-                  ) : (
-                    <div className="text-2xl font-black mb-1" style={{ color: DARK }}>{template.companyName}</div>
-                  )}
+              <div className="flex justify-between items-start gap-4">
+                <div className="min-w-0">
                   {template.logoUrl && (
-                    <span className="text-[8px] text-gray-400 tracking-wide leading-tight max-w-[200px]">{template.companyName}</span>
+                    <img src={template.logoUrl} alt="logo" className="h-14 object-contain object-left block" />
                   )}
+                  <div className={`text-[11px] leading-relaxed ${template.logoUrl ? 'mt-1' : ''}`}>
+                    <div className="font-bold text-[14px]" style={{ color: DARK }}>{template.companyName}</div>
+                    {template.address && <div className="text-gray-600 max-w-md">{template.address}</div>}
+                    {template.crNumber && <div className="text-gray-600">CR No.: {template.crNumber}</div>}
+                    <div className="mt-1 space-y-0.5" style={{ color: accent }}>
+                      {template.phone && <div>{template.phone}</div>}
+                      {template.email && <div>{template.email}</div>}
+                      {template.website && <div>{template.website}</div>}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <h1 className="text-3xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
                   <div className="mt-2 text-[12px] space-y-0.5">
                     <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
@@ -766,18 +770,6 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Company details */}
-              <div className="mt-3 text-[11px] leading-relaxed">
-                <div className="font-bold text-[14px]" style={{ color: DARK }}>{template.companyName}</div>
-                {template.address && <div className="text-gray-600 max-w-md">{template.address}</div>}
-                {template.crNumber && <div className="text-gray-600">CR No.: {template.crNumber}</div>}
-                <div className="mt-1 space-y-0.5" style={{ color: accent }}>
-                  {template.phone && <div>{template.phone}</div>}
-                  {template.email && <div>{template.email}</div>}
-                  {template.website && <div>{template.website}</div>}
                 </div>
               </div>
 
@@ -956,13 +948,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
             {/* ── PAGE 2 ── */}
             <div className="invoice-pdf-page invoice-page-break mt-8 pt-6 border-t-2 border-dashed border-gray-200 print:border-0" data-pdf-page="2">
-              <div className="invoice-page-2-header flex justify-between items-center text-[9px] text-gray-400 mb-4 pb-2 border-b border-gray-200">
-                <div className="flex items-center gap-2 min-w-0">
-                  {template.logoUrl && <img src={template.logoUrl} alt="" className="h-6 object-contain shrink-0" />}
-                  <span className="font-semibold text-gray-600 truncate">{template.companyName}</span>
+              <div className="invoice-page-2-header flex justify-between items-start gap-3 text-[9px] text-gray-400 mb-4 pb-2 pt-1 border-b border-gray-200">
+                <div className="flex items-start gap-2 min-w-0">
+                  {template.logoUrl && <img src={template.logoUrl} alt="" className="h-7 w-auto object-contain object-left shrink-0 mt-0.5" />}
+                  <span className="font-semibold text-gray-600 leading-snug pt-1">{template.companyName}</span>
                 </div>
-                <span className="shrink-0 mx-2">Invoice {draft.number}</span>
-                <span className="shrink-0">{fmtDate(draft.createdAt || draft.date)}</span>
+                <div className="text-right shrink-0 leading-snug pt-1">
+                  <div>Invoice {draft.number}</div>
+                  <div>{fmtDate(draft.createdAt || draft.date)}</div>
+                </div>
               </div>
 
             {/* ── Payment details + Notes ── */}
@@ -1006,8 +1000,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           <style>{`
             .pdf-export .print\\:hidden { display: none !important; }
             .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; padding: 0 !important; }
-            .pdf-export .invoice-pdf-page { padding: 0; margin: 0; border: 0 !important; }
-            .pdf-export .invoice-page-break { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+            .pdf-export .invoice-pdf-page { padding: 0; margin: 0; border: 0 !important; overflow: visible !important; }
+            .pdf-export .invoice-pdf-page[data-pdf-page="2"] { padding-top: 24px !important; }
+            .pdf-export .invoice-page-break { margin-top: 0 !important; border-top: 0 !important; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }
