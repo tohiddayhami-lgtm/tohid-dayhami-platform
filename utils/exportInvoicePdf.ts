@@ -6,27 +6,45 @@ const PAGE_MARGIN_MM = 10;
 const flattenInputsForExport = (root: HTMLElement) => {
   root.querySelectorAll('input, textarea, select').forEach((el) => {
     const node = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-    const span = document.createElement('div');
+    if (node.tagName === 'INPUT') {
+      const input = node as HTMLInputElement;
+      if (input.type === 'radio' || input.type === 'checkbox') {
+        node.remove();
+        return;
+      }
+      if (!String(input.value ?? '').trim()) {
+        node.remove();
+        return;
+      }
+    }
+    const span = document.createElement('span');
     if (node.tagName === 'SELECT') {
       const sel = node as HTMLSelectElement;
       span.textContent = sel.options[sel.selectedIndex]?.text || sel.value;
-      span.style.display = 'inline';
-      span.style.width = 'auto';
     } else if (node.tagName === 'TEXTAREA') {
       span.textContent = node.value;
       span.style.whiteSpace = 'pre-wrap';
+      span.style.display = 'block';
     } else {
       span.textContent = node.value;
-      const inline = node.classList.contains('invoice-inline-field');
-      span.style.display = inline ? 'inline' : 'block';
-      span.style.width = inline ? 'auto' : '100%';
     }
+    const inline = node.classList.contains('invoice-inline-field');
     const cs = window.getComputedStyle(node);
     span.style.font = cs.font;
     span.style.color = cs.color;
     span.style.textAlign = cs.textAlign;
     span.style.padding = '0';
     span.style.margin = '0';
+    span.style.lineHeight = cs.lineHeight;
+    if (node.tagName === 'TEXTAREA') {
+      span.style.display = 'block';
+      span.style.width = '100%';
+    } else if (inline || node.tagName === 'SELECT') {
+      span.style.display = 'inline';
+    } else {
+      span.style.display = 'inline';
+      span.style.width = 'auto';
+    }
     node.replaceWith(span);
   });
 };

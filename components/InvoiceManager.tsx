@@ -813,27 +813,27 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <p className="text-[10px] font-bold tracking-wider text-gray-400">LINE ITEMS</p>
               <SectionPresetControls section="items" />
             </div>
-            <table className="w-full text-[12px] mb-1">
+            <table className="w-full text-[12px] mb-0 border-collapse">
               <thead>
                 <tr className="bg-gray-100 text-gray-500 text-[10px] tracking-wider">
-                  <th className="px-2 py-2 text-left w-8">#</th>
-                  <th className="px-2 py-2 text-left">DESCRIPTION</th>
-                  <th className="px-2 py-2 text-center w-14">QTY</th>
-                  <th className="px-2 py-2 text-right w-28">UNIT PRICE ({cur})</th>
-                  <th className="px-2 py-2 text-right w-28">AMOUNT ({cur})</th>
+                  <th className="px-2 py-1 text-left w-8">#</th>
+                  <th className="px-2 py-1 text-left">DESCRIPTION</th>
+                  <th className="px-2 py-1 text-center w-14">QTY</th>
+                  <th className="px-2 py-1 text-right w-28">UNIT PRICE ({cur})</th>
+                  <th className="px-2 py-1 text-right w-28">AMOUNT ({cur})</th>
                   <th className="print:hidden w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {draft.items.map((item, idx) => (
                   <tr key={idx} className="border-b border-gray-100 align-top">
-                    <td className="px-2 py-2.5 text-gray-400">{idx + 1}</td>
-                    <td className="px-2 py-2.5">
-                      <input className="w-full font-semibold outline-none bg-transparent" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} />
-                      <input className="w-full text-gray-500 text-[11px] outline-none bg-transparent" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
+                    <td className="px-2 py-1.5 text-gray-400">{idx + 1}</td>
+                    <td className="px-2 py-1.5">
+                      <input className="w-full font-semibold outline-none bg-transparent leading-tight" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} />
+                      <input className="w-full text-gray-500 text-[10px] outline-none bg-transparent leading-tight mt-0.5 print:hidden" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
                     </td>
-                    <td className="px-2 py-2.5 text-center"><input type="number" min="0" className="w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
-                    <td className="px-2 py-2.5 text-right">
+                    <td className="px-2 py-1.5 text-center"><input type="number" min="0" className="w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
+                    <td className="px-2 py-1.5 text-right">
                       <input
                         type="number"
                         min="0"
@@ -844,16 +844,16 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                         onChange={e => setItem(idx, 'unitPrice', parseInvoiceAmount(e.target.value))}
                       />
                     </td>
-                    <td className="px-2 py-2.5 text-right font-bold" style={{ color: DARK }}>{money(item.total)}</td>
+                    <td className="px-2 py-1.5 text-right font-bold" style={{ color: DARK }}>{money(item.total)}</td>
                     <td className="print:hidden text-center">{draft.items.length > 1 && <button onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!readonly && <button onClick={addItem} className="text-indigo-600 font-bold text-xs flex items-center gap-1 hover:underline print:hidden mb-2"><IconPlus className="w-3.5 h-3.5" />Add row</button>}
+            {!readonly && <button onClick={addItem} className="text-indigo-600 font-bold text-xs flex items-center gap-1 hover:underline print:hidden mb-1 mt-1"><IconPlus className="w-3.5 h-3.5" />Add row</button>}
 
-            {/* ── Extra charges & VAT ── */}
-            <div className="flex items-center justify-between gap-2 mb-2 print:mb-0">
+            {/* ── Extra charges & VAT (editor only) ── */}
+            <div className="flex items-center justify-between gap-2 mb-1 mt-1 print:hidden">
               <p className="text-[10px] font-bold tracking-wider text-gray-400">EXTRA CHARGES &amp; VAT</p>
               <div className="flex items-center gap-2">
                 <SectionPresetControls section="adjustments" />
@@ -894,46 +894,46 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             )}
 
             {/* ── Totals ── */}
-            <div className="flex flex-col items-end gap-0 mb-2 text-[12px]">
-              <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
+            <div className="flex flex-col items-end gap-0 mb-1.5 text-[12px] mt-1">
+              <div className="w-full flex justify-end border-b border-gray-100 py-1"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
               {(draft.adjustments || []).filter(a => a.amount !== 0).map(adj => (
-                <div key={adj.id} className="w-full flex justify-end border-b border-gray-100 py-1.5">
+                <div key={adj.id} className="w-full flex justify-end border-b border-gray-100 py-1">
                   <span className="text-gray-500 mr-6">{adj.label} ({cur})</span>
                   <span className={`font-medium w-28 text-right ${adj.amount < 0 ? 'text-red-600' : ''}`} style={adj.amount >= 0 ? { color: DARK } : undefined}>{money(adj.amount)}</span>
                 </div>
               ))}
-              <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
-              <div className="w-full flex justify-end border-b border-gray-100 py-1.5 items-center gap-3 flex-wrap">
-                <div className="print:hidden flex items-center gap-2 mr-auto">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">VAT mode</span>
-                  <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive === true} onChange={() => setField('vatInclusive', true)} />Inclusive</label>
-                  <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive !== true} onChange={() => setField('vatInclusive', false)} />Exclusive</label>
-                </div>
-                <span className="text-gray-400 mr-6">
-                  VAT (
-                  <input type="number" className="w-10 text-center border-b border-gray-200 outline-none bg-transparent print:border-0" value={draft.taxRate} onChange={e => setField('taxRate', parseFloat(e.target.value) || 0)} />
-                  % — {draft.vatInclusive ? 'inclusive' : 'exclusive'}) ({cur})
-                </span>
-                <span className="text-gray-500 w-28 text-right">{money(draft.taxAmount)}</span>
+              <div className="w-full flex justify-end border-b border-gray-100 py-1"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
+              <div className="print:hidden flex items-center gap-2 mb-1 w-full">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">VAT mode</span>
+                <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive === true} onChange={() => setField('vatInclusive', true)} />Inclusive</label>
+                <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive !== true} onChange={() => setField('vatInclusive', false)} />Exclusive</label>
               </div>
-              <div className="w-full flex justify-end items-center py-2 px-3 mt-1 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
+              <div className="w-full flex justify-end border-b border-gray-100 py-1">
+                <span className="text-gray-400 mr-6 whitespace-nowrap">
+                  VAT (
+                  <input type="number" className="invoice-inline-field w-7 text-center border-b border-gray-200 outline-none bg-transparent print:border-0" value={draft.taxRate} onChange={e => setField('taxRate', parseFloat(e.target.value) || 0)} />
+                  % — {draft.vatInclusive ? 'incl.' : 'excl.'}) ({cur})
+                </span>
+                <span className="text-gray-500 w-28 text-right shrink-0">{money(draft.taxAmount)}</span>
+              </div>
+              <div className="w-full flex justify-end items-center py-1.5 px-3 mt-0.5 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
             </div>
 
             {/* ── Payment receipt (when partial / full payments recorded) ── */}
             {invoiceAmountPaid(draft) > 0 && (
-              <div className="mb-2 border border-emerald-200 rounded-md overflow-hidden text-[11px]">
-                <div className="bg-emerald-50 px-2.5 py-1.5 border-b border-emerald-100">
+              <div className="mb-1.5 border border-emerald-200 rounded-md overflow-hidden text-[11px]">
+                <div className="bg-emerald-50 px-2 py-1 border-b border-emerald-100">
                   <p className="text-[9px] font-bold tracking-wider text-emerald-800">PAYMENT RECEIPT</p>
                 </div>
-                <div className="p-2.5">
-                  <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Invoice Total ({cur})</span><span className="font-semibold w-28 text-right">{money(draft.total)}</span></div>
-                  <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Amount Received ({cur})</span><span className="font-semibold w-28 text-right text-emerald-700">{money(invoiceAmountPaid(draft))}</span></div>
-                  <div className="flex justify-end py-2"><span className="font-bold text-gray-800 mr-6">Balance Due ({cur})</span><span className="font-black w-28 text-right text-base" style={{ color: invoiceBalanceDue(draft) > 0 ? '#b45309' : DARK }}>{money(invoiceBalanceDue(draft))}</span></div>
+                <div className="px-2 py-1">
+                  <div className="flex justify-end border-b border-gray-100 py-0.5"><span className="text-gray-500 mr-6">Invoice Total ({cur})</span><span className="font-semibold w-28 text-right">{money(draft.total)}</span></div>
+                  <div className="flex justify-end border-b border-gray-100 py-0.5"><span className="text-gray-500 mr-6">Amount Received ({cur})</span><span className="font-semibold w-28 text-right text-emerald-700">{money(invoiceAmountPaid(draft))}</span></div>
+                  <div className="flex justify-end py-0.5"><span className="font-bold text-gray-800 mr-6">Balance Due ({cur})</span><span className="font-black w-28 text-right" style={{ color: invoiceBalanceDue(draft) > 0 ? '#b45309' : DARK }}>{money(invoiceBalanceDue(draft))}</span></div>
                   {(draft.receipts || []).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-100">
-                      <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-1.5">PAYMENT HISTORY</p>
+                    <div className="mt-1 pt-1 border-t border-gray-100">
+                      <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-0.5">PAYMENT HISTORY</p>
                       {(draft.receipts || []).map(r => (
-                        <div key={r.id} className="flex justify-between text-[11px] py-0.5 text-gray-600">
+                        <div key={r.id} className="flex justify-between text-[11px] py-0 text-gray-600 leading-tight">
                           <span>{fmtDate(r.date)}{r.method ? ` · ${r.method}` : ''}{r.reference ? ` · Ref: ${r.reference}` : ''}</span>
                           <span className="font-semibold text-emerald-700 shrink-0 ml-2">{money(r.amount)}</span>
                         </div>
