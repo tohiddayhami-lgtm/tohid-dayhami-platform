@@ -11,6 +11,7 @@ import {
   isPresetInvoiceCurrency,
 } from '../utils/invoiceMoney';
 import { exportInvoicePdf } from '../utils/exportInvoicePdf';
+import { InvoiceAmountInput } from './InvoiceAmountInput';
 import {
   invoiceAmountPaid,
   invoiceBalanceDue,
@@ -131,7 +132,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [loadMenuSection, setLoadMenuSection] = useState<InvoiceSectionKey | null>(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [paymentModalInv, setPaymentModalInv] = useState<Invoice | null>(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: '', reference: '', note: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: 0, date: new Date().toISOString().split('T')[0], method: '', reference: '', note: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const invoiceSheetRef = useRef<HTMLDivElement>(null);
@@ -497,7 +498,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     setPaymentModalInv(inv);
     const balance = invoiceBalanceDue(inv);
     setPaymentForm({
-      amount: balance > 0 ? String(balance) : '',
+      amount: balance > 0 ? balance : 0,
       date: new Date().toISOString().split('T')[0],
       method: '',
       reference: '',
@@ -508,7 +509,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const handleRecordPayment = async () => {
     if (!paymentModalInv || readonly) return;
     if (!canEditInvoice(currentUser, paymentModalInv)) { denyAccess(); return; }
-    const amount = parseInvoiceAmount(paymentForm.amount);
+    const amount = paymentForm.amount;
     if (amount <= 0) { alert(lang === 'fa' ? 'مبلغ واریز را وارد کنید.' : 'Enter payment amount.'); return; }
     const balance = invoiceBalanceDue(paymentModalInv);
     if (amount > balance + 0.0001) { alert(lang === 'fa' ? 'مبلغ بیشتر از مانده است.' : 'Amount exceeds balance due.'); return; }
@@ -889,14 +890,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     </td>
                     <td className="px-2 py-2 text-center"><input type="number" min="0" className="invoice-inline-field w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
                     <td className="px-2 py-2 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.001"
+                      <InvoiceAmountInput
                         className="invoice-inline-field w-full outline-none bg-transparent text-right dir-ltr"
                         placeholder="0"
-                        value={item.unitPrice || ''}
-                        onChange={e => setItem(idx, 'unitPrice', parseInvoiceAmount(e.target.value))}
+                        value={item.unitPrice || 0}
+                        onChange={n => setItem(idx, 'unitPrice', n)}
                       />
                     </td>
                     <td className="px-2 py-2 text-right font-bold" style={{ color: DARK }}>{money(item.total)}</td>
@@ -933,13 +931,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       value={adj.label}
                       onChange={e => setAdjustment(adj.id, 'label', e.target.value)}
                     />
-                    <input
-                      type="number"
-                      step="0.001"
+                    <InvoiceAmountInput
                       className="w-28 text-right outline-none bg-transparent font-semibold dir-ltr print:w-auto print:border-0 border-b border-transparent focus:border-gray-200"
                       placeholder="0"
-                      value={adj.amount || ''}
-                      onChange={e => setAdjustment(adj.id, 'amount', parseInvoiceAmount(e.target.value))}
+                      value={adj.amount || 0}
+                      allowNegative
+                      onChange={n => setAdjustment(adj.id, 'amount', n)}
                     />
                     <span className="text-gray-400 w-8 print:hidden">{cur}</span>
                     {!readonly && <button type="button" onClick={() => removeAdjustment(adj.id)} className="text-red-400 hover:text-red-600 print:hidden"><IconTrash className="w-3 h-3" /></button>}
@@ -1077,7 +1074,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <div className="flex justify-between border-t border-gray-200 pt-1 mt-1"><span className="font-semibold text-gray-700">Balance Due</span><span className="font-bold text-amber-600">{formatInvoiceMoney(invoiceBalanceDue(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
             </div>
             <div className="space-y-3">
-              <div><label className={lbl}>Amount</label><input type="number" step="0.001" min="0" className={cFld + ' dir-ltr'} value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} /></div>
+              <div><label className={lbl}>Amount</label><InvoiceAmountInput className={cFld + ' dir-ltr'} value={paymentForm.amount} onChange={n => setPaymentForm(f => ({ ...f, amount: n }))} /></div>
               <div><label className={lbl}>Date</label><input type="date" className={cFld + ' dir-ltr'} value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} /></div>
               <div><label className={lbl}>Method <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld} placeholder="Bank Transfer, Cash…" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} /></div>
               <div><label className={lbl}>Reference <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld + ' dir-ltr'} placeholder="Transaction ID" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} /></div>
