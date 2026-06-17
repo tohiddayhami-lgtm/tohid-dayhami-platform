@@ -28,6 +28,7 @@ import {
   filterInvoicesForUser,
   isInvoiceMasterOrAdmin,
 } from '../utils/invoiceAccess';
+import { computeInvoiceTotals, invoiceNetExclVat } from '../utils/invoiceTotals';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
@@ -218,26 +219,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const denyAccess = () => alert(lang === 'fa' ? 'شما مجوز ویرایش این فاکتور را ندارید.' : 'You do not have permission to edit this invoice.');
 
-  // ── Calculations (supports VAT-inclusive + extra adjustments) ──
-  const adjustmentsSum = (inv: Invoice) => (inv.adjustments || []).reduce((acc, a) => acc + (a.amount || 0), 0);
+  // ── Calculations: Subtotal → adjustments → Net (excl. VAT) → VAT → Total ──
+  const recompute = (inv: Invoice): Invoice =>
+    withInvoicePaymentMeta({ ...inv, ...computeInvoiceTotals(inv) });
 
-  const recompute = (inv: Invoice): Invoice => {
-    const subTotal = inv.items.reduce((acc, it) => acc + (it.total || 0), 0);
-    const extras = adjustmentsSum(inv);
-    const rate = inv.taxRate || 0;
-    const discount = inv.discount || 0;
-    let taxAmount: number, total: number;
-    if (inv.vatInclusive) {
-      const net = rate > 0 ? subTotal / (1 + rate / 100) : subTotal;
-      taxAmount = subTotal - net;
-      total = subTotal + extras - discount;
-    } else {
-      taxAmount = (subTotal * rate) / 100;
-      total = subTotal + taxAmount + extras - discount;
-    }
-    return withInvoicePaymentMeta({ ...inv, subTotal, taxAmount, total });
-  };
-  const netAmount = (inv: Invoice) => inv.vatInclusive ? inv.subTotal - inv.taxAmount : inv.subTotal;
+  const netAmount = (inv: Invoice) => invoiceNetExclVat(inv);
 
   const startNew = () => {
     if (!canCreate) return;
@@ -971,16 +957,16 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               </div>
             )}
 
-            {/* ── Totals ── */}
+            {/* ── Totals (Subtotal → discounts/charges → Net → VAT → Total) ── */}
             <div className="flex flex-col items-end gap-0 mb-3 text-[12px]">
               <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
               {(draft.adjustments || []).filter(a => a.amount !== 0).map(adj => (
-                <div key={adj.id} className="w-full flex justify-end border-b border-gray-100 py-1.5">
+                <div key={adj.id} className={`w-full flex justify-end border-b py-1.5 ${adj.amount < 0 ? 'bg-amber-50/80 border-amber-100' : 'border-gray-100'}`}>
                   <span className="text-gray-500 mr-6">{adj.label} ({cur})</span>
                   <span className={`font-medium w-28 text-right ${adj.amount < 0 ? 'text-red-600' : ''}`} style={adj.amount >= 0 ? { color: DARK } : undefined}>{money(adj.amount)}</span>
                 </div>
               ))}
-              <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
+              <div className="w-full flex justify-end border-b border-sky-100 bg-sky-50/70 py-1.5"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
               <div className="print:hidden flex items-center gap-2 mb-1.5 w-full">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">VAT mode</span>
                 <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive === true} onChange={() => setField('vatInclusive', true)} />Inclusive</label>
