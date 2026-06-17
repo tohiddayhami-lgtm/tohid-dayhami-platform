@@ -1,6 +1,9 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+/** Fixed desktop/A4 capture width — same PDF on mobile and laptop. */
+export const INVOICE_CAPTURE_WIDTH_PX = 794;
+
 const PAGE_MARGIN_MM = 10;
 
 const flattenInputsForExport = (root: HTMLElement) => {
@@ -51,9 +54,38 @@ const flattenInputsForExport = (root: HTMLElement) => {
   });
 };
 
+const applyDesktopCaptureLayout = (root: HTMLElement) => {
+  root.classList.add('invoice-pdf-capture-root');
+  root.style.width = `${INVOICE_CAPTURE_WIDTH_PX}px`;
+  root.style.maxWidth = `${INVOICE_CAPTURE_WIDTH_PX}px`;
+  root.style.minWidth = `${INVOICE_CAPTURE_WIDTH_PX}px`;
+  root.style.boxSizing = 'border-box';
+  root.style.margin = '0';
+};
+
+/** Deep-clone invoice DOM and sync live form values (cloneNode skips input values). */
+const cloneInvoiceForCapture = (source: HTMLElement): HTMLElement => {
+  const clone = source.cloneNode(true) as HTMLElement;
+  const sourceFields = source.querySelectorAll('input, textarea, select');
+  const cloneFields = clone.querySelectorAll('input, textarea, select');
+  sourceFields.forEach((src, index) => {
+    const dst = cloneFields[index] as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | undefined;
+    if (!dst) return;
+    if (src instanceof HTMLSelectElement && dst instanceof HTMLSelectElement) {
+      dst.value = src.value;
+    } else if (src instanceof HTMLInputElement && dst instanceof HTMLInputElement) {
+      dst.value = src.value;
+      if (src.type === 'checkbox' || src.type === 'radio') dst.checked = src.checked;
+    } else if (src instanceof HTMLTextAreaElement && dst instanceof HTMLTextAreaElement) {
+      dst.value = src.value;
+    }
+  });
+  applyDesktopCaptureLayout(clone);
+  return clone;
+};
+
 const captureSheet = async (sheetEl: HTMLElement): Promise<HTMLCanvasElement> => {
-  sheetEl.scrollIntoView({ block: 'start' });
-  await new Promise((r) => setTimeout(r, 80));
+  await new Promise((r) => setTimeout(r, 120));
   return html2canvas(sheetEl, {
     scale: 2,
     useCORS: true,
@@ -61,16 +93,22 @@ const captureSheet = async (sheetEl: HTMLElement): Promise<HTMLCanvasElement> =>
     backgroundColor: '#ffffff',
     logging: false,
     imageTimeout: 15000,
+    width: INVOICE_CAPTURE_WIDTH_PX,
+    windowWidth: INVOICE_CAPTURE_WIDTH_PX,
     scrollX: 0,
-    scrollY: -window.scrollY,
+    scrollY: 0,
     ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
     onclone: (_clonedDoc, cloneEl) => {
       const clone = cloneEl as HTMLElement;
+      applyDesktopCaptureLayout(clone);
       clone.style.margin = '0';
       clone.style.overflow = 'visible';
       let node: HTMLElement | null = clone.parentElement;
       while (node) {
         node.style.overflow = 'visible';
+        if (node.classList.contains('invoice-pdf-capture-host')) {
+          node.style.width = `${INVOICE_CAPTURE_WIDTH_PX}px`;
+        }
         node = node.parentElement;
       }
       flattenInputsForExport(clone);
@@ -114,12 +152,31 @@ const addSliceToPdf = (
   pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM + (contentWidth - w) / 2, PAGE_MARGIN_MM, w, h);
 };
 
-/** Capture full invoice sheet; paginate only when content exceeds one A4 page. */
+/** Capture at fixed desktop width so mobile PDF matches laptop layout. */
 export async function exportInvoicePdf(element: HTMLElement, filename: string): Promise<void> {
   document.body.classList.add('pdf-export');
+
+  const host = document.createElement('div');
+  host.className = 'invoice-pdf-capture-host';
+  Object.assign(host.style, {
+    position: 'fixed',
+    left: '0',
+    top: '0',
+    width: `${INVOICE_CAPTURE_WIDTH_PX}px`,
+    zIndex: '-1',
+    opacity: '0',
+    pointerEvents: 'none',
+    overflow: 'visible',
+    transform: 'translateX(-120vw)',
+  });
+
+  const captureRoot = cloneInvoiceForCapture(element);
+
   try {
-    const sheet = (element.querySelector('.invoice-pdf-sheet') as HTMLElement) || element;
-    const canvas = await captureSheet(sheet);
+    document.body.appendChild(host);
+    host.appendChild(captureRoot);
+
+    const canvas = await captureSheet(captureRoot);
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -145,6 +202,7 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
 
     pdf.save(filename);
   } finally {
+    host.remove();
     document.body.classList.remove('pdf-export');
   }
 }

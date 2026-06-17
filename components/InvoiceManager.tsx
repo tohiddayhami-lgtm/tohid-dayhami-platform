@@ -1039,7 +1039,19 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
           <style>{`
             .pdf-export .print\\:hidden { display: none !important; }
-            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; padding: 14px 18px !important; }
+            .pdf-export .invoice-pdf-capture-host,
+            .pdf-export .invoice-pdf-capture-root {
+              width: 794px !important;
+              max-width: 794px !important;
+              min-width: 794px !important;
+            }
+            .pdf-export .invoice-content,
+            .pdf-export .invoice-pdf-capture-root {
+              box-shadow: none !important;
+              border: 0 !important;
+              padding: 26px 34px !important;
+              box-sizing: border-box !important;
+            }
             .pdf-export .invoice-pdf-sheet { overflow: visible !important; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
