@@ -176,7 +176,7 @@ export interface Invoice {
   adjustments?: InvoiceAdjustment[];       // extra fees / discounts below line items
 }
 
-export type InvoiceSectionKey = 'billTo' | 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat';
+export type InvoiceSectionKey = 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat';
 
 /** Named snapshot of one invoice section — stored in Firebase for reuse across invoices. */
 export interface InvoiceSectionPreset {

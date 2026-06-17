@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
 import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload } from './Icons';
-import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets } from '../services/firebaseService';
+import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets, saveCustomerToCloud } from '../services/firebaseService';
 import { Language } from '../App';
 import {
   INVOICE_PRESET_CURRENCIES,
@@ -10,6 +10,9 @@ import {
   parseInvoiceAmount,
   isPresetInvoiceCurrency,
 } from '../utils/invoiceMoney';
+import { exportInvoicePdf } from '../utils/exportInvoicePdf';
+
+const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
 interface Props {
   invoices: Invoice[];
@@ -47,16 +50,15 @@ const cloneItems = (items?: InvoiceItem[]): InvoiceItem[] =>
 
 const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice => {
   const tpl = defaultTemplate(config);
-  const bill = tpl.defaultBillTo;
   return {
     id: `inv-${Date.now()}`,
     number: genInvoiceNumber(tpl, count),
     date: new Date().toISOString().split('T')[0],
-    customerName: bill?.customerName || '',
-    companyName: bill?.companyName || '',
-    customerPhone: bill?.customerPhone || '',
-    customerAddress: bill?.customerAddress || '',
-    customerEmail: bill?.customerEmail || '',
+    customerName: '',
+    companyName: '',
+    customerPhone: '',
+    customerAddress: '',
+    customerEmail: '',
     items: cloneItems(tpl.defaultItems),
     adjustments: tpl.defaultAdjustments?.map(a => ({ ...a, id: a.id || `adj-${Date.now()}-${Math.random()}` })) || [],
     currency: tpl.defaultCurrency || 'OMR',
@@ -89,7 +91,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [presetSaveName, setPresetSaveName] = useState('');
   const [presetSaving, setPresetSaving] = useState(false);
   const [loadMenuSection, setLoadMenuSection] = useState<InvoiceSectionKey | null>(null);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const invoiceSheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsub = subscribeToInvoiceSectionPresets(setSectionPresets);
@@ -206,15 +210,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       createdAt: new Date().toISOString(),
       createdBy: currentUser.fullName,
     };
-    if (section === 'billTo') {
-      base.billTo = {
-        customerName: draft.customerName,
-        companyName: draft.companyName,
-        customerPhone: draft.customerPhone,
-        customerAddress: draft.customerAddress,
-        customerEmail: draft.customerEmail,
-      };
-    } else if (section === 'paymentTerms') {
+    if (section === 'paymentTerms') {
       base.paymentTerms = draft.paymentTerms || '';
     } else if (section === 'items') {
       base.items = draft.items.map(it => ({ ...it }));
@@ -233,16 +229,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     setDraft(d => {
       if (!d) return d;
       let next: Invoice = { ...d };
-      if (preset.section === 'billTo' && preset.billTo) {
-        next = {
-          ...next,
-          customerName: preset.billTo.customerName || '',
-          companyName: preset.billTo.companyName || '',
-          customerPhone: preset.billTo.customerPhone || '',
-          customerAddress: preset.billTo.customerAddress || '',
-          customerEmail: preset.billTo.customerEmail || '',
-        };
-      } else if (preset.section === 'paymentTerms') {
+      if (preset.section === 'paymentTerms') {
         next = { ...next, paymentTerms: preset.paymentTerms || '' };
       } else if (preset.section === 'items' && preset.items?.length) {
         next = { ...next, items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })) };
@@ -346,15 +333,72 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     setShowCustomerPicker(false); setCustomerSearch('');
   };
 
+  const upsertCustomerFromInvoice = async (inv: Invoice): Promise<string | undefined> => {
+    const phoneRaw = inv.customerPhone || '';
+    const phone = normalizePhone(phoneRaw);
+    let existing = inv.customerId ? customers.find(c => c.id === inv.customerId) : undefined;
+    if (!existing && phone) existing = customers.find(c => normalizePhone(c.phoneNumber) === phone);
+
+    if (existing) {
+      await saveCustomerToCloud({
+        ...existing,
+        fullName: inv.customerName.trim() || existing.fullName,
+        companyName: inv.companyName || existing.companyName,
+        location: inv.customerAddress || existing.location,
+        phoneNumber: phoneRaw || existing.phoneNumber,
+        whatsappNumber: existing.whatsappNumber || phoneRaw || existing.phoneNumber,
+        email: inv.customerEmail || existing.email,
+      });
+      return existing.id;
+    }
+
+    if (!inv.customerName.trim()) return undefined;
+
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const phoneSuffix = (phone || '0000').slice(-4);
+    const newCustomer: Customer = {
+      id: `C-${Date.now()}`,
+      fullName: inv.customerName.trim(),
+      companyName: inv.companyName || '',
+      location: inv.customerAddress || '',
+      phoneNumber: phoneRaw,
+      whatsappNumber: phoneRaw,
+      email: inv.customerEmail,
+      firstContact: new Date().toISOString(),
+      totalTickets: 0,
+      source: 'Invoice',
+      loyaltyCode: phone ? `VIP-${phoneSuffix}-${randomStr}` : undefined,
+    };
+    await saveCustomerToCloud(newCustomer);
+    return newCustomer.id;
+  };
+
   const handleSave = async () => {
     if (!draft || readonly) return;
     if (!draft.customerName.trim()) { alert(lang === 'fa' ? 'نام مشتری را وارد کنید.' : 'Enter customer name.'); return; }
     setSaving(true);
     try {
-      await onSaveInvoice(recompute({ ...draft, createdAt: draft.createdAt || new Date().toISOString() }));
+      const customerId = await upsertCustomerFromInvoice(draft);
+      await onSaveInvoice(recompute({
+        ...draft,
+        customerId: customerId || draft.customerId,
+        createdAt: draft.createdAt || new Date().toISOString(),
+      }));
       setMode('archive'); setDraft(null);
     } catch { alert(lang === 'fa' ? 'خطا در ذخیره' : 'Save failed'); }
     finally { setSaving(false); }
+  };
+
+  const handleExportPdf = async () => {
+    if (!draft || !invoiceSheetRef.current) return;
+    setPdfGenerating(true);
+    try {
+      await exportInvoicePdf(invoiceSheetRef.current, `Invoice-${draft.number || 'draft'}.pdf`);
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ساخت PDF' : 'PDF export failed');
+    } finally {
+      setPdfGenerating(false);
+    }
   };
 
   const handleDelete = async (id: string) => { if (!readonly && window.confirm(t.deleteConfirm)) await onDeleteInvoice(id); };
@@ -516,13 +560,13 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <button onClick={() => { setMode('archive'); setDraft(null); }} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
             <div className="flex items-center gap-2">
               <select value={draft.status || 'draft'} onChange={e => setField('status', e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none"><option value="draft">{t.draft}</option><option value="issued">{t.issued}</option><option value="paid">{t.paid}</option></select>
-              <button onClick={() => window.print()} className="flex items-center gap-1.5 bg-gray-700 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-gray-800"><IconPrinter className="w-4 h-4" />{t.print}</button>
+              <button onClick={handleExportPdf} disabled={pdfGenerating} className="flex items-center gap-1.5 bg-gray-700 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-gray-800 disabled:opacity-50"><IconPrinter className="w-4 h-4" />{pdfGenerating ? 'PDF…' : 'PDF'}</button>
               {!readonly && <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50"><IconCheck className="w-4 h-4" />{t.save}</button>}
             </div>
           </div>
 
           {/* A4 sheet */}
-          <div className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ maxWidth: 800, padding: '40px 44px' }} dir="ltr">
+          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', minHeight: 1123, padding: '36px 40px', boxSizing: 'border-box' }} dir="ltr">
             {/* ── Top: logo + Invoice meta ── */}
             <div className="flex justify-between items-start">
               <div className="flex flex-col">
@@ -576,10 +620,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <div className="border border-gray-200 rounded-md p-3">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">BILL TO</p>
-                  <div className="flex items-center gap-2">
-                    <SectionPresetControls section="billTo" />
-                    {!readonly && (
-                      <div className="relative print:hidden">
+                  {!readonly && (
+                    <div className="relative print:hidden">
                         <button type="button" onClick={() => setShowCustomerPicker(v => !v)} className="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50"><IconUsers className="w-3 h-3" />Pick Customer</button>
                         {showCustomerPicker && (
                           <div className="absolute left-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20 p-2 text-left" dir="ltr">
@@ -591,9 +633,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                             </div>
                           </div>
                         )}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <input className="block w-full font-bold text-[14px] outline-none bg-transparent print:border-0 border-b border-transparent focus:border-gray-200" style={{ color: DARK }} placeholder="Mr. Customer Name" value={draft.customerName} onChange={e => setField('customerName', e.target.value)} />
                 <input className="block w-full text-[12px] text-gray-700 outline-none bg-transparent print:border-0 border-b border-transparent focus:border-gray-200" placeholder="Company" value={draft.companyName || ''} onChange={e => setField('companyName', e.target.value)} />
@@ -754,10 +795,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           </div>
 
           <style>{`
+            .pdf-export .print\\:hidden { display: none !important; }
             @media print {
+              @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }
               .invoice-content, .invoice-content * { visibility: visible; }
-              .invoice-content { position: absolute; left: 0; top: 0; width: 100%; max-width: 100% !important; margin: 0; border: 0 !important; box-shadow: none !important; }
+              .invoice-content { position: absolute; left: 0; top: 0; width: 210mm !important; max-width: 210mm !important; min-height: auto !important; margin: 0; padding: 12mm !important; border: 0 !important; box-shadow: none !important; }
               .print\\:hidden { display: none !important; }
               .print\\:border-0 { border: 0 !important; }
             }
