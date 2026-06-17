@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence } from '../types';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -749,6 +749,29 @@ export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) => 
         const invoices = snapshot.docs.map(d => d.data() as Invoice);
         invoices.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
         callback(invoices);
+    }, (e) => {});
+};
+
+// ── Invoice section presets (named saves per section) ──
+export const saveInvoiceSectionPresetToCloud = async (preset: InvoiceSectionPreset) => {
+    await setDoc(doc(db, "invoice_presets", preset.id), sanitizeData(preset));
+    logSystemAction('CREATE', 'InvoicePreset', `Preset "${preset.name}" (${preset.section}) saved`, preset.createdBy, preset.id);
+};
+
+export const deleteInvoiceSectionPresetFromCloud = async (id: string) => {
+    const ref = doc(db, "invoice_presets", id);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : null;
+    await deleteDoc(ref);
+    logSystemAction('DELETE', 'InvoicePreset', `Invoice preset deleted`, 'Master', id, data, 'invoice_presets');
+};
+
+export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSectionPreset[]) => void) => {
+    const q = query(collection(db, "invoice_presets"));
+    return onSnapshot(q, (snapshot) => {
+        const presets = snapshot.docs.map(d => d.data() as InvoiceSectionPreset);
+        presets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(presets);
     }, (e) => {});
 };
 

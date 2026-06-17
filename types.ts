@@ -176,6 +176,30 @@ export interface Invoice {
   adjustments?: InvoiceAdjustment[];       // extra fees / discounts below line items
 }
 
+export type InvoiceSectionKey = 'billTo' | 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat';
+
+/** Named snapshot of one invoice section — stored in Firebase for reuse across invoices. */
+export interface InvoiceSectionPreset {
+  id: string;
+  name: string;
+  section: InvoiceSectionKey;
+  createdAt: string;
+  createdBy: string;
+  billTo?: {
+    customerName?: string;
+    companyName?: string;
+    customerPhone?: string;
+    customerAddress?: string;
+    customerEmail?: string;
+  };
+  paymentTerms?: string;
+  items?: InvoiceItem[];
+  adjustments?: InvoiceAdjustment[];
+  note?: string;
+  taxRate?: number;
+  vatInclusive?: boolean;
+}
+
 export interface ProjectMilestone {
   id: string;
   title: string;
@@ -500,7 +524,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'InvoicePreset' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar';
   entityId?: string;
   details: string;
   actorName: string;

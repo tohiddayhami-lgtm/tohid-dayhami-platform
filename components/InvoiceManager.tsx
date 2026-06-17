@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, Customer, Personnel, AppConfig } from '../types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
 import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload } from './Icons';
-import { uploadFileWithProgress } from '../services/firebaseService';
+import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets } from '../services/firebaseService';
 import { Language } from '../App';
 import {
   INVOICE_PRESET_CURRENCIES,
@@ -84,7 +84,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [companySaved, setCompanySaved] = useState(false);
   const [sectionSaved, setSectionSaved] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [sectionPresets, setSectionPresets] = useState<InvoiceSectionPreset[]>([]);
+  const [presetSaveSection, setPresetSaveSection] = useState<InvoiceSectionKey | null>(null);
+  const [presetSaveName, setPresetSaveName] = useState('');
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [loadMenuSection, setLoadMenuSection] = useState<InvoiceSectionKey | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToInvoiceSectionPresets(setSectionPresets);
+    return () => unsub();
+  }, []);
 
   const t = {
     fa: {
@@ -187,11 +197,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const flashSectionSave = (key: string) => { setSectionSaved(key); setTimeout(() => setSectionSaved(null), 2000); };
 
-  const saveSectionPreset = (section: 'billTo' | 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat') => {
-    if (!draft || readonly) return;
-    const tpl = { ...template };
+  const buildPresetFromDraft = (section: InvoiceSectionKey, name: string): InvoiceSectionPreset => {
+    if (!draft) throw new Error('No draft');
+    const base: InvoiceSectionPreset = {
+      id: `preset-${section}-${Date.now()}`,
+      name: name.trim(),
+      section,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.fullName,
+    };
     if (section === 'billTo') {
-      tpl.defaultBillTo = {
+      base.billTo = {
         customerName: draft.customerName,
         companyName: draft.companyName,
         customerPhone: draft.customerPhone,
@@ -199,34 +215,131 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
         customerEmail: draft.customerEmail,
       };
     } else if (section === 'paymentTerms') {
-      tpl.defaultPaymentTerms = draft.paymentTerms || '';
+      base.paymentTerms = draft.paymentTerms || '';
     } else if (section === 'items') {
-      tpl.defaultItems = draft.items.map(it => ({ ...it }));
+      base.items = draft.items.map(it => ({ ...it }));
     } else if (section === 'adjustments') {
-      tpl.defaultAdjustments = (draft.adjustments || []).map(a => ({ ...a }));
+      base.adjustments = (draft.adjustments || []).map(a => ({ ...a, id: a.id || `adj-${Date.now()}` }));
     } else if (section === 'notes') {
-      tpl.defaultNotes = draft.note || '';
+      base.note = draft.note || '';
     } else if (section === 'vat') {
-      tpl.defaultTaxRate = draft.taxRate;
-      tpl.vatInclusive = draft.vatInclusive ?? true;
+      base.taxRate = draft.taxRate;
+      base.vatInclusive = draft.vatInclusive ?? true;
     }
-    onUpdateConfig({ ...config, invoiceTemplate: tpl });
-    flashSectionSave(section);
+    return base;
   };
 
-  const SectionSaveBtn: React.FC<{ section: 'billTo' | 'paymentTerms' | 'items' | 'adjustments' | 'notes' | 'vat' }> = ({ section }) => (
-    !readonly ? (
-      <button
-        type="button"
-        onClick={() => saveSectionPreset(section)}
-        title="Save for next invoices"
-        className="print:hidden text-[9px] font-semibold uppercase tracking-wide text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 shrink-0"
-      >
-        <IconCheck className="w-3 h-3" />
-        {sectionSaved === section ? 'Saved' : 'Save'}
-      </button>
-    ) : null
-  );
+  const applySectionPreset = (preset: InvoiceSectionPreset) => {
+    setDraft(d => {
+      if (!d) return d;
+      let next: Invoice = { ...d };
+      if (preset.section === 'billTo' && preset.billTo) {
+        next = {
+          ...next,
+          customerName: preset.billTo.customerName || '',
+          companyName: preset.billTo.companyName || '',
+          customerPhone: preset.billTo.customerPhone || '',
+          customerAddress: preset.billTo.customerAddress || '',
+          customerEmail: preset.billTo.customerEmail || '',
+        };
+      } else if (preset.section === 'paymentTerms') {
+        next = { ...next, paymentTerms: preset.paymentTerms || '' };
+      } else if (preset.section === 'items' && preset.items?.length) {
+        next = { ...next, items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })) };
+      } else if (preset.section === 'adjustments') {
+        next = {
+          ...next,
+          adjustments: (preset.adjustments || []).map(a => ({ ...a, id: a.id || `adj-${Date.now()}-${Math.random()}` })),
+        };
+      } else if (preset.section === 'notes') {
+        next = { ...next, note: preset.note || '' };
+      } else if (preset.section === 'vat') {
+        next = { ...next, taxRate: preset.taxRate ?? next.taxRate, vatInclusive: preset.vatInclusive ?? next.vatInclusive };
+      }
+      return recompute(next);
+    });
+    setLoadMenuSection(null);
+  };
+
+  const handleSaveSectionPreset = async (section: InvoiceSectionKey) => {
+    if (!draft || readonly || !presetSaveName.trim()) return;
+    setPresetSaving(true);
+    try {
+      await saveInvoiceSectionPresetToCloud(buildPresetFromDraft(section, presetSaveName));
+      flashSectionSave(section);
+      setPresetSaveSection(null);
+      setPresetSaveName('');
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ذخیره preset' : 'Failed to save preset');
+    } finally {
+      setPresetSaving(false);
+    }
+  };
+
+  const handleDeleteSectionPreset = async (id: string) => {
+    if (readonly) return;
+    if (!window.confirm(lang === 'fa' ? 'این preset حذف شود؟' : 'Delete this preset?')) return;
+    try {
+      await deleteInvoiceSectionPresetFromCloud(id);
+    } catch {
+      alert(lang === 'fa' ? 'خطا در حذف' : 'Delete failed');
+    }
+  };
+
+  const SectionPresetControls: React.FC<{ section: InvoiceSectionKey }> = ({ section }) => {
+    if (readonly) return null;
+    const list = sectionPresets.filter(p => p.section === section);
+    const saveOpen = presetSaveSection === section;
+    const loadOpen = loadMenuSection === section;
+    return (
+      <div className="flex items-center gap-1 print:hidden relative">
+        <button
+          type="button"
+          onClick={() => { setLoadMenuSection(loadOpen ? null : section); setPresetSaveSection(null); }}
+          className={`text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border ${list.length ? 'text-indigo-600 border-indigo-200 hover:bg-indigo-50' : 'text-gray-300 border-gray-100 cursor-not-allowed'}`}
+          disabled={!list.length}
+          title="Load saved preset"
+        >
+          Load{list.length ? ` (${list.length})` : ''}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setPresetSaveSection(saveOpen ? null : section); setLoadMenuSection(null); setPresetSaveName(''); }}
+          className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 hover:text-indigo-600 flex items-center gap-0.5 px-1"
+          title="Save as new preset"
+        >
+          <IconCheck className="w-3 h-3" />
+          {sectionSaved === section ? 'Saved' : 'Save'}
+        </button>
+        {loadOpen && list.length > 0 && (
+          <div className="absolute right-0 top-full mt-1 z-30 w-56 bg-white border border-gray-200 rounded-lg shadow-xl py-1 text-left max-h-48 overflow-y-auto">
+            {list.map(p => (
+              <div key={p.id} className="flex items-center gap-1 px-2 py-1.5 hover:bg-gray-50 group">
+                <button type="button" onClick={() => applySectionPreset(p)} className="flex-1 text-left text-[11px] text-gray-700 truncate">{p.name}</button>
+                <button type="button" onClick={() => handleDeleteSectionPreset(p.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 p-0.5" title="Delete"><IconTrash className="w-3 h-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {saveOpen && (
+          <div className="absolute right-0 top-full mt-1 z-30 w-52 bg-white border border-gray-200 rounded-lg shadow-xl p-2 text-left">
+            <input
+              autoFocus
+              value={presetSaveName}
+              onChange={e => setPresetSaveName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveSectionPreset(section); if (e.key === 'Escape') setPresetSaveSection(null); }}
+              placeholder="Preset name…"
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded outline-none focus:border-indigo-400 mb-1.5"
+            />
+            <div className="flex gap-1">
+              <button type="button" disabled={presetSaving || !presetSaveName.trim()} onClick={() => handleSaveSectionPreset(section)} className="flex-1 text-[10px] font-bold bg-indigo-600 text-white rounded py-1 hover:bg-indigo-700 disabled:opacity-50">Save</button>
+              <button type="button" onClick={() => setPresetSaveSection(null)} className="text-[10px] text-gray-500 px-2 py-1 hover:bg-gray-100 rounded">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const pickCustomer = (c: Customer) => {
     setDraft(d => d ? { ...d, customerId: c.id, customerName: c.fullName, companyName: c.companyName || '', customerAddress: c.location || '', customerPhone: c.phoneNumber || '', customerEmail: c.email || '' } : d);
@@ -260,7 +373,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const cur = (draft?.currency || 'OMR').trim() || 'OMR';
   const money = (n: number) => formatInvoiceMoney(n, cur);
-  const fmtDateTime = (iso?: string) => iso ? new Date(iso).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US') : '';
+  const fmtDate = (value?: string) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
 
   const currencySelectValue = draft && isPresetInvoiceCurrency(draft.currency) ? draft.currency : INVOICE_CURRENCY_CUSTOM;
   const setCurrencyPreset = (code: string) => {
@@ -315,7 +436,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     <tr key={inv.id} className="hover:bg-gray-50/60">
                       <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">{inv.number}</td>
                       <td className="px-4 py-3"><div className="font-medium text-gray-800">{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
-                      <td className="px-4 py-3 text-gray-500" dir="ltr">{inv.date}</td>
+                      <td className="px-4 py-3 text-gray-500" dir="ltr">{fmtDate(inv.date)}</td>
                       <td className="px-4 py-3 font-bold text-gray-800" dir="ltr">{formatInvoiceMoney(inv.total, inv.currency || 'OMR')}</td>
                       <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${statusCls(inv.status)}`}>{statusLabel(inv.status)}</span></td>
                       <td className="px-4 py-3"><div className="flex items-center justify-center gap-1"><button onClick={() => startEdit(inv)} title={t.edit} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>{!readonly && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}</div></td>
@@ -412,7 +533,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <h1 className="text-3xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
                 <div className="mt-3 text-[12px] space-y-0.5">
                   <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
-                  <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDateTime(draft.createdAt)}</span></div>
+                  <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>
                   <div className="flex items-center justify-end gap-2 flex-wrap">
                     <span className="text-gray-500">Currency </span>
                     <select
@@ -456,7 +577,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">BILL TO</p>
                   <div className="flex items-center gap-2">
-                    <SectionSaveBtn section="billTo" />
+                    <SectionPresetControls section="billTo" />
                     {!readonly && (
                       <div className="relative print:hidden">
                         <button type="button" onClick={() => setShowCustomerPicker(v => !v)} className="text-[10px] flex items-center gap-1 px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50"><IconUsers className="w-3 h-3" />Pick Customer</button>
@@ -482,7 +603,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <div className="border border-gray-200 rounded-md p-3">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT TERMS</p>
-                  <SectionSaveBtn section="paymentTerms" />
+                  <SectionPresetControls section="paymentTerms" />
                 </div>
                 <textarea rows={3} className="w-full text-[12px] text-gray-700 outline-none bg-transparent resize-none" placeholder="Advance Payment: 80% to start / 20% upon completion." value={draft.paymentTerms || ''} onChange={e => setField('paymentTerms', e.target.value)} />
               </div>
@@ -491,7 +612,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             {/* ── Items table ── */}
             <div className="flex items-center justify-between gap-2 mb-1">
               <p className="text-[10px] font-bold tracking-wider text-gray-400">LINE ITEMS</p>
-              <SectionSaveBtn section="items" />
+              <SectionPresetControls section="items" />
             </div>
             <table className="w-full text-[12px] mb-1">
               <thead>
@@ -536,8 +657,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <div className="flex items-center justify-between gap-2 mb-2 print:mb-0">
               <p className="text-[10px] font-bold tracking-wider text-gray-400">EXTRA CHARGES &amp; VAT</p>
               <div className="flex items-center gap-2">
-                <SectionSaveBtn section="adjustments" />
-                <SectionSaveBtn section="vat" />
+                <SectionPresetControls section="adjustments" />
+                <SectionPresetControls section="vat" />
               </div>
             </div>
             {!readonly && (
@@ -613,7 +734,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <div className="border border-gray-200 rounded-md p-3">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
-                  <SectionSaveBtn section="notes" />
+                  <SectionPresetControls section="notes" />
                 </div>
                 <textarea rows={6} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
               </div>
@@ -629,7 +750,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             </div>
 
             {/* ── Footer ── */}
-            <div className="mt-6 text-center text-[9px] text-gray-300">Generated by {template.companyName} — issued {fmtDateTime(draft.createdAt)}</div>
+            <div className="mt-6 text-center text-[9px] text-gray-300">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
           </div>
 
           <style>{`
