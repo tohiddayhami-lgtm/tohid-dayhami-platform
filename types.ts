@@ -140,6 +140,13 @@ export interface InvoiceItem {
   total: number;
 }
 
+/** Extra line in totals area — fees, discounts, or other charges (not main line items). */
+export interface InvoiceAdjustment {
+  id: string;
+  label: string;
+  amount: number; // positive = charge, negative = discount
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -163,9 +170,10 @@ export interface Invoice {
   issuedBy: string;
   status?: 'draft' | 'issued' | 'paid';  // archive status
   createdAt?: string;                      // when first created (for sorting the archive)
-  type?: string;                           // invoice type, e.g. "Services" (shown in header, drives number prefix)
+  type?: string;                           // legacy — no longer shown in UI
   paymentTerms?: string;                   // payment terms box (defaults from template)
   vatInclusive?: boolean;                  // true => VAT is included in the line amounts
+  adjustments?: InvoiceAdjustment[];       // extra fees / discounts below line items
 }
 
 export interface ProjectMilestone {
@@ -1004,6 +1012,16 @@ export interface InvoiceTemplate {
   defaultNotes?: string;          // NOTES / TERMS box default content
   vatInclusive?: boolean;         // VAT is inclusive in the unit prices (default behaviour)
   invoicePrefix?: string;         // invoice-number prefix (default "SVC")
+  // ── Section presets (saved from invoice editor for reuse) ──
+  defaultItems?: InvoiceItem[];
+  defaultAdjustments?: InvoiceAdjustment[];
+  defaultBillTo?: {
+    customerName?: string;
+    companyName?: string;
+    customerPhone?: string;
+    customerAddress?: string;
+    customerEmail?: string;
+  };
 }
 
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';
