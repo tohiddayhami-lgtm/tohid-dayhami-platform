@@ -32,8 +32,10 @@ const capturePage = async (pageEl: HTMLElement): Promise<HTMLCanvasElement> =>
   html2canvas(pageEl, {
     scale: 2,
     useCORS: true,
+    allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
+    imageTimeout: 15000,
     ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
     onclone: (_clonedDoc, cloneEl) => {
       const clone = cloneEl as HTMLElement;
