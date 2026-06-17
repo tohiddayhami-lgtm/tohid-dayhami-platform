@@ -54,7 +54,8 @@ export interface PersonnelPermissions {
   canViewCustomers: boolean; 
   canViewTariffs: boolean; 
   canViewAllTickets: boolean;
-  canIssueInvoices: boolean;
+  canIssueInvoices: boolean;      // create & edit own invoices
+  canViewAllInvoices?: boolean;   // view all invoices in archive (master/admin always)
 }
 
 export interface PersonnelDocument {
@@ -168,6 +169,7 @@ export interface Invoice {
   total: number;
   note?: string;
   issuedBy: string;
+  issuedByPersonnelId?: string;    // personnel id of issuer (for access control)
   status?: 'draft' | 'issued' | 'paid';  // archive status
   createdAt?: string;                      // when first created (for sorting the archive)
   documentTitle?: string;                  // header title — e.g. INVOICE, PROFORMA INVOICE

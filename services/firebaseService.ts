@@ -4,6 +4,7 @@ import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence } from '../types';
+import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -490,7 +491,8 @@ export const logSystemAction = async (
     actorName: string,
     entityId?: string,
     backupData?: any,
-    collectionName?: string
+    collectionName?: string,
+    actorId?: string,
 ) => {
     try {
         const logEntry: SystemLog = {
@@ -499,6 +501,7 @@ export const logSystemAction = async (
             entity,
             details,
             actorName,
+            actorId,
             entityId,
             timestamp: new Date().toISOString(),
             backupData,
@@ -730,17 +733,42 @@ export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void)
 };
 
 // ── Standalone Invoices (Invoices archive) ──
-export const saveInvoiceToCloud = async (invoice: Invoice) => {
-    await setDoc(doc(db, "invoices", invoice.id), sanitizeData(invoice));
-    logSystemAction('CREATE', 'Invoice', `فاکتور ${invoice.number} ذخیره شد`, invoice.issuedBy, invoice.id);
+export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) => {
+    const ref = doc(db, "invoices", invoice.id);
+    const snap = await getDoc(ref);
+    const prev = snap.exists() ? (snap.data() as Invoice) : null;
+    await setDoc(ref, sanitizeData(invoice));
+    const details = summarizeInvoiceChanges(prev, invoice);
+    const actorName = actor?.fullName || invoice.issuedBy || 'System';
+    const actorId = actor?.id;
+    await logSystemAction(
+        prev ? 'UPDATE' : 'CREATE',
+        'Invoice',
+        details,
+        actorName,
+        invoice.id,
+        undefined,
+        undefined,
+        actorId,
+    );
 };
 
-export const deleteInvoiceFromCloud = async (id: string) => {
+export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
     const ref = doc(db, "invoices", id);
     const snap = await getDoc(ref);
     const data = snap.exists() ? snap.data() : null;
     await deleteDoc(ref);
-    logSystemAction('DELETE', 'Invoice', `فاکتور حذف شد`, 'Master', id, data, 'invoices');
+    const inv = data as Invoice | null;
+    await logSystemAction(
+        'DELETE',
+        'Invoice',
+        inv ? `Deleted invoice ${inv.number} (${inv.customerName || '—'})` : `Deleted invoice ${id}`,
+        actor?.fullName || 'System',
+        id,
+        data,
+        'invoices',
+        actor?.id,
+    );
 };
 
 export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) => {

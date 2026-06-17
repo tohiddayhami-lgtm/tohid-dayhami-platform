@@ -121,7 +121,8 @@ export const AdminDashboard: React.FC<Props> = ({
   const isAdmin = safeRoles.includes('مدیر');
   const isMaster = currentUser?.username === 'master';
   
-  const canManageInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices; 
+  const canManageInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices || currentUser?.permissions?.canViewAllInvoices;
+  const canEditInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices;
   const canAssign = isAdmin || isMaster || currentUser?.permissions?.canAssign;
   const hasCustomerAccess = isAdmin || isMaster || currentUser?.permissions?.canViewCustomers;
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
@@ -1856,7 +1857,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
         {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
         {activeTab === 'invoices' && canManageInvoices && onSaveInvoice && onDeleteInvoice && (
-          <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!(isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices)} />
+          <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && (isAdmin || isMaster) && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
           <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={metaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!(isAdmin || isMaster)} />

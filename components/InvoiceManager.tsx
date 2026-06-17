@@ -19,6 +19,14 @@ import {
   addInvoiceReceipt,
   removeInvoiceReceipt,
 } from '../utils/invoicePayments';
+import {
+  canViewAllInvoices,
+  canEditInvoice,
+  canDeleteInvoice,
+  canIssueInvoices,
+  filterInvoicesForUser,
+  isInvoiceMasterOrAdmin,
+} from '../utils/invoiceAccess';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
@@ -71,7 +79,7 @@ const normalizePaymentDetails = (value: unknown): string => {
   return '';
 };
 
-const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice => {
+const emptyDraft = (config: AppConfig, user: Personnel, count: number): Invoice => {
   const tpl = defaultTemplate(config);
   return {
     id: `inv-${Date.now()}`,
@@ -86,7 +94,8 @@ const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice
     adjustments: tpl.defaultAdjustments?.map(a => ({ ...a, id: a.id || `adj-${Date.now()}-${Math.random()}` })) || [],
     currency: tpl.defaultCurrency || 'OMR',
     subTotal: 0, taxRate: tpl.defaultTaxRate ?? 5, taxAmount: 0, discount: 0, total: 0,
-    issuedBy,
+    issuedBy: user.fullName,
+    issuedByPersonnelId: user.id,
     status: 'draft',
     createdAt: new Date().toISOString(),
     paymentTerms: tpl.defaultPaymentTerms || '',
@@ -98,6 +107,10 @@ const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice
 };
 
 export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, currentUser, lang, onSaveInvoice, onDeleteInvoice, onUpdateConfig, readonly = false }) => {
+  const showAllInvoices = canViewAllInvoices(currentUser);
+  const visibleInvoices = useMemo(() => filterInvoicesForUser(invoices, currentUser), [invoices, currentUser]);
+  const canManageCompany = isInvoiceMasterOrAdmin(currentUser);
+  const canCreate = canIssueInvoices(currentUser) && !readonly;
   const [mode, setMode] = useState<'archive' | 'editor' | 'company'>('archive');
   const [draft, setDraft] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
@@ -132,7 +145,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     fa: {
       title: 'فاکتورها', archive: 'آرشیو فاکتورها', newInvoice: 'فاکتور جدید', companyInfo: 'اطلاعات شرکت',
       search: 'جستجو شماره فاکتور یا نام مشتری...', empty: 'هنوز فاکتوری ثبت نشده است.', noResult: 'موردی یافت نشد.',
-      number: 'شماره', customer: 'مشتری', date: 'تاریخ', amount: 'مبلغ', status: 'وضعیت', actions: 'عملیات',
+      number: 'شماره', customer: 'مشتری', date: 'تاریخ', amount: 'مبلغ', status: 'وضعیت', issuer: 'صادرکننده', actions: 'عملیات',
       edit: 'ویرایش', del: 'حذف', print: 'چاپ', save: 'ذخیره', cancel: 'انصراف', back: 'بازگشت به آرشیو',
       deleteConfirm: 'این فاکتور حذف شود؟',
       draft: 'پیش‌نویس', issued: 'صادر شده', paid: 'پرداخت شده',
@@ -150,7 +163,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     en: {
       title: 'Invoices', archive: 'Invoice Archive', newInvoice: 'New Invoice', companyInfo: 'Company Info',
       search: 'Search invoice no. or customer...', empty: 'No invoices yet.', noResult: 'No results.',
-      number: 'No.', customer: 'Customer', date: 'Date', amount: 'Amount', status: 'Status', actions: 'Actions',
+      number: 'No.', customer: 'Customer', date: 'Date', amount: 'Amount', status: 'Status', issuer: 'Issued by', actions: 'Actions',
       edit: 'Edit', del: 'Delete', print: 'Print', save: 'Save', cancel: 'Cancel', back: 'Back to archive',
       deleteConfirm: 'Delete this invoice?',
       draft: 'Draft', issued: 'Issued', paid: 'Paid',
@@ -183,13 +196,13 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return invoices;
-    return invoices.filter(i => i.number.toLowerCase().includes(q) || (i.customerName || '').toLowerCase().includes(q) || (i.companyName || '').toLowerCase().includes(q));
-  }, [invoices, search]);
+    if (!q) return visibleInvoices;
+    return visibleInvoices.filter(i => i.number.toLowerCase().includes(q) || (i.customerName || '').toLowerCase().includes(q) || (i.companyName || '').toLowerCase().includes(q) || (i.issuedBy || '').toLowerCase().includes(q));
+  }, [visibleInvoices, search]);
 
   const archiveStats = useMemo(() => {
     const byCur: Record<string, { count: number; invoiced: number; paid: number; due: number }> = {};
-    for (const inv of invoices) {
+    for (const inv of visibleInvoices) {
       const c = inv.currency || 'OMR';
       if (!byCur[c]) byCur[c] = { count: 0, invoiced: 0, paid: 0, due: 0 };
       byCur[c].count += 1;
@@ -198,7 +211,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       byCur[c].due += invoiceBalanceDue(inv);
     }
     return byCur;
-  }, [invoices]);
+  }, [visibleInvoices]);
+
+  const denyAccess = () => alert(lang === 'fa' ? 'شما مجوز ویرایش این فاکتور را ندارید.' : 'You do not have permission to edit this invoice.');
 
   // ── Calculations (supports VAT-inclusive + extra adjustments) ──
   const adjustmentsSum = (inv: Invoice) => (inv.adjustments || []).reduce((acc, a) => acc + (a.amount || 0), 0);
@@ -221,8 +236,14 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   };
   const netAmount = (inv: Invoice) => inv.vatInclusive ? inv.subTotal - inv.taxAmount : inv.subTotal;
 
-  const startNew = () => { setDraft(recompute(emptyDraft(config, currentUser.fullName, invoices.length))); setMode('editor'); };
+  const startNew = () => {
+    if (!canCreate) return;
+    setDraft(recompute(emptyDraft(config, currentUser, visibleInvoices.length)));
+    setMode('editor');
+  };
   const startEdit = (inv: Invoice) => {
+    if (!visibleInvoices.some(i => i.id === inv.id)) { denyAccess(); return; }
+    if (!readonly && !canEditInvoice(currentUser, inv)) { denyAccess(); return; }
     setDraft(recompute({
       ...inv,
       adjustments: inv.adjustments || [],
@@ -440,15 +461,21 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const handleSave = async () => {
     if (!draft || readonly) return;
+    const existing = invoices.find(i => i.id === draft.id);
+    if (existing && !canEditInvoice(currentUser, existing)) { denyAccess(); return; }
+    if (!existing && !canCreate) { denyAccess(); return; }
     if (!draft.customerName.trim()) { alert(lang === 'fa' ? 'نام مشتری را وارد کنید.' : 'Enter customer name.'); return; }
     setSaving(true);
     try {
       const customerId = await upsertCustomerFromInvoice(draft);
-      await onSaveInvoice(recompute({
+      const toSave = recompute({
         ...draft,
         customerId: customerId || draft.customerId,
         createdAt: draft.createdAt || new Date().toISOString(),
-      }));
+        issuedBy: existing?.issuedBy || draft.issuedBy || currentUser.fullName,
+        issuedByPersonnelId: existing?.issuedByPersonnelId || draft.issuedByPersonnelId || currentUser.id,
+      });
+      await onSaveInvoice(toSave);
       setMode('archive'); setDraft(null);
     } catch { alert(lang === 'fa' ? 'خطا در ذخیره' : 'Save failed'); }
     finally { setSaving(false); }
@@ -480,6 +507,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const handleRecordPayment = async () => {
     if (!paymentModalInv || readonly) return;
+    if (!canEditInvoice(currentUser, paymentModalInv)) { denyAccess(); return; }
     const amount = parseInvoiceAmount(paymentForm.amount);
     if (amount <= 0) { alert(lang === 'fa' ? 'مبلغ واریز را وارد کنید.' : 'Enter payment amount.'); return; }
     const balance = invoiceBalanceDue(paymentModalInv);
@@ -504,6 +532,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const handleRemoveReceipt = async (inv: Invoice, receiptId: string) => {
     if (readonly) return;
+    if (!canEditInvoice(currentUser, inv)) { denyAccess(); return; }
     if (!window.confirm(lang === 'fa' ? 'این واریز حذف شود؟' : 'Remove this payment?')) return;
     try {
       await onSaveInvoice(removeInvoiceReceipt(inv, receiptId));
@@ -515,7 +544,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     }
   };
 
-  const handleDelete = async (id: string) => { if (!readonly && window.confirm(t.deleteConfirm)) await onDeleteInvoice(id); };
+  const handleDelete = async (id: string) => {
+    if (readonly) return;
+    const inv = invoices.find(i => i.id === id);
+    if (inv && !canDeleteInvoice(currentUser, inv)) { denyAccess(); return; }
+    if (window.confirm(t.deleteConfirm)) await onDeleteInvoice(id);
+  };
   const handleSaveCompany = () => { onUpdateConfig({ ...config, invoiceTemplate: companyForm }); setCompanySaved(true); setTimeout(() => setCompanySaved(false), 2500); };
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -563,19 +597,19 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconInvoice className="w-5 h-5" /></div>
           <h3 className="text-lg font-bold text-gray-800">{t.title}</h3>
-          <span className="text-xs text-gray-400">({invoices.length})</span>
+          <span className="text-xs text-gray-400">({visibleInvoices.length}{showAllInvoices && invoices.length !== visibleInvoices.length ? ` / ${invoices.length}` : ''})</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setMode('archive'); setDraft(null); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'archive' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.archive}</button>
-          <button onClick={() => { setCompanyForm(template); setMode('company'); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${mode === 'company' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><IconSettings className="w-3.5 h-3.5" />{t.companyInfo}</button>
-          {!readonly && <button onClick={startNew} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newInvoice}</button>}
+          {canManageCompany && <button onClick={() => { setCompanyForm(template); setMode('company'); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${mode === 'company' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><IconSettings className="w-3.5 h-3.5" />{t.companyInfo}</button>}
+          {canCreate && <button onClick={startNew} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newInvoice}</button>}
         </div>
       </div>
 
       {/* ───────── ARCHIVE ───────── */}
       {mode === 'archive' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {invoices.length > 0 && (
+          {visibleInvoices.length > 0 && (
             <div className="p-4 border-b border-gray-100 bg-gradient-to-l from-slate-50 to-white" dir="ltr">
               <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Invoice Summary</p>
               {Object.entries(archiveStats).map(([currency, s]) => (
@@ -601,8 +635,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     </div>
                     <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
                       <p className="text-[10px] text-indigo-600 uppercase tracking-wide">Status</p>
-                      <p className="text-lg font-black text-indigo-800 mt-0.5">{invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'paid').length} paid</p>
-                      <p className="text-[10px] text-indigo-600/70 mt-0.5">{invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'partial').length} partial · {invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'unpaid').length} open</p>
+                      <p className="text-lg font-black text-indigo-800 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'paid').length} paid</p>
+                      <p className="text-[10px] text-indigo-600/70 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'partial').length} partial · {visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'unpaid').length} open</p>
                     </div>
                   </div>
                 </div>
@@ -615,23 +649,33 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} className="w-full pr-9 pl-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500" />
             </div>
           </div>
-          {invoices.length === 0 ? <div className="py-16 text-center text-sm text-gray-400">{t.empty}</div>
+          {visibleInvoices.length === 0 ? <div className="py-16 text-center text-sm text-gray-400">{t.empty}</div>
           : filtered.length === 0 ? <div className="py-16 text-center text-sm text-gray-400">{t.noResult}</div>
           : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-right">
                 <thead className="bg-gray-50 text-gray-500 text-xs">
-                  <tr><th className="px-4 py-3 font-medium">{t.number}</th><th className="px-4 py-3 font-medium">{t.customer}</th><th className="px-4 py-3 font-medium">{t.date}</th><th className="px-4 py-3 font-medium">{t.amount}</th><th className="px-4 py-3 font-medium">{t.status}</th><th className="px-4 py-3 font-medium text-center">{t.actions}</th></tr>
+                  <tr>
+                    <th className="px-4 py-3 font-medium">{t.number}</th>
+                    <th className="px-4 py-3 font-medium">{t.customer}</th>
+                    {showAllInvoices && <th className="px-4 py-3 font-medium">{t.issuer}</th>}
+                    <th className="px-4 py-3 font-medium">{t.date}</th>
+                    <th className="px-4 py-3 font-medium">{t.amount}</th>
+                    <th className="px-4 py-3 font-medium">{t.status}</th>
+                    <th className="px-4 py-3 font-medium text-center">{t.actions}</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filtered.map(inv => {
                     const paid = invoiceAmountPaid(inv);
                     const balance = invoiceBalanceDue(inv);
                     const curInv = inv.currency || 'OMR';
+                    const editable = canEditInvoice(currentUser, inv);
                     return (
                     <tr key={inv.id} className="hover:bg-gray-50/60">
                       <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">{inv.number}</td>
                       <td className="px-4 py-3"><div className="font-medium text-gray-800">{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
+                      {showAllInvoices && <td className="px-4 py-3 text-gray-600 text-xs">{inv.issuedBy || '—'}</td>}
                       <td className="px-4 py-3 text-gray-500" dir="ltr">{fmtDate(inv.date)}</td>
                       <td className="px-4 py-3" dir="ltr">
                         <div className="font-bold text-gray-800">{formatInvoiceMoney(inv.total, curInv)}</div>
@@ -645,11 +689,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${archiveStatusCls(inv)}`}>{archiveStatusLabel(inv)}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          {!readonly && balance > 0 && (
+                          {editable && balance > 0 && (
                             <button onClick={() => openPaymentModal(inv)} title={lang === 'fa' ? 'ثبت واریز' : 'Record payment'} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"><IconMoney className="w-4 h-4" /></button>
                           )}
-                          <button onClick={() => startEdit(inv)} title={t.edit} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>
-                          {!readonly && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}
+                          <button onClick={() => startEdit(inv)} title={editable ? t.edit : (lang === 'fa' ? 'مشاهده' : 'View')} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>
+                          {editable && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}
                         </div>
                       </td>
                     </tr>

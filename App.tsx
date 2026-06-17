@@ -1808,8 +1808,8 @@ const App: React.FC = () => {
                     onSaveProcess={async (proc) => { await saveProcess(proc); }}
                     onDeleteProcess={async (id) => { await deleteProcess(id); }}
                     invoices={invoices}
-                    onSaveInvoice={async (inv) => { await saveInvoiceToCloud(inv); }}
-                    onDeleteInvoice={async (id) => { await deleteInvoiceFromCloud(id); }}
+                    onSaveInvoice={async (inv) => { if (currentUser) await saveInvoiceToCloud(inv, currentUser); }}
+                    onDeleteInvoice={async (id) => { if (currentUser) await deleteInvoiceFromCloud(id, currentUser); }}
                     metaShops={metaShops}
                     metaShopOrders={metaShopOrders}
                     onSaveMetaShop={async (s) => { await saveMetaShopToCloud(s); }}
