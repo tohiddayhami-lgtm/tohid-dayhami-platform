@@ -7,7 +7,7 @@ export enum TicketStatus {
   CANCELLED = 'لغو شده'
 }
 
-export type Currency = 'IRR' | 'OMR' | 'USD';
+export type Currency = 'IRR' | 'OMR' | 'USD' | 'EUR' | 'AED' | 'AUD';
 
 export interface Price {
   amount: number;
@@ -160,7 +160,7 @@ export interface Invoice {
   customerPhone?: string;
   customerEmail?: string;
   items: InvoiceItem[];
-  currency: Currency;
+  currency: string;                        // preset (AED, USD, …) or any custom code
   subTotal: number;
   taxRate: number;
   taxAmount: number;
@@ -1012,6 +1012,7 @@ export interface InvoiceTemplate {
   defaultNotes?: string;          // NOTES / TERMS box default content
   vatInclusive?: boolean;         // VAT is inclusive in the unit prices (default behaviour)
   invoicePrefix?: string;         // invoice-number prefix (default "SVC")
+  defaultCurrency?: string;       // default currency for new invoices (e.g. OMR)
   // ── Section presets (saved from invoice editor for reuse) ──
   defaultItems?: InvoiceItem[];
   defaultAdjustments?: InvoiceAdjustment[];

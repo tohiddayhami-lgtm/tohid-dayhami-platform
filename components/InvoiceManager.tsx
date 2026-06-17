@@ -1,8 +1,15 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Invoice, InvoiceItem, InvoiceAdjustment, Currency, InvoiceTemplate, Customer, Personnel, AppConfig } from '../types';
+import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, Customer, Personnel, AppConfig } from '../types';
 import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
+import {
+  INVOICE_PRESET_CURRENCIES,
+  INVOICE_CURRENCY_CUSTOM,
+  formatInvoiceMoney,
+  parseInvoiceAmount,
+  isPresetInvoiceCurrency,
+} from '../utils/invoiceMoney';
 
 interface Props {
   invoices: Invoice[];
@@ -52,7 +59,7 @@ const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice
     customerEmail: bill?.customerEmail || '',
     items: cloneItems(tpl.defaultItems),
     adjustments: tpl.defaultAdjustments?.map(a => ({ ...a, id: a.id || `adj-${Date.now()}-${Math.random()}` })) || [],
-    currency: 'OMR',
+    currency: tpl.defaultCurrency || 'OMR',
     subTotal: 0, taxRate: tpl.defaultTaxRate ?? 5, taxAmount: 0, discount: 0, total: 0,
     issuedBy,
     status: 'draft',
@@ -251,9 +258,20 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     return list.slice(0, 50);
   }, [customers, customerSearch]);
 
-  const cur = draft?.currency || 'OMR';
-  const money = (n: number) => `${cur} ${Math.round((n || 0) * 100) / 100}`.replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1');
+  const cur = (draft?.currency || 'OMR').trim() || 'OMR';
+  const money = (n: number) => formatInvoiceMoney(n, cur);
   const fmtDateTime = (iso?: string) => iso ? new Date(iso).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US') : '';
+
+  const currencySelectValue = draft && isPresetInvoiceCurrency(draft.currency) ? draft.currency : INVOICE_CURRENCY_CUSTOM;
+  const setCurrencyPreset = (code: string) => {
+    setDraft(d => {
+      if (!d) return d;
+      if (code === INVOICE_CURRENCY_CUSTOM) {
+        return { ...d, currency: isPresetInvoiceCurrency(d.currency) ? '' : d.currency };
+      }
+      return { ...d, currency: code };
+    });
+  };
 
   const cFld = 'w-full px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-sm';
   const lbl = 'block text-[13px] font-semibold text-gray-700 mb-1.5';
@@ -298,7 +316,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">{inv.number}</td>
                       <td className="px-4 py-3"><div className="font-medium text-gray-800">{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
                       <td className="px-4 py-3 text-gray-500" dir="ltr">{inv.date}</td>
-                      <td className="px-4 py-3 font-bold text-gray-800">{inv.currency} {Math.round(inv.total)}</td>
+                      <td className="px-4 py-3 font-bold text-gray-800" dir="ltr">{formatInvoiceMoney(inv.total, inv.currency || 'OMR')}</td>
                       <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${statusCls(inv.status)}`}>{statusLabel(inv.status)}</span></td>
                       <td className="px-4 py-3"><div className="flex items-center justify-center gap-1"><button onClick={() => startEdit(inv)} title={t.edit} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>{!readonly && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}</div></td>
                     </tr>
@@ -340,6 +358,19 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <div className="md:col-span-2"><label className={lbl}>{t.notes}</label><textarea rows={4} className={cFld} value={companyForm.defaultNotes || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultNotes: e.target.value }))} placeholder={'Project Details & Timeline\n• Deliverables: ...\n• Estimated Timeline: ...'} /></div>
             <div><label className={lbl}>{t.footer}</label><input className={cFld} value={companyForm.footerText} onChange={e => setCompanyForm(f => ({ ...f, footerText: e.target.value }))} /></div>
             <div><label className={lbl}>{t.prefix}</label><input className={cFld + ' dir-ltr'} value={companyForm.invoicePrefix || ''} onChange={e => setCompanyForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="SVC" /></div>
+            <div>
+              <label className={lbl}>Default currency</label>
+              <select className={cFld + ' dir-ltr'} value={isPresetInvoiceCurrency(companyForm.defaultCurrency || 'OMR') ? (companyForm.defaultCurrency || 'OMR') : INVOICE_CURRENCY_CUSTOM} onChange={e => {
+                const v = e.target.value;
+                setCompanyForm(f => ({ ...f, defaultCurrency: v === INVOICE_CURRENCY_CUSTOM ? (isPresetInvoiceCurrency(f.defaultCurrency || '') ? '' : (f.defaultCurrency || '')) : v }));
+              }}>
+                {INVOICE_PRESET_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value={INVOICE_CURRENCY_CUSTOM}>Custom…</option>
+              </select>
+              {!isPresetInvoiceCurrency(companyForm.defaultCurrency || 'OMR') && (
+                <input className={cFld + ' dir-ltr mt-2'} placeholder="e.g. GBP, SAR" value={companyForm.defaultCurrency || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultCurrency: e.target.value.toUpperCase().slice(0, 12) }))} />
+              )}
+            </div>
             <div><label className={lbl}>{t.defTax}</label><input type="number" className={cFld} value={companyForm.defaultTaxRate} onChange={e => setCompanyForm(f => ({ ...f, defaultTaxRate: parseFloat(e.target.value) || 0 }))} /></div>
             <div className="flex items-end gap-4 md:col-span-2">
               <div>
@@ -382,6 +413,25 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <div className="mt-3 text-[12px] space-y-0.5">
                   <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
                   <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDateTime(draft.createdAt)}</span></div>
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
+                    <span className="text-gray-500">Currency </span>
+                    <select
+                      className="font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none"
+                      value={currencySelectValue}
+                      onChange={e => setCurrencyPreset(e.target.value)}
+                    >
+                      {INVOICE_PRESET_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      <option value={INVOICE_CURRENCY_CUSTOM}>Custom</option>
+                    </select>
+                    {currencySelectValue === INVOICE_CURRENCY_CUSTOM && (
+                      <input
+                        className="w-16 font-medium outline-none bg-transparent border-b border-gray-200 uppercase print:border-0"
+                        placeholder="GBP"
+                        value={draft.currency || ''}
+                        onChange={e => setField('currency', e.target.value.toUpperCase().slice(0, 12))}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -449,8 +499,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <th className="px-2 py-2 text-left w-8">#</th>
                   <th className="px-2 py-2 text-left">DESCRIPTION</th>
                   <th className="px-2 py-2 text-center w-14">QTY</th>
-                  <th className="px-2 py-2 text-right w-24">UNIT PRICE</th>
-                  <th className="px-2 py-2 text-right w-24">AMOUNT</th>
+                  <th className="px-2 py-2 text-right w-28">UNIT PRICE ({cur})</th>
+                  <th className="px-2 py-2 text-right w-28">AMOUNT ({cur})</th>
                   <th className="print:hidden w-8"></th>
                 </tr>
               </thead>
@@ -463,7 +513,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       <input className="w-full text-gray-500 text-[11px] outline-none bg-transparent" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
                     </td>
                     <td className="px-2 py-2.5 text-center"><input type="number" min="0" className="w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
-                    <td className="px-2 py-2.5 text-right"><input className="w-full outline-none bg-transparent text-right" value={`${cur} ${item.unitPrice.toLocaleString()}`} onChange={e => setItem(idx, 'unitPrice', parseInt(e.target.value.replace(/[^\d]/g, '')) || 0)} /></td>
+                    <td className="px-2 py-2.5 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        className="w-full outline-none bg-transparent text-right dir-ltr"
+                        placeholder="0"
+                        value={item.unitPrice || ''}
+                        onChange={e => setItem(idx, 'unitPrice', parseInvoiceAmount(e.target.value))}
+                      />
+                    </td>
                     <td className="px-2 py-2.5 text-right font-bold" style={{ color: DARK }}>{money(item.total)}</td>
                     <td className="print:hidden text-center">{draft.items.length > 1 && <button onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}</td>
                   </tr>
@@ -499,9 +559,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       onChange={e => setAdjustment(adj.id, 'label', e.target.value)}
                     />
                     <input
+                      type="number"
+                      step="0.001"
                       className="w-28 text-right outline-none bg-transparent font-semibold dir-ltr print:w-auto print:border-0 border-b border-transparent focus:border-gray-200"
-                      value={adj.amount}
-                      onChange={e => setAdjustment(adj.id, 'amount', parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      value={adj.amount || ''}
+                      onChange={e => setAdjustment(adj.id, 'amount', parseInvoiceAmount(e.target.value))}
                     />
                     <span className="text-gray-400 w-8 print:hidden">{cur}</span>
                     {!readonly && <button type="button" onClick={() => removeAdjustment(adj.id)} className="text-red-400 hover:text-red-600 print:hidden"><IconTrash className="w-3 h-3" /></button>}
