@@ -93,6 +93,7 @@ const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice
     paymentDetails: '',
     note: tpl.defaultNotes || '',
     vatInclusive: tpl.vatInclusive ?? true,
+    documentTitle: tpl.defaultDocumentTitle || 'INVOICE',
   };
 };
 
@@ -143,7 +144,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       cName: 'نام شرکت', logo: 'لوگو', uploadLogo: 'آپلود لوگو', uploading: 'در حال آپلود...',
       addr: 'آدرس', cr: 'CR No.', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت',
       bankName: 'نام بانک', accHolder: 'صاحب حساب', accNo: 'شماره حساب', swift: 'کد سوئیفت', iban: 'IBAN',
-      payTerms: 'شرایط پرداخت پیش‌فرض', notes: 'یادداشت/شرایط پیش‌فرض', footer: 'متن پایانی', defTax: 'مالیات پیش‌فرض (٪)', vatInc: 'مالیات به‌صورت تجمیعی (داخل قیمت)', color: 'رنگ قالب', prefix: 'پیشوند شماره فاکتور',
+      payTerms: 'شرایط پرداخت پیش‌فرض', notes: 'یادداشت/شرایط پیش‌فرض', footer: 'متن پایانی', defTax: 'مالیات پیش‌فرض (٪)', vatInc: 'مالیات به‌صورت تجمیعی (داخل قیمت)', color: 'رنگ قالب', prefix: 'پیشوند شماره فاکتور', docTitle: 'عنوان سند پیش‌فرض',
       type: 'نوع', terms: 'شرایط و قوانین',
     },
     en: {
@@ -160,7 +161,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       cName: 'Company name', logo: 'Logo', uploadLogo: 'Upload logo', uploading: 'Uploading...',
       addr: 'Address', cr: 'CR No.', phone: 'Phone', email: 'Email', website: 'Website',
       bankName: 'Bank name', accHolder: 'Account holder', accNo: 'Account number', swift: 'SWIFT code', iban: 'IBAN',
-      payTerms: 'Default payment terms', notes: 'Default notes / terms', footer: 'Footer text', defTax: 'Default tax (%)', vatInc: 'VAT inclusive in prices', color: 'Theme color', prefix: 'Invoice number prefix',
+      payTerms: 'Default payment terms', notes: 'Default notes / terms', footer: 'Footer text', defTax: 'Default tax (%)', vatInc: 'VAT inclusive in prices', color: 'Theme color', prefix: 'Invoice number prefix', docTitle: 'Default document title',
       type: 'Type', terms: 'Terms',
     },
   }[lang];
@@ -691,6 +692,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <div className="md:col-span-2"><label className={lbl}>{t.notes}</label><textarea rows={4} className={cFld} value={companyForm.defaultNotes || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultNotes: e.target.value }))} placeholder={'Project Details & Timeline\n• Deliverables: ...\n• Estimated Timeline: ...'} /></div>
             <div><label className={lbl}>{t.footer}</label><input className={cFld} value={companyForm.footerText} onChange={e => setCompanyForm(f => ({ ...f, footerText: e.target.value }))} /></div>
             <div><label className={lbl}>{t.prefix}</label><input className={cFld + ' dir-ltr'} value={companyForm.invoicePrefix || ''} onChange={e => setCompanyForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="SVC" /></div>
+            <div><label className={lbl}>{t.docTitle}</label><input className={cFld + ' dir-ltr'} value={companyForm.defaultDocumentTitle || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultDocumentTitle: e.target.value }))} placeholder="INVOICE" /></div>
             <div>
               <label className={lbl}>Default currency</label>
               <select className={cFld + ' dir-ltr'} value={isPresetInvoiceCurrency(companyForm.defaultCurrency || 'OMR') ? (companyForm.defaultCurrency || 'OMR') : INVOICE_CURRENCY_CUSTOM} onChange={e => {
@@ -753,8 +755,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     </div>
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <h1 className="text-2xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
+                <div className="text-right shrink-0 w-full max-w-[300px]">
+                  <input
+                    className="invoice-block-field w-full text-2xl font-black tracking-tight text-right uppercase outline-none bg-transparent border-b border-transparent focus:border-gray-200 print:border-0"
+                    style={{ color: DARK }}
+                    placeholder="INVOICE"
+                    value={draft.documentTitle || 'INVOICE'}
+                    onChange={e => setField('documentTitle', e.target.value)}
+                    readOnly={readonly}
+                  />
                   <div className="mt-2 text-[12px] space-y-1">
                     <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
                     <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>

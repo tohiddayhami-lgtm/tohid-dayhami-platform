@@ -170,6 +170,7 @@ export interface Invoice {
   issuedBy: string;
   status?: 'draft' | 'issued' | 'paid';  // archive status
   createdAt?: string;                      // when first created (for sorting the archive)
+  documentTitle?: string;                  // header title — e.g. INVOICE, PROFORMA INVOICE
   type?: string;                           // legacy — no longer shown in UI
   paymentTerms?: string;                   // payment terms box (defaults from template)
   vatInclusive?: boolean;                  // true => VAT is included in the line amounts
@@ -1052,6 +1053,7 @@ export interface InvoiceTemplate {
   defaultNotes?: string;          // NOTES / TERMS box default content
   vatInclusive?: boolean;         // VAT is inclusive in the unit prices (default behaviour)
   invoicePrefix?: string;         // invoice-number prefix (default "SVC")
+  defaultDocumentTitle?: string;  // header title for new invoices (default "INVOICE")
   defaultCurrency?: string;       // default currency for new invoices (e.g. OMR)
   // ── Section presets (saved from invoice editor for reuse) ──
   defaultItems?: InvoiceItem[];
