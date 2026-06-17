@@ -1010,7 +1010,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <div className="text-right shrink-0 min-w-[6rem]">
                   <div className="text-[10px] font-semibold tracking-wider opacity-85 leading-none mb-0.5">{cur}</div>
                   <div className="font-black text-base sm:text-lg leading-tight tabular-nums whitespace-nowrap">
-                    {formatInvoiceAmount(draft.total, draftAmountDecimals)}
+                    {formatInvoiceAmount(draft.total, amountDecimals)}
                   </div>
                 </div>
               </div>
