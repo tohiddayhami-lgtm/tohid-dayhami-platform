@@ -104,6 +104,8 @@ const emptyDraft = (config: AppConfig, user: Personnel, count: number): Invoice 
     note: tpl.defaultNotes || '',
     vatInclusive: tpl.vatInclusive ?? true,
     documentTitle: tpl.defaultDocumentTitle || 'INVOICE',
+    qtyColumnLabel: tpl.defaultQtyColumnLabel || 'QTY',
+    unitPriceColumnLabel: tpl.defaultUnitPriceColumnLabel || 'UNIT PRICE',
   };
 };
 
@@ -158,7 +160,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       cName: 'نام شرکت', logo: 'لوگو', uploadLogo: 'آپلود لوگو', uploading: 'در حال آپلود...',
       addr: 'آدرس', cr: 'CR No.', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت',
       bankName: 'نام بانک', accHolder: 'صاحب حساب', accNo: 'شماره حساب', swift: 'کد سوئیفت', iban: 'IBAN',
-      payTerms: 'شرایط پرداخت پیش‌فرض', notes: 'یادداشت/شرایط پیش‌فرض', footer: 'متن پایانی', defTax: 'مالیات پیش‌فرض (٪)', vatInc: 'مالیات به‌صورت تجمیعی (داخل قیمت)', color: 'رنگ قالب', prefix: 'پیشوند شماره فاکتور', docTitle: 'عنوان سند پیش‌فرض',
+      payTerms: 'شرایط پرداخت پیش‌فرض', notes: 'یادداشت/شرایط پیش‌فرض', footer: 'متن پایانی', defTax: 'مالیات پیش‌فرض (٪)', vatInc: 'مالیات به‌صورت تجمیعی (داخل قیمت)', color: 'رنگ قالب', prefix: 'پیشوند شماره فاکتور', docTitle: 'عنوان سند پیش‌فرض', colQty: 'عنوان ستون تعداد', colUnitPrice: 'عنوان ستون قیمت واحد',
       type: 'نوع', terms: 'شرایط و قوانین',
     },
     en: {
@@ -175,7 +177,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       cName: 'Company name', logo: 'Logo', uploadLogo: 'Upload logo', uploading: 'Uploading...',
       addr: 'Address', cr: 'CR No.', phone: 'Phone', email: 'Email', website: 'Website',
       bankName: 'Bank name', accHolder: 'Account holder', accNo: 'Account number', swift: 'SWIFT code', iban: 'IBAN',
-      payTerms: 'Default payment terms', notes: 'Default notes / terms', footer: 'Footer text', defTax: 'Default tax (%)', vatInc: 'VAT inclusive in prices', color: 'Theme color', prefix: 'Invoice number prefix', docTitle: 'Default document title',
+      payTerms: 'Default payment terms', notes: 'Default notes / terms', footer: 'Footer text', defTax: 'Default tax (%)', vatInc: 'VAT inclusive in prices', color: 'Theme color', prefix: 'Invoice number prefix', docTitle: 'Default document title', colQty: 'Default QTY column title', colUnitPrice: 'Default unit price column title',
       type: 'Type', terms: 'Terms',
     },
   }[lang];
@@ -299,6 +301,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       base.paymentDetails = draft.paymentDetails || '';
     } else if (section === 'items') {
       base.items = draft.items.map(it => ({ ...it }));
+      base.qtyColumnLabel = draft.qtyColumnLabel;
+      base.unitPriceColumnLabel = draft.unitPriceColumnLabel;
     } else if (section === 'adjustments') {
       base.adjustments = (draft.adjustments || []).map(a => ({ ...a, id: a.id || `adj-${Date.now()}` }));
     } else if (section === 'notes') {
@@ -319,7 +323,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       } else if (preset.section === 'paymentDetails') {
         next = { ...next, paymentDetails: normalizePaymentDetails(preset.paymentDetails) };
       } else if (preset.section === 'items' && preset.items?.length) {
-        next = { ...next, items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })) };
+        next = {
+          ...next,
+          items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })),
+          qtyColumnLabel: preset.qtyColumnLabel ?? next.qtyColumnLabel,
+          unitPriceColumnLabel: preset.unitPriceColumnLabel ?? next.unitPriceColumnLabel,
+        };
       } else if (preset.section === 'adjustments') {
         next = {
           ...next,
@@ -738,6 +747,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <div><label className={lbl}>{t.footer}</label><input className={cFld} value={companyForm.footerText} onChange={e => setCompanyForm(f => ({ ...f, footerText: e.target.value }))} /></div>
             <div><label className={lbl}>{t.prefix}</label><input className={cFld + ' dir-ltr'} value={companyForm.invoicePrefix || ''} onChange={e => setCompanyForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="SVC" /></div>
             <div><label className={lbl}>{t.docTitle}</label><input className={cFld + ' dir-ltr'} value={companyForm.defaultDocumentTitle || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultDocumentTitle: e.target.value }))} placeholder="INVOICE" /></div>
+            <div><label className={lbl}>{t.colQty}</label><input className={cFld + ' dir-ltr'} value={companyForm.defaultQtyColumnLabel || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultQtyColumnLabel: e.target.value }))} placeholder="QTY" /></div>
+            <div><label className={lbl}>{t.colUnitPrice}</label><input className={cFld + ' dir-ltr'} value={companyForm.defaultUnitPriceColumnLabel || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultUnitPriceColumnLabel: e.target.value }))} placeholder="UNIT PRICE" /></div>
             <div>
               <label className={lbl}>Default currency</label>
               <select className={cFld + ' dir-ltr'} value={isPresetInvoiceCurrency(companyForm.defaultCurrency || 'OMR') ? (companyForm.defaultCurrency || 'OMR') : INVOICE_CURRENCY_CUSTOM} onChange={e => {
@@ -874,8 +885,23 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <tr className="bg-gray-100 text-gray-500 text-[10px] tracking-wider">
                   <th className="px-2 py-2 text-left w-8">#</th>
                   <th className="px-2 py-2 text-left">DESCRIPTION</th>
-                  <th className="px-2 py-2 text-center w-14">QTY</th>
-                  <th className="px-2 py-2 text-right w-28">UNIT PRICE ({cur})</th>
+                  <th className="px-2 py-2 text-center w-20">
+                    <input
+                      className="invoice-inline-field w-full text-center uppercase outline-none bg-transparent text-[10px] font-bold tracking-wider text-gray-500 print:border-0"
+                      value={draft.qtyColumnLabel || 'QTY'}
+                      onChange={e => setField('qtyColumnLabel', e.target.value.slice(0, 24))}
+                      readOnly={readonly}
+                    />
+                  </th>
+                  <th className="px-2 py-2 text-right w-32">
+                    <input
+                      className="invoice-inline-field uppercase outline-none bg-transparent text-[10px] font-bold tracking-wider text-gray-500 print:border-0 text-right w-auto max-w-[120px]"
+                      value={draft.unitPriceColumnLabel || 'UNIT PRICE'}
+                      onChange={e => setField('unitPriceColumnLabel', e.target.value.slice(0, 32))}
+                      readOnly={readonly}
+                    />
+                    {' '}({cur})
+                  </th>
                   <th className="px-2 py-2 text-right w-28">AMOUNT ({cur})</th>
                   <th className="print:hidden w-8"></th>
                 </tr>

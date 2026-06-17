@@ -173,6 +173,8 @@ export interface Invoice {
   status?: 'draft' | 'issued' | 'paid';  // archive status
   createdAt?: string;                      // when first created (for sorting the archive)
   documentTitle?: string;                  // header title — e.g. INVOICE, PROFORMA INVOICE
+  qtyColumnLabel?: string;                 // line items table — default "QTY"
+  unitPriceColumnLabel?: string;           // line items table — default "UNIT PRICE"
   type?: string;                           // legacy — no longer shown in UI
   paymentTerms?: string;                   // payment terms box (defaults from template)
   vatInclusive?: boolean;                  // true => VAT is included in the line amounts
@@ -213,6 +215,8 @@ export interface InvoiceSectionPreset {
   paymentTerms?: string;
   paymentDetails?: string;
   items?: InvoiceItem[];
+  qtyColumnLabel?: string;
+  unitPriceColumnLabel?: string;
   adjustments?: InvoiceAdjustment[];
   note?: string;
   taxRate?: number;
@@ -1056,6 +1060,8 @@ export interface InvoiceTemplate {
   vatInclusive?: boolean;         // VAT is inclusive in the unit prices (default behaviour)
   invoicePrefix?: string;         // invoice-number prefix (default "SVC")
   defaultDocumentTitle?: string;  // header title for new invoices (default "INVOICE")
+  defaultQtyColumnLabel?: string;   // default "QTY"
+  defaultUnitPriceColumnLabel?: string; // default "UNIT PRICE"
   defaultCurrency?: string;       // default currency for new invoices (e.g. OMR)
   // ── Section presets (saved from invoice editor for reuse) ──
   defaultItems?: InvoiceItem[];
