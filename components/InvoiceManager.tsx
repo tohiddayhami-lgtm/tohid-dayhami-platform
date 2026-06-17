@@ -734,20 +734,19 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           </div>
 
           {/* A4 sheet */}
-          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '28px 36px', boxSizing: 'border-box' }} dir="ltr">
+          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '22px 32px', boxSizing: 'border-box' }} dir="ltr">
 
-            {/* ── PAGE 1 ── */}
-            <div className="invoice-pdf-page" data-pdf-page="1">
+            <div className="invoice-pdf-sheet">
               <div className="flex justify-between items-start gap-4">
                 <div className="min-w-0">
                   {template.logoUrl && (
-                    <img src={template.logoUrl} alt="logo" className="h-14 object-contain object-left block" />
+                    <img src={template.logoUrl} alt="logo" className="h-12 object-contain object-left block" />
                   )}
-                  <div className={`text-[11px] leading-relaxed ${template.logoUrl ? 'mt-1' : ''}`}>
-                    <div className="font-bold text-[14px]" style={{ color: DARK }}>{template.companyName}</div>
+                  <div className={`text-[11px] leading-snug ${template.logoUrl ? 'mt-0.5' : ''}`}>
+                    <div className="font-bold text-[13px]" style={{ color: DARK }}>{template.companyName}</div>
                     {template.address && <div className="text-gray-600 max-w-md">{template.address}</div>}
                     {template.crNumber && <div className="text-gray-600">CR No.: {template.crNumber}</div>}
-                    <div className="mt-1 space-y-0.5" style={{ color: accent }}>
+                    <div className="mt-0.5 space-y-0" style={{ color: accent }}>
                       {template.phone && <div>{template.phone}</div>}
                       {template.email && <div>{template.email}</div>}
                       {template.website && <div>{template.website}</div>}
@@ -755,27 +754,27 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <h1 className="text-3xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
-                  <div className="mt-2 text-[12px] space-y-0.5">
+                  <h1 className="text-2xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
+                  <div className="mt-1.5 text-[12px] space-y-0.5">
                     <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
                     <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>
-                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                    <div>
                       <span className="text-gray-500">Currency </span>
-                      <select className="font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none" value={currencySelectValue} onChange={e => setCurrencyPreset(e.target.value)}>
+                      <select className="invoice-inline-field font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none" value={currencySelectValue} onChange={e => setCurrencyPreset(e.target.value)}>
                         {INVOICE_PRESET_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                         <option value={INVOICE_CURRENCY_CUSTOM}>Custom</option>
                       </select>
                       {currencySelectValue === INVOICE_CURRENCY_CUSTOM && (
-                        <input className="w-16 font-medium outline-none bg-transparent border-b border-gray-200 uppercase print:border-0" placeholder="GBP" value={draft.currency || ''} onChange={e => setField('currency', e.target.value.toUpperCase().slice(0, 12))} />
+                        <input className="invoice-inline-field w-14 font-medium outline-none bg-transparent border-b border-gray-200 uppercase print:border-0 ml-1" placeholder="GBP" value={draft.currency || ''} onChange={e => setField('currency', e.target.value.toUpperCase().slice(0, 12))} />
                       )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="h-[3px] mt-3 mb-4" style={{ backgroundColor: DARK }} />
+              <div className="h-[2px] mt-2 mb-2.5" style={{ backgroundColor: DARK }} />
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-2 gap-2.5 mb-2.5">
               <div className="border border-gray-200 rounded-md p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">BILL TO</p>
@@ -805,7 +804,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT TERMS</p>
                   <SectionPresetControls section="paymentTerms" />
                 </div>
-                <textarea rows={3} className="w-full text-[12px] text-gray-700 outline-none bg-transparent resize-none" placeholder="Advance Payment: 80% to start / 20% upon completion." value={draft.paymentTerms || ''} onChange={e => setField('paymentTerms', e.target.value)} />
+                <textarea rows={2} className="w-full text-[12px] text-gray-700 outline-none bg-transparent resize-none" placeholder="Advance Payment: 80% to start / 20% upon completion." value={draft.paymentTerms || ''} onChange={e => setField('paymentTerms', e.target.value)} />
               </div>
             </div>
 
@@ -851,7 +850,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 ))}
               </tbody>
             </table>
-            {!readonly && <button onClick={addItem} className="text-indigo-600 font-bold text-xs flex items-center gap-1 hover:underline print:hidden mb-3"><IconPlus className="w-3.5 h-3.5" />Add row</button>}
+            {!readonly && <button onClick={addItem} className="text-indigo-600 font-bold text-xs flex items-center gap-1 hover:underline print:hidden mb-2"><IconPlus className="w-3.5 h-3.5" />Add row</button>}
 
             {/* ── Extra charges & VAT ── */}
             <div className="flex items-center justify-between gap-2 mb-2 print:mb-0">
@@ -895,16 +894,16 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             )}
 
             {/* ── Totals ── */}
-            <div className="flex flex-col items-end gap-0 mb-3 text-[12px]">
-              <div className="w-full flex justify-end border-b border-gray-100 py-2"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
+            <div className="flex flex-col items-end gap-0 mb-2 text-[12px]">
+              <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
               {(draft.adjustments || []).filter(a => a.amount !== 0).map(adj => (
                 <div key={adj.id} className="w-full flex justify-end border-b border-gray-100 py-1.5">
                   <span className="text-gray-500 mr-6">{adj.label} ({cur})</span>
                   <span className={`font-medium w-28 text-right ${adj.amount < 0 ? 'text-red-600' : ''}`} style={adj.amount >= 0 ? { color: DARK } : undefined}>{money(adj.amount)}</span>
                 </div>
               ))}
-              <div className="w-full flex justify-end border-b border-gray-100 py-2"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
-              <div className="w-full flex justify-end border-b border-gray-100 py-2 items-center gap-3 flex-wrap">
+              <div className="w-full flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-700 font-semibold mr-6">Net (excl. VAT) ({cur})</span><span className="font-bold w-28 text-right" style={{ color: DARK }}>{money(netAmount(draft))}</span></div>
+              <div className="w-full flex justify-end border-b border-gray-100 py-1.5 items-center gap-3 flex-wrap">
                 <div className="print:hidden flex items-center gap-2 mr-auto">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">VAT mode</span>
                   <label className="flex items-center gap-1 text-[11px] cursor-pointer"><input type="radio" name="vatMode" className="accent-indigo-600" checked={draft.vatInclusive === true} onChange={() => setField('vatInclusive', true)} />Inclusive</label>
@@ -917,12 +916,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </span>
                 <span className="text-gray-500 w-28 text-right">{money(draft.taxAmount)}</span>
               </div>
-              <div className="w-full flex justify-end items-center py-3 px-4 mt-2 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
+              <div className="w-full flex justify-end items-center py-2 px-3 mt-1 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
             </div>
 
             {/* ── Payment receipt (when partial / full payments recorded) ── */}
             {invoiceAmountPaid(draft) > 0 && (
-              <div className="mb-3 border border-emerald-200 rounded-md overflow-hidden text-[11px]">
+              <div className="mb-2 border border-emerald-200 rounded-md overflow-hidden text-[11px]">
                 <div className="bg-emerald-50 px-2.5 py-1.5 border-b border-emerald-100">
                   <p className="text-[9px] font-bold tracking-wider text-emerald-800">PAYMENT RECEIPT</p>
                 </div>
@@ -944,65 +943,49 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </div>
               </div>
             )}
-            </div>{/* end page 1 */}
-
-            {/* ── PAGE 2 ── */}
-            <div className="invoice-pdf-page invoice-page-break mt-8 pt-6 border-t-2 border-dashed border-gray-200 print:border-0" data-pdf-page="2">
-              <div className="invoice-page-2-header flex justify-between items-start gap-3 text-[9px] text-gray-400 mb-4 pb-2 pt-1 border-b border-gray-200">
-                <div className="flex items-start gap-2 min-w-0">
-                  {template.logoUrl && <img src={template.logoUrl} alt="" className="h-7 w-auto object-contain object-left shrink-0 mt-0.5" />}
-                  <span className="font-semibold text-gray-600 leading-snug pt-1">{template.companyName}</span>
-                </div>
-                <div className="text-right shrink-0 leading-snug pt-1">
-                  <div>Invoice {draft.number}</div>
-                  <div>{fmtDate(draft.createdAt || draft.date)}</div>
-                </div>
-              </div>
 
             {/* ── Payment details + Notes ── */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed">
-                <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="grid grid-cols-2 gap-2.5 mb-2 mt-2">
+              <div className="border border-gray-200 rounded-md p-2 text-[11px] leading-snug">
+                <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT DETAILS</p>
                   <SectionPresetControls section="paymentDetails" />
                 </div>
                 <textarea
-                  rows={4}
-                  className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-relaxed whitespace-pre-wrap dir-ltr"
+                  rows={3}
+                  className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-snug whitespace-pre-wrap dir-ltr"
                   placeholder="Paste or type your bank / payment details here…"
                   value={draft.paymentDetails || ''}
                   onChange={e => setField('paymentDetails', e.target.value)}
                 />
               </div>
-              <div className="border border-gray-200 rounded-md p-2.5">
-                <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="border border-gray-200 rounded-md p-2">
+                <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
                   <SectionPresetControls section="notes" />
                 </div>
-                <textarea rows={4} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
+                <textarea rows={3} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-snug" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
               </div>
             </div>
 
             {/* ── Footer ── */}
-            <div className="invoice-footer-block mt-3 pt-3 border-t border-gray-100">
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <div className="border border-gray-200 rounded-md p-2.5">
-                  <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-4">AUTHORIZED SIGNATURE</p>
+            <div className="invoice-footer-block mt-2 pt-2 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-2.5 mb-1">
+                <div className="border border-gray-200 rounded-md p-2">
+                  <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-3">AUTHORIZED SIGNATURE</p>
                   <div className="border-t border-gray-400 pt-1 text-center text-[9px] tracking-wider text-gray-500">{(template.companyName || '').toUpperCase()}</div>
                 </div>
                 <div />
               </div>
               <div className="text-center text-[9px] text-gray-400">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
             </div>
-            </div>{/* end page 2 */}
+            </div>{/* end invoice-pdf-sheet */}
           </div>
 
           <style>{`
             .pdf-export .print\\:hidden { display: none !important; }
-            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; padding: 0 !important; }
-            .pdf-export .invoice-pdf-page { padding: 0; margin: 0; border: 0 !important; overflow: visible !important; }
-            .pdf-export .invoice-pdf-page[data-pdf-page="2"] { padding-top: 24px !important; }
-            .pdf-export .invoice-page-break { margin-top: 0 !important; border-top: 0 !important; }
+            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; padding: 12px 16px !important; }
+            .pdf-export .invoice-pdf-sheet { overflow: visible !important; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }
