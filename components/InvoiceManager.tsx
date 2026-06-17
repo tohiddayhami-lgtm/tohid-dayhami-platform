@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
-import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload } from './Icons';
+import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload, IconMoney } from './Icons';
 import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets, saveCustomerToCloud } from '../services/firebaseService';
 import { Language } from '../App';
 import {
@@ -11,6 +11,14 @@ import {
   isPresetInvoiceCurrency,
 } from '../utils/invoiceMoney';
 import { exportInvoicePdf } from '../utils/exportInvoicePdf';
+import {
+  invoiceAmountPaid,
+  invoiceBalanceDue,
+  invoicePaymentStatus,
+  withInvoicePaymentMeta,
+  addInvoiceReceipt,
+  removeInvoiceReceipt,
+} from '../utils/invoicePayments';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
@@ -108,6 +116,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [presetSaving, setPresetSaving] = useState(false);
   const [loadMenuSection, setLoadMenuSection] = useState<InvoiceSectionKey | null>(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [paymentModalInv, setPaymentModalInv] = useState<Invoice | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: '', reference: '', note: '' });
+  const [paymentSaving, setPaymentSaving] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const invoiceSheetRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +167,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const statusLabel = (s?: Invoice['status']) => s === 'paid' ? t.paid : s === 'issued' ? t.issued : t.draft;
   const statusCls = (s?: Invoice['status']) => s === 'paid' ? 'bg-emerald-100 text-emerald-700' : s === 'issued' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
+  const archiveStatusLabel = (inv: Invoice) => {
+    const ps = invoicePaymentStatus(inv);
+    if (ps === 'paid') return t.paid;
+    if (ps === 'partial') return lang === 'fa' ? 'پرداخت جزئی' : 'Partial';
+    return statusLabel(inv.status);
+  };
+  const archiveStatusCls = (inv: Invoice) => {
+    const ps = invoicePaymentStatus(inv);
+    if (ps === 'paid') return 'bg-emerald-100 text-emerald-700';
+    if (ps === 'partial') return 'bg-amber-100 text-amber-700';
+    return statusCls(inv.status);
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -180,7 +203,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       taxAmount = (subTotal * rate) / 100;
       total = subTotal + taxAmount + extras - discount;
     }
-    return { ...inv, subTotal, taxAmount, total };
+    return withInvoicePaymentMeta({ ...inv, subTotal, taxAmount, total });
   };
   const netAmount = (inv: Invoice) => inv.vatInclusive ? inv.subTotal - inv.taxAmount : inv.subTotal;
 
@@ -190,6 +213,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       ...inv,
       adjustments: inv.adjustments || [],
       paymentDetails: normalizePaymentDetails(inv.paymentDetails),
+      receipts: inv.receipts || [],
     }));
     setMode('editor');
   };
@@ -428,6 +452,55 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     }
   };
 
+  const openPaymentModal = (inv: Invoice) => {
+    setPaymentModalInv(inv);
+    const balance = invoiceBalanceDue(inv);
+    setPaymentForm({
+      amount: balance > 0 ? String(balance) : '',
+      date: new Date().toISOString().split('T')[0],
+      method: '',
+      reference: '',
+      note: '',
+    });
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentModalInv || readonly) return;
+    const amount = parseInvoiceAmount(paymentForm.amount);
+    if (amount <= 0) { alert(lang === 'fa' ? 'مبلغ واریز را وارد کنید.' : 'Enter payment amount.'); return; }
+    const balance = invoiceBalanceDue(paymentModalInv);
+    if (amount > balance + 0.0001) { alert(lang === 'fa' ? 'مبلغ بیشتر از مانده است.' : 'Amount exceeds balance due.'); return; }
+    setPaymentSaving(true);
+    try {
+      const updated = addInvoiceReceipt(paymentModalInv, {
+        amount,
+        date: paymentForm.date,
+        method: paymentForm.method,
+        reference: paymentForm.reference,
+        note: paymentForm.note,
+      }, currentUser.fullName);
+      await onSaveInvoice(updated);
+      setPaymentModalInv(null);
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ثبت واریز' : 'Failed to record payment');
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
+  const handleRemoveReceipt = async (inv: Invoice, receiptId: string) => {
+    if (readonly) return;
+    if (!window.confirm(lang === 'fa' ? 'این واریز حذف شود؟' : 'Remove this payment?')) return;
+    try {
+      await onSaveInvoice(removeInvoiceReceipt(inv, receiptId));
+      if (paymentModalInv?.id === inv.id) {
+        setPaymentModalInv(removeInvoiceReceipt(inv, receiptId));
+      }
+    } catch {
+      alert(lang === 'fa' ? 'خطا در حذف' : 'Delete failed');
+    }
+  };
+
   const handleDelete = async (id: string) => { if (!readonly && window.confirm(t.deleteConfirm)) await onDeleteInvoice(id); };
   const handleSaveCompany = () => { onUpdateConfig({ ...config, invoiceTemplate: companyForm }); setCompanySaved(true); setTimeout(() => setCompanySaved(false), 2500); };
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -503,16 +576,37 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <tr><th className="px-4 py-3 font-medium">{t.number}</th><th className="px-4 py-3 font-medium">{t.customer}</th><th className="px-4 py-3 font-medium">{t.date}</th><th className="px-4 py-3 font-medium">{t.amount}</th><th className="px-4 py-3 font-medium">{t.status}</th><th className="px-4 py-3 font-medium text-center">{t.actions}</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map(inv => (
+                  {filtered.map(inv => {
+                    const paid = invoiceAmountPaid(inv);
+                    const balance = invoiceBalanceDue(inv);
+                    const curInv = inv.currency || 'OMR';
+                    return (
                     <tr key={inv.id} className="hover:bg-gray-50/60">
                       <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">{inv.number}</td>
                       <td className="px-4 py-3"><div className="font-medium text-gray-800">{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
                       <td className="px-4 py-3 text-gray-500" dir="ltr">{fmtDate(inv.date)}</td>
-                      <td className="px-4 py-3 font-bold text-gray-800" dir="ltr">{formatInvoiceMoney(inv.total, inv.currency || 'OMR')}</td>
-                      <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${statusCls(inv.status)}`}>{statusLabel(inv.status)}</span></td>
-                      <td className="px-4 py-3"><div className="flex items-center justify-center gap-1"><button onClick={() => startEdit(inv)} title={t.edit} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>{!readonly && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}</div></td>
+                      <td className="px-4 py-3" dir="ltr">
+                        <div className="font-bold text-gray-800">{formatInvoiceMoney(inv.total, curInv)}</div>
+                        {paid > 0 && (
+                          <div className="text-[10px] mt-0.5 text-emerald-600">Paid {formatInvoiceMoney(paid, curInv)}</div>
+                        )}
+                        {balance > 0 && paid > 0 && (
+                          <div className="text-[10px] text-amber-600">Due {formatInvoiceMoney(balance, curInv)}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${archiveStatusCls(inv)}`}>{archiveStatusLabel(inv)}</span></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          {!readonly && balance > 0 && (
+                            <button onClick={() => openPaymentModal(inv)} title={lang === 'fa' ? 'ثبت واریز' : 'Record payment'} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"><IconMoney className="w-4 h-4" /></button>
+                          )}
+                          <button onClick={() => startEdit(inv)} title={t.edit} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>
+                          {!readonly && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -593,7 +687,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           </div>
 
           {/* A4 sheet */}
-          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', minHeight: 1123, padding: '36px 40px', boxSizing: 'border-box' }} dir="ltr">
+          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '32px 36px 40px', boxSizing: 'border-box' }} dir="ltr">
             {/* ── Top: logo + Invoice meta ── */}
             <div className="flex justify-between items-start">
               <div className="flex flex-col">
@@ -788,15 +882,40 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               <div className="w-full flex justify-end items-center py-3 px-4 mt-2 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
             </div>
 
+            {/* ── Payment receipt (when partial / full payments recorded) ── */}
+            {invoiceAmountPaid(draft) > 0 && (
+              <div className="mb-6 border border-emerald-200 rounded-md overflow-hidden text-[12px]">
+                <div className="bg-emerald-50 px-3 py-2 border-b border-emerald-100">
+                  <p className="text-[10px] font-bold tracking-wider text-emerald-800">PAYMENT RECEIPT</p>
+                </div>
+                <div className="p-3">
+                  <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Invoice Total ({cur})</span><span className="font-semibold w-28 text-right">{money(draft.total)}</span></div>
+                  <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Amount Received ({cur})</span><span className="font-semibold w-28 text-right text-emerald-700">{money(invoiceAmountPaid(draft))}</span></div>
+                  <div className="flex justify-end py-2"><span className="font-bold text-gray-800 mr-6">Balance Due ({cur})</span><span className="font-black w-28 text-right text-base" style={{ color: invoiceBalanceDue(draft) > 0 ? '#b45309' : DARK }}>{money(invoiceBalanceDue(draft))}</span></div>
+                  {(draft.receipts || []).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-1.5">PAYMENT HISTORY</p>
+                      {(draft.receipts || []).map(r => (
+                        <div key={r.id} className="flex justify-between text-[11px] py-0.5 text-gray-600">
+                          <span>{fmtDate(r.date)}{r.method ? ` · ${r.method}` : ''}{r.reference ? ` · Ref: ${r.reference}` : ''}</span>
+                          <span className="font-semibold text-emerald-700 shrink-0 ml-2">{money(r.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── Payment details + Notes ── */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT DETAILS</p>
                   <SectionPresetControls section="paymentDetails" />
                 </div>
                 <textarea
-                  rows={6}
+                  rows={5}
                   className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-relaxed whitespace-pre-wrap dir-ltr"
                   placeholder="Paste or type your bank / payment details here…"
                   value={draft.paymentDetails || ''}
@@ -808,25 +927,27 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
                   <SectionPresetControls section="notes" />
                 </div>
-                <textarea rows={6} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
+                <textarea rows={5} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
               </div>
             </div>
 
-            {/* ── Authorized signature ── */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border border-gray-200 rounded-md p-3 pt-3">
-                <p className="text-[10px] font-bold tracking-wider text-gray-400 mb-6">AUTHORIZED SIGNATURE</p>
-                <div className="border-t border-gray-300 pt-1 text-center text-[9px] tracking-wider text-gray-400">{(template.companyName || '').toUpperCase()}</div>
+            {/* ── Footer block (kept together for PDF) ── */}
+            <div className="invoice-footer-block mt-6 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="border border-gray-200 rounded-md p-3">
+                  <p className="text-[10px] font-bold tracking-wider text-gray-400 mb-5">AUTHORIZED SIGNATURE</p>
+                  <div className="border-t border-gray-400 pt-1.5 text-center text-[9px] tracking-wider text-gray-500">{(template.companyName || '').toUpperCase()}</div>
+                </div>
+                <div />
               </div>
-              <div />
+              <div className="text-center text-[9px] text-gray-400 pb-1">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
             </div>
-
-            {/* ── Footer ── */}
-            <div className="mt-6 text-center text-[9px] text-gray-300">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
           </div>
 
           <style>{`
             .pdf-export .print\\:hidden { display: none !important; }
+            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; }
+            .pdf-export .invoice-footer-block { padding-bottom: 24px; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }
@@ -836,6 +957,45 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               .print\\:border-0 { border: 0 !important; }
             }
           `}</style>
+        </div>
+      )}
+
+      {/* ── Record payment modal (from archive) ── */}
+      {paymentModalInv && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 print:hidden" onClick={() => setPaymentModalInv(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} dir="ltr">
+            <h4 className="font-bold text-gray-900 mb-1">Record Payment</h4>
+            <p className="text-xs text-gray-500 mb-4">{paymentModalInv.number} · {paymentModalInv.customerName}</p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-gray-500">Invoice Total</span><span className="font-bold">{formatInvoiceMoney(paymentModalInv.total, paymentModalInv.currency || 'OMR')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Already Paid</span><span className="font-semibold text-emerald-600">{formatInvoiceMoney(invoiceAmountPaid(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
+              <div className="flex justify-between border-t border-gray-200 pt-1 mt-1"><span className="font-semibold text-gray-700">Balance Due</span><span className="font-bold text-amber-600">{formatInvoiceMoney(invoiceBalanceDue(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
+            </div>
+            <div className="space-y-3">
+              <div><label className={lbl}>Amount</label><input type="number" step="0.001" min="0" className={cFld + ' dir-ltr'} value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} /></div>
+              <div><label className={lbl}>Date</label><input type="date" className={cFld + ' dir-ltr'} value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} /></div>
+              <div><label className={lbl}>Method <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld} placeholder="Bank Transfer, Cash…" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} /></div>
+              <div><label className={lbl}>Reference <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld + ' dir-ltr'} placeholder="Transaction ID" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} /></div>
+              <div><label className={lbl}>Note <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld} value={paymentForm.note} onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))} /></div>
+            </div>
+            {(paymentModalInv.receipts || []).length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-xs font-bold text-gray-500 mb-2">Previous Payments</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {(paymentModalInv.receipts || []).map(r => (
+                    <div key={r.id} className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
+                      <span>{fmtDate(r.date)} · {formatInvoiceMoney(r.amount, paymentModalInv.currency || 'OMR')}{r.method ? ` · ${r.method}` : ''}</span>
+                      {!readonly && <button type="button" onClick={() => handleRemoveReceipt(paymentModalInv, r.id)} className="text-red-400 hover:text-red-600 p-0.5"><IconTrash className="w-3 h-3" /></button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 mt-6">
+              <button type="button" onClick={() => setPaymentModalInv(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button type="button" disabled={paymentSaving} onClick={handleRecordPayment} className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">Record Payment</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

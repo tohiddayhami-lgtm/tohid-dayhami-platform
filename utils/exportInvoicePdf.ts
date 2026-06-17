@@ -1,6 +1,8 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+const PAGE_MARGIN_MM = 12;
+
 const flattenInputsForExport = (root: HTMLElement) => {
   root.querySelectorAll('input, textarea, select').forEach((el) => {
     const node = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -27,7 +29,7 @@ const flattenInputsForExport = (root: HTMLElement) => {
   });
 };
 
-/** Capture an invoice DOM node and download a clean A4 PDF. */
+/** Capture an invoice DOM node and download a clean A4 PDF with margins. */
 export async function exportInvoicePdf(element: HTMLElement, filename: string): Promise<void> {
   document.body.classList.add('pdf-export');
   try {
@@ -39,7 +41,11 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
       ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
       onclone: (clonedDoc) => {
         const root = clonedDoc.querySelector('.invoice-content') as HTMLElement | null;
-        if (root) flattenInputsForExport(root);
+        if (root) {
+          root.style.minHeight = 'auto';
+          root.style.paddingBottom = '32px';
+          flattenInputsForExport(root);
+        }
       },
     });
 
@@ -47,20 +53,39 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
+    const contentWidth = pageWidth - PAGE_MARGIN_MM * 2;
+    const contentHeight = pageHeight - PAGE_MARGIN_MM * 2;
     const imgProps = pdf.getImageProperties(imgData);
-    const imgHeight = (imgProps.height * pageWidth) / imgProps.width;
+    let imgHeight = (imgProps.height * contentWidth) / imgProps.width;
 
-    let position = 0;
+    // Slight overflow → scale down to one page (avoids messy footer split)
+    if (imgHeight > contentHeight && imgHeight <= contentHeight * 1.12) {
+      const scale = contentHeight / imgHeight;
+      const w = contentWidth * scale;
+      const h = imgHeight * scale;
+      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM + (contentWidth - w) / 2, PAGE_MARGIN_MM, w, h);
+      pdf.save(filename);
+      return;
+    }
+
+    if (imgHeight <= contentHeight) {
+      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, PAGE_MARGIN_MM, contentWidth, imgHeight);
+      pdf.save(filename);
+      return;
+    }
+
+    // Multi-page with margins
+    let position = PAGE_MARGIN_MM;
     let remaining = imgHeight;
 
-    pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
-    remaining -= pageHeight;
+    pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, position, contentWidth, imgHeight);
+    remaining -= contentHeight;
 
     while (remaining > 0) {
-      position -= pageHeight;
+      position = PAGE_MARGIN_MM - (imgHeight - remaining);
       pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
-      remaining -= pageHeight;
+      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, position, contentWidth, imgHeight);
+      remaining -= contentHeight;
     }
 
     pdf.save(filename);

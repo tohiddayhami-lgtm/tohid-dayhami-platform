@@ -175,6 +175,20 @@ export interface Invoice {
   vatInclusive?: boolean;                  // true => VAT is included in the line amounts
   adjustments?: InvoiceAdjustment[];       // extra fees / discounts below line items
   paymentDetails?: string;                 // free-form bank / payment block (copy-paste, preset-able)
+  receipts?: InvoiceReceipt[];             // partial / full payments received
+  amountPaid?: number;                   // cached sum of receipts (for archive display)
+  balanceDue?: number;                   // total − amountPaid
+}
+
+export interface InvoiceReceipt {
+  id: string;
+  amount: number;
+  date: string;                            // YYYY-MM-DD
+  method?: string;                         // e.g. Bank Transfer, Cash
+  reference?: string;                      // transaction ref
+  note?: string;
+  recordedBy: string;
+  recordedAt: string;
 }
 
 export type InvoiceSectionKey = 'paymentTerms' | 'paymentDetails' | 'items' | 'adjustments' | 'notes' | 'vat';
