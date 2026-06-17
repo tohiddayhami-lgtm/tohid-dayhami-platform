@@ -13,6 +13,13 @@ export const resolveInvoiceDecimals = (value?: number): InvoiceAmountDecimals =>
   return MAX_INVOICE_DECIMALS;
 };
 
+/** Per-invoice decimals, then template default, then 3. */
+export const getInvoiceAmountDecimals = (
+  invoice?: { amountDecimals?: number },
+  template?: { amountDecimals?: number },
+): InvoiceAmountDecimals =>
+  resolveInvoiceDecimals(invoice?.amountDecimals ?? template?.amountDecimals);
+
 export const isPresetInvoiceCurrency = (code: string): code is InvoicePresetCurrency =>
   (INVOICE_PRESET_CURRENCIES as readonly string[]).includes(code);
 

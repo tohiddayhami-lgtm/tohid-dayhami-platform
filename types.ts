@@ -183,6 +183,7 @@ export interface Invoice {
   receipts?: InvoiceReceipt[];             // partial / full payments received
   amountPaid?: number;                   // cached sum of receipts (for archive display)
   balanceDue?: number;                   // total − amountPaid
+  amountDecimals?: 0 | 1 | 2 | 3;        // per-invoice display/input precision
 }
 
 export interface InvoiceReceipt {
