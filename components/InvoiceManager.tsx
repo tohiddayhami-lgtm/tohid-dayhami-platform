@@ -918,7 +918,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
                     <td className="px-2 py-2">
                       <input className="invoice-block-field w-full font-semibold outline-none bg-transparent leading-snug" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} />
-                      <input className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:hidden" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
+                      <input className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:border-0" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
                     </td>
                     <td className="px-2 py-2 text-center"><input type="number" min="0" className="invoice-inline-field w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
                     <td className="px-2 py-2 text-right">
