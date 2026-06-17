@@ -186,6 +186,19 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     return invoices.filter(i => i.number.toLowerCase().includes(q) || (i.customerName || '').toLowerCase().includes(q) || (i.companyName || '').toLowerCase().includes(q));
   }, [invoices, search]);
 
+  const archiveStats = useMemo(() => {
+    const byCur: Record<string, { count: number; invoiced: number; paid: number; due: number }> = {};
+    for (const inv of invoices) {
+      const c = inv.currency || 'OMR';
+      if (!byCur[c]) byCur[c] = { count: 0, invoiced: 0, paid: 0, due: 0 };
+      byCur[c].count += 1;
+      byCur[c].invoiced += inv.total || 0;
+      byCur[c].paid += invoiceAmountPaid(inv);
+      byCur[c].due += invoiceBalanceDue(inv);
+    }
+    return byCur;
+  }, [invoices]);
+
   // ── Calculations (supports VAT-inclusive + extra adjustments) ──
   const adjustmentsSum = (inv: Invoice) => (inv.adjustments || []).reduce((acc, a) => acc + (a.amount || 0), 0);
 
@@ -561,6 +574,40 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       {/* ───────── ARCHIVE ───────── */}
       {mode === 'archive' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {invoices.length > 0 && (
+            <div className="p-4 border-b border-gray-100 bg-gradient-to-l from-slate-50 to-white" dir="ltr">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-3">Invoice Summary</p>
+              {Object.entries(archiveStats).map(([currency, s]) => (
+                <div key={currency} className={Object.keys(archiveStats).length > 1 ? 'mb-4 last:mb-0' : ''}>
+                  {Object.keys(archiveStats).length > 1 && (
+                    <p className="text-xs font-bold text-gray-500 mb-2">{currency}</p>
+                  )}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-gray-100 bg-white p-3">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Invoiced</p>
+                      <p className="text-lg font-black text-gray-900 mt-0.5">{formatInvoiceMoney(s.invoiced, currency)}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{s.count} invoice{s.count !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+                      <p className="text-[10px] text-emerald-600 uppercase tracking-wide">Total Received</p>
+                      <p className="text-lg font-black text-emerald-700 mt-0.5">{formatInvoiceMoney(s.paid, currency)}</p>
+                      <p className="text-[10px] text-emerald-600/70 mt-0.5">{s.invoiced > 0 ? `${Math.round((s.paid / s.invoiced) * 100)}% collected` : '—'}</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
+                      <p className="text-[10px] text-amber-600 uppercase tracking-wide">Outstanding</p>
+                      <p className="text-lg font-black text-amber-700 mt-0.5">{formatInvoiceMoney(s.due, currency)}</p>
+                      <p className="text-[10px] text-amber-600/70 mt-0.5">Balance due</p>
+                    </div>
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+                      <p className="text-[10px] text-indigo-600 uppercase tracking-wide">Status</p>
+                      <p className="text-lg font-black text-indigo-800 mt-0.5">{invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'paid').length} paid</p>
+                      <p className="text-[10px] text-indigo-600/70 mt-0.5">{invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'partial').length} partial · {invoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'unpaid').length} open</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="p-4 border-b border-gray-100">
             <div className="relative max-w-sm">
               <IconSearch className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -687,58 +734,47 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           </div>
 
           {/* A4 sheet */}
-          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '32px 36px 40px', boxSizing: 'border-box' }} dir="ltr">
-            {/* ── Top: logo + Invoice meta ── */}
-            <div className="flex justify-between items-start">
-              <div className="flex flex-col">
-                {template.logoUrl ? <img src={template.logoUrl} alt="logo" className="h-14 object-contain self-start mb-1" /> : <div className="text-2xl font-black" style={{ color: DARK }}>{template.companyName}</div>}
-                <span className="text-[8px] text-gray-400 tracking-wide">{template.companyName}</span>
-              </div>
-              <div className="text-right">
-                <h1 className="text-3xl font-black tracking-tight" style={{ color: DARK }}>INVOICE</h1>
-                <div className="mt-3 text-[12px] space-y-0.5">
-                  <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
-                  <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>
-                  <div className="flex items-center justify-end gap-2 flex-wrap">
-                    <span className="text-gray-500">Currency </span>
-                    <select
-                      className="font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none"
-                      value={currencySelectValue}
-                      onChange={e => setCurrencyPreset(e.target.value)}
-                    >
-                      {INVOICE_PRESET_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      <option value={INVOICE_CURRENCY_CUSTOM}>Custom</option>
-                    </select>
-                    {currencySelectValue === INVOICE_CURRENCY_CUSTOM && (
-                      <input
-                        className="w-16 font-medium outline-none bg-transparent border-b border-gray-200 uppercase print:border-0"
-                        placeholder="GBP"
-                        value={draft.currency || ''}
-                        onChange={e => setField('currency', e.target.value.toUpperCase().slice(0, 12))}
-                      />
-                    )}
+          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '20px 24px', boxSizing: 'border-box' }} dir="ltr">
+
+            {/* ── PAGE 1 ── */}
+            <div className="invoice-pdf-page" data-pdf-page="1">
+              <div className="flex justify-between items-start gap-3 mb-2">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  {template.logoUrl ? <img src={template.logoUrl} alt="logo" className="h-9 w-9 object-contain shrink-0 mt-0.5" /> : null}
+                  <div className="text-[10px] leading-snug min-w-0">
+                    <div className="font-bold text-[12px] leading-tight" style={{ color: DARK }}>{template.companyName}</div>
+                    {template.address && <div className="text-gray-600 mt-0.5">{template.address}</div>}
+                    {template.crNumber && <div className="text-gray-500">CR No.: {template.crNumber}</div>}
+                    <div className="mt-0.5 space-y-0" style={{ color: accent }}>
+                      {template.phone && <div>{template.phone}</div>}
+                      {template.email && <div>{template.email}</div>}
+                      {template.website && <div>{template.website}</div>}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <h1 className="text-xl font-black tracking-tight leading-none" style={{ color: DARK }}>INVOICE</h1>
+                  <div className="mt-1.5 text-[11px] space-y-0">
+                    <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
+                    <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="text-gray-500">Currency </span>
+                      <select className="font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none text-[11px]" value={currencySelectValue} onChange={e => setCurrencyPreset(e.target.value)}>
+                        {INVOICE_PRESET_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value={INVOICE_CURRENCY_CUSTOM}>Custom</option>
+                      </select>
+                      {currencySelectValue === INVOICE_CURRENCY_CUSTOM && (
+                        <input className="w-14 font-medium outline-none bg-transparent border-b border-gray-200 uppercase print:border-0 text-[11px]" placeholder="GBP" value={draft.currency || ''} onChange={e => setField('currency', e.target.value.toUpperCase().slice(0, 12))} />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* ── Company block ── */}
-            <div className="mt-4 text-[12px] leading-relaxed">
-              <div className="font-bold text-[15px]" style={{ color: DARK }}>{template.companyName}</div>
-              {template.address && <div className="text-gray-600 max-w-xs">{template.address}</div>}
-              {template.crNumber && <div className="text-gray-600">CR No.: {template.crNumber}</div>}
-              <div className="mt-2 space-y-0.5" style={{ color: accent }}>
-                {template.phone && <div>{template.phone}</div>}
-                {template.email && <div>{template.email}</div>}
-                {template.website && <div>{template.website}</div>}
-              </div>
-            </div>
+              <div className="h-[2px] mb-3" style={{ backgroundColor: DARK }} />
 
-            <div className="h-[3px] mt-4 mb-5" style={{ backgroundColor: DARK }} />
-
-            {/* ── Bill To + Payment Terms ── */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="border border-gray-200 rounded-md p-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="border border-gray-200 rounded-md p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">BILL TO</p>
                   {!readonly && (
@@ -762,7 +798,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <input className="block w-full text-[11px] text-gray-500 outline-none bg-transparent dir-ltr print:border-0 border-b border-transparent focus:border-gray-200" placeholder="Phone: ..." value={draft.customerPhone ? `Phone: ${draft.customerPhone}` : ''} onChange={e => setField('customerPhone', e.target.value.replace(/^Phone:\s*/i, ''))} />
                 <input className="block w-full text-[11px] text-gray-400 outline-none bg-transparent print:border-0 border-b border-transparent focus:border-gray-200" placeholder="Address" value={draft.customerAddress || ''} onChange={e => setField('customerAddress', e.target.value)} />
               </div>
-              <div className="border border-gray-200 rounded-md p-3">
+              <div className="border border-gray-200 rounded-md p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT TERMS</p>
                   <SectionPresetControls section="paymentTerms" />
@@ -857,7 +893,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             )}
 
             {/* ── Totals ── */}
-            <div className="flex flex-col items-end gap-0 mb-6 text-[12px]">
+            <div className="flex flex-col items-end gap-0 mb-3 text-[12px]">
               <div className="w-full flex justify-end border-b border-gray-100 py-2"><span className="text-gray-500 mr-6">Subtotal ({cur})</span><span className="font-semibold w-28 text-right" style={{ color: DARK }}>{money(draft.subTotal)}</span></div>
               {(draft.adjustments || []).filter(a => a.amount !== 0).map(adj => (
                 <div key={adj.id} className="w-full flex justify-end border-b border-gray-100 py-1.5">
@@ -884,11 +920,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
             {/* ── Payment receipt (when partial / full payments recorded) ── */}
             {invoiceAmountPaid(draft) > 0 && (
-              <div className="mb-6 border border-emerald-200 rounded-md overflow-hidden text-[12px]">
-                <div className="bg-emerald-50 px-3 py-2 border-b border-emerald-100">
-                  <p className="text-[10px] font-bold tracking-wider text-emerald-800">PAYMENT RECEIPT</p>
+              <div className="mb-3 border border-emerald-200 rounded-md overflow-hidden text-[11px]">
+                <div className="bg-emerald-50 px-2.5 py-1.5 border-b border-emerald-100">
+                  <p className="text-[9px] font-bold tracking-wider text-emerald-800">PAYMENT RECEIPT</p>
                 </div>
-                <div className="p-3">
+                <div className="p-2.5">
                   <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Invoice Total ({cur})</span><span className="font-semibold w-28 text-right">{money(draft.total)}</span></div>
                   <div className="flex justify-end border-b border-gray-100 py-1.5"><span className="text-gray-500 mr-6">Amount Received ({cur})</span><span className="font-semibold w-28 text-right text-emerald-700">{money(invoiceAmountPaid(draft))}</span></div>
                   <div className="flex justify-end py-2"><span className="font-bold text-gray-800 mr-6">Balance Due ({cur})</span><span className="font-black w-28 text-right text-base" style={{ color: invoiceBalanceDue(draft) > 0 ? '#b45309' : DARK }}>{money(invoiceBalanceDue(draft))}</span></div>
@@ -906,48 +942,59 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </div>
               </div>
             )}
+            </div>{/* end page 1 */}
+
+            {/* ── PAGE 2 ── */}
+            <div className="invoice-pdf-page mt-4 pt-3 border-t border-gray-200" data-pdf-page="2">
+              <div className="flex justify-between items-center text-[9px] text-gray-400 mb-3 pb-2 border-b border-gray-100">
+                <span className="font-semibold text-gray-600 truncate max-w-[40%]">{template.companyName}</span>
+                <span>Invoice {draft.number}</span>
+                <span>{fmtDate(draft.createdAt || draft.date)}</span>
+              </div>
 
             {/* ── Payment details + Notes ── */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT DETAILS</p>
                   <SectionPresetControls section="paymentDetails" />
                 </div>
                 <textarea
-                  rows={5}
+                  rows={4}
                   className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-relaxed whitespace-pre-wrap dir-ltr"
                   placeholder="Paste or type your bank / payment details here…"
                   value={draft.paymentDetails || ''}
                   onChange={e => setField('paymentDetails', e.target.value)}
                 />
               </div>
-              <div className="border border-gray-200 rounded-md p-3">
+              <div className="border border-gray-200 rounded-md p-2.5">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
                   <SectionPresetControls section="notes" />
                 </div>
-                <textarea rows={5} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
+                <textarea rows={4} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
               </div>
             </div>
 
-            {/* ── Footer block (kept together for PDF) ── */}
-            <div className="invoice-footer-block mt-6 pt-4 border-t border-gray-100">
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="border border-gray-200 rounded-md p-3">
-                  <p className="text-[10px] font-bold tracking-wider text-gray-400 mb-5">AUTHORIZED SIGNATURE</p>
-                  <div className="border-t border-gray-400 pt-1.5 text-center text-[9px] tracking-wider text-gray-500">{(template.companyName || '').toUpperCase()}</div>
+            {/* ── Footer ── */}
+            <div className="invoice-footer-block mt-3 pt-3 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <div className="border border-gray-200 rounded-md p-2.5">
+                  <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-4">AUTHORIZED SIGNATURE</p>
+                  <div className="border-t border-gray-400 pt-1 text-center text-[9px] tracking-wider text-gray-500">{(template.companyName || '').toUpperCase()}</div>
                 </div>
                 <div />
               </div>
-              <div className="text-center text-[9px] text-gray-400 pb-1">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
+              <div className="text-center text-[9px] text-gray-400">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
             </div>
+            </div>{/* end page 2 */}
           </div>
 
           <style>{`
             .pdf-export .print\\:hidden { display: none !important; }
-            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; }
-            .pdf-export .invoice-footer-block { padding-bottom: 24px; }
+            .pdf-export .invoice-content { box-shadow: none !important; border: 0 !important; padding: 0 !important; }
+            .pdf-export .invoice-pdf-page { padding: 0; margin: 0; }
+            .pdf-export .invoice-pdf-page + .invoice-pdf-page { border-top: 0 !important; margin-top: 0 !important; padding-top: 0 !important; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }

@@ -1,7 +1,7 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-const PAGE_MARGIN_MM = 12;
+const PAGE_MARGIN_MM = 10;
 
 const flattenInputsForExport = (root: HTMLElement) => {
   root.querySelectorAll('input, textarea, select').forEach((el) => {
@@ -20,72 +20,64 @@ const flattenInputsForExport = (root: HTMLElement) => {
     span.style.font = cs.font;
     span.style.color = cs.color;
     span.style.textAlign = cs.textAlign;
-    span.style.padding = cs.padding;
-    span.style.margin = cs.margin;
-    span.style.width = cs.width;
-    span.style.minHeight = cs.minHeight;
+    span.style.padding = '0';
+    span.style.margin = '0';
+    span.style.width = '100%';
     span.style.lineHeight = cs.lineHeight;
     node.replaceWith(span);
   });
 };
 
-/** Capture an invoice DOM node and download a clean A4 PDF with margins. */
+const capturePage = async (pageEl: HTMLElement): Promise<HTMLCanvasElement> =>
+  html2canvas(pageEl, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+    ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
+    onclone: (_clonedDoc, cloneEl) => {
+      const clone = cloneEl as HTMLElement;
+      clone.style.padding = '0';
+      clone.style.margin = '0';
+      flattenInputsForExport(clone);
+    },
+  });
+
+const addCanvasToPdf = (
+  pdf: jsPDF,
+  canvas: HTMLCanvasElement,
+  isFirstPage: boolean,
+) => {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - PAGE_MARGIN_MM * 2;
+  const contentHeight = pageHeight - PAGE_MARGIN_MM * 2;
+  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  let imgHeight = (canvas.height * contentWidth) / canvas.width;
+  let w = contentWidth;
+  let h = imgHeight;
+
+  if (h > contentHeight) {
+    const scale = contentHeight / h;
+    w = contentWidth * scale;
+    h = contentHeight;
+  }
+
+  if (!isFirstPage) pdf.addPage();
+  pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM + (contentWidth - w) / 2, PAGE_MARGIN_MM, w, h);
+};
+
+/** Capture invoice pages (.invoice-pdf-page) and download a clean multi-page A4 PDF. */
 export async function exportInvoicePdf(element: HTMLElement, filename: string): Promise<void> {
   document.body.classList.add('pdf-export');
   try {
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      ignoreElements: (el) => (el as HTMLElement).classList?.contains('print:hidden'),
-      onclone: (clonedDoc) => {
-        const root = clonedDoc.querySelector('.invoice-content') as HTMLElement | null;
-        if (root) {
-          root.style.minHeight = 'auto';
-          root.style.paddingBottom = '32px';
-          flattenInputsForExport(root);
-        }
-      },
-    });
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pages = Array.from(element.querySelectorAll('.invoice-pdf-page')) as HTMLElement[];
+    const targets = pages.length > 0 ? pages : [element];
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const contentWidth = pageWidth - PAGE_MARGIN_MM * 2;
-    const contentHeight = pageHeight - PAGE_MARGIN_MM * 2;
-    const imgProps = pdf.getImageProperties(imgData);
-    let imgHeight = (imgProps.height * contentWidth) / imgProps.width;
 
-    // Slight overflow → scale down to one page (avoids messy footer split)
-    if (imgHeight > contentHeight && imgHeight <= contentHeight * 1.12) {
-      const scale = contentHeight / imgHeight;
-      const w = contentWidth * scale;
-      const h = imgHeight * scale;
-      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM + (contentWidth - w) / 2, PAGE_MARGIN_MM, w, h);
-      pdf.save(filename);
-      return;
-    }
-
-    if (imgHeight <= contentHeight) {
-      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, PAGE_MARGIN_MM, contentWidth, imgHeight);
-      pdf.save(filename);
-      return;
-    }
-
-    // Multi-page with margins
-    let position = PAGE_MARGIN_MM;
-    let remaining = imgHeight;
-
-    pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, position, contentWidth, imgHeight);
-    remaining -= contentHeight;
-
-    while (remaining > 0) {
-      position = PAGE_MARGIN_MM - (imgHeight - remaining);
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', PAGE_MARGIN_MM, position, contentWidth, imgHeight);
-      remaining -= contentHeight;
+    for (let i = 0; i < targets.length; i++) {
+      const canvas = await capturePage(targets[i]);
+      addCanvasToPdf(pdf, canvas, i === 0);
     }
 
     pdf.save(filename);
