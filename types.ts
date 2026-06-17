@@ -1063,6 +1063,7 @@ export interface InvoiceTemplate {
   defaultQtyColumnLabel?: string;   // default "QTY"
   defaultUnitPriceColumnLabel?: string; // default "UNIT PRICE"
   defaultCurrency?: string;       // default currency for new invoices (e.g. OMR)
+  amountDecimals?: 0 | 1 | 2 | 3; // display/input precision for invoice amounts (default 3)
   // ── Section presets (saved from invoice editor for reuse) ──
   defaultItems?: InvoiceItem[];
   defaultAdjustments?: InvoiceAdjustment[];

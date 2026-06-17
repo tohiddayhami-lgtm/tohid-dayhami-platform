@@ -9,6 +9,7 @@ import {
   formatInvoiceMoney,
   parseInvoiceAmount,
   isPresetInvoiceCurrency,
+  resolveInvoiceDecimals,
 } from '../utils/invoiceMoney';
 import { exportInvoicePdf } from '../utils/exportInvoicePdf';
 import { InvoiceAmountInput } from './InvoiceAmountInput';
@@ -162,6 +163,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       addr: 'آدرس', cr: 'CR No.', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت',
       bankName: 'نام بانک', accHolder: 'صاحب حساب', accNo: 'شماره حساب', swift: 'کد سوئیفت', iban: 'IBAN',
       payTerms: 'شرایط پرداخت پیش‌فرض', notes: 'یادداشت/شرایط پیش‌فرض', footer: 'متن پایانی', defTax: 'مالیات پیش‌فرض (٪)', vatInc: 'مالیات به‌صورت تجمیعی (داخل قیمت)', color: 'رنگ قالب', prefix: 'پیشوند شماره فاکتور', docTitle: 'عنوان سند پیش‌فرض', colQty: 'عنوان ستون تعداد', colUnitPrice: 'عنوان ستون قیمت واحد',
+      amountDecimals: 'تعداد اعشار مبالغ', amountDecimalsHint: 'نمایش و ورود مبالغ در فاکتور (مثلاً 285,714,285 یا 285,714,285.71)',
       type: 'نوع', terms: 'شرایط و قوانین',
     },
     en: {
@@ -179,6 +181,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       addr: 'Address', cr: 'CR No.', phone: 'Phone', email: 'Email', website: 'Website',
       bankName: 'Bank name', accHolder: 'Account holder', accNo: 'Account number', swift: 'SWIFT code', iban: 'IBAN',
       payTerms: 'Default payment terms', notes: 'Default notes / terms', footer: 'Footer text', defTax: 'Default tax (%)', vatInc: 'VAT inclusive in prices', color: 'Theme color', prefix: 'Invoice number prefix', docTitle: 'Default document title', colQty: 'Default QTY column title', colUnitPrice: 'Default unit price column title',
+      amountDecimals: 'Amount decimal places', amountDecimalsHint: 'How many decimals to show in invoice amounts (e.g. 285,714,285 or 285,714,285.71)',
       type: 'Type', terms: 'Terms',
     },
   }[lang];
@@ -560,7 +563,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   }, [customers, customerSearch]);
 
   const cur = (draft?.currency || 'OMR').trim() || 'OMR';
-  const money = (n: number) => formatInvoiceMoney(n, cur);
+  const amountDecimals = resolveInvoiceDecimals(template.amountDecimals);
+  const money = (n: number, currency = cur) => formatInvoiceMoney(n, currency, amountDecimals);
+  const fmtMoney = (n: number, currency: string) => formatInvoiceMoney(n, currency, amountDecimals);
   const fmtDate = (value?: string) => {
     if (!value) return '';
     const d = new Date(value);
@@ -616,17 +621,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="rounded-xl border border-gray-100 bg-white p-3">
                       <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Invoiced</p>
-                      <p className="text-lg font-black text-gray-900 mt-0.5">{formatInvoiceMoney(s.invoiced, currency)}</p>
+                      <p className="text-lg font-black text-gray-900 mt-0.5">{fmtMoney(s.invoiced, currency)}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">{s.count} invoice{s.count !== 1 ? 's' : ''}</p>
                     </div>
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
                       <p className="text-[10px] text-emerald-600 uppercase tracking-wide">Total Received</p>
-                      <p className="text-lg font-black text-emerald-700 mt-0.5">{formatInvoiceMoney(s.paid, currency)}</p>
+                      <p className="text-lg font-black text-emerald-700 mt-0.5">{fmtMoney(s.paid, currency)}</p>
                       <p className="text-[10px] text-emerald-600/70 mt-0.5">{s.invoiced > 0 ? `${Math.round((s.paid / s.invoiced) * 100)}% collected` : '—'}</p>
                     </div>
                     <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
                       <p className="text-[10px] text-amber-600 uppercase tracking-wide">Outstanding</p>
-                      <p className="text-lg font-black text-amber-700 mt-0.5">{formatInvoiceMoney(s.due, currency)}</p>
+                      <p className="text-lg font-black text-amber-700 mt-0.5">{fmtMoney(s.due, currency)}</p>
                       <p className="text-[10px] text-amber-600/70 mt-0.5">Balance due</p>
                     </div>
                     <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
@@ -674,12 +679,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       {showAllInvoices && <td className="px-4 py-3 text-gray-600 text-xs">{inv.issuedBy || '—'}</td>}
                       <td className="px-4 py-3 text-gray-500" dir="ltr">{fmtDate(inv.date)}</td>
                       <td className="px-4 py-3" dir="ltr">
-                        <div className="font-bold text-gray-800">{formatInvoiceMoney(inv.total, curInv)}</div>
+                        <div className="font-bold text-gray-800">{fmtMoney(inv.total, curInv)}</div>
                         {paid > 0 && (
-                          <div className="text-[10px] mt-0.5 text-emerald-600">Paid {formatInvoiceMoney(paid, curInv)}</div>
+                          <div className="text-[10px] mt-0.5 text-emerald-600">Paid {fmtMoney(paid, curInv)}</div>
                         )}
                         {balance > 0 && paid > 0 && (
-                          <div className="text-[10px] text-amber-600">Due {formatInvoiceMoney(balance, curInv)}</div>
+                          <div className="text-[10px] text-amber-600">Due {fmtMoney(balance, curInv)}</div>
                         )}
                       </td>
                       <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${archiveStatusCls(inv)}`}>{archiveStatusLabel(inv)}</span></td>
@@ -747,6 +752,20 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
               {!isPresetInvoiceCurrency(companyForm.defaultCurrency || 'OMR') && (
                 <input className={cFld + ' dir-ltr mt-2'} placeholder="e.g. GBP, SAR" value={companyForm.defaultCurrency || ''} onChange={e => setCompanyForm(f => ({ ...f, defaultCurrency: e.target.value.toUpperCase().slice(0, 12) }))} />
               )}
+            </div>
+            <div>
+              <label className={lbl}>{t.amountDecimals}</label>
+              <select
+                className={cFld + ' dir-ltr'}
+                value={resolveInvoiceDecimals(companyForm.amountDecimals)}
+                onChange={e => setCompanyForm(f => ({ ...f, amountDecimals: Number(e.target.value) as 0 | 1 | 2 | 3 }))}
+              >
+                <option value={0}>{lang === 'fa' ? 'بدون اعشار' : 'No decimals'}</option>
+                <option value={1}>{lang === 'fa' ? '۱ رقم اعشار' : '1 decimal'}</option>
+                <option value={2}>{lang === 'fa' ? '۲ رقم اعشار' : '2 decimals'}</option>
+                <option value={3}>{lang === 'fa' ? '۳ رقم اعشار' : '3 decimals'}</option>
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">{t.amountDecimalsHint}</p>
             </div>
             <div><label className={lbl}>{t.defTax}</label><input type="number" className={cFld} value={companyForm.defaultTaxRate} onChange={e => setCompanyForm(f => ({ ...f, defaultTaxRate: parseFloat(e.target.value) || 0 }))} /></div>
             <div className="flex items-end gap-4 md:col-span-2">
@@ -906,6 +925,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                         className="invoice-inline-field w-full outline-none bg-transparent text-right dir-ltr"
                         placeholder="0"
                         value={item.unitPrice || 0}
+                        maxDecimals={amountDecimals}
                         onChange={n => setItem(idx, 'unitPrice', n)}
                       />
                     </td>
@@ -948,6 +968,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                       placeholder="0"
                       value={adj.amount || 0}
                       allowNegative
+                      maxDecimals={amountDecimals}
                       onChange={n => setAdjustment(adj.id, 'amount', n)}
                     />
                     <span className="text-gray-400 w-8 print:hidden">{cur}</span>
@@ -1081,12 +1102,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <h4 className="font-bold text-gray-900 mb-1">Record Payment</h4>
             <p className="text-xs text-gray-500 mb-4">{paymentModalInv.number} · {paymentModalInv.customerName}</p>
             <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-gray-500">Invoice Total</span><span className="font-bold">{formatInvoiceMoney(paymentModalInv.total, paymentModalInv.currency || 'OMR')}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Already Paid</span><span className="font-semibold text-emerald-600">{formatInvoiceMoney(invoiceAmountPaid(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
-              <div className="flex justify-between border-t border-gray-200 pt-1 mt-1"><span className="font-semibold text-gray-700">Balance Due</span><span className="font-bold text-amber-600">{formatInvoiceMoney(invoiceBalanceDue(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Invoice Total</span><span className="font-bold">{fmtMoney(paymentModalInv.total, paymentModalInv.currency || 'OMR')}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Already Paid</span><span className="font-semibold text-emerald-600">{fmtMoney(invoiceAmountPaid(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
+              <div className="flex justify-between border-t border-gray-200 pt-1 mt-1"><span className="font-semibold text-gray-700">Balance Due</span><span className="font-bold text-amber-600">{fmtMoney(invoiceBalanceDue(paymentModalInv), paymentModalInv.currency || 'OMR')}</span></div>
             </div>
             <div className="space-y-3">
-              <div><label className={lbl}>Amount</label><InvoiceAmountInput className={cFld + ' dir-ltr'} value={paymentForm.amount} onChange={n => setPaymentForm(f => ({ ...f, amount: n }))} /></div>
+              <div><label className={lbl}>Amount</label><InvoiceAmountInput className={cFld + ' dir-ltr'} value={paymentForm.amount} maxDecimals={amountDecimals} onChange={n => setPaymentForm(f => ({ ...f, amount: n }))} /></div>
               <div><label className={lbl}>Date</label><input type="date" className={cFld + ' dir-ltr'} value={paymentForm.date} onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))} /></div>
               <div><label className={lbl}>Method <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld} placeholder="Bank Transfer, Cash…" value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} /></div>
               <div><label className={lbl}>Reference <span className="text-gray-400 font-normal">(optional)</span></label><input className={cFld + ' dir-ltr'} placeholder="Transaction ID" value={paymentForm.reference} onChange={e => setPaymentForm(f => ({ ...f, reference: e.target.value }))} /></div>
@@ -1098,7 +1119,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 <div className="space-y-1 max-h-32 overflow-y-auto">
                   {(paymentModalInv.receipts || []).map(r => (
                     <div key={r.id} className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 rounded px-2 py-1.5">
-                      <span>{fmtDate(r.date)} · {formatInvoiceMoney(r.amount, paymentModalInv.currency || 'OMR')}{r.method ? ` · ${r.method}` : ''}</span>
+                      <span>{fmtDate(r.date)} · {fmtMoney(r.amount, paymentModalInv.currency || 'OMR')}{r.method ? ` · ${r.method}` : ''}</span>
                       {!readonly && <button type="button" onClick={() => handleRemoveReceipt(paymentModalInv, r.id)} className="text-red-400 hover:text-red-600 p-0.5"><IconTrash className="w-3 h-3" /></button>}
                     </div>
                   ))}

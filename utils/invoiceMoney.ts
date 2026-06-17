@@ -6,6 +6,13 @@ export const INVOICE_CURRENCY_CUSTOM = '__custom__';
 
 export const MAX_INVOICE_DECIMALS = 3;
 
+export type InvoiceAmountDecimals = 0 | 1 | 2 | 3;
+
+export const resolveInvoiceDecimals = (value?: number): InvoiceAmountDecimals => {
+  if (value === 0 || value === 1 || value === 2 || value === 3) return value;
+  return MAX_INVOICE_DECIMALS;
+};
+
 export const isPresetInvoiceCurrency = (code: string): code is InvoicePresetCurrency =>
   (INVOICE_PRESET_CURRENCIES as readonly string[]).includes(code);
 
@@ -32,24 +39,32 @@ export function formatInvoiceAmount(n: number, maxDecimals = MAX_INVOICE_DECIMAL
 }
 
 /** Live typing formatter — keeps commas while user edits (e.g. 1,250,000.5). */
-export function formatInvoiceAmountTyping(raw: string, allowNegative = false): string {
+export function formatInvoiceAmountTyping(
+  raw: string,
+  allowNegative = false,
+  maxDecimals = MAX_INVOICE_DECIMALS,
+): string {
   let cleaned = raw.replace(/,/g, '');
   if (allowNegative) {
     const negative = cleaned.startsWith('-');
     cleaned = cleaned.replace(/-/g, '').replace(/[^\d.]/g, '');
     if (!cleaned) return negative ? '-' : '';
-    const formatted = formatTypingCore(cleaned);
+    const formatted = formatTypingCore(cleaned, maxDecimals);
     return negative ? `-${formatted}` : formatted;
   }
   cleaned = cleaned.replace(/[^\d.]/g, '');
   if (!cleaned) return '';
-  return formatTypingCore(cleaned);
+  return formatTypingCore(cleaned, maxDecimals);
 }
 
-const formatTypingCore = (cleaned: string): string => {
+const formatTypingCore = (cleaned: string, maxDecimals: number): string => {
+  if (maxDecimals <= 0) {
+    const intRaw = cleaned.replace(/\./g, '');
+    return intRaw ? formatIntegerPart(intRaw) : '';
+  }
   const dotIndex = cleaned.indexOf('.');
   const intRaw = dotIndex >= 0 ? cleaned.slice(0, dotIndex) : cleaned;
-  const decRaw = dotIndex >= 0 ? cleaned.slice(dotIndex + 1).slice(0, MAX_INVOICE_DECIMALS) : '';
+  const decRaw = dotIndex >= 0 ? cleaned.slice(dotIndex + 1).slice(0, maxDecimals) : '';
   const intFormatted = intRaw ? formatIntegerPart(intRaw) : '0';
   if (dotIndex >= 0) {
     if (cleaned.endsWith('.')) return `${intFormatted}.`;
@@ -58,17 +73,21 @@ const formatTypingCore = (cleaned: string): string => {
   return intFormatted;
 };
 
-/** Parse user input — strips commas; keeps at most 3 decimal places. */
-export function parseInvoiceAmount(raw: string): number {
+/** Parse user input — strips commas; rounds to configured decimal places. */
+export function parseInvoiceAmount(raw: string, maxDecimals = MAX_INVOICE_DECIMALS): number {
   const cleaned = raw.replace(/,/g, '').replace(/[^\d.-]/g, '');
   if (!cleaned || cleaned === '-' || cleaned === '.') return 0;
   const n = parseFloat(cleaned);
   if (Number.isNaN(n)) return 0;
-  const factor = 10 ** MAX_INVOICE_DECIMALS;
+  const factor = 10 ** maxDecimals;
   return Math.round(n * factor) / factor;
 }
 
-export function formatInvoiceMoney(amount: number, currency: string): string {
+export function formatInvoiceMoney(
+  amount: number,
+  currency: string,
+  maxDecimals = MAX_INVOICE_DECIMALS,
+): string {
   const code = (currency || 'OMR').trim() || 'OMR';
-  return `${code} ${formatInvoiceAmount(amount)}`;
+  return `${code} ${formatInvoiceAmount(amount, maxDecimals)}`;
 }
