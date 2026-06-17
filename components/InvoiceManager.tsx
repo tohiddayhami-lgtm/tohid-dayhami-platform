@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Invoice, InvoiceItem, InvoiceAdjustment, InvoicePaymentDetails, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
+import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
 import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload } from './Icons';
 import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets, saveCustomerToCloud } from '../services/firebaseService';
 import { Language } from '../App';
@@ -48,13 +48,20 @@ const cloneItems = (items?: InvoiceItem[]): InvoiceItem[] =>
   (items && items.length > 0 ? items : [{ description: '', quantity: 1, unitPrice: 0, total: 0 }])
     .map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) }));
 
-const paymentDetailsFromTemplate = (tpl: InvoiceTemplate): InvoicePaymentDetails => ({
-  bankName: tpl.bankName || '',
-  accountHolder: tpl.accountHolder || '',
-  accountNumber: tpl.accountNumber || '',
-  swiftCode: tpl.swiftCode || '',
-  iban: tpl.iban || '',
-});
+const normalizePaymentDetails = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const pd = value as Record<string, string | undefined>;
+    return [
+      pd.bankName,
+      pd.accountHolder,
+      pd.accountNumber,
+      pd.swiftCode,
+      pd.iban,
+    ].filter(Boolean).join('\n');
+  }
+  return '';
+};
 
 const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice => {
   const tpl = defaultTemplate(config);
@@ -75,7 +82,7 @@ const emptyDraft = (config: AppConfig, issuedBy: string, count: number): Invoice
     status: 'draft',
     createdAt: new Date().toISOString(),
     paymentTerms: tpl.defaultPaymentTerms || '',
-    paymentDetails: paymentDetailsFromTemplate(tpl),
+    paymentDetails: '',
     note: tpl.defaultNotes || '',
     vatInclusive: tpl.vatInclusive ?? true,
   };
@@ -179,11 +186,10 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const startNew = () => { setDraft(recompute(emptyDraft(config, currentUser.fullName, invoices.length))); setMode('editor'); };
   const startEdit = (inv: Invoice) => {
-    const tpl = defaultTemplate(config);
     setDraft(recompute({
       ...inv,
       adjustments: inv.adjustments || [],
-      paymentDetails: inv.paymentDetails || paymentDetailsFromTemplate(tpl),
+      paymentDetails: normalizePaymentDetails(inv.paymentDetails),
     }));
     setMode('editor');
   };
@@ -199,10 +205,6 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const addItem = () => setDraft(d => d ? { ...d, items: [...d.items, { description: '', quantity: 1, unitPrice: 0, total: 0 }] } : d);
   const removeItem = (idx: number) => setDraft(d => d ? recompute({ ...d, items: d.items.filter((_, i) => i !== idx) }) : d);
   const setField = (field: keyof Invoice, value: any) => setDraft(d => d ? recompute({ ...d, [field]: value }) : d);
-  const setPaymentDetail = (field: keyof InvoicePaymentDetails, value: string) => setDraft(d => d ? {
-    ...d,
-    paymentDetails: { ...(d.paymentDetails || paymentDetailsFromTemplate(template)), [field]: value },
-  } : d);
 
   const addAdjustment = (preset?: { label: string; amount?: number }) => setDraft(d => {
     if (!d) return d;
@@ -234,7 +236,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     if (section === 'paymentTerms') {
       base.paymentTerms = draft.paymentTerms || '';
     } else if (section === 'paymentDetails') {
-      base.paymentDetails = { ...(draft.paymentDetails || paymentDetailsFromTemplate(template)) };
+      base.paymentDetails = draft.paymentDetails || '';
     } else if (section === 'items') {
       base.items = draft.items.map(it => ({ ...it }));
     } else if (section === 'adjustments') {
@@ -254,8 +256,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       let next: Invoice = { ...d };
       if (preset.section === 'paymentTerms') {
         next = { ...next, paymentTerms: preset.paymentTerms || '' };
-      } else if (preset.section === 'paymentDetails' && preset.paymentDetails) {
-        next = { ...next, paymentDetails: { ...preset.paymentDetails } };
+      } else if (preset.section === 'paymentDetails') {
+        next = { ...next, paymentDetails: normalizePaymentDetails(preset.paymentDetails) };
       } else if (preset.section === 'items' && preset.items?.length) {
         next = { ...next, items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })) };
       } else if (preset.section === 'adjustments') {
@@ -788,16 +790,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
             {/* ── Payment details + Notes ── */}
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed space-y-1">
-                <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT DETAILS</p>
                   <SectionPresetControls section="paymentDetails" />
                 </div>
-                <div className="flex gap-1"><span className="text-gray-500 shrink-0">Bank Name:</span><input className="flex-1 outline-none bg-transparent" value={draft.paymentDetails?.bankName || ''} onChange={e => setPaymentDetail('bankName', e.target.value)} placeholder="Bank Muscat" /></div>
-                <div className="flex gap-1"><span className="text-gray-500 shrink-0">Account Holder:</span><input className="flex-1 outline-none bg-transparent" value={draft.paymentDetails?.accountHolder || ''} onChange={e => setPaymentDetail('accountHolder', e.target.value)} /></div>
-                <div className="flex gap-1 dir-ltr"><span className="text-gray-500 shrink-0">Account Number:</span><input className="flex-1 outline-none bg-transparent" value={draft.paymentDetails?.accountNumber || ''} onChange={e => setPaymentDetail('accountNumber', e.target.value)} /></div>
-                <div className="flex gap-1 dir-ltr"><span className="text-gray-500 shrink-0">SWIFT Code:</span><input className="flex-1 outline-none bg-transparent" value={draft.paymentDetails?.swiftCode || ''} onChange={e => setPaymentDetail('swiftCode', e.target.value)} /></div>
-                <div className="flex gap-1 dir-ltr"><span className="text-gray-500 shrink-0">IBAN:</span><input className="flex-1 outline-none bg-transparent" value={draft.paymentDetails?.iban || ''} onChange={e => setPaymentDetail('iban', e.target.value)} /></div>
+                <textarea
+                  rows={6}
+                  className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-relaxed whitespace-pre-wrap dir-ltr"
+                  placeholder="Paste or type your bank / payment details here…"
+                  value={draft.paymentDetails || ''}
+                  onChange={e => setField('paymentDetails', e.target.value)}
+                />
               </div>
               <div className="border border-gray-200 rounded-md p-3">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
