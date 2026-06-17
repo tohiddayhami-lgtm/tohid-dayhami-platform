@@ -7,6 +7,7 @@ import {
   INVOICE_PRESET_CURRENCIES,
   INVOICE_CURRENCY_CUSTOM,
   formatInvoiceMoney,
+  formatInvoiceAmount,
   parseInvoiceAmount,
   isPresetInvoiceCurrency,
   resolveInvoiceDecimals,
@@ -1001,7 +1002,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </span>
                 <span className="text-gray-500 w-28 text-right shrink-0">{money(draft.taxAmount)}</span>
               </div>
-              <div className="w-full flex justify-end items-center py-2 px-4 mt-1 text-white" style={{ backgroundColor: DARK }}><span className="font-bold mr-6 tracking-wide">TOTAL DUE ({cur})</span><span className="font-black w-28 text-right text-base">{money(draft.total)}</span></div>
+              <div
+                className="w-full flex justify-between items-center gap-6 py-2.5 px-4 mt-1 text-white"
+                style={{ backgroundColor: DARK }}
+              >
+                <span className="font-bold tracking-wide shrink-0">TOTAL DUE</span>
+                <div className="text-right shrink-0 min-w-[6rem]">
+                  <div className="text-[10px] font-semibold tracking-wider opacity-85 leading-none mb-0.5">{cur}</div>
+                  <div className="font-black text-base sm:text-lg leading-tight tabular-nums whitespace-nowrap">
+                    {formatInvoiceAmount(draft.total, draftAmountDecimals)}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Payment receipt (when partial / full payments recorded) ── */}
