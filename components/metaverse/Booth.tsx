@@ -9,6 +9,7 @@ import { Language } from '../../App';
 import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
+import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
 import type { BoothFace } from '../../types';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -973,10 +974,10 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const href = /^https?:\/\//i.test(v) ? v : /^\+?\d[\d\s-]+$/.test(v) ? `https://wa.me/${v.replace(/[^\d]/g, '')}` : `https://${v}`;
     window.open(href, '_blank', 'noopener,noreferrer');
   };
-  const meetLabel = bi(booth.meetTitle, lang, lang === 'fa' ? 'تماس Google Meet' : 'Google Meet call');
+  const meetCaption = bi(booth.meetTitle, lang, '');
   const openBoothMeet = () => {
     if (!booth.meetUrl) return;
-    onTrack?.('hotspot_click', { ...trackBase, targetType: 'google_meet', targetName: meetLabel, side: 'booth_meet' });
+    onTrack?.('hotspot_click', { ...trackBase, targetType: 'google_meet', targetName: meetCaption || (lang === 'fa' ? 'Google Meet' : 'Google Meet'), side: 'booth_meet' });
     openManagerLink(booth.meetUrl);
   };
   const toggleManagerAudio = (index: number, raw?: string) => {
@@ -1347,27 +1348,15 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         </group>
       )}
 
-      {/* Per-booth Google Meet screen — opens Meet in a new tab when clicked. */}
+      {/* Per-booth Google Meet icon on the booth flank. */}
       {booth.meetEnabled && booth.meetUrl && (
-        <group position={[-W / 2 + 0.11, sideY, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <mesh
-            onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            <planeGeometry args={[sideW * 0.92, sideH * 0.92]} />
-            <meshStandardMaterial color="#0f172a" emissive="#22c55e" emissiveIntensity={0.28} roughness={0.45} metalness={0.2} />
-          </mesh>
-          <CanvasLabel
-            text={`📹 ${meetLabel}`}
-            width={sideW * 0.86}
-            height={0.28}
-            position={[0, -sideH * 0.22, 0.02]}
-            bg="rgba(6,78,59,.9)"
-            color="#ffffff"
-            onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
-          />
-        </group>
+        <BoothMeetBadge
+          side={booth.meetSide || 'left'}
+          boothW={W}
+          boothD={D}
+          label={meetCaption || undefined}
+          onClick={openBoothMeet}
+        />
       )}
 
       {/* Optional life-size transparent PNG people standing behind the reception counter. */}

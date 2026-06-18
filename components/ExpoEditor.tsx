@@ -113,9 +113,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
     boothMeetEnable: T ? 'تماس Google Meet این غرفه' : 'This booth Google Meet',
     boothMeetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
-    boothMeetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
-    boothMeetTitleEn: T ? 'عنوان تماس (انگلیسی)' : 'Call title (EN)',
-    boothMeetHint: T ? 'نمایشگر تماس روی دیوار داخل غرفه؛ کلیک → باز شدن Meet در تب جدید.' : 'Call screen on the booth wall; click opens Meet in a new tab.',
+    boothMeetSide: T ? 'جای آیکون' : 'Icon side',
+    boothMeetSideLeft: T ? 'سمت چپ غرفه' : 'Left of booth',
+    boothMeetSideRight: T ? 'سمت راست غرفه' : 'Right of booth',
+    boothMeetTitleFa: T ? 'متن کوتاه زیر آیکون (فارسی)' : 'Short caption (FA)',
+    boothMeetTitleEn: T ? 'متن کوتاه زیر آیکون (انگلیسی)' : 'Short caption (EN)',
+    boothMeetHint: T ? 'آیکون کوچک Meet کنار غرفه؛ کلیک → باز شدن تماس در تب جدید.' : 'Small Meet icon beside the booth; click opens the call in a new tab.',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
@@ -1095,8 +1098,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               {b.meetEnabled && (
                                 <>
                                   <div className="md:col-span-2"><label className={lbl}>{t.boothMeetUrl}</label><input className={fld + ' dir-ltr'} value={b.meetUrl || ''} onChange={ev => updBooth(b.id, { meetUrl: ev.target.value || undefined })} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></div>
-                                  <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="تماس تصویری زنده" /></div>
-                                  <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="Live video call" /></div>
+                                  <div><label className={lbl}>{t.boothMeetSide}</label>
+                                    <select className={fld + ' bg-white'} value={b.meetSide || 'left'} onChange={ev => updBooth(b.id, { meetSide: ev.target.value as 'left' | 'right' })}>
+                                      <option value="left">{t.boothMeetSideLeft}</option>
+                                      <option value="right">{t.boothMeetSideRight}</option>
+                                    </select>
+                                  </div>
+                                  <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="تماس تصویری" /></div>
+                                  <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="Video call" /></div>
                                 </>
                               )}
                             </div>
