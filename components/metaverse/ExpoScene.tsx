@@ -8,6 +8,7 @@ import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
+import { ExpoDecorationMesh } from './ExpoDecoration';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
@@ -510,6 +511,11 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
           </Suspense>
         </TexBoundary>
       )}
+
+      {/* Free-placed hall decorations (GLB props) */}
+      {(expo.decorations || []).map(d => (
+        <ExpoDecorationMesh key={d.id} deco={d} />
+      ))}
 
       {/* Environmental advertising banners — auto-distributed along each wall, height auto-fit. */}
       {(() => {

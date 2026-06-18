@@ -778,6 +778,18 @@ export interface ExpoPresenceSettings {
   avatarsEnabled?: boolean;
 }
 
+/** Free-placed GLB prop anywhere in the exhibition hall (decor / furniture / signage). */
+export interface ExpoDecoration {
+  id: string;
+  modelUrl: string;
+  name?: MetaShopDirCat;        // editor label only
+  x: number;
+  y: number;                    // height above floor (meters)
+  z: number;
+  ry?: number;                  // Y rotation (radians)
+  scale?: number;               // uniform scale multiplier (default 1)
+}
+
 export interface MetaverseExpo {
   enabled: boolean;
   defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
@@ -802,6 +814,7 @@ export interface MetaverseExpo {
   entranceRegistration?: ExpoEntranceRegistration; // clickable registration kiosk at the entrance gate
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
+  decorations?: ExpoDecoration[]; // free-placed GLB props (furniture, plants, signage…)
   boothLayout?: string;           // quick-arrange layout id (see expoUtils EXPO_LAYOUT_OPTIONS)
   retailCategories?: ExpoRetailCategory[]; // supermarket/mall department zones linked to MetaShops
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls

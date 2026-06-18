@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -48,6 +48,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const T = lang === 'fa';
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
   const [openBooth, setOpenBooth] = useState<string | null>(null);
+  const [openDecoration, setOpenDecoration] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [quickN, setQuickN] = useState(6);
@@ -92,7 +93,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     entranceAdPos: T ? 'جایگاه بنر' : 'Banner position',
     entranceAdLift: T ? 'فاصله از سردر (متر)' : 'Distance above arch (m)',
     adsJsonSample: T ? 'دانلود JSON نمونه تبلیغات برای AI' : 'Download AI ads JSON sample',
-    floorplan: T ? 'نقشه‌ی کف (غرفه‌ها را بکشید و جابه‌جا کنید)' : 'Floor plan (drag booths to place)',
+    floorplan: T ? 'نقشه‌ی کف (غرفه‌ها و دکور را بکشید)' : 'Floor plan (drag booths & decor)',
+    decoT: T ? 'دکوراسیون نمایشگاه' : 'Exhibition decor',
+    decoHint: T ? 'هر فایل GLB را در هر نقطه سالن قرار دهید — روی نقشه بکشید، ارتفاع/اندازه/چرخش را تنظیم کنید.' : 'Place any GLB anywhere in the hall — drag on the map, set height, size and rotation.',
+    addDeco: T ? 'افزودن دکور GLB' : 'Add GLB decor',
+    noDeco: T ? 'هنوز دکوری اضافه نشده.' : 'No decorations yet.',
+    decoGlb: T ? 'فایل GLB' : 'GLB file',
+    decoNameFa: T ? 'نام (فارسی)' : 'Name (FA)',
+    decoNameEn: T ? 'نام (انگلیسی)' : 'Name (EN)',
+    decoHeight: T ? 'ارتفاع از کف (متر)' : 'Height above floor (m)',
+    decoScale: T ? 'اندازه (مقیاس)' : 'Size (scale)',
+    decoRot: T ? 'چرخش (درجه)' : 'Rotation (°)',
+    decoOnMap: T ? 'روی نقشه' : 'On map',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
     adsHint: T ? 'فقط دیوار، اندازهٔ بنر، تصویر و لینک را بدهید؛ جای‌گذاری روی دیوار به‌صورت خودکار و متناسب با سالن انجام می‌شود. هر بنر لینک‌دار است (در تب جدید باز می‌شود).' : 'Just pick a wall, a banner size, an image and a link — placement on the wall is automatic and fits the hall. Each banner is clickable (opens in a new tab).',
@@ -183,7 +195,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     vidTooBig: T ? 'حجم ویدیو بیش از ۱۵۰ مگابایت است. لطفاً فشرده‌تر کنید.' : 'Video exceeds 150MB. Please compress it.',
     audioErr: T ? 'فقط فایل صوتی مجاز است.' : 'Only audio files are allowed.',
     htmlErr: T ? 'فقط فایل HTML (html/htm) مجاز است.' : 'Only HTML files (html/htm) allowed.',
-    posX: 'X', posZ: 'Z',
+    posX: 'X', posY: 'Y', posZ: 'Z',
     hotspots: T ? 'نشانگرهای تعاملی (هات‌اسپات)' : 'Interactive hotspots', addHotspot: T ? 'افزودن نشانگر' : 'Add hotspot', noHot: T ? 'بدون نشانگر.' : 'No hotspots.',
     hType: T ? 'نوع' : 'Type', hTitleFa: T ? 'عنوان (فا)' : 'Title (FA)', hTitleEn: T ? 'عنوان (en)' : 'Title (EN)', hBodyFa: T ? 'متن (فا)' : 'Text (FA)', hBodyEn: T ? 'متن (en)' : 'Text (EN)',
     hUrl: T ? 'لینک (ویدئو/PDF/تصویر/سایت)' : 'URL (video/pdf/image/site)', hProduct: T ? 'محصول' : 'Product', hPhone: T ? 'تلفن' : 'Phone', hWa: T ? 'واتس‌اپ' : 'WhatsApp', hEmail: T ? 'ایمیل' : 'Email',
@@ -254,6 +266,35 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const updBooth = (id: string, p: Partial<MetaverseBooth>) => updBooths((e.booths || []).map(b => b.id === id ? { ...b, ...p } : b));
   const delBooth = (id: string) => updBooths((e.booths || []).filter(b => b.id !== id));
+
+  // ── Hall decorations (free-placed GLB) ──
+  const updDecorations = (decorations: ExpoDecoration[]) => patch({ decorations });
+  const addDecoration = (at?: { x: number; z: number }) => {
+    const n = (e.decorations || []).length;
+    const d: ExpoDecoration = {
+      id: newId('deco'),
+      modelUrl: '',
+      name: { fa: `دکور ${n + 1}`, en: `Decor ${n + 1}` },
+      x: at?.x ?? 0,
+      y: 0,
+      z: at?.z ?? 0,
+      ry: 0,
+      scale: 1,
+    };
+    updDecorations([...(e.decorations || []), d]);
+    setOpenDecoration(d.id);
+    setOpenBooth(null);
+  };
+  const updDecoration = (id: string, p: Partial<ExpoDecoration>) =>
+    updDecorations((e.decorations || []).map(d => d.id === id ? { ...d, ...p } : d));
+  const delDecoration = (id: string) => {
+    updDecorations((e.decorations || []).filter(d => d.id !== id));
+    if (openDecoration === id) setOpenDecoration(null);
+  };
+  const setDecoName = (d: ExpoDecoration, which: 'fa' | 'en', val: string) =>
+    updDecoration(d.id, { name: { ...(d.name || {}), [which]: val } });
+  const isDecoId = (id: string | null) => !!(id && (e.decorations || []).some(d => d.id === id));
+
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
   const setBoothStorefrontSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
@@ -576,6 +617,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const theme = isSF ? sfTheme : null;
     const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
     const visibleBooths = e.booths || [];
+    const decorations = e.decorations || [];
     const toWorld = (clientX: number, clientY: number) => {
       const r = svgRef.current!.getBoundingClientRect();
       const nx = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
@@ -586,6 +628,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       if (!dragId.current) return;
       const { x, z } = toWorld(ev.clientX, ev.clientY);
       if (dragId.current === '__spawn__') setSpawn('x', x), setSpawn('z', z);
+      else if (isDecoId(dragId.current)) updDecoration(dragId.current!, { x, z });
       else updBooth(dragId.current, { x, z });
     };
     const wx = (x: number) => ((x + W / 2) / W) * 100;
@@ -638,14 +681,27 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         })}
         {!readonly && visibleBooths.map((b, i) => (
           <g key={b.id} transform={`translate(${wx(b.x || 0)} ${wz(b.z || 0)})`} style={{ cursor: 'grab' }}
-            onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
-            onClick={() => setOpenBooth(b.id)}
+            onPointerDown={ev => { ev.stopPropagation(); (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
+            onClick={() => { setOpenBooth(b.id); setOpenDecoration(null); }}
           >
             <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || theme?.boothColor || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
             <text x={0} y={6.5} textAnchor="middle" fontSize={2.9} fill="#475569">{T ? `غ ${i + 1}` : `B${i + 1}`}</text>
             <text x={0} y={10.2} textAnchor="middle" fontSize={2.1} fill="#64748b">{tierMark(b.tier)}</text>
           </g>
         ))}
+        {!readonly && decorations.map((d, i) => {
+          const selected = openDecoration === d.id;
+          return (
+            <g key={d.id} transform={`translate(${wx(d.x || 0)} ${wz(d.z || 0)})`} style={{ cursor: 'grab' }}
+              onPointerDown={ev => { ev.stopPropagation(); (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = d.id; }}
+              onClick={() => { setOpenDecoration(d.id); setOpenBooth(null); }}
+            >
+              {selected && <circle r={4.2} fill="none" stroke="#f59e0b" strokeWidth={0.55} strokeDasharray="1.2 0.8" />}
+              <polygon points="0,-2.6 2.2,0 0,2.6 -2.2,0" fill={d.modelUrl ? '#f59e0b' : '#d1d5db'} stroke="#fff" strokeWidth={0.45} />
+              <text x={0} y={5.8} textAnchor="middle" fontSize={2.5} fill="#b45309" fontWeight="bold">{T ? `د${i + 1}` : `D${i + 1}`}</text>
+            </g>
+          );
+        })}
         {/* spawn marker */}
         <g transform={`translate(${wx(e.spawn?.x || 0)} ${wz(e.spawn?.z || 0)})`} style={{ cursor: 'grab' }}
           onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = '__spawn__'; }}
@@ -866,8 +922,85 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
           {/* Floor plan */}
           <div className="border border-gray-100 rounded-xl p-4">
-            <h5 className="font-bold text-gray-700 text-sm mb-3">{t.floorplan}</h5>
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <h5 className="font-bold text-gray-700 text-sm">{t.floorplan}</h5>
+              {!readonly && (
+                <button type="button" onClick={() => addDecoration()} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1">
+                  <IconPlus className="w-3.5 h-3.5" />{t.addDeco}
+                </button>
+              )}
+            </div>
             <FloorPlan />
+          </div>
+
+          {/* Hall decorations */}
+          <div className="border border-amber-100 bg-amber-50/35 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+              <h5 className="font-bold text-amber-900 text-sm">🪴 {t.decoT} <span className="text-xs text-amber-600">({(e.decorations || []).length})</span></h5>
+              {!readonly && (
+                <button type="button" onClick={() => addDecoration()} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1">
+                  <IconPlus className="w-3.5 h-3.5" />{t.addDeco}
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-amber-800/75 mb-3">{t.decoHint}</p>
+            {(e.decorations || []).length === 0 ? (
+              <p className="text-sm text-amber-700/50 text-center py-3">{t.noDeco}</p>
+            ) : (
+              <div className="space-y-2">
+                {(e.decorations || []).map((d, i) => {
+                  const open = openDecoration === d.id;
+                  const deg = ((Math.round((d.ry || 0) * 180 / Math.PI) % 360) + 360) % 360;
+                  const label = T ? (d.name?.fa || `دکور ${i + 1}`) : (d.name?.en || `Decor ${i + 1}`);
+                  return (
+                    <div key={d.id} className={`rounded-xl border bg-white/85 overflow-hidden transition-shadow ${open ? 'border-amber-400 ring-2 ring-amber-200' : 'border-amber-100'}`}>
+                      <button type="button" className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-start hover:bg-amber-50/60"
+                        onClick={() => { setOpenDecoration(open ? null : d.id); setOpenBooth(null); }}>
+                        <span className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                          <span className="inline-flex w-6 h-6 rounded-md bg-amber-100 text-amber-800 text-xs items-center justify-center font-bold">{i + 1}</span>
+                          {label}
+                          {!d.modelUrl && <span className="text-[10px] font-normal text-amber-600/70">({T ? 'بدون GLB' : 'no GLB'})</span>}
+                        </span>
+                        <span className="text-[10px] text-amber-700/60 shrink-0">{t.decoOnMap}: {d.x?.toFixed(1)}, {d.z?.toFixed(1)}</span>
+                      </button>
+                      {open && (
+                        <div className="px-3 pb-3 pt-1 border-t border-amber-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                          <div className="md:col-span-2 lg:col-span-3">
+                            <GlbUpload id={`deco-glb-${d.id}`} value={d.modelUrl || undefined} onUrl={u => updDecoration(d.id, { modelUrl: u || '' })} label={t.decoGlb} />
+                          </div>
+                          <div><label className={lbl}>{t.decoNameFa}</label><input className={fld} value={d.name?.fa || ''} onChange={ev => setDecoName(d, 'fa', ev.target.value)} /></div>
+                          <div><label className={lbl}>{t.decoNameEn}</label><input className={fld + ' dir-ltr'} value={d.name?.en || ''} onChange={ev => setDecoName(d, 'en', ev.target.value)} /></div>
+                          <div><label className={lbl}>{t.posX}</label><input type="number" step={0.25} className={fld} value={d.x ?? 0} onChange={ev => updDecoration(d.id, { x: +ev.target.value })} /></div>
+                          <div><label className={lbl}>{t.posZ}</label><input type="number" step={0.25} className={fld} value={d.z ?? 0} onChange={ev => updDecoration(d.id, { z: +ev.target.value })} /></div>
+                          <div>
+                            <label className={lbl}>{t.decoHeight}</label>
+                            <input type="range" min={0} max={Math.max(6, e.height || 9)} step={0.05} className="w-full accent-amber-500" value={d.y ?? 0} onChange={ev => updDecoration(d.id, { y: +ev.target.value })} />
+                            <input type="number" min={0} max={30} step={0.05} className={fld + ' mt-1'} value={d.y ?? 0} onChange={ev => updDecoration(d.id, { y: +ev.target.value })} />
+                          </div>
+                          <div>
+                            <label className={lbl}>{t.decoScale}</label>
+                            <input type="range" min={0.05} max={20} step={0.05} className="w-full accent-amber-500" value={d.scale ?? 1} onChange={ev => updDecoration(d.id, { scale: +ev.target.value })} />
+                            <input type="number" min={0.05} max={50} step={0.05} className={fld + ' mt-1'} value={d.scale ?? 1} onChange={ev => updDecoration(d.id, { scale: +ev.target.value })} />
+                          </div>
+                          <div>
+                            <label className={lbl}>{t.decoRot}</label>
+                            <input type="range" min={0} max={360} step={1} className="w-full accent-amber-500" value={deg < 0 ? deg + 360 : deg} onChange={ev => updDecoration(d.id, { ry: (+ev.target.value) * Math.PI / 180 })} />
+                            <input type="number" className={fld + ' mt-1'} value={deg} onChange={ev => updDecoration(d.id, { ry: (+ev.target.value) * Math.PI / 180 })} />
+                          </div>
+                          {!readonly && (
+                            <div className="flex items-end justify-end md:col-span-2 lg:col-span-3">
+                              <button type="button" onClick={() => delDecoration(d.id)} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1">
+                                <IconTrash className="w-3.5 h-3.5" />{T ? 'حذف' : 'Delete'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Supermarket / mall departments */}
