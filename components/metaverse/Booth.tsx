@@ -1,7 +1,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
-import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF } from '@react-three/drei';
+import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
@@ -1157,7 +1157,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               <GltfModel url={booth.modelUrl} scale={booth.modelScale ?? 1} autoFit={4} />
             </Suspense>
           </TexBoundary>
-          {meetBadgeEl(W, D)}
         </group>
       ) : (
         <group>
@@ -1256,72 +1255,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             <boxGeometry args={[W * 0.54, 0.06, 0.66]} />
             <meshStandardMaterial color="#e8eaed" metalness={0.3} roughness={0.4} />
           </mesh>
-          {counterGlbs.map((url, i) => url ? (
-            <TexBoundary key={`${url}-${i}`}>
-              <Suspense fallback={null}>
-                <CounterMiniatureGlb
-                  url={url}
-                  position={[counterGlbXs[i], 1.02, D / 2 - 0.5]}
-                  onGrab={() => onTrack?.('counter_glb_grab', {
-                    ...trackBase,
-                    targetId: `${booth.id}-counter-glb-${i + 1}`,
-                    targetName: `Counter GLB ${i + 1}`,
-                    targetType: 'counter_glb',
-                    side: 'counter',
-                  })}
-                />
-              </Suspense>
-            </TexBoundary>
-          ) : null)}
 
-          {/* Six wall panels (3 inner + 3 outer) — each an image or an in-world auto-playing video */}
-          {PANEL_SPECS.map(s => {
-            const u = panelUrl(s.face);
-            return u ? (
-              <PanelMedia
-                key={s.face}
-                url={u}
-                width={s.w}
-                height={s.h}
-                position={s.position}
-                rotation={s.rotation}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTrack?.('booth_panel_click', { ...trackBase, targetType: 'booth_panel', targetId: s.face, side: s.face });
-                }}
-              />
-            ) : null;
-          })}
-
-          {/* Logo plate above the reception desk */}
-          {booth.logo && (
-            <SafeImage url={booth.logo} width={0.8} height={0.8} position={[0, 1.5, D / 2 - 0.46]} />
-          )}
-
-          {/* Counter / desk front — a clickable 3D link into the booth's shop (works in VR too) */}
-          {booth.shopSlug && (
-            <group position={[0, 0.62, D / 2 - 0.12]}>
-              <mesh onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }}
-                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-                onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
-                <planeGeometry args={[1.74, 0.42]} />
-                <meshStandardMaterial color={accentColor} />
-              </mesh>
-              <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
-                onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
-            </group>
-          )}
-
-          {/* Booth header sign: number + name. A baked 3D label so it renders in VR. Click → shop. */}
-          <CanvasLabel
-            text={num ? `${num} · ${name}` : name}
-            width={W * 0.92} height={0.42}
-            position={[0, wallH + 0.12, -D / 2 + 0.17]}
-            color="#ffffff"
-            onClick={(e) => { e.stopPropagation(); trackBoothSelect('header'); }}
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          />
           {storefront && (
             <group>
               {/* Glass storefront facade: side panes + central clickable door. */}
@@ -1358,25 +1292,101 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               )}
             </group>
           )}
-          {meetBadgeEl(W, D)}
         </group>
       )}
 
-      {/* Optional life-size transparent PNG people standing behind the reception counter. */}
+      {/* Configurable overlays — panels, shop entry, logo, managers, hotspots (procedural & GLB). */}
+      {PANEL_SPECS.map(s => {
+        const u = panelUrl(s.face);
+        return u ? (
+          <PanelMedia
+            key={s.face}
+            url={u}
+            width={s.w}
+            height={s.h}
+            position={s.position}
+            rotation={s.rotation}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrack?.('booth_panel_click', { ...trackBase, targetType: 'booth_panel', targetId: s.face, side: s.face });
+            }}
+          />
+        ) : null;
+      })}
+
+      {booth.logo && (
+        <group position={[0, 1.5, D / 2 - 0.46]}>
+          <Billboard>
+            <SafeImage url={booth.logo} width={0.8} height={0.8} position={[0, 0, 0]} />
+          </Billboard>
+        </group>
+      )}
+
+      {booth.shopSlug && (
+        <group position={[0, 0.62, D / 2 - 0.12]}>
+          <Billboard>
+            <mesh onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+              renderOrder={11}>
+              <planeGeometry args={[1.74, 0.42]} />
+              <meshBasicMaterial color={accentColor} toneMapped={false} depthWrite={false} />
+            </mesh>
+            <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
+              onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
+          </Billboard>
+        </group>
+      )}
+
+      <CanvasLabel
+        text={num ? `${num} · ${name}` : name}
+        width={W * 0.92}
+        height={0.42}
+        position={[0, wallH + 0.12, -D / 2 + 0.17]}
+        color="#ffffff"
+        onClick={(e) => { e.stopPropagation(); trackBoothSelect('header'); }}
+        onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+        onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+      />
+
+      {counterGlbs.map((url, i) => url ? (
+        <TexBoundary key={`shared-counter-glb-${url}-${i}`}>
+          <Suspense fallback={null}>
+            <CounterMiniatureGlb
+              url={url}
+              position={[counterGlbXs[i], 1.02, D / 2 - 0.5]}
+              onGrab={() => onTrack?.('counter_glb_grab', {
+                ...trackBase,
+                targetId: `${booth.id}-counter-glb-${i + 1}`,
+                targetName: `Counter GLB ${i + 1}`,
+                targetType: 'counter_glb',
+                side: 'counter',
+              })}
+            />
+          </Suspense>
+        </TexBoundary>
+      ) : null)}
+
+      {meetBadgeEl(W, D)}
+
+      {/* Life-size PNG people behind the reception counter. */}
       {activeManagers.map(({ slot: i, x }) => (
-        <SafeImage
-          key={`${managerPngs[i]}-${i}`}
-          url={managerPngs[i]}
-          width={1.12}
-          height={2.1}
-          position={[x, 1.05, D / 2 - 1.08]}
-          onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
-            e.stopPropagation();
-            trackManager(i, managerAudios[i] ? 'manager_audio' : 'manager_link');
-            if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
-            else openManagerLink(managerLinks[i]);
-          } : undefined}
-        />
+        <group key={`${managerPngs[i]}-${i}`} position={[x, 1.05, D / 2 - 0.88]}>
+          <Billboard>
+            <SafeImage
+              url={managerPngs[i]}
+              width={1.12}
+              height={2.1}
+              position={[0, 0, 0]}
+              onClick={(managerAudios[i] || managerLinks[i]) ? (e) => {
+                e.stopPropagation();
+                trackManager(i, managerAudios[i] ? 'manager_audio' : 'manager_link');
+                if (managerAudios[i]) toggleManagerAudio(i, managerAudios[i]);
+                else openManagerLink(managerLinks[i]);
+              } : undefined}
+            />
+          </Billboard>
+        </group>
       ))}
       {activeManagers.map(({ slot: i, x }) => managerNames[i] ? (
         <CanvasLabel
@@ -1384,13 +1394,13 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           text={managerNames[i]}
           width={0.68}
           height={0.22}
-          position={[x, 2.5, D / 2 - 1.055]}
+          position={[x, 2.5, D / 2 - 0.86]}
           bg="rgba(15,23,42,.82)"
           color="#ffffff"
         />
       ) : null)}
       {activeManagers.map(({ slot: i, x }) => managerAudios[i] ? (
-        <group key={`audio-${managerPngs[i]}-${i}`} position={[x, 2.26, D / 2 - 1.06]}>
+        <group key={`audio-${managerPngs[i]}-${i}`} position={[x, 2.26, D / 2 - 0.86]}>
           <group position={[-0.3, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); trackManager(i, 'manager_audio_seek'); seekManagerAudio(i, managerAudios[i], -5); }}

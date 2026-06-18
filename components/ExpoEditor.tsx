@@ -168,7 +168,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model',
     glbScale: T ? 'مقیاس مدل GLB' : 'GLB model scale',
     glbRot: T ? 'چرخش مدل (درجه)' : 'Model rotation (°)',
-    glbAdjustHint: T ? 'مدل در جای خود می‌چرخد؛ اندازهٔ اولیه خودکار با غرفهٔ استاندارد (۴×۴ متر) هم‌تراز می‌شود.' : 'Model spins in place; initial size auto-fits the standard 4×4 m booth footprint.',
+    glbAdjustHint: T ? 'مدل در جای خود می‌چرخد؛ اندازهٔ اولیه خودکار با غرفهٔ استاندارد (۴×۴ متر) هم‌تراز می‌شود. پنل‌ها، ورود به فروشگاه، مدیر پشت کانتر، ویس و هات‌اسپات روی مدل GLB هم نمایش داده می‌شوند.' : 'Model spins in place; auto-fits the 4×4 m footprint. Panels, shop entry, counter staff, audio and hotspots still render on GLB booths.',
     upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,

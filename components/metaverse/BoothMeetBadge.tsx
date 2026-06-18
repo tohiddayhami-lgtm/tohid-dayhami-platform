@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from 'react';
-import { ThreeEvent } from '@react-three/fiber';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { ThreeEvent, useFrame } from '@react-three/fiber';
+import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { CanvasLabel } from './CanvasLabel';
 
@@ -14,13 +15,11 @@ const buildMeetIconTexture = () => {
 
   ctx.clearRect(0, 0, ICON_PX, ICON_PX);
 
-  // Google Meet–style green badge
   ctx.fillStyle = '#00897B';
   ctx.beginPath();
   ctx.arc(c, c, c * 0.88, 0, Math.PI * 2);
   ctx.fill();
 
-  // White video camera body
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   if ((ctx as CanvasRenderingContext2D & { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect) {
@@ -30,7 +29,6 @@ const buildMeetIconTexture = () => {
   }
   ctx.fill();
 
-  // Camera lens triangle (viewfinder arm)
   ctx.beginPath();
   ctx.moveTo(c + 16, c - 6);
   ctx.lineTo(c + 34, c - 14);
@@ -38,7 +36,6 @@ const buildMeetIconTexture = () => {
   ctx.closePath();
   ctx.fill();
 
-  // Lens dot
   ctx.fillStyle = '#00897B';
   ctx.beginPath();
   ctx.arc(c - 12, c - 3, 7, 0, Math.PI * 2);
@@ -54,23 +51,27 @@ interface Props {
   side: 'left' | 'right';
   boothW: number;
   boothD: number;
-  /** Defaults to counter height on standard booths. */
   y?: number;
-  /** Defaults to just in front of the visitor-facing counter. */
   frontZ?: number;
   label?: string;
   onClick: () => void;
 }
 
-/** Small Google Meet badge on the visitor-facing front — left or right of the center counter. */
+/** Google Meet badge on the visitor-facing front — billboards toward camera with a gentle spin. */
 export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, y = 1.06, frontZ, label, onClick }) => {
   const texture = useMemo(() => buildMeetIconTexture(), []);
+  const spinRef = useRef<THREE.Group>(null);
   useEffect(() => () => texture.dispose(), [texture]);
 
   const iconSize = 0.3;
   const counterHalfW = boothW * 0.26;
   const x = side === 'left' ? -(counterHalfW + 0.58) : counterHalfW + 0.58;
   const z = frontZ ?? boothD / 2 - 0.32;
+
+  useFrame(({ clock }) => {
+    if (!spinRef.current) return;
+    spinRef.current.rotation.y = Math.sin(clock.elapsedTime * 2.2) * 0.35;
+  });
 
   const stop = (e: ThreeEvent<MouseEvent>) => e.stopPropagation();
   const pointer = {
@@ -80,26 +81,31 @@ export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, y = 1.06
 
   return (
     <group position={[x, y, z]}>
-      <mesh
-        onClick={(e) => { stop(e); onClick(); }}
-        {...pointer}
-      >
-        <planeGeometry args={[iconSize, iconSize]} />
-        <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} />
-      </mesh>
-      {label && (
-        <CanvasLabel
-          text={label}
-          width={0.62}
-          height={0.11}
-          position={[0, -iconSize * 0.58, 0.01]}
-          color="#0f172a"
-          bold={false}
-          onClick={(e) => { stop(e); onClick(); }}
-          onPointerOver={pointer.onPointerOver}
-          onPointerOut={pointer.onPointerOut}
-        />
-      )}
+      <Billboard>
+        <group ref={spinRef}>
+          <mesh
+            onClick={(e) => { stop(e); onClick(); }}
+            {...pointer}
+            renderOrder={12}
+          >
+            <planeGeometry args={[iconSize, iconSize]} />
+            <meshBasicMaterial map={texture} transparent toneMapped={false} depthWrite={false} />
+          </mesh>
+          {label && (
+            <CanvasLabel
+              text={label}
+              width={0.62}
+              height={0.11}
+              position={[0, -iconSize * 0.58, 0.01]}
+              color="#0f172a"
+              bold={false}
+              onClick={(e) => { stop(e); onClick(); }}
+              onPointerOver={pointer.onPointerOver}
+              onPointerOut={pointer.onPointerOut}
+            />
+          )}
+        </group>
+      </Billboard>
     </group>
   );
 };
