@@ -37,6 +37,7 @@ const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: stri
 ];
 
 const MANAGER_SLOTS = [0, 1, 2, 3, 4] as const;
+const GLB_MAX_BYTES = 70 * 1024 * 1024;
 
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, visualStyle: 'exhibition', preset: 'warehouse', width: 30, depth: 30, height: 9,
@@ -201,7 +202,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     hType: T ? 'نوع' : 'Type', hTitleFa: T ? 'عنوان (فا)' : 'Title (FA)', hTitleEn: T ? 'عنوان (en)' : 'Title (EN)', hBodyFa: T ? 'متن (فا)' : 'Text (FA)', hBodyEn: T ? 'متن (en)' : 'Text (EN)',
     hUrl: T ? 'لینک (ویدئو/PDF/تصویر/سایت)' : 'URL (video/pdf/image/site)', hProduct: T ? 'محصول' : 'Product', hPhone: T ? 'تلفن' : 'Phone', hWa: T ? 'واتس‌اپ' : 'WhatsApp', hEmail: T ? 'ایمیل' : 'Email',
     hPos: T ? 'موقعیت نسبت به غرفه (X/Y/Z)' : 'Position vs booth (X/Y/Z)',
-    edit: T ? 'ویرایش غرفه' : 'Edit booth', glbErr: T ? 'فقط فایل GLB/GLTF مجاز است.' : 'Only GLB/GLTF files allowed.', tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
+    edit: T ? 'ویرایش غرفه' : 'Edit booth', glbErr: T ? 'فقط فایل GLB/GLTF مجاز است.' : 'Only GLB/GLTF files allowed.',
+    glbTooBig: T ? 'حجم فایل GLB بیش از ۷۰ مگابایت است.' : 'GLB file exceeds 70MB.',
+    tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
       product: T ? 'محصول' : 'Product', company: T ? 'پروفایل شرکت' : 'Company', video: T ? 'ویدئو' : 'Video', pdf: T ? 'کاتالوگ PDF' : 'PDF', image: T ? 'تصویر' : 'Image',
       url: T ? 'لینک خارجی' : 'External link', page: T ? 'صفحه فروشگاه' : 'Shop page', whatsapp: 'WhatsApp', contact: T ? 'تماس' : 'Contact', order: T ? 'ثبت سفارش' : 'Order',
@@ -471,7 +474,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const uploadGlb = (key: string, file: File, onUrl: (u: string) => void) => {
     if (!/\.(glb|gltf)$/i.test(file.name)) { alert(t.glbErr); return; }
-    if (file.size > 30 * 1024 * 1024) { alert(t.tooBig); return; }
+    if (file.size > GLB_MAX_BYTES) { alert(t.glbTooBig); return; }
     setUploading(key);
     uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents');
   };
