@@ -980,6 +980,16 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     onTrack?.('hotspot_click', { ...trackBase, targetType: 'google_meet', targetName: meetCaption || (lang === 'fa' ? 'Google Meet' : 'Google Meet'), side: 'booth_meet' });
     openManagerLink(booth.meetUrl);
   };
+  const meetBadgeEl = (bw: number, bd: number, wy: number) => booth.meetEnabled && booth.meetUrl ? (
+    <BoothMeetBadge
+      side={booth.meetSide || 'left'}
+      boothW={bw}
+      boothD={bd}
+      wallY={wy}
+      label={meetCaption || undefined}
+      onClick={openBoothMeet}
+    />
+  ) : null;
   const toggleManagerAudio = (index: number, raw?: string) => {
     const url = (raw || '').trim();
     if (!url) return;
@@ -1130,6 +1140,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             }}
           />
         ))}
+        {meetBadgeEl(shelfW, shelfD, shelfH * 0.62)}
         </group>
       </group>
     );
@@ -1145,6 +1156,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               <GltfModel url={booth.modelUrl} scale={booth.modelScale ?? 1} autoFit={4} />
             </Suspense>
           </TexBoundary>
+          {meetBadgeEl(W, D, sideY)}
         </group>
       ) : (
         <group>
@@ -1345,18 +1357,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               )}
             </group>
           )}
+          {meetBadgeEl(W, D, sideY)}
         </group>
-      )}
-
-      {/* Per-booth Google Meet icon on the booth flank. */}
-      {booth.meetEnabled && booth.meetUrl && (
-        <BoothMeetBadge
-          side={booth.meetSide || 'left'}
-          boothW={W}
-          boothD={D}
-          label={meetCaption || undefined}
-          onClick={openBoothMeet}
-        />
       )}
 
       {/* Optional life-size transparent PNG people standing behind the reception counter. */}
