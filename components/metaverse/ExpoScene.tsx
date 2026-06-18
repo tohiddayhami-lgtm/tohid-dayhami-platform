@@ -400,8 +400,6 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
           <BusinessCenterBuilding
             width={width}
             depth={depth}
-            wallColor={wall}
-            accentColor={expo.wallColor || '#0f766e'}
             playerFloor={playerFloor}
           />
           <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>

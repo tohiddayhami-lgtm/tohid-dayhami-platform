@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, BUSINESS_CENTER_FLOOR_THEMES, businessCenterCarpetRects, planRectPct, BUSINESS_CENTER, type BusinessCenterFloorId } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -53,6 +53,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const [quickN, setQuickN] = useState(6);
   const [quickLayout, setQuickLayout] = useState<ExpoBoothLayout>('facing');
   const [quickTier, setQuickTier] = useState<BoothTier>('basic');
+  const [planFloor, setPlanFloor] = useState<BusinessCenterFloorId>(0);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const t = {
@@ -222,8 +223,22 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const updBooths = (booths: MetaverseBooth[]) => patch({ booths });
   const addBooth = () => {
     const W = e.width || 30, D = e.depth || 30;
-    const idx = (e.booths || []).length;
-    const b: MetaverseBooth = { id: newId('booth'), name: { fa: T ? `غرفه ${idx + 1}` : `Booth ${idx + 1}`, en: `Booth ${idx + 1}` }, x: ((idx % 4) - 1.5) * (W / 5), y: 0, z: ((Math.floor(idx / 4)) - 1) * (D / 5), ry: 0, color: '#2d4a1a', tier: 'basic', hotspots: [] };
+    const isBC = e.visualStyle === 'business_center';
+    const theme = isBC ? BUSINESS_CENTER_FLOOR_THEMES[planFloor] : null;
+    const onFloor = isBC ? (e.booths || []).filter(b => (b.floorId ?? 0) === planFloor) : (e.booths || []);
+    const idx = onFloor.length;
+    const b: MetaverseBooth = {
+      id: newId('booth'),
+      name: { fa: T ? `غرفه ${idx + 1}` : `Booth ${idx + 1}`, en: `Booth ${idx + 1}` },
+      x: ((idx % 4) - 1.5) * (W / 5),
+      y: 0,
+      z: ((Math.floor(idx / 4)) - 1) * (D / 5),
+      ry: 0,
+      color: theme?.boothColor || '#2d4a1a',
+      tier: 'basic',
+      floorId: isBC ? planFloor : undefined,
+      hotspots: [],
+    };
     updBooths([...(e.booths || []), b]);
     setOpenBooth(b.id);
   };
@@ -350,13 +365,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
     const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
     const cats = quickLayout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
-    const booths: MetaverseBooth[] = cells.map((c, i) => ({
-      id: newId('booth'), name: { fa: `دفتر ${i + 1}`, en: `Office ${i + 1}` },
-      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#0f766e', tier: quickTier,
-      floorId: quickLayout === 'business_center' ? ((c.floor ?? 0) as 0 | 1 | 2) : undefined,
-      categoryId: quickLayout === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
-      hotspots: [],
-    }));
+    const booths: MetaverseBooth[] = cells.map((c, i) => {
+      const floor = (c.floor ?? 0) as BusinessCenterFloorId;
+      const theme = quickLayout === 'business_center' ? BUSINESS_CENTER_FLOOR_THEMES[floor] : null;
+      return {
+        id: newId('booth'), name: { fa: `دفتر ${i + 1}`, en: `Office ${i + 1}` },
+        x: c.x, y: 0, z: c.z, ry: c.ry, color: theme?.boothColor || '#0f766e', tier: quickTier,
+        floorId: quickLayout === 'business_center' ? floor : undefined,
+        categoryId: quickLayout === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
+        hotspots: [],
+      };
+    });
     const visualStyle: ExpoVisualStyle | undefined = quickLayout === 'storefront' ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : quickLayout === 'business_center' ? 'business_center' : undefined;
     const hallPatch = quickLayout === 'business_center' ? { width, depth, height: 12, entranceEnabled: false } : { width, depth };
     patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
@@ -545,7 +564,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const svgRef = useRef<SVGSVGElement>(null);
     const W = Math.max(8, e.width || 30), D = Math.max(8, e.depth || 30);
     const dragId = useRef<string | null>(null);
+    const isBC = e.visualStyle === 'business_center';
+    const theme = isBC ? BUSINESS_CENTER_FLOOR_THEMES[planFloor] : null;
     const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
+    const visibleBooths = isBC
+      ? (e.booths || []).filter(b => (b.floorId ?? 0) === planFloor)
+      : (e.booths || []);
     const toWorld = (clientX: number, clientY: number) => {
       const r = svgRef.current!.getBoundingClientRect();
       const nx = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
@@ -556,21 +580,74 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       if (!dragId.current) return;
       const { x, z } = toWorld(ev.clientX, ev.clientY);
       if (dragId.current === '__spawn__') setSpawn('x', x), setSpawn('z', z);
-      else updBooth(dragId.current, { x, z });
+      else updBooth(dragId.current, isBC ? { x, z, floorId: planFloor } : { x, z });
     };
     const wx = (x: number) => ((x + W / 2) / W) * 100;
     const wz = (z: number) => ((z + D / 2) / D) * 100;
     const cats = e.retailCategories || [];
+    const carpets = isBC ? businessCenterCarpetRects(planFloor) : [];
     return (
+      <div>
+        {isBC && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {BUSINESS_CENTER_FLOOR_THEMES.map((th, i) => {
+              const count = (e.booths || []).filter(b => (b.floorId ?? 0) === i).length;
+              const active = planFloor === i;
+              return (
+                <button
+                  key={th.id}
+                  type="button"
+                  onClick={() => setPlanFloor(i as BusinessCenterFloorId)}
+                  className={`text-xs px-3 py-2 rounded-lg border-2 font-bold transition-all ${active ? 'shadow-md scale-[1.02]' : 'opacity-80 hover:opacity-100'}`}
+                  style={{
+                    borderColor: th.accent,
+                    background: active ? th.planBg : '#fff',
+                    color: th.signBg,
+                  }}
+                >
+                  {T ? th.labelFa : th.labelEn}
+                  <span className="mr-1 opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {isBC && (
+          <p className="text-[11px] text-slate-600 mb-2">
+            {T
+              ? 'غرفه‌ها فقط روی طبقهٔ انتخاب‌شده نمایش داده می‌شوند. با کشیدن روی نقشه، غرفه به همین طبقه اختصاص می‌یابد. نوارهای قرمز/آبی = فرش راهرو.'
+              : 'Booths shown for the selected floor only. Dragging assigns them to this floor. Colored strips = carpet walkways.'}
+          </p>
+        )}
       <svg
         ref={svgRef} viewBox="0 0 100 100" preserveAspectRatio="none"
-        className="w-full rounded-xl border border-gray-200 bg-gradient-to-br from-slate-50 to-slate-100 touch-none select-none"
-        style={{ aspectRatio: `${W} / ${D}`, cursor: dragId.current ? 'grabbing' : 'default' }}
+        className="w-full rounded-xl border-2 touch-none select-none"
+        style={{
+          aspectRatio: `${W} / ${D}`,
+          cursor: dragId.current ? 'grabbing' : 'default',
+          borderColor: theme?.accent || '#cbd5e1',
+          background: theme ? `linear-gradient(135deg, ${theme.planBg} 0%, ${theme.floorColor} 100%)` : undefined,
+        }}
         onPointerMove={onMove}
         onPointerUp={() => { dragId.current = null; }}
         onPointerLeave={() => { dragId.current = null; }}
       >
-        <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke="#cbd5e1" strokeWidth={0.6} />
+        <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke={theme?.accent || '#cbd5e1'} strokeWidth={0.8} />
+        {isBC && carpets.map((c, ci) => {
+          const r = planRectPct(c, W, D);
+          return (
+            <g key={`carpet-${ci}`}>
+              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill={theme!.carpetColor} opacity={0.42} />
+              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill="none" stroke={theme!.carpetBorder} strokeWidth={0.35} opacity={0.75} />
+            </g>
+          );
+        })}
+        {isBC && (
+          <g>
+            <rect x={wx(BUSINESS_CENTER.stairX) - 2.2} y={wz(0) - 8} width={4.4} height={16} rx={0.8} fill="none" stroke={theme!.accent} strokeWidth={0.5} strokeDasharray="1.2 0.8" opacity={0.7} />
+            <text x={wx(BUSINESS_CENTER.stairX)} y={wz(BUSINESS_CENTER.stairZMax) - 2} textAnchor="middle" fontSize={2.6} fill={theme!.signBg} fontWeight="bold">{T ? 'پله' : 'stairs'}</text>
+          </g>
+        )}
         {e.visualStyle === 'supermarket' && cats.map((c, i) => {
           const rows = Math.max(1, Math.ceil(cats.length / 2));
           const col = i % 2;
@@ -585,24 +662,27 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             </g>
           );
         })}
-        {!readonly && (e.booths || []).map((b, i) => (
+        {!readonly && visibleBooths.map((b, i) => (
           <g key={b.id} transform={`translate(${wx(b.x || 0)} ${wz(b.z || 0)})`} style={{ cursor: 'grab' }}
             onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
             onClick={() => setOpenBooth(b.id)}
           >
-            <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
+            <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || theme?.boothColor || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
             <text x={0} y={6.5} textAnchor="middle" fontSize={2.9} fill="#475569">{T ? `غ ${i + 1}` : `B${i + 1}`}</text>
             <text x={0} y={10.2} textAnchor="middle" fontSize={2.1} fill="#64748b">{tierMark(b.tier)}</text>
           </g>
         ))}
-        {/* spawn marker */}
+        {/* spawn marker — ground floor only for business center */}
+        {(!isBC || planFloor === 0) && (
         <g transform={`translate(${wx(e.spawn?.x || 0)} ${wz(e.spawn?.z || 0)})`} style={{ cursor: 'grab' }}
           onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = '__spawn__'; }}
         >
           <circle r={2.4} fill="#22d3ee" stroke="#0e7490" strokeWidth={0.6} />
           <text x={0} y={-3.2} textAnchor="middle" fontSize={3} fill="#0e7490" fontWeight="bold">{T ? 'شروع' : 'start'}</text>
         </g>
+        )}
       </svg>
+      </div>
     );
   };
 

@@ -5,7 +5,7 @@ import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
-import { bi, EXPO_DEFAULTS, hallDims, businessCenterEyeY } from './expoUtils';
+import { bi, EXPO_DEFAULTS, hallDims, businessCenterEyeY, BUSINESS_CENTER_FLOOR_THEMES } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
@@ -341,8 +341,11 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <button onClick={onExit} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>← {ui.exit}</button>
           <div className="px-3 py-2 rounded-lg bg-black/40 text-white text-sm font-bold backdrop-blur max-w-[40vw] truncate">{bi(expo.title, lang, bazaar.name)}</div>
           {isBusinessCenter && (
-            <div className="px-3 py-2 rounded-lg bg-teal-600/90 text-white text-sm font-bold backdrop-blur pointer-events-auto">
-              {T ? ['همکف', 'طبقه اول', 'طبقه دوم'][currentFloor] : ['Ground', '1st Floor', '2nd Floor'][currentFloor]}
+            <div
+              className="px-3 py-2 rounded-lg text-white text-sm font-bold backdrop-blur pointer-events-auto border-2 border-white/30"
+              style={{ backgroundColor: BUSINESS_CENTER_FLOOR_THEMES[currentFloor]?.signBg || '#0f766e' }}
+            >
+              {T ? BUSINESS_CENTER_FLOOR_THEMES[currentFloor]?.labelFa : BUSINESS_CENTER_FLOOR_THEMES[currentFloor]?.labelEn}
             </div>
           )}
         </div>

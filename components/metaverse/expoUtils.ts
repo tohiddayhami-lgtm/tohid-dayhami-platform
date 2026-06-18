@@ -159,6 +159,106 @@ export const BUSINESS_CENTER = {
   stairZMax: 8.5,
 } as const;
 
+export type BusinessCenterFloorId = 0 | 1 | 2;
+
+export interface BusinessCenterFloorTheme {
+  id: BusinessCenterFloorId;
+  labelFa: string;
+  labelEn: string;
+  floorColor: string;
+  wallColor: string;
+  ceilingColor: string;
+  carpetColor: string;
+  carpetBorder: string;
+  accent: string;
+  signBg: string;
+  boothZone: string;
+  boothColor: string;
+  planBg: string;
+}
+
+/** Distinct palette per floor — used in 3D building + 2D floor-plan editor. */
+export const BUSINESS_CENTER_FLOOR_THEMES: BusinessCenterFloorTheme[] = [
+  {
+    id: 0,
+    labelFa: 'همکف · لابی',
+    labelEn: 'Ground · Lobby',
+    floorColor: '#e8ddd0',
+    wallColor: '#faf6f1',
+    ceilingColor: '#fff9f0',
+    carpetColor: '#9f1239',
+    carpetBorder: '#d4a574',
+    accent: '#0d9488',
+    signBg: '#0f766e',
+    boothZone: '#d6cec4',
+    boothColor: '#0f766e',
+    planBg: '#f5ebe0',
+  },
+  {
+    id: 1,
+    labelFa: 'طبقه اول',
+    labelEn: '1st Floor',
+    floorColor: '#dbeafe',
+    wallColor: '#eff6ff',
+    ceilingColor: '#f0f9ff',
+    carpetColor: '#1e3a8a',
+    carpetBorder: '#60a5fa',
+    accent: '#2563eb',
+    signBg: '#1d4ed8',
+    boothZone: '#bfdbfe',
+    boothColor: '#1d4ed8',
+    planBg: '#e0f2fe',
+  },
+  {
+    id: 2,
+    labelFa: 'طبقه دوم',
+    labelEn: '2nd Floor',
+    floorColor: '#fef3c7',
+    wallColor: '#fffbeb',
+    ceilingColor: '#fff7ed',
+    carpetColor: '#92400e',
+    carpetBorder: '#fbbf24',
+    accent: '#ea580c',
+    signBg: '#c2410c',
+    boothZone: '#fde68a',
+    boothColor: '#c2410c',
+    planBg: '#fef9c3',
+  },
+];
+
+export interface BusinessCenterCarpetRect {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  entranceOnly?: boolean;
+}
+
+/** Carpet runners (world metres) — same layout on every floor; entrance strip on ground only. */
+export const businessCenterCarpetRects = (floor: BusinessCenterFloorId = 0): BusinessCenterCarpetRect[] => {
+  const base: BusinessCenterCarpetRect[] = [
+    { x: 2, z: 0, w: 14, d: 2.6 },
+    { x: BUSINESS_CENTER.stairX, z: 0, w: 2.4, d: 15 },
+    { x: 9, z: 7, w: 2.2, d: 4 },
+    { x: 9, z: -7, w: 2.2, d: 4 },
+    { x: -2, z: 9, w: 8, d: 2.2 },
+    { x: 5, z: 9, w: 6, d: 2.2 },
+  ];
+  if (floor === 0) base.push({ x: 2, z: 9.5, w: 5, d: 2.4, entranceOnly: true });
+  return base;
+};
+
+export const planRectPct = (rect: BusinessCenterCarpetRect, W: number, D: number) => {
+  const cx = ((rect.x + W / 2) / W) * 100;
+  const cz = ((rect.z + D / 2) / D) * 100;
+  return {
+    x: cx - (rect.w / W) * 50,
+    y: cz - (rect.d / D) * 50,
+    w: (rect.w / W) * 100,
+    h: (rect.d / D) * 100,
+  };
+};
+
 export const businessCenterFloorY = (floor: number) =>
   Math.max(0, Math.min(BUSINESS_CENTER.floors - 1, floor)) * BUSINESS_CENTER.floorHeight;
 
