@@ -1151,7 +1151,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
       <group rotation={[0, entranceFacingYaw, 0]}>
       {booth.modelUrl ? (
-        <group rotation={[0, booth.modelRy || 0, 0]} position={[0, 0.022, 0]}>
+        <group rotation={[0, booth.modelRy || 0, 0]}>
           <TexBoundary key={booth.modelUrl}>
             <Suspense fallback={null}>
               <GltfModel url={booth.modelUrl} scale={booth.modelScale ?? 1} autoFit={4} />

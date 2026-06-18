@@ -441,35 +441,22 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
 
       {layoutCarpetRects(normalizeBoothLayout(expo.boothLayout), width, depth)
         .filter(c => !(c.entrance && c.z > depth / 2 + 0.5 && expo.entranceEnabled))
-        .map((c, i) => {
-          const carpetY = 0.011 + i * 0.0012;
-          const stripeY = carpetY + 0.004;
-          const fill = c.color || (c.entrance ? EXPO_CARPET.entrance : EXPO_CARPET.main);
-          const stripe = c.border || (c.entrance ? EXPO_CARPET.entranceStripe : EXPO_CARPET.border);
-          return (
-            <group key={`hall-carpet-${i}`}>
-              <mesh position={[c.x, carpetY, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                <planeGeometry args={[c.w, c.d]} />
-                <meshStandardMaterial
-                  color={fill}
-                  roughness={0.86}
-                  metalness={c.entrance ? 0.08 : 0.04}
-                  polygonOffset
-                  polygonOffsetFactor={-1 - i * 0.15}
-                  polygonOffsetUnits={-1}
-                />
-              </mesh>
-              <mesh position={[c.x, stripeY, c.z]} rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[Math.min(0.18, c.w * 0.08), Math.max(0.2, c.d - 0.35)]} />
-                <meshBasicMaterial
-                  color={stripe}
-                  toneMapped={false}
-                  depthWrite={false}
-                />
-              </mesh>
-            </group>
-          );
-        })}
+        .map((c, i) => (
+        <group key={`hall-carpet-${i}`}>
+          <mesh position={[c.x, c.entrance ? 0.032 : 0.025, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[c.w, c.d]} />
+            <meshStandardMaterial
+              color={c.color || (c.entrance ? EXPO_CARPET.entrance : EXPO_CARPET.main)}
+              roughness={0.86}
+              metalness={c.entrance ? 0.08 : 0.04}
+            />
+          </mesh>
+          <mesh position={[c.x, c.entrance ? 0.048 : 0.04, c.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[Math.min(0.18, c.w * 0.08), Math.max(0.2, c.d - 0.35)]} />
+            <meshBasicMaterial color={c.border || (c.entrance ? EXPO_CARPET.entranceStripe : EXPO_CARPET.border)} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
 
       {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} onRegistrationKioskClick={onRegistrationKioskClick} />}
 
