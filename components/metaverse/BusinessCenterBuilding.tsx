@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {
   BUSINESS_CENTER,
   BUSINESS_CENTER_FLOOR_THEMES,
+  BUSINESS_CENTER_OFFICE_ZONES,
   businessCenterCarpetRects,
   businessCenterFloorY,
 } from './expoUtils';
@@ -79,11 +80,6 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
   const stairCarpetMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#881337', roughness: 0.8 }), []);
   const stairRailMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#d4a574', roughness: 0.4, metalness: 0.2 }), []);
 
-  const officeZones = [
-    { x: 9, z: 0, w: 5.5, d: depth - 3 },
-    { x: -3, z: 0, w: 7, d: depth - 4 },
-  ];
-
   return (
     <group>
       {/* Exterior shell */}
@@ -116,8 +112,8 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
               <planeGeometry args={[width - 0.4, depth - 0.4]} />
             </mesh>
 
-            {/* Office zones (subtle tint) */}
-            {officeZones.map((zone, zi) => (
+            {/* Office zones (subtle tint behind each row) */}
+            {BUSINESS_CENTER_OFFICE_ZONES.map((zone, zi) => (
               <mesh key={`zone-${floor}-${zi}`} position={[zone.x, y + 0.025, zone.z]} rotation={[-Math.PI / 2, 0, 0]} material={zoneMats[floor]}>
                 <planeGeometry args={[zone.w, zone.d]} />
               </mesh>

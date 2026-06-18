@@ -234,18 +234,84 @@ export interface BusinessCenterCarpetRect {
   entranceOnly?: boolean;
 }
 
-/** Carpet runners (world metres) — same layout on every floor; entrance strip on ground only. */
+/** Fixed office slots per floor — aligned to walls, doors face the corridor. */
+export const BUSINESS_CENTER_OFFICE_SLOTS: { x: number; z: number; ry: number }[] = [
+  // East wing — storefront faces west toward main corridor
+  { x: 10.5, z: -6, ry: Math.PI / 2 },
+  { x: 10.5, z: -2, ry: Math.PI / 2 },
+  { x: 10.5, z: 2, ry: Math.PI / 2 },
+  { x: 10.5, z: 6, ry: Math.PI / 2 },
+  // North wing — faces south
+  { x: 2, z: -9.5, ry: 0 },
+  { x: 6.5, z: -9.5, ry: 0 },
+  // South wing — faces north
+  { x: 2, z: 9.5, ry: Math.PI },
+  { x: 6.5, z: 9.5, ry: Math.PI },
+  // West wing (clear of stairwell) — faces east
+  { x: -3.5, z: -4.5, ry: -Math.PI / 2 },
+  { x: -3.5, z: 4.5, ry: -Math.PI / 2 },
+];
+
+/** Tinted zones behind each office row (world metres). */
+export const BUSINESS_CENTER_OFFICE_ZONES = [
+  { x: 10.5, z: 0, w: 4.2, d: 16 },
+  { x: 4.25, z: -9.5, w: 11, d: 4.2 },
+  { x: 4.25, z: 9.5, w: 11, d: 4.2 },
+  { x: -3.5, z: 0, w: 4.2, d: 11 },
+] as const;
+
+const slotTaken = (booths: { x?: number; z?: number }[], slot: { x: number; z: number }, minDist = 2.2) =>
+  booths.some(b => Math.hypot((b.x ?? 0) - slot.x, (b.z ?? 0) - slot.z) < minDist);
+
+/** Next free slot on a floor, or cyclic fallback. */
+export const findNextBusinessCenterSlot = (
+  booths: { x?: number; z?: number; floorId?: number }[],
+  floor: BusinessCenterFloorId,
+) => {
+  const onFloor = booths.filter(b => (b.floorId ?? 0) === floor);
+  const free = BUSINESS_CENTER_OFFICE_SLOTS.find(s => !slotTaken(onFloor, s));
+  if (free) return free;
+  const i = onFloor.length % BUSINESS_CENTER_OFFICE_SLOTS.length;
+  return BUSINESS_CENTER_OFFICE_SLOTS[i];
+};
+
+/** Snap drag position to nearest office slot (with rotation) or 0.5 m grid. */
+export const snapBusinessCenterPosition = (x: number, z: number) => {
+  let best = { x, z, d: Infinity };
+  for (const s of BUSINESS_CENTER_OFFICE_SLOTS) {
+    const d = Math.hypot(x - s.x, z - s.z);
+    if (d < best.d) best = { x: s.x, z: s.z, d };
+  }
+  if (best.d < 3.2) return { x: best.x, z: best.z };
+  return { x: Math.round(x * 2) / 2, z: Math.round(z * 2) / 2 };
+};
+
+export const snapBusinessCenterBooth = (x: number, z: number, fallbackRy = 0) => {
+  let best = { x, z, ry: fallbackRy, d: Infinity };
+  for (const s of BUSINESS_CENTER_OFFICE_SLOTS) {
+    const d = Math.hypot(x - s.x, z - s.z);
+    if (d < best.d) best = { x: s.x, z: s.z, ry: s.ry, d };
+  }
+  if (best.d < 3.2) return { x: best.x, z: best.z, ry: best.ry };
+  const g = snapBusinessCenterPosition(x, z);
+  return { x: g.x, z: g.z, ry: fallbackRy };
+};
+
+/**
+ * Carpet runners — clean + junction (E–W spine × N–S spine) + stair lane + lobby.
+ */
 export const businessCenterCarpetRects = (floor: BusinessCenterFloorId = 0): BusinessCenterCarpetRect[] => {
-  const base: BusinessCenterCarpetRect[] = [
-    { x: 2, z: 0, w: 14, d: 2.6 },
-    { x: BUSINESS_CENTER.stairX, z: 0, w: 2.4, d: 15 },
-    { x: 9, z: 7, w: 2.2, d: 4 },
-    { x: 9, z: -7, w: 2.2, d: 4 },
-    { x: -2, z: 9, w: 8, d: 2.2 },
-    { x: 5, z: 9, w: 6, d: 2.2 },
+  const carpets: BusinessCenterCarpetRect[] = [
+    { x: 3, z: 0, w: 18, d: 2.4 },
+    { x: 4, z: 0, w: 2.2, d: 16 },
+    { x: BUSINESS_CENTER.stairX, z: 0, w: 2.2, d: 14 },
+    { x: -5.5, z: 0, w: 2.4, d: 2.4 },
   ];
-  if (floor === 0) base.push({ x: 2, z: 9.5, w: 5, d: 2.4, entranceOnly: true });
-  return base;
+  if (floor === 0) {
+    carpets.push({ x: 0, z: 6.5, w: 2.4, d: 5 });
+    carpets.push({ x: 0, z: 3.2, w: 2.4, d: 3.4 });
+  }
+  return carpets;
 };
 
 export const planRectPct = (rect: BusinessCenterCarpetRect, W: number, D: number) => {
@@ -298,22 +364,13 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
   if (layout === 'business_center') {
     const width = 28;
     const depth = 24;
-    const slotsPerFloor = [
-      { x: 9, z: 7, ry: Math.PI },
-      { x: 9, z: 0, ry: Math.PI },
-      { x: 9, z: -7, ry: Math.PI },
-      { x: -2, z: -9, ry: 0 },
-      { x: 5, z: -9, ry: 0 },
-      { x: 9, z: -9, ry: Math.PI },
-      { x: -2, z: 9, ry: Math.PI },
-      { x: 5, z: 9, ry: Math.PI },
-    ];
+    const slotsPerFloor = BUSINESS_CENTER_OFFICE_SLOTS;
     for (let i = 0; i < n; i++) {
       const floor = Math.floor(i / slotsPerFloor.length) % BUSINESS_CENTER.floors;
       const slot = slotsPerFloor[i % slotsPerFloor.length];
       cells.push({ x: slot.x, z: slot.z, ry: slot.ry, floor });
     }
-    const spawn = { x: 2, y: 0, z: 6, ry: Math.PI };
+    const spawn = { x: 0, y: 0, z: 7, ry: Math.PI };
     return { width, depth, spawn, cells };
   }
 

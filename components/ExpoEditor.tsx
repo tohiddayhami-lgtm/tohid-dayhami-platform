@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, BUSINESS_CENTER_FLOOR_THEMES, businessCenterCarpetRects, planRectPct, BUSINESS_CENTER, type BusinessCenterFloorId } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, BUSINESS_CENTER_FLOOR_THEMES, businessCenterCarpetRects, planRectPct, BUSINESS_CENTER, BUSINESS_CENTER_OFFICE_SLOTS, findNextBusinessCenterSlot, snapBusinessCenterBooth, type BusinessCenterFloorId } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -227,13 +227,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const theme = isBC ? BUSINESS_CENTER_FLOOR_THEMES[planFloor] : null;
     const onFloor = isBC ? (e.booths || []).filter(b => (b.floorId ?? 0) === planFloor) : (e.booths || []);
     const idx = onFloor.length;
+    const slot = isBC ? findNextBusinessCenterSlot(e.booths || [], planFloor) : null;
     const b: MetaverseBooth = {
       id: newId('booth'),
       name: { fa: T ? `غرفه ${idx + 1}` : `Booth ${idx + 1}`, en: `Booth ${idx + 1}` },
-      x: ((idx % 4) - 1.5) * (W / 5),
+      x: slot?.x ?? ((idx % 4) - 1.5) * (W / 5),
       y: 0,
-      z: ((Math.floor(idx / 4)) - 1) * (D / 5),
-      ry: 0,
+      z: slot?.z ?? ((Math.floor(idx / 4)) - 1) * (D / 5),
+      ry: slot?.ry ?? 0,
       color: theme?.boothColor || '#2d4a1a',
       tier: 'basic',
       floorId: isBC ? planFloor : undefined,
@@ -578,12 +579,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     };
     const onMove = (ev: React.PointerEvent) => {
       if (!dragId.current) return;
-      const { x, z } = toWorld(ev.clientX, ev.clientY);
+      let { x, z } = toWorld(ev.clientX, ev.clientY);
       if (dragId.current === '__spawn__') setSpawn('x', x), setSpawn('z', z);
-      else updBooth(dragId.current, isBC ? { x, z, floorId: planFloor } : { x, z });
+      else if (isBC) {
+        const cur = (e.booths || []).find(b => b.id === dragId.current);
+        const snapped = snapBusinessCenterBooth(x, z, cur?.ry ?? 0);
+        updBooth(dragId.current, { x: snapped.x, z: snapped.z, ry: snapped.ry, floorId: planFloor });
+      } else updBooth(dragId.current, { x, z });
     };
     const wx = (x: number) => ((x + W / 2) / W) * 100;
     const wz = (z: number) => ((z + D / 2) / D) * 100;
+    const boothPw = (4 / W) * 100;
+    const boothPh = (4 / D) * 100;
     const cats = e.retailCategories || [];
     const carpets = isBC ? businessCenterCarpetRects(planFloor) : [];
     return (
@@ -615,8 +622,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         {isBC && (
           <p className="text-[11px] text-slate-600 mb-2">
             {T
-              ? 'غرفه‌ها فقط روی طبقهٔ انتخاب‌شده نمایش داده می‌شوند. با کشیدن روی نقشه، غرفه به همین طبقه اختصاص می‌یابد. نوارهای قرمز/آبی = فرش راهرو.'
-              : 'Booths shown for the selected floor only. Dragging assigns them to this floor. Colored strips = carpet walkways.'}
+              ? 'دفاتر روی جایگاه‌های مشخص چیده می‌شوند (کادر خط‌چین = خالی). فرش‌ها راهروهای اصلی، شاخه شمال/جنوب و پله را نشان می‌دهند.'
+              : 'Offices snap to fixed slots (dashed = empty). Carpets mark main corridor, north/south arms, and stairs.'}
           </p>
         )}
       <svg
@@ -644,10 +651,29 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         })}
         {isBC && (
           <g>
-            <rect x={wx(BUSINESS_CENTER.stairX) - 2.2} y={wz(0) - 8} width={4.4} height={16} rx={0.8} fill="none" stroke={theme!.accent} strokeWidth={0.5} strokeDasharray="1.2 0.8" opacity={0.7} />
+            <rect x={wx(BUSINESS_CENTER.stairX) - 2.2} y={wz(0) - 7} width={4.4} height={14} rx={0.8} fill="none" stroke={theme!.accent} strokeWidth={0.5} strokeDasharray="1.2 0.8" opacity={0.7} />
             <text x={wx(BUSINESS_CENTER.stairX)} y={wz(BUSINESS_CENTER.stairZMax) - 2} textAnchor="middle" fontSize={2.6} fill={theme!.signBg} fontWeight="bold">{T ? 'پله' : 'stairs'}</text>
           </g>
         )}
+        {isBC && BUSINESS_CENTER_OFFICE_SLOTS.map((s, si) => {
+          const taken = visibleBooths.some(b => Math.hypot((b.x || 0) - s.x, (b.z || 0) - s.z) < 2.2);
+          if (taken) return null;
+          return (
+            <rect
+              key={`slot-${si}`}
+              x={wx(s.x) - boothPw / 2}
+              y={wz(s.z) - boothPh / 2}
+              width={boothPw}
+              height={boothPh}
+              rx={0.8}
+              fill={theme!.boothZone}
+              opacity={0.4}
+              stroke={theme!.accent}
+              strokeWidth={0.35}
+              strokeDasharray="1.2 0.7"
+            />
+          );
+        })}
         {e.visualStyle === 'supermarket' && cats.map((c, i) => {
           const rows = Math.max(1, Math.ceil(cats.length / 2));
           const col = i % 2;
