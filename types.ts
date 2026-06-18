@@ -788,6 +788,10 @@ export interface ExpoDecoration {
   z: number;
   ry?: number;                  // Y rotation (radians)
   scale?: number;               // uniform scale multiplier (default 1)
+  linkUrl?: string;             // opens in a new tab when clicked (if no audio)
+  audioUrl?: string;            // legacy/fallback audio
+  audioUrlFa?: string;
+  audioUrlEn?: string;
 }
 
 export interface MetaverseExpo {
@@ -1287,6 +1291,7 @@ export type MetaExpoEventType =
   | 'booth_panel_click'
   | 'booth_character_click'
   | 'counter_glb_grab'
+  | 'decoration_click'
   | 'booth_dwell'
   | 'entrance_kiosk_click'
   | 'registration_complete';

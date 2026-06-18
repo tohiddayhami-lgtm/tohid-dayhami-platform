@@ -9,11 +9,19 @@ export const GltfModel: React.FC<{
   scale?: number;
   /** Target max footprint (max of X/Z bbox) in meters — auto-scales and grounds the model. */
   autoFit?: number;
-}> = ({ url, scale = 1, autoFit }) => {
+  /** When false, mesh raycasts are disabled (use an external collider for clicks). */
+  pickable?: boolean;
+}> = ({ url, scale = 1, autoFit, pickable = true }) => {
   const { scene } = useGLTF(url);
   const prepared = useMemo(() => {
     const c = scene.clone(true);
-    c.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    c.traverse((o: any) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+        if (!pickable) o.raycast = () => null;
+      }
+    });
     if (autoFit && autoFit > 0) {
       const box = new THREE.Box3().setFromObject(c);
       const center = new THREE.Vector3();
@@ -27,6 +35,6 @@ export const GltfModel: React.FC<{
       c.position.y -= grounded.min.y;
     }
     return c;
-  }, [scene, autoFit]);
+  }, [scene, autoFit, pickable]);
   return <primitive object={prepared} scale={scale} />;
 };

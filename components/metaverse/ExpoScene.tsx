@@ -514,7 +514,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
 
       {/* Free-placed hall decorations (GLB props) */}
       {(expo.decorations || []).map(d => (
-        <ExpoDecorationMesh key={d.id} deco={d} />
+        <ExpoDecorationMesh key={d.id} deco={d} lang={lang} onTrack={onTrack} />
       ))}
 
       {/* Environmental advertising banners — auto-distributed along each wall, height auto-fit. */}

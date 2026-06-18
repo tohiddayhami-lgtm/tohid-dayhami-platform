@@ -107,6 +107,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     decoScale: T ? 'اندازه (مقیاس)' : 'Size (scale)',
     decoRot: T ? 'چرخش (درجه)' : 'Rotation (°)',
     decoOnMap: T ? 'روی نقشه' : 'On map',
+    decoLink: T ? 'لینک (کلیک)' : 'Link (on click)',
+    decoAudioFa: T ? 'فایل صوتی (فارسی)' : 'Audio file (FA)',
+    decoAudioEn: T ? 'فایل صوتی (انگلیسی)' : 'Audio file (EN)',
+    decoInteractHint: T ? 'بازدیدکننده روی دکور کلیک کند → اول صدا پخش می‌شود؛ اگر صدا نبود لینک باز می‌شود.' : 'Visitors click the decor → audio plays first; otherwise the link opens.',
     booths: T ? 'غرفه‌ها' : 'Booths', addBooth: T ? 'افزودن غرفه' : 'Add booth', noBooths: T ? 'هنوز غرفه‌ای اضافه نشده.' : 'No booths yet.',
     adsT: T ? 'تبلیغات محیطی روی دیوارها' : 'Wall advertising banners',
     adsHint: T ? 'فقط دیوار، اندازهٔ بنر، تصویر و لینک را بدهید؛ جای‌گذاری روی دیوار به‌صورت خودکار و متناسب با سالن انجام می‌شود. هر بنر لینک‌دار است (در تب جدید باز می‌شود).' : 'Just pick a wall, a banner size, an image and a link — placement on the wall is automatic and fits the hall. Each banner is clickable (opens in a new tab).',
@@ -297,6 +301,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const setDecoName = (d: ExpoDecoration, which: 'fa' | 'en', val: string) =>
     updDecoration(d.id, { name: { ...(d.name || {}), [which]: val } });
+  const setDecoAudio = (d: ExpoDecoration, which: 'fa' | 'en', url: string) => {
+    const field = which === 'fa' ? 'audioUrlFa' : 'audioUrlEn';
+    updDecoration(d.id, { [field]: url || undefined, ...(which === 'fa' ? { audioUrl: undefined } : {}) } as Partial<ExpoDecoration>);
+  };
 
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
@@ -874,6 +882,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                           <span className="inline-flex w-6 h-6 rounded-md bg-amber-100 text-amber-800 text-xs items-center justify-center font-bold">{i + 1}</span>
                           {label}
                           {!d.modelUrl && <span className="text-[10px] font-normal text-amber-600/70">({T ? 'بدون GLB' : 'no GLB'})</span>}
+                          {(d.audioUrlFa || d.audioUrlEn || d.audioUrl) && <span className="text-[10px] text-sky-600">♪</span>}
+                          {d.linkUrl && <span className="text-[10px] text-indigo-600">🔗</span>}
                         </span>
                         <span className="text-[10px] text-amber-700/60 shrink-0">{t.decoOnMap}: {d.x?.toFixed(1)}, {d.z?.toFixed(1)}</span>
                       </button>
@@ -900,6 +910,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <label className={lbl}>{t.decoRot}</label>
                             <input type="range" min={0} max={360} step={1} className="w-full accent-amber-500" value={deg < 0 ? deg + 360 : deg} onChange={ev => updDecoration(d.id, { ry: (+ev.target.value) * Math.PI / 180 })} />
                             <input type="number" className={fld + ' mt-1'} value={deg} onChange={ev => updDecoration(d.id, { ry: (+ev.target.value) * Math.PI / 180 })} />
+                          </div>
+                          <div className="md:col-span-2 lg:col-span-3 border-t border-amber-100 pt-2">
+                            <p className="text-[10px] text-amber-800/75 mb-2">{t.decoInteractHint}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                              <div className="md:col-span-2">
+                                <label className={lbl}>{t.decoLink}</label>
+                                <input className={fld + ' dir-ltr'} value={d.linkUrl || ''} onChange={ev => updDecoration(d.id, { linkUrl: ev.target.value || undefined })} placeholder="https://meet.google.com/… / https://wa.me/…" />
+                              </div>
+                              <AudioUpload id={`deco-audio-fa-${d.id}`} value={d.audioUrlFa || d.audioUrl} onUrl={u => setDecoAudio(d, 'fa', u)} label={t.decoAudioFa} />
+                              <AudioUpload id={`deco-audio-en-${d.id}`} value={d.audioUrlEn} onUrl={u => setDecoAudio(d, 'en', u)} label={t.decoAudioEn} />
+                            </div>
                           </div>
                           {!readonly && (
                             <div className="flex items-end justify-end md:col-span-2 lg:col-span-3">
