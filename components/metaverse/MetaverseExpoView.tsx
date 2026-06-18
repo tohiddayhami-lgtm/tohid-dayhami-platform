@@ -187,6 +187,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   // budget — this is what keeps walking smooth (no judder). The centre of vision stays sharp.
   const store = useMemo(() => createXRStore({ foveation: 1 }), []);
 
+  const isBusinessCenter = expo.visualStyle === 'business_center';
   const spawn: [number, number, number] = [
     expo.spawn?.x ?? 0,
     isBusinessCenter ? businessCenterEyeY(0) : EXPO_DEFAULTS.eyeHeight,
@@ -199,7 +200,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
   const [currentFloor, setCurrentFloor] = useState(0);
-  const isBusinessCenter = expo.visualStyle === 'business_center';
   const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
     logMetaExpoEvent(type, { id: bazaar.id, slug: bazaar.slug, name: bazaar.name }, opts);
