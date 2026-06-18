@@ -707,10 +707,9 @@ export interface MetaverseBooth {
   // auto-play muted & looping on an in-world screen; images render on the wall panel.
   panels?: Partial<Record<BoothFace, string>>;
   hotspots?: MetaverseHotspot[];
-  meetEnabled?: boolean;        // per-booth Google Meet video call button
+  meetEnabled?: boolean;        // per-booth Google Meet video call screen
   meetUrl?: string;             // https://meet.google.com/…
-  meetTitle?: MetaShopDirCat;   // optional label on the button
-  meetWall?: BoothFace;         // which booth wall shows the Meet button (optional)
+  meetTitle?: MetaShopDirCat;   // optional label on the in-booth screen
 }
 
 // drei <Environment> presets used for image-based lighting / skybox when no custom HDR is given

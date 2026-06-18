@@ -115,9 +115,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     boothMeetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
     boothMeetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
     boothMeetTitleEn: T ? 'عنوان تماس (انگلیسی)' : 'Call title (EN)',
-    boothMeetWall: T ? 'دیوار دکمه Meet' : 'Meet button wall',
-    boothMeetWallDefault: T ? '— پیش‌فرض (چپ داخل) —' : '— default (inner left) —',
-    boothMeetHint: T ? 'دکمهٔ بدون پس‌زمینه روی دیوار انتخابی؛ کلیک → باز شدن Meet در تب جدید.' : 'Background-free button on the chosen wall; click opens Meet in a new tab.',
+    boothMeetHint: T ? 'نمایشگر تماس روی دیوار داخل غرفه؛ کلیک → باز شدن Meet در تب جدید.' : 'Call screen on the booth wall; click opens Meet in a new tab.',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
@@ -1097,12 +1095,6 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               {b.meetEnabled && (
                                 <>
                                   <div className="md:col-span-2"><label className={lbl}>{t.boothMeetUrl}</label><input className={fld + ' dir-ltr'} value={b.meetUrl || ''} onChange={ev => updBooth(b.id, { meetUrl: ev.target.value || undefined })} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></div>
-                                  <div><label className={lbl}>{t.boothMeetWall}</label>
-                                    <select className={fld + ' bg-white'} value={b.meetWall || ''} onChange={ev => updBooth(b.id, { meetWall: (ev.target.value || undefined) as BoothFace | undefined })}>
-                                      <option value="">{t.boothMeetWallDefault}</option>
-                                      {PANEL_FACES.map(pf => <option key={pf.face} value={pf.face}>{T ? pf.fa : pf.en}</option>)}
-                                    </select>
-                                  </div>
                                   <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="تماس تصویری زنده" /></div>
                                   <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="Live video call" /></div>
                                 </>
