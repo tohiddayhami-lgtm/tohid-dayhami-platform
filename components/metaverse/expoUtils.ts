@@ -146,7 +146,7 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
 };
 
 export type ExpoBoothLayout =
-  | 'cross' | 'boulevard' | 'avenue' | 'gallery' | 'pavilion'
+  | 'cross' | 'boulevard' | 'avenue' | 'gallery' | 'alley' | 'pavilion'
   | 'symmetric' | 'perimeter' | 'grand' | 'storefront' | 'supermarket'
   | 'facing' | 'grid' | 'business_center';
 
@@ -175,12 +175,13 @@ export const EXPO_LAYOUT_OPTIONS: { id: ExpoBoothLayout; labelFa: string; labelE
   { id: 'boulevard', labelFa: '۲. بلوار مرکزی VIP', labelEn: '2. Central boulevard' },
   { id: 'avenue', labelFa: '۳. شبلون‌های موازی', labelEn: '3. Parallel avenues' },
   { id: 'gallery', labelFa: '۴. گالری دوطرفه', labelEn: '4. Twin gallery' },
-  { id: 'pavilion', labelFa: '۵. جزیره‌های نمایشگاهی', labelEn: '5. Pavilion islands' },
-  { id: 'symmetric', labelFa: '۶. قرینه رسمی', labelEn: '6. Symmetric wings' },
-  { id: 'perimeter', labelFa: '۷. دور سالن', labelEn: '7. Perimeter ring' },
-  { id: 'grand', labelFa: '۸. سالن بزرگ', labelEn: '8. Grand hall' },
-  { id: 'storefront', labelFa: '۹. دفاتر تجاری', labelEn: '9. Commercial offices' },
-  { id: 'supermarket', labelFa: '۱۰. فروشگاه زنجیره‌ای', labelEn: '10. Supermarket' },
+  { id: 'alley', labelFa: '۵. کوچه بازار', labelEn: '5. Bazaar alley' },
+  { id: 'pavilion', labelFa: '۶. جزیره‌های نمایشگاهی', labelEn: '6. Pavilion islands' },
+  { id: 'symmetric', labelFa: '۷. قرینه رسمی', labelEn: '7. Symmetric wings' },
+  { id: 'perimeter', labelFa: '۸. دور سالن', labelEn: '8. Perimeter ring' },
+  { id: 'grand', labelFa: '۹. سالن بزرگ', labelEn: '9. Grand hall' },
+  { id: 'storefront', labelFa: '۱۰. دفاتر تجاری', labelEn: '10. Commercial offices' },
+  { id: 'supermarket', labelFa: '۱۱. فروشگاه زنجیره‌ای', labelEn: '11. Supermarket' },
 ];
 
 export const normalizeBoothLayout = (layout?: ExpoBoothLayout | string | null): ExpoBoothLayout => {
@@ -245,6 +246,20 @@ export const layoutCarpetRects = (layout: ExpoBoothLayout | string | undefined, 
       carpet(-w * 0.22, 0, cw * 0.75, innerD * 0.9, EXPO_CARPET.accent, '#93c5fd'),
       carpet(w * 0.22, 0, cw * 0.75, innerD * 0.9, EXPO_CARPET.accent, '#93c5fd'),
     ],
+    alley: (() => {
+      const streetPitch = BOOTH * 2 + 3.4 + 6;
+      const streets = Math.max(1, Math.round((w - 10) / streetPitch));
+      const narrowW = Math.min(2.1, cw * 0.78);
+      const out: ExpoCarpetRect[] = [
+        carpet(0, d / 2 - 6, innerW, cd),
+        carpet(0, d * 0.12, innerW * 0.62, cd * 0.7, EXPO_CARPET.main, EXPO_CARPET.border),
+      ];
+      for (let s = 0; s < streets; s++) {
+        const x = (s - (streets - 1) / 2) * streetPitch;
+        out.push(carpet(x, -d * 0.04, narrowW, innerD * 0.92, '#78350f', '#d97706'));
+      }
+      return out;
+    })(),
     pavilion: (() => {
       const step = BOOTH * 2 + 10;
       const out: ExpoCarpetRect[] = [carpet(0, d / 2 - 6, innerW, cd)];
@@ -407,6 +422,33 @@ const arrangeGallery = (n: number): ArrangeResult => {
     const side = i % 2;
     const z = depth / 2 - 8 - pair * slotZ;
     cells.push({ x: side === 0 ? -wallX : wallX, z: +z.toFixed(2), ry: side === 0 ? Math.PI / 2 : -Math.PI / 2 });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+/** Narrow parallel bazaar alleys — booths face each other across each کوچه. */
+const arrangeAlley = (n: number): ArrangeResult => {
+  const alleyW = 3.4;
+  const halfGap = BOOTH / 2 + alleyW / 2;
+  const alongPitch = BOOTH + 4.4;
+  const streetPitch = BOOTH * 2 + alleyW + 6;
+
+  const pairCount = Math.ceil(n / 2);
+  const streets = Math.max(1, Math.ceil(Math.sqrt(pairCount / 1.5)));
+  const rows = Math.ceil(pairCount / streets);
+  const width = Math.max(24, streets * streetPitch + 10);
+  const depth = Math.max(28, rows * alongPitch + 14);
+  const cells: ArrangeCell[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const pair = Math.floor(i / 2);
+    const street = pair % streets;
+    const row = Math.floor(pair / streets);
+    const side = i % 2;
+    const xCenter = (street - (streets - 1) / 2) * streetPitch;
+    const x = xCenter + (side === 0 ? -halfGap : halfGap);
+    const z = depth / 2 - 8 - row * alongPitch;
+    cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: side === 0 ? Math.PI / 2 : -Math.PI / 2 });
   }
   return { width, depth, spawn: spawnFor(depth), cells };
 };
@@ -727,7 +769,7 @@ export const resolveBusinessCenterPlayerY = (x: number, z: number, prevEyeY: num
   return businessCenterEyeY(floor);
 };
 
-// Auto-arrange booths — 10 professional layout styles, each with matching aisle carpets.
+// Auto-arrange booths — 11 professional layout styles, each with matching aisle carpets.
 export const autoArrangeBooths = (
   count: number,
   layout: ExpoBoothLayout = 'cross',
@@ -738,6 +780,7 @@ export const autoArrangeBooths = (
     case 'boulevard': return arrangeBoulevard(n);
     case 'avenue': return arrangeAvenue(n);
     case 'gallery': return arrangeGallery(n);
+    case 'alley': return arrangeAlley(n);
     case 'pavilion': return arrangeCrossFacing(n, 1.28);
     case 'symmetric': return arrangeSymmetric(n);
     case 'perimeter': return arrangePerimeter(n);
