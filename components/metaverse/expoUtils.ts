@@ -206,6 +206,28 @@ const aw = (span: number) => Math.min(2.5, Math.max(1.8, span * 0.09));
 const carpet = (x: number, z: number, w: number, d: number, color = EXPO_CARPET.main, border = EXPO_CARPET.border): ExpoCarpetRect =>
   ({ x, z, w, d, color, border });
 
+/** Vertical + horizontal aisle carpets — T-junction without overlapping planes (avoids z-fighting). */
+const crossAisleCarpets = (
+  cw: number, cd: number, innerD: number, innerW: number,
+  horizZ: number,
+  horizColor = EXPO_CARPET.main,
+  horizBorder = EXPO_CARPET.border,
+): ExpoCarpetRect[] => {
+  const halfCd = cd / 2;
+  const gap = 0.1;
+  const zMin = -innerD / 2;
+  const zMax = innerD / 2;
+  const zSplitLow = horizZ - halfCd - gap;
+  const zSplitHigh = horizZ + halfCd + gap;
+  const out: ExpoCarpetRect[] = [];
+  const southLen = zSplitLow - zMin;
+  if (southLen > 0.4) out.push(carpet(0, zMin + southLen / 2, cw, southLen));
+  const northLen = zMax - zSplitHigh;
+  if (northLen > 0.4) out.push(carpet(0, zSplitHigh + northLen / 2, cw, northLen));
+  out.push(carpet(0, horizZ, innerW, cd, horizColor, horizBorder));
+  return out;
+};
+
 /** Red carpet at the hall doorway (+ optional exterior strip coordinates). */
 export const entranceCarpetRects = (width: number, depth: number): ExpoCarpetRect[] => [
   { x: 0, z: depth / 2 - 2.2, w: Math.min(3.4, width * 0.28), d: 4.2, color: EXPO_CARPET.entrance, border: EXPO_CARPET.entranceBorder, entrance: true },
@@ -224,10 +246,7 @@ export const layoutCarpetRects = (layout: ExpoBoothLayout | string | undefined, 
   const innerW = w * 0.68;
 
   const byLayout: Record<ExpoBoothLayout, ExpoCarpetRect[]> = {
-    cross: [
-      carpet(0, 0, cw, innerD),
-      carpet(0, d / 2 - 6, innerW, cd),
-    ],
+    cross: crossAisleCarpets(cw, cd, innerD, innerW, d / 2 - 6),
     boulevard: [
       carpet(0, 0, cw, innerD * 0.95),
       carpet(0, d / 2 - 5, Math.min(3, w * 0.22), cd),
@@ -286,10 +305,7 @@ export const layoutCarpetRects = (layout: ExpoBoothLayout | string | undefined, 
       carpet(0, d / 2 - 6, innerW, cd),
       carpet(0, -d * 0.22, innerW * 0.7, cd * 0.7),
     ],
-    storefront: [
-      carpet(0, 0, cw, innerD),
-      carpet(0, d / 2 - 6, innerW, cd, '#0f766e', '#5eead4'),
-    ],
+    storefront: crossAisleCarpets(cw, cd, innerD, innerW, d / 2 - 6, '#0f766e', '#5eead4'),
     supermarket: (() => {
       const out: ExpoCarpetRect[] = [carpet(0, d / 2 - 7, innerW, cd)];
       for (let lane = 0; lane < 3; lane++) {
@@ -303,7 +319,7 @@ export const layoutCarpetRects = (layout: ExpoBoothLayout | string | undefined, 
     business_center: [],
   };
 
-  return [...entrance, ...(byLayout[L] || byLayout.cross)];
+  return [...(byLayout[L] || byLayout.cross), ...entrance];
 };
 
 /** @deprecated use layoutCarpetRects */
