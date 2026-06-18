@@ -830,6 +830,7 @@ export interface MetaExpoRegistration {
   firstName: string;
   lastName: string;
   company: string;
+  jobTitle: string;             // سمت / position in the company
   productService: string;
   whatsapp: string;
   city: string;
@@ -846,6 +847,8 @@ export interface MetaExpoPresence {
   visitorId: string;
   name: string;
   color: string;
+  company?: string;             // from entrance registration — shown on avatar badge
+  jobTitle?: string;            // سمت — shown on avatar badge
   x: number;
   z: number;
   heading: number;

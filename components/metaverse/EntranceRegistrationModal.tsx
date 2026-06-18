@@ -10,7 +10,7 @@ interface Props {
   lang: Language;
   title?: string;
   onClose: () => void;
-  onSubmitted: (fullName: string) => void;
+  onSubmitted: (profile: { name: string; company: string; jobTitle: string }) => void;
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
 }
 
@@ -30,6 +30,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
   const [productService, setProductService] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [city, setCity] = useState('');
@@ -45,6 +46,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
     firstName: T ? 'نام' : 'First name',
     lastName: T ? 'نام خانوادگی' : 'Last name',
     company: T ? 'نام شرکت' : 'Company name',
+    jobTitle: T ? 'سمت' : 'Job title',
     productService: T ? 'نوع محصول یا خدمت تولیدی' : 'Product / service type',
     whatsapp: T ? 'شماره تماس واتساپ' : 'WhatsApp number',
     city: T ? 'شهر' : 'City',
@@ -58,7 +60,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
   };
 
   const reset = () => {
-    setFirstName(''); setLastName(''); setCompany(''); setProductService('');
+    setFirstName(''); setLastName(''); setCompany(''); setJobTitle(''); setProductService('');
     setWhatsapp(''); setCity(''); setCountry(''); setDone(false); setError('');
   };
 
@@ -66,7 +68,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const fields = [firstName, lastName, company, productService, whatsapp, city, country];
+    const fields = [firstName, lastName, company, jobTitle, productService, whatsapp, city, country];
     if (fields.some(f => !f.trim())) { setError(t.required); return; }
     setSaving(true);
     setError('');
@@ -80,6 +82,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       company: company.trim(),
+      jobTitle: jobTitle.trim(),
       productService: productService.trim(),
       whatsapp: whatsapp.trim(),
       city: city.trim(),
@@ -91,7 +94,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
       await saveMetaExpoRegistration(reg);
       const fullName = `${reg.firstName} ${reg.lastName}`;
       onTrack?.('registration_complete', { targetName: fullName, targetType: 'entrance_registration', targetId: reg.id });
-      onSubmitted(fullName);
+      onSubmitted({ name: fullName, company: reg.company, jobTitle: reg.jobTitle });
       setDone(true);
     } catch {
       setError(T ? 'خطا در ثبت. دوباره تلاش کنید.' : 'Save failed. Please try again.');
@@ -131,6 +134,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
               <div><label className={lbl}>{t.lastName}</label><input className={fld} value={lastName} onChange={e => setLastName(e.target.value)} required /></div>
             </div>
             <div><label className={lbl}>{t.company}</label><input className={fld} value={company} onChange={e => setCompany(e.target.value)} required /></div>
+            <div><label className={lbl}>{t.jobTitle}</label><input className={fld} value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder={T ? 'مثلاً مدیرعامل، کارشناس فروش' : 'e.g. CEO, Sales manager'} required /></div>
             <div><label className={lbl}>{t.productService}</label><input className={fld} value={productService} onChange={e => setProductService(e.target.value)} required /></div>
             <div><label className={lbl}>{t.whatsapp}</label><input className={fld + ' dir-ltr'} value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="+98…" required /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -153,12 +157,12 @@ export const exportExpoRegistrationsCSV = (rows: MetaExpoRegistration[], lang: L
   if (!rows.length) return;
   const T = lang === 'fa';
   const headers = T
-    ? ['تاریخ', 'نام', 'نام خانوادگی', 'شرکت', 'محصول/خدمت', 'واتساپ', 'شهر', 'کشور']
-    : ['Date', 'First name', 'Last name', 'Company', 'Product/service', 'WhatsApp', 'City', 'Country'];
+    ? ['تاریخ', 'نام', 'نام خانوادگی', 'شرکت', 'سمت', 'محصول/خدمت', 'واتساپ', 'شهر', 'کشور']
+    : ['Date', 'First name', 'Last name', 'Company', 'Job title', 'Product/service', 'WhatsApp', 'City', 'Country'];
   const escape = (v: string) => `"${String(v || '').replace(/"/g, '""')}"`;
   const csvRows = rows.map(r => [
     new Date(r.timestamp).toLocaleString(T ? 'fa-IR' : 'en-US'),
-    r.firstName, r.lastName, r.company, r.productService, r.whatsapp, r.city, r.country,
+    r.firstName, r.lastName, r.company, r.jobTitle || '', r.productService, r.whatsapp, r.city, r.country,
   ]);
   const csv = [headers, ...csvRows].map(row => row.map(escape).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });

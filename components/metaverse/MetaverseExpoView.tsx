@@ -30,20 +30,44 @@ interface Props {
 type ExpoTrackFn = (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
 
 const visitorColors = ['#2563eb', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2', '#be123c', '#4f46e5'];
-const liveVisitor = (bazaarId: string) => {
+type ExpoVisitor = { id: string; name: string; color: string; company?: string; jobTitle?: string };
+const liveVisitor = (bazaarId: string): ExpoVisitor => {
   const key = `_meta_expo_visitor_${bazaarId}`;
   try {
     const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved) as { id: string; name: string; color: string };
+    if (saved) return JSON.parse(saved) as ExpoVisitor;
   } catch {}
   const n = Math.floor(100 + Math.random() * 900);
-  const visitor = {
+  const visitor: ExpoVisitor = {
     id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     name: `Guest ${n}`,
     color: visitorColors[n % visitorColors.length],
   };
   try { localStorage.setItem(key, JSON.stringify(visitor)); } catch {}
   return visitor;
+};
+
+const truncBadge = (s: string, max: number) => {
+  const t = (s || '').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
+
+const VisitorAvatarLabels: React.FC<{ v: MetaExpoPresence }> = ({ v }) => {
+  const registered = !!(v.company || v.jobTitle);
+  if (!registered) {
+    return <CanvasLabel text={v.name || 'Guest'} width={0.9} height={0.22} position={[0, 1.98, 0]} bg="rgba(15,23,42,.78)" color="#ffffff" />;
+  }
+  return (
+    <>
+      {v.company && (
+        <CanvasLabel text={truncBadge(v.company, 20)} width={0.58} height={0.1} position={[0, 2.24, 0]} bg="rgba(15,23,42,.58)" color="#cbd5e1" bold={false} radius={10} />
+      )}
+      <CanvasLabel text={truncBadge(v.name, 18)} width={0.64} height={0.13} position={[0, 2.1, 0]} bg="rgba(15,23,42,.72)" color="#ffffff" bold={false} radius={12} />
+      {v.jobTitle && (
+        <CanvasLabel text={truncBadge(v.jobTitle, 16)} width={0.5} height={0.09} position={[0, 1.97, 0]} bg="rgba(15,23,42,.5)" color="#94a3b8" bold={false} radius={8} />
+      )}
+    </>
+  );
 };
 
 const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> = ({ visitors, selfId }) => (
@@ -70,7 +94,7 @@ const RemoteAvatars: React.FC<{ visitors: MetaExpoPresence[]; selfId: string }> 
           <ringGeometry args={[0.28, 0.31, 48]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0.72} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
-        <CanvasLabel text={v.name || 'Guest'} width={0.9} height={0.22} position={[0, 1.98, 0]} bg="rgba(15,23,42,.78)" color="#ffffff" />
+        <VisitorAvatarLabels v={v} />
       </group>
     ))}
   </>
@@ -198,6 +222,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const roomId = `expo_${bazaar.id}`;
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
   const [visitorName, setVisitorName] = useState(visitor.name);
+  const [visitorCompany, setVisitorCompany] = useState(visitor.company || '');
+  const [visitorJobTitle, setVisitorJobTitle] = useState(visitor.jobTitle || '');
   const displayName = visitorName || visitor.name;
   const presenceEnabled = expo.presence?.enabled !== false;
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
@@ -242,6 +268,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         bazaarSlug: bazaar.slug,
         visitorId: visitor.id,
         name: displayName,
+        company: visitorCompany || undefined,
+        jobTitle: visitorJobTitle || undefined,
         color: visitor.color,
         x: pose.x,
         z: pose.z,
@@ -265,7 +293,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       document.removeEventListener('visibilitychange', onVisibilityChange);
       markInactive();
     };
-  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, displayName]);
+  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, displayName, visitorCompany, visitorJobTitle]);
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -371,13 +399,17 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         lang={lang}
         title={bi(expo.entranceRegistration?.title, lang, lang === 'fa' ? 'ثبت اطلاعات بازدیدکننده' : 'Visitor registration')}
         onClose={() => setRegistrationOpen(false)}
-        onSubmitted={(fullName) => {
-          setVisitorName(fullName);
+        onSubmitted={(profile) => {
+          setVisitorName(profile.name);
+          setVisitorCompany(profile.company);
+          setVisitorJobTitle(profile.jobTitle);
           try {
             const key = `_meta_expo_visitor_${bazaar.id}`;
             const saved = localStorage.getItem(key);
             const parsed = saved ? JSON.parse(saved) : { ...visitor };
-            parsed.name = fullName;
+            parsed.name = profile.name;
+            parsed.company = profile.company;
+            parsed.jobTitle = profile.jobTitle;
             localStorage.setItem(key, JSON.stringify(parsed));
           } catch {}
         }}

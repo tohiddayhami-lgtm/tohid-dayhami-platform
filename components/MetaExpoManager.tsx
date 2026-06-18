@@ -69,6 +69,7 @@ export const MetaExpoManager: React.FC<Props> = ({
     regDate: T ? 'تاریخ' : 'Date',
     regName: T ? 'نام' : 'Name',
     regCompany: T ? 'شرکت' : 'Company',
+    regJobTitle: T ? 'سمت' : 'Job title',
     regProduct: T ? 'محصول/خدمت' : 'Product/service',
     regWhatsapp: T ? 'واتساپ' : 'WhatsApp',
     regCity: T ? 'شهر' : 'City',
@@ -186,6 +187,7 @@ export const MetaExpoManager: React.FC<Props> = ({
                   <th className="p-2 text-start border-b">{t.regDate}</th>
                   <th className="p-2 text-start border-b">{t.regName}</th>
                   <th className="p-2 text-start border-b">{t.regCompany}</th>
+                  <th className="p-2 text-start border-b">{t.regJobTitle}</th>
                   <th className="p-2 text-start border-b">{t.regProduct}</th>
                   <th className="p-2 text-start border-b">{t.regWhatsapp}</th>
                   <th className="p-2 text-start border-b">{t.regCity}</th>
@@ -198,6 +200,7 @@ export const MetaExpoManager: React.FC<Props> = ({
                     <td className="p-2 whitespace-nowrap" dir="ltr">{new Date(r.timestamp).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
                     <td className="p-2">{r.firstName} {r.lastName}</td>
                     <td className="p-2">{r.company}</td>
+                    <td className="p-2">{r.jobTitle || '—'}</td>
                     <td className="p-2">{r.productService}</td>
                     <td className="p-2 dir-ltr">{r.whatsapp}</td>
                     <td className="p-2">{r.city}</td>
