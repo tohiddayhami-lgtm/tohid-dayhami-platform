@@ -5,12 +5,13 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, businessCenterFloorY } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
+import { BusinessCenterBuilding } from './BusinessCenterBuilding';
 
 interface Props {
   expo: MetaverseExpo;
@@ -296,6 +297,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const t = 0.2; // wall thickness
   const visualStyle = expo.visualStyle || 'exhibition';
+  const isBusinessCenter = visualStyle === 'business_center';
   const retailCategories = expo.retailCategories || [];
   const categoryById = new Map(retailCategories.map(c => [c.id, c]));
   const categoryIndexById = new Map(retailCategories.map((c, i) => [c.id, i]));
@@ -360,6 +362,12 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
     return { ...b, x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI, scale: b.scale ?? 0.95 };
   };
 
+  const boothWithFloor = (b: MetaverseBooth): MetaverseBooth => {
+    if (!isBusinessCenter) return b;
+    const floor = b.floorId ?? 0;
+    return { ...b, y: businessCenterFloorY(floor), floorId: floor as 0 | 1 | 2 };
+  };
+
   return (
     <>
       {/* Lighting — flat & even (no shadows), so every booth is lit identically. Fully procedural
@@ -382,6 +390,30 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       )}
 
       {/* Floor (also the teleport target for both desktop double-click and WebXR) */}
+      {isBusinessCenter ? (
+        <>
+          <BusinessCenterBuilding
+            width={width}
+            depth={depth}
+            lang={lang}
+            wallColor={wall}
+            accentColor={expo.wallColor || '#0f766e'}
+          />
+          {[0, 1, 2].map(floor => (
+            <TeleportTarget key={`floor-tp-${floor}`} onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
+              <mesh
+                rotation={[-Math.PI / 2, 0, 0]}
+                position={[0, businessCenterFloorY(floor) + 0.02, 0]}
+                receiveShadow
+                onDoubleClick={(e) => { e.stopPropagation(); onFloorTeleport(e.point.x, e.point.z); }}
+              >
+                <planeGeometry args={[width, depth]} />
+                <meshStandardMaterial color={ground} transparent opacity={0} />
+              </mesh>
+            </TeleportTarget>
+          ))}
+        </>
+      ) : (
       <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
@@ -393,11 +425,14 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
           <meshStandardMaterial color={ground} />
         </mesh>
       </TeleportTarget>
-      <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
+      )}
+      {!isBusinessCenter && <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />}
 
-      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
+      {expo.entranceEnabled && !isBusinessCenter && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
 
       {/* Perimeter walls */}
+      {!isBusinessCenter && (
+      <>
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
       {expo.entranceEnabled ? (() => {
         const gap = Math.min(7, width * 0.42);
@@ -438,6 +473,15 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       {/* Soft warm fill from the ceiling lights (no shadows → cheap) */}
       <pointLight position={[width * 0.25, height - 0.4, depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
       <pointLight position={[-width * 0.25, height - 0.4, -depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
+      </>
+      )}
+
+      {isBusinessCenter && (
+        <>
+          <pointLight position={[0, 6, 0]} intensity={0.6} distance={40} color="#fff7ed" />
+          <pointLight position={[0, 10, 0]} intensity={0.45} distance={40} color="#e0f2fe" />
+        </>
+      )}
 
       {/* Optional custom environment / hall GLB */}
       {expo.environmentUrl && (
@@ -529,7 +573,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
 
       {/* Brand shelves / booths */}
       {supermarketShelves.map((b, i) => {
-        const renderBooth = boothForRender(b, i);
+        const renderBooth = boothForRender(boothWithFloor(b), i);
         return (
           <Booth
             key={b.id}

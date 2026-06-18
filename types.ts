@@ -654,7 +654,7 @@ export interface MetaverseHotspot {
 // interior) and an outer face (the aisle side). Each can show an image OR a video link.
 export type BoothFace = 'innerBack' | 'innerLeft' | 'innerRight' | 'outerBack' | 'outerLeft' | 'outerRight';
 export type BoothTier = 'basic' | 'standard' | 'premium';
-export type ExpoVisualStyle = 'exhibition' | 'storefront' | 'supermarket';
+export type ExpoVisualStyle = 'exhibition' | 'storefront' | 'supermarket' | 'business_center';
 
 export interface ExpoRetailCategory {
   id: string;
@@ -680,7 +680,7 @@ export interface MetaverseBooth {
   // visuals
   modelUrl?: string;            // optional custom GLB/GLTF (Storage documents/ URL) — overrides procedural booth
   color?: string;               // accent color for the procedural booth
-  categoryId?: string;          // supermarket/mall department this booth belongs to
+  floorId?: 0 | 1 | 2;          // business_center: ground / 1st / 2nd floor
   storefrontSignText?: MetaShopDirCat;  // optional storefront signboard text
   storefrontGlassText?: MetaShopDirCat; // optional service text printed on the glass facade
   premiumSignText?: MetaShopDirCat; // optional rotating LCD text for premium booths

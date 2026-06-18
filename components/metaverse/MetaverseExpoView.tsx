@@ -5,7 +5,7 @@ import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
-import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
+import { bi, EXPO_DEFAULTS, hallDims, businessCenterEyeY } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
@@ -187,13 +187,19 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   // budget — this is what keeps walking smooth (no judder). The centre of vision stays sharp.
   const store = useMemo(() => createXRStore({ foveation: 1 }), []);
 
-  const spawn: [number, number, number] = [expo.spawn?.x ?? 0, 0, startZ];
+  const spawn: [number, number, number] = [
+    expo.spawn?.x ?? 0,
+    isBusinessCenter ? businessCenterEyeY(0) : EXPO_DEFAULTS.eyeHeight,
+    startZ,
+  ];
   const T = lang === 'fa';
   const roomId = `expo_${bazaar.id}`;
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
   const presenceEnabled = expo.presence?.enabled !== false;
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
+  const [currentFloor, setCurrentFloor] = useState(0);
+  const isBusinessCenter = expo.visualStyle === 'business_center';
   const latestPresenceRef = useRef<MetaExpoPresence | null>(null);
   const trackExpoEvent: ExpoTrackFn = useCallback((type, opts = {}) => {
     logMetaExpoEvent(type, { id: bazaar.id, slug: bazaar.slug, name: bazaar.name }, opts);
@@ -202,6 +208,14 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   useEffect(() => {
     trackExpoEvent('visit', { language: lang, isVr: false });
   }, [trackExpoEvent]);
+
+  useEffect(() => {
+    if (!isBusinessCenter) return;
+    const id = window.setInterval(() => {
+      setCurrentFloor(poseRef.current.floor ?? 0);
+    }, 150);
+    return () => window.clearInterval(id);
+  }, [isBusinessCenter]);
 
   const langDidMount = useRef(false);
   useEffect(() => {
@@ -275,6 +289,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     standing: T ? 'ایستاده' : 'Standing',
     heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
+    helpBusinessCenter: T ? 'با WASD حرکت کنید · از پله‌های مرکزی (سمت چپ) برای رفتن به طبقات بالا استفاده کنید · روی دفاتر شیشه‌ای کلیک کنید' : 'WASD to move · use central stairs (left side) to reach upper floors · click glass offices',
     helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
   };
@@ -315,6 +330,11 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         <div className="flex items-center gap-2 pointer-events-auto">
           <button onClick={onExit} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>← {ui.exit}</button>
           <div className="px-3 py-2 rounded-lg bg-black/40 text-white text-sm font-bold backdrop-blur max-w-[40vw] truncate">{bi(expo.title, lang, bazaar.name)}</div>
+          {isBusinessCenter && (
+            <div className="px-3 py-2 rounded-lg bg-teal-600/90 text-white text-sm font-bold backdrop-blur pointer-events-auto">
+              {T ? ['همکف', 'طبقه اول', 'طبقه دوم'][currentFloor] : ['Ground', '1st Floor', '2nd Floor'][currentFloor]}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
           <button onClick={() => setLang(l => l === 'fa' ? 'en' : 'fa')} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{T ? 'EN' : 'فا'}</button>
@@ -343,7 +363,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       {help && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-[90vw]">
           <div className="bg-black/55 text-white text-xs md:text-sm rounded-xl px-4 py-2.5 backdrop-blur flex items-center gap-3 shadow-lg">
-            <span>{caps.touch ? ui.helpTouch : ui.helpDesktop}</span>
+            <span>{caps.touch ? ui.helpTouch : (isBusinessCenter ? ui.helpBusinessCenter : ui.helpDesktop)}</span>
             <button onClick={() => setHelp(false)} className="shrink-0 px-2.5 py-1 rounded-lg bg-white/90 text-gray-900 font-bold">{ui.gotIt}</button>
           </div>
         </div>

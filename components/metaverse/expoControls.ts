@@ -24,7 +24,7 @@ export const makeControlState = (): ControlState => ({
 export type ControlRef = MutableRefObject<ControlState>;
 
 // Where the player currently is (read by the minimap; written by <Player> each frame).
-export interface PlayerPose { x: number; z: number; heading: number }
+export interface PlayerPose { x: number; z: number; heading: number; y?: number; floor?: number }
 export type PlayerPoseRef = MutableRefObject<PlayerPose>;
 
 // Lets non-Player code (e.g. double-click teleport on the floor) move the player.

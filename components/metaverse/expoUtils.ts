@@ -145,14 +145,77 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket';
+export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket' | 'business_center';
+
+/** Meta Business Center — 3 walkable floors with a central stairwell. */
+export const BUSINESS_CENTER = {
+  floors: 3,
+  floorHeight: 4,
+  /** Eye height above each floor slab (m). */
+  eyeOffset: 1.6,
+  stairX: -8,
+  stairHalfW: 2.4,
+  stairZMin: -8.5,
+  stairZMax: 8.5,
+} as const;
+
+export const businessCenterFloorY = (floor: number) =>
+  Math.max(0, Math.min(BUSINESS_CENTER.floors - 1, floor)) * BUSINESS_CENTER.floorHeight;
+
+export const businessCenterEyeY = (floor: number) =>
+  businessCenterFloorY(floor) + BUSINESS_CENTER.eyeOffset;
+
+export const businessCenterFloorFromEyeY = (eyeY: number) =>
+  Math.max(0, Math.min(BUSINESS_CENTER.floors - 1,
+    Math.round((eyeY - BUSINESS_CENTER.eyeOffset) / BUSINESS_CENTER.floorHeight)));
+
+export const isOnBusinessCenterStairs = (x: number, z: number) =>
+  Math.abs(x - BUSINESS_CENTER.stairX) < BUSINESS_CENTER.stairHalfW
+  && z >= BUSINESS_CENTER.stairZMin && z <= BUSINESS_CENTER.stairZMax;
+
+/** Continuous eye Y while walking the central staircase (ground → 2nd floor). */
+export const businessCenterStairEyeY = (z: number) => {
+  const { stairZMin, stairZMax, eyeOffset, floorHeight, floors } = BUSINESS_CENTER;
+  const t = (stairZMax - z) / (stairZMax - stairZMin);
+  const clamped = Math.max(0, Math.min(1, t));
+  return eyeOffset + clamped * floorHeight * (floors - 1);
+};
+
+/** Resolve player eye height for business_center (floor slabs + stairs). */
+export const resolveBusinessCenterPlayerY = (x: number, z: number, prevEyeY: number): number => {
+  if (isOnBusinessCenterStairs(x, z)) return businessCenterStairEyeY(z);
+  const floor = businessCenterFloorFromEyeY(prevEyeY);
+  return businessCenterEyeY(floor);
+};
 
 // Auto-arrange `count` booths and size the hall to fit. `facing` creates paired booths across
 // walking aisles; `perimeter` uses the outside walls; `grid` keeps the older compact rows.
-export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number }[] } => {
+export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number; floor?: number }[] } => {
   const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
-  const cells: { x: number; z: number; ry: number }[] = [];
+  const cells: { x: number; z: number; ry: number; floor?: number }[] = [];
   const booth = 4;
+
+  if (layout === 'business_center') {
+    const width = 28;
+    const depth = 24;
+    const slotsPerFloor = [
+      { x: 9, z: 7, ry: Math.PI },
+      { x: 9, z: 0, ry: Math.PI },
+      { x: 9, z: -7, ry: Math.PI },
+      { x: -2, z: -9, ry: 0 },
+      { x: 5, z: -9, ry: 0 },
+      { x: 9, z: -9, ry: Math.PI },
+      { x: -2, z: 9, ry: Math.PI },
+      { x: 5, z: 9, ry: Math.PI },
+    ];
+    for (let i = 0; i < n; i++) {
+      const floor = Math.floor(i / slotsPerFloor.length) % BUSINESS_CENTER.floors;
+      const slot = slotsPerFloor[i % slotsPerFloor.length];
+      cells.push({ x: slot.x, z: slot.z, ry: slot.ry, floor });
+    }
+    const spawn = { x: 2, y: 0, z: 6, ry: Math.PI };
+    return { width, depth, spawn, cells };
+  }
 
   if (layout === 'storefront') {
     const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n * 1.4))));

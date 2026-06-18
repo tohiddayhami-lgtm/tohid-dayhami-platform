@@ -68,6 +68,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     styleExhibition: T ? 'نمایشگاهی کلاسیک' : 'Classic exhibition',
     styleStorefront: T ? 'مغازه شیشه‌ای' : 'Glass storefront shops',
     styleSupermarket: T ? 'مرکز خرید / فروشگاه زنجیره‌ای' : 'Mall / supermarket departments',
+    styleBusinessCenter: T ? 'مرکز تجاری متا (۳ طبقه + پله)' : 'Meta Business Center (3 floors + stairs)',
     width: T ? 'عرض سالن (متر)' : 'Width (m)', depth: T ? 'عمق سالن (متر)' : 'Depth (m)', height: T ? 'ارتفاع سقف (متر)' : 'Ceiling height (m)',
     preset: T ? 'محیط/نور' : 'Environment', ground: T ? 'رنگ کف' : 'Ground color', wall: T ? 'رنگ دیوار' : 'Wall color',
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
@@ -122,6 +123,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
     layoutStorefront: T ? 'خیابان مغازه‌ای' : 'Storefront street',
     layoutSupermarket: T ? 'فروشگاه زنجیره‌ای' : 'Supermarket aisles',
+    layoutBusinessCenter: T ? 'مرکز تجاری ۳ طبقه' : '3-floor business center',
+    boothFloor: T ? 'طبقه دفتر' : 'Office floor',
     applyLayout: T ? 'تغییر چیدمان غرفه‌های فعلی' : 'Rearrange current booths',
     applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
     boothTier: T ? 'نوع غرفه' : 'Booth type',
@@ -331,11 +334,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       x: cells[i]?.x ?? b.x,
       z: cells[i]?.z ?? b.z,
       ry: cells[i]?.ry ?? b.ry,
+      floorId: layout === 'business_center' ? ((cells[i]?.floor ?? 0) as 0 | 1 | 2) : b.floorId,
       tier: tier || b.tier || 'basic',
       categoryId: layout === 'supermarket' && cats.length ? (b.categoryId || cats[i % cats.length].id) : b.categoryId,
     }));
-    const visualStyle: ExpoVisualStyle | undefined = layout === 'storefront' ? 'storefront' : layout === 'supermarket' ? 'supermarket' : undefined;
-    patch({ width, depth, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(layout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
+    const visualStyle: ExpoVisualStyle | undefined = layout === 'storefront' ? 'storefront' : layout === 'supermarket' ? 'supermarket' : layout === 'business_center' ? 'business_center' : undefined;
+    const hallPatch = layout === 'business_center' ? { width, depth, height: 12, entranceEnabled: false } : { width, depth };
+    patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(layout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
   };
   const setTierAndApply = (tier: BoothTier) => {
     setQuickTier(tier);
@@ -346,13 +351,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
     const cats = quickLayout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
     const booths: MetaverseBooth[] = cells.map((c, i) => ({
-      id: newId('booth'), name: { fa: `غرفه ${i + 1}`, en: `Booth ${i + 1}` },
-      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#2d4a1a', tier: quickTier,
+      id: newId('booth'), name: { fa: `دفتر ${i + 1}`, en: `Office ${i + 1}` },
+      x: c.x, y: 0, z: c.z, ry: c.ry, color: '#0f766e', tier: quickTier,
+      floorId: quickLayout === 'business_center' ? ((c.floor ?? 0) as 0 | 1 | 2) : undefined,
       categoryId: quickLayout === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
       hotspots: [],
     }));
-    const visualStyle: ExpoVisualStyle | undefined = quickLayout === 'storefront' ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : undefined;
-    patch({ width, depth, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
+    const visualStyle: ExpoVisualStyle | undefined = quickLayout === 'storefront' ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : quickLayout === 'business_center' ? 'business_center' : undefined;
+    const hallPatch = quickLayout === 'business_center' ? { width, depth, height: 12, entranceEnabled: false } : { width, depth };
+    patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
     setOpenBooth(null);
   };
 
@@ -687,11 +694,17 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <div><label className={lbl}>{t.visualStyle}</label>
                 <select className={fld + ' bg-white'} value={e.visualStyle || 'exhibition'} onChange={ev => {
                   const visualStyle = ev.target.value as ExpoVisualStyle;
-                  patch({ visualStyle, ...(visualStyle === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: defaultRetailCategories() } : {}) });
+                  const extra = visualStyle === 'supermarket' && !(e.retailCategories || []).length
+                    ? { retailCategories: defaultRetailCategories() }
+                    : visualStyle === 'business_center'
+                      ? { width: 28, depth: 24, height: 12, entranceEnabled: false }
+                      : {};
+                  patch({ visualStyle, ...extra });
                 }}>
                   <option value="exhibition">{t.styleExhibition}</option>
                   <option value="storefront">{t.styleStorefront}</option>
                   <option value="supermarket">{t.styleSupermarket}</option>
+                  <option value="business_center">{t.styleBusinessCenter}</option>
                 </select>
               </div>
               <div><label className={lbl}>{t.subFa}</label><input className={fld} value={e.subtitle?.fa || ''} onChange={ev => setBi('subtitle', 'fa', ev.target.value)} /></div>
@@ -925,6 +938,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     <option value="perimeter">{t.layoutPerimeter}</option>
                     <option value="storefront">{t.layoutStorefront}</option>
                     <option value="supermarket">{t.layoutSupermarket}</option>
+                    <option value="business_center">{t.layoutBusinessCenter}</option>
                   </select>
                 </div>
                 {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold">{t.applyLayout}</button>}
@@ -960,6 +974,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                         <span className="text-sm font-medium text-gray-700 flex-1 truncate">{(T ? b.name?.fa : b.name?.en) || b.name?.fa || b.name?.en || '—'}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{b.tier === 'premium' ? t.tierPremium : b.tier === 'standard' ? t.tierStandard : t.tierBasic}</span>
                         {b.shopSlug && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{b.shopSlug}</span>}
+                        {e.visualStyle === 'business_center' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">
+                            {T ? ['همکف', '۱', '۲'][b.floorId ?? 0] : ['G', '1', '2'][b.floorId ?? 0]}
+                          </span>
+                        )}
                         <span className="text-[10px] text-gray-400">{(b.hotspots || []).length} ⭐</span>
                         <button onClick={() => setOpenBooth(open ? null : b.id)} className="text-xs px-2 py-1 rounded-lg text-indigo-500 hover:bg-indigo-50 flex items-center gap-1"><IconEdit className="w-3.5 h-3.5" />{t.edit}</button>
                         {!readonly && <button onClick={() => delBooth(b.id)} className="text-xs px-2 py-1 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
@@ -986,6 +1005,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <option value="premium">{t.tierPremium}</option>
                               </select>
                             </div>
+                            {e.visualStyle === 'business_center' && (
+                              <div><label className={lbl}>{t.boothFloor}</label>
+                                <select className={fld + ' bg-white'} value={b.floorId ?? 0} onChange={ev => updBooth(b.id, { floorId: Number(ev.target.value) as 0 | 1 | 2 })}>
+                                  <option value={0}>{T ? 'همکف' : 'Ground'}</option>
+                                  <option value={1}>{T ? 'طبقه اول' : '1st floor'}</option>
+                                  <option value={2}>{T ? 'طبقه دوم' : '2nd floor'}</option>
+                                </select>
+                              </div>
+                            )}
                             {(b.tier || 'basic') === 'premium' && <>
                               <div><label className={lbl}>{t.premiumSignFa}</label><input className={fld} value={b.premiumSignText?.fa || ''} onChange={ev => setBoothPremiumSign(b, 'fa', ev.target.value)} placeholder={b.name?.fa || ''} /></div>
                               <div><label className={lbl}>{t.premiumSignEn}</label><input className={fld + ' dir-ltr'} value={b.premiumSignText?.en || ''} onChange={ev => setBoothPremiumSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>

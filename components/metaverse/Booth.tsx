@@ -900,7 +900,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
-  const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket';
+  const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket' || visualStyle === 'business_center';
   const signText = bi(booth.storefrontSignText, lang, name);
   const glassText = bi(booth.storefrontGlassText, lang, lang === 'fa' ? 'خدمات و محصولات ویژه' : 'Services & special offers');
   const premiumSignText = bi(booth.premiumSignText, lang, name);
