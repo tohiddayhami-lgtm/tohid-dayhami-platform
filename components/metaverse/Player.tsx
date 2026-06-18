@@ -4,7 +4,7 @@ import { PointerLockControls, OrbitControls } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseExpo } from '../../types';
-import { hallDims, EXPO_DEFAULTS, resolveBusinessCenterPlayerY, businessCenterFloorFromEyeY, businessCenterEyeY } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS } from './expoUtils';
 import type { ControlRef, PlayerPoseRef, TeleportRef } from './expoControls';
 
 interface Props {
@@ -26,11 +26,9 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
   const inXR = useXR((s) => !!s.session);
   const { width, depth } = hallDims(expo);
   const eye = EXPO_DEFAULTS.eyeHeight;
-  const isBusinessCenter = expo.visualStyle === 'business_center';
-  const defaultEyeY = isBusinessCenter ? businessCenterEyeY(0) : eye;
   const startZ = expo.entranceEnabled ? depth / 2 + 6.2 : (expo.spawn?.z ?? Math.min(depth / 2 - 2, 8));
   const startRy = expo.entranceEnabled ? 0 : (expo.spawn?.ry ?? Math.PI);
-  const posRef = useRef(new THREE.Vector3(expo.spawn?.x ?? 0, isBusinessCenter ? (expo.spawn?.y != null ? expo.spawn.y + eye : defaultEyeY) : eye, startZ));
+  const posRef = useRef(new THREE.Vector3(expo.spawn?.x ?? 0, eye, startZ));
   const yawRef = useRef(startRy);
   const pitchRef = useRef(0);
 
@@ -44,13 +42,11 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
       const maxZ = depth / 2 - m + (expo.entranceEnabled ? 8 : 0);
       const nx = clamp(x, -width / 2 + m, width / 2 - m);
       const nz = clamp(z, -depth / 2 + m, maxZ);
-      const ny = isBusinessCenter
-        ? resolveBusinessCenterPlayerY(nx, nz, posRef.current.y)
-        : eye;
+      const ny = eye;
       posRef.current.set(nx, ny, nz);
     };
     return () => { teleportRef.current = null; };
-  }, [camera, teleportRef, width, depth, eye, isBusinessCenter]);
+  }, [camera, teleportRef, width, depth, eye, expo.entranceEnabled]);
 
   // Keyboard (desktop)
   useEffect(() => {
@@ -133,19 +129,13 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
       posRef.current.x = clamp(posRef.current.x, -width / 2 + m, width / 2 - m);
       posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m + (expo.entranceEnabled ? 8 : 0));
     }
-    if (isBusinessCenter) {
-      posRef.current.y = resolveBusinessCenterPlayerY(posRef.current.x, posRef.current.z, posRef.current.y);
-    } else {
-      posRef.current.y = eye;
-    }
+    posRef.current.y = eye;
     camera.position.copy(posRef.current);
-    const floor = isBusinessCenter ? businessCenterFloorFromEyeY(posRef.current.y) : undefined;
     poseRef.current = {
       x: posRef.current.x,
       z: posRef.current.z,
       heading: Math.atan2(-dir.x, -dir.z),
       y: posRef.current.y,
-      floor,
     };
   });
 

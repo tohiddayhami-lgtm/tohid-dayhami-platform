@@ -1,5 +1,4 @@
 import type { ExpoVisualStyle, MetaBazaar, MetaverseExpo, EnvPreset } from '../../types';
-import { BUSINESS_CENTER } from './expoUtils';
 
 export type ExpoCatalogFilter = ExpoVisualStyle | 'all';
 
@@ -37,13 +36,13 @@ export const EXPO_STYLE_CATALOG: ExpoStyleCatalogItem[] = [
   },
   {
     id: 'storefront',
-    labelFa: 'مغازه‌های شیشه‌ای',
-    labelEn: 'Glass storefronts',
-    emoji: '🏪',
+    labelFa: 'دفاتر تجاری',
+    labelEn: 'Commercial offices',
+    emoji: '🏢',
     accent: '#0d9488',
     bg: '#f0fdfa',
-    descFa: 'خیابان مغازه با ویترین شیشه‌ای',
-    descEn: 'Shop street with glass storefronts',
+    descFa: 'دفاتر شیشه‌ای دو طرف راهرو — از بغل دیده می‌شوند',
+    descEn: 'Glass offices flanking the walkway — seen from the side',
   },
   {
     id: 'supermarket',
@@ -54,16 +53,6 @@ export const EXPO_STYLE_CATALOG: ExpoStyleCatalogItem[] = [
     bg: '#f0fdf4',
     descFa: 'فروشگاه زنجیره‌ای با دسته‌بندی قفسه‌ها',
     descEn: 'Supermarket aisles and departments',
-  },
-  {
-    id: 'business_center',
-    labelFa: 'دفاتر تجاری',
-    labelEn: 'Business centers',
-    emoji: '🏢',
-    accent: '#c2410c',
-    bg: '#fff7ed',
-    descFa: 'مرکز تجاری ۳ طبقه با پله و دفاتر',
-    descEn: '3-floor business center with stairs',
   },
 ];
 
@@ -81,20 +70,24 @@ export const filterBazaarsByExpoStyle = (
   activeOnly = true,
 ) => {
   let list = activeOnly ? bazaars.filter(bazaarHasActiveExpo) : bazaars;
-  if (filter !== 'all') list = list.filter(b => resolveExpoStyle(b) === filter);
+  if (filter === 'storefront') {
+    list = list.filter(b => resolveExpoStyle(b) === 'storefront' || resolveExpoStyle(b) === 'business_center');
+  } else if (filter !== 'all') {
+    list = list.filter(b => resolveExpoStyle(b) === filter);
+  }
   return list;
 };
 
 export const blankExpoForStyle = (style: ExpoVisualStyle): MetaverseExpo => ({
   enabled: true,
-  visualStyle: style,
-  preset: (style === 'business_center' ? 'lobby' : 'warehouse') as EnvPreset,
-  width: style === 'business_center' ? 28 : 30,
-  depth: style === 'business_center' ? 24 : 30,
-  height: style === 'business_center' ? 12 : 9,
+  visualStyle: style === 'business_center' ? 'storefront' : style,
+  preset: 'warehouse' as EnvPreset,
+  width: style === 'storefront' || style === 'business_center' ? 24 : 30,
+  depth: style === 'storefront' || style === 'business_center' ? 28 : 30,
+  height: 9,
   groundColor: '#cfd4dc',
   wallColor: '#e9edf3',
-  spawn: { x: BUSINESS_CENTER.spawnX, y: 0, z: BUSINESS_CENTER.spawnZ },
+  spawn: { x: 0, y: 0, z: style === 'storefront' || style === 'business_center' ? 11 : 8 },
   booths: [],
   schemaVersion: 1,
   entranceEnabled: true,

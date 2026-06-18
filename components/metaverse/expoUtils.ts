@@ -145,7 +145,59 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket' | 'business_center';
+export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'storefront_flank' | 'supermarket' | 'business_center';
+
+/**
+ * دفاتر تجاری — دو ردیف چپ و راست راهرو؛ ویترین به سمت راهرو (بازدید از بغل).
+ * West (x<0): ry=-π/2 → door faces +X.  East (x>0): ry=π/2 → door faces -X.
+ */
+export const STOREFRONT_FLANK_SLOTS: { x: number; z: number; ry: number }[] = (() => {
+  const rows = [8, 4, 0, -4, -8];
+  const slots: { x: number; z: number; ry: number }[] = [];
+  for (const z of rows) {
+    slots.push({ x: -7, z, ry: -Math.PI / 2 });
+    slots.push({ x: 7, z, ry: Math.PI / 2 });
+  }
+  return slots;
+})();
+
+/** Central corridor carpet (2D plan + optional 3D) for storefront flank layout. */
+export const storefrontFlankCarpetRects = () => [
+  { x: 0, z: 0, w: 2.2, d: 22 },
+  { x: 0, z: 10, w: 2.2, d: 4 },
+];
+
+const slotTakenAt = (booths: { x?: number; z?: number }[], slot: { x: number; z: number }, minDist = 2.2) =>
+  booths.some(b => Math.hypot((b.x ?? 0) - slot.x, (b.z ?? 0) - slot.z) < minDist);
+
+export const findNextStorefrontFlankSlot = (booths: { x?: number; z?: number }[]) => {
+  const free = STOREFRONT_FLANK_SLOTS.find(s => !slotTakenAt(booths, s));
+  if (free) return free;
+  const i = booths.length % STOREFRONT_FLANK_SLOTS.length;
+  return STOREFRONT_FLANK_SLOTS[i];
+};
+
+export const snapStorefrontFlankBooth = (x: number, z: number, fallbackRy = 0) => {
+  let best = { x, z, ry: fallbackRy, d: Infinity };
+  for (const s of STOREFRONT_FLANK_SLOTS) {
+    const d = Math.hypot(x - s.x, z - s.z);
+    if (d < best.d) best = { x: s.x, z: s.z, ry: s.ry, d };
+  }
+  if (best.d < 3.5) return { x: best.x, z: best.z, ry: best.ry };
+  return { x: Math.round(x * 2) / 2, z: Math.round(z * 2) / 2, ry: fallbackRy };
+};
+
+const arrangeStorefrontFlank = (n: number) => {
+  const width = 24;
+  const depth = 28;
+  const cells: { x: number; z: number; ry: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const slot = STOREFRONT_FLANK_SLOTS[i % STOREFRONT_FLANK_SLOTS.length];
+    cells.push({ x: slot.x, z: slot.z, ry: slot.ry });
+  }
+  const spawn = { x: 0, y: 0, z: depth / 2 - 3, ry: Math.PI };
+  return { width, depth, spawn, cells };
+};
 
 /** Meta Business Center — 3 walkable floors with a central stairwell. */
 export const BUSINESS_CENTER = {
@@ -378,33 +430,8 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
   const cells: { x: number; z: number; ry: number; floor?: number }[] = [];
   const booth = 4;
 
-  if (layout === 'business_center') {
-    const width = 28;
-    const depth = 24;
-    const slotsPerFloor = BUSINESS_CENTER_OFFICE_SLOTS;
-    for (let i = 0; i < n; i++) {
-      const floor = Math.floor(i / slotsPerFloor.length) % BUSINESS_CENTER.floors;
-      const slot = slotsPerFloor[i % slotsPerFloor.length];
-      cells.push({ x: slot.x, z: slot.z, ry: slot.ry, floor });
-    }
-    const spawn = { x: BUSINESS_CENTER.spawnX, y: 0, z: BUSINESS_CENTER.spawnZ, ry: Math.PI };
-    return { width, depth, spawn, cells };
-  }
-
-  if (layout === 'storefront') {
-    const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n * 1.4))));
-    const rows = Math.ceil(n / cols);
-    const width = Math.max(24, cols * 5.8 + 8);
-    const depth = Math.max(24, rows * 8.2 + 12);
-    for (let i = 0; i < n; i++) {
-      const r = Math.floor(i / cols), c = i % cols;
-      const colsThisRow = Math.min(cols, n - r * cols);
-      const x = (c - (colsThisRow - 1) / 2) * 5.8;
-      const z = depth / 2 - 7.2 - r * 8.2;
-      cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
-    }
-    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-    return { width, depth, spawn, cells };
+  if (layout === 'business_center' || layout === 'storefront' || layout === 'storefront_flank') {
+    return arrangeStorefrontFlank(n);
   }
 
   if (layout === 'supermarket') {

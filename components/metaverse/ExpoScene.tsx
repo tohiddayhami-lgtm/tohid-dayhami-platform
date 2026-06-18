@@ -5,20 +5,17 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, businessCenterFloorY, BUSINESS_CENTER_FLOOR_THEMES } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, storefrontFlankCarpetRects } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
-import { BusinessCenterBuilding } from './BusinessCenterBuilding';
-import { BusinessCenterEntrance } from './BusinessCenterEntrance';
 
 interface Props {
   expo: MetaverseExpo;
   shops?: MetaShop[];
   lang: Language;
-  playerFloor?: number;
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
   onFloorTeleport: (x: number, z: number) => void;   // desktop double-click teleport
@@ -293,13 +290,13 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor = 0, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const t = 0.2; // wall thickness
   const visualStyle = expo.visualStyle || 'exhibition';
-  const isBusinessCenter = visualStyle === 'business_center';
+  const boothVisualStyle = visualStyle === 'business_center' ? 'storefront' : visualStyle;
   const retailCategories = expo.retailCategories || [];
   const categoryById = new Map(retailCategories.map(c => [c.id, c]));
   const categoryIndexById = new Map(retailCategories.map((c, i) => [c.id, i]));
@@ -364,28 +361,14 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
     return { ...b, x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI, scale: b.scale ?? 0.95 };
   };
 
-  const boothWithFloor = (b: MetaverseBooth): MetaverseBooth => {
-    if (!isBusinessCenter) return b;
-    const floor = b.floorId ?? 0;
-    return { ...b, y: businessCenterFloorY(floor), floorId: floor as 0 | 1 | 2 };
-  };
-
   return (
     <>
-      {/* Lighting — business center uses minimal lights (no shadows) for performance */}
-      <ambientLight intensity={isBusinessCenter ? 1.35 : 1.15} />
-      <hemisphereLight intensity={isBusinessCenter ? 0.55 : 0.9} groundColor="#ffffff" color="#ffffff" />
-      {!isBusinessCenter && (
-        <>
-          <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
-          <directionalLight position={[-width, height * 2, -depth]} intensity={0.45} />
-        </>
-      )}
+      <ambientLight intensity={1.15} />
+      <hemisphereLight intensity={0.9} groundColor="#ffffff" color="#ffffff" />
+      <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
+      <directionalLight position={[-width, height * 2, -depth]} intensity={0.45} />
 
-      {/* Sky / background */}
-      {isBusinessCenter ? (
-        <color attach="background" args={['#dce3ed']} />
-      ) : expo.skyboxUrl ? (
+      {expo.skyboxUrl ? (
         <TexBoundary key={expo.skyboxUrl}>
           <Suspense fallback={null}>
             <Environment files={expo.skyboxUrl} background />
@@ -395,35 +378,6 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
         <Sky distance={450000} sunPosition={[10, 8, 5]} turbidity={6} rayleigh={1.2} />
       )}
 
-      {/* Floor + teleport */}
-      {isBusinessCenter ? (
-        <>
-          <BusinessCenterBuilding
-            width={width}
-            depth={depth}
-            playerFloor={playerFloor}
-          />
-          {expo.entranceEnabled !== false && (
-            <BusinessCenterEntrance
-              width={width}
-              depth={depth}
-              title={bi(expo.title, lang, lang === 'fa' ? 'ورود مرکز تجاری' : 'Business Center Entrance')}
-              subtitle={bi(expo.subtitle, lang, '') || undefined}
-              accent={BUSINESS_CENTER_FLOOR_THEMES[0]?.signBg}
-            />
-          )}
-          <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, businessCenterFloorY(playerFloor) + 0.02, 0]}
-              onDoubleClick={(e) => { e.stopPropagation(); onFloorTeleport(e.point.x, e.point.z); }}
-            >
-              <planeGeometry args={[width, depth]} />
-              <meshBasicMaterial visible={false} />
-            </mesh>
-          </TeleportTarget>
-        </>
-      ) : (
       <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
@@ -435,13 +389,24 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
           <meshStandardMaterial color={ground} />
         </mesh>
       </TeleportTarget>
-      )}
-      {!isBusinessCenter && <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />}
+      <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
 
-      {expo.entranceEnabled && !isBusinessCenter && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
+      {boothVisualStyle === 'storefront' && storefrontFlankCarpetRects().map((c, i) => (
+        <group key={`sf-carpet-${i}`}>
+          <mesh position={[c.x, 0.025, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <planeGeometry args={[c.w, c.d]} />
+            <meshStandardMaterial color="#9f1239" roughness={0.88} metalness={0.04} />
+          </mesh>
+          <mesh position={[c.x, 0.04, c.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[0.14, c.d - 0.3]} />
+            <meshBasicMaterial color="#d4a574" toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+
+      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
 
       {/* Perimeter walls */}
-      {!isBusinessCenter && (
       <>
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
       {expo.entranceEnabled ? (() => {
@@ -484,14 +449,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
       <pointLight position={[width * 0.25, height - 0.4, depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
       <pointLight position={[-width * 0.25, height - 0.4, -depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
       </>
-      )}
 
-      {isBusinessCenter && (
-        <pointLight position={[0, businessCenterFloorY(playerFloor) + 2.8, 0]} intensity={0.4} distance={28} color="#fff7ed" />
-      )}
-
-      {/* Optional custom environment / hall GLB */}
-      {expo.environmentUrl && !isBusinessCenter && (
+      {expo.environmentUrl && (
         <TexBoundary key={expo.environmentUrl}>
           <Suspense fallback={null}>
             <GltfModel url={expo.environmentUrl} />
@@ -579,11 +538,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
       {visualStyle === 'supermarket' && <SupermarketDirectory categories={retailCategories} width={width} depth={depth} lang={lang} />}
 
       {/* Brand shelves / booths — business center: current floor only */}
-      {(isBusinessCenter
-        ? supermarketShelves.filter(b => (b.floorId ?? 0) === playerFloor)
-        : supermarketShelves
-      ).map((b, i) => {
-        const renderBooth = boothForRender(boothWithFloor(b), i);
+      {supermarketShelves.map((b, i) => {
+        const renderBooth = boothForRender(b, i);
         return (
           <Booth
             key={b.id}
@@ -593,7 +549,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
             onSelectHotspot={onSelectHotspot}
             onSelectBooth={onSelectBooth}
             onTrack={onTrack}
-            visualStyle={visualStyle}
+            visualStyle={boothVisualStyle}
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
           />
