@@ -19,6 +19,19 @@ export const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
+// Centralized media bucket lives in calculator-55611 (separate from Firestore project).
+// Storage SDK must use that project's Firebase app — cross-bucket access from company-crm-103aa
+// triggers storage/unauthorized even when rules allow public writes.
+const centralStorageConfig = {
+  apiKey: "AIzaSyBF11zbII9hRPHPaQBpQcnvCvxVdbgJv7c",
+  authDomain: "calculator-55611.firebaseapp.com",
+  projectId: "calculator-55611",
+  storageBucket: "calculator-55611.firebasestorage.app",
+  messagingSenderId: "62112615270",
+  appId: "1:62112615270:web:0ade99d9cdf585eae3d6a7",
+};
+const storageApp = initializeApp(centralStorageConfig, "centralStorage");
+
 // ── Iran Proxy ─────────────────────────────────────────────────────────────
 // Firebase (Google) is blocked in Iran. On first use we test connectivity;
 // if blocked we route public read/write through /api/fb (Vercel serverless).
@@ -139,7 +152,7 @@ export const storageFolders: Record<CentralStorageFolder, string> = {
     documents: `${STORAGE_ROOT}/documents`,
     temp: `${STORAGE_ROOT}/temp`,
 };
-const storage = getStorage(app, `gs://${CENTRAL_STORAGE_BUCKET}`);
+const storage = getStorage(storageApp);
 export let analytics: Analytics | null = null;
 
 isSupported()
@@ -369,9 +382,10 @@ export const uploadFile = (
 ): Promise<{ url: string; path: string }> => {
     const path = buildCentralStoragePath(file.name, folder);
     const storageRef = ref(storage, path);
-    // Force the stored content-type when given (e.g. text/html) so the download URL is served
-    // inline/renderable rather than as an octet-stream the browser would just download.
-    const uploadTask = uploadBytesResumable(storageRef, file, contentType ? { contentType } : undefined);
+    const resolvedType = contentType
+        || (folder === "images" ? (file.type || "image/png") : undefined)
+        || (file.type || undefined);
+    const uploadTask = uploadBytesResumable(storageRef, file, resolvedType ? { contentType: resolvedType } : undefined);
 
     return new Promise((resolve, reject) => {
         uploadTask.on(
