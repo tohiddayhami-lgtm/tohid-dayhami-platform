@@ -157,6 +157,14 @@ export const BUSINESS_CENTER = {
   stairHalfW: 2.4,
   stairZMin: -8.5,
   stairZMax: 8.5,
+  /** South entrance (world metres, hall 28×24). */
+  entranceX: 0,
+  entranceZ: 10.2,
+  spawnX: 0,
+  spawnZ: 8.6,
+  corridorW: 2.2,
+  hubX: 4,
+  hubZ: 0,
 } as const;
 
 export type BusinessCenterFloorId = 0 | 1 | 2;
@@ -298,20 +306,27 @@ export const snapBusinessCenterBooth = (x: number, z: number, fallbackRy = 0) =>
 };
 
 /**
- * Carpet runners — clean + junction (E–W spine × N–S spine) + stair lane + lobby.
+ * Carpet runners — non-overlapping segments forming a clear + lobby path.
+ * Hub at (hubX, hubZ); entrance path on ground floor only (south).
  */
 export const businessCenterCarpetRects = (floor: BusinessCenterFloorId = 0): BusinessCenterCarpetRect[] => {
-  const carpets: BusinessCenterCarpetRect[] = [
-    { x: 3, z: 0, w: 18, d: 2.4 },
-    { x: 4, z: 0, w: 2.2, d: 16 },
-    { x: BUSINESS_CENTER.stairX, z: 0, w: 2.2, d: 14 },
-    { x: -5.5, z: 0, w: 2.4, d: 2.4 },
+  const { corridorW: W, hubX: HX, stairX } = BUSINESS_CENTER;
+  const segments: BusinessCenterCarpetRect[] = [
+    { x: -2.5, z: 0, w: 7, d: W },
+    { x: 8.5, z: 0, w: 7, d: W },
+    { x: HX, z: -5.5, w: W, d: 9 },
+    { x: HX, z: 4.2, w: W, d: 5.6 },
+    { x: stairX, z: 0, w: W, d: 12 },
+    { x: -6.5, z: 0, w: 2.8, d: W },
   ];
   if (floor === 0) {
-    carpets.push({ x: 0, z: 6.5, w: 2.4, d: 5 });
-    carpets.push({ x: 0, z: 3.2, w: 2.4, d: 3.4 });
+    segments.unshift(
+      { x: 0, z: 9.6, w: 4, d: 2.6, entranceOnly: true },
+      { x: 0, z: 5.5, w: W, d: 6.6, entranceOnly: true },
+      { x: 2, z: 1.1, w: 4.4, d: W, entranceOnly: true },
+    );
   }
-  return carpets;
+  return segments;
 };
 
 export const planRectPct = (rect: BusinessCenterCarpetRect, W: number, D: number) => {
@@ -370,7 +385,7 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
       const slot = slotsPerFloor[i % slotsPerFloor.length];
       cells.push({ x: slot.x, z: slot.z, ry: slot.ry, floor });
     }
-    const spawn = { x: 0, y: 0, z: 7, ry: Math.PI };
+    const spawn = { x: BUSINESS_CENTER.spawnX, y: 0, z: BUSINESS_CENTER.spawnZ, ry: Math.PI };
     return { width, depth, spawn, cells };
   }
 

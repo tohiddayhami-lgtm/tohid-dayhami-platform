@@ -355,7 +355,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       categoryId: layout === 'supermarket' && cats.length ? (b.categoryId || cats[i % cats.length].id) : b.categoryId,
     }));
     const visualStyle: ExpoVisualStyle | undefined = layout === 'storefront' ? 'storefront' : layout === 'supermarket' ? 'supermarket' : layout === 'business_center' ? 'business_center' : undefined;
-    const hallPatch = layout === 'business_center' ? { width, depth, height: 12, entranceEnabled: false } : { width, depth };
+    const hallPatch = layout === 'business_center' ? { width, depth, height: 12, entranceEnabled: true } : { width, depth };
     patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(layout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
   };
   const setTierAndApply = (tier: BoothTier) => {
@@ -378,7 +378,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       };
     });
     const visualStyle: ExpoVisualStyle | undefined = quickLayout === 'storefront' ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : quickLayout === 'business_center' ? 'business_center' : undefined;
-    const hallPatch = quickLayout === 'business_center' ? { width, depth, height: 12, entranceEnabled: false } : { width, depth };
+    const hallPatch = quickLayout === 'business_center' ? { width, depth, height: 12, entranceEnabled: true } : { width, depth };
     patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
     setOpenBooth(null);
   };
@@ -649,6 +649,22 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             </g>
           );
         })}
+        {isBC && planFloor === 0 && (
+          <g>
+            <rect
+              x={wx(BUSINESS_CENTER.entranceX) - 4}
+              y={wz(BUSINESS_CENTER.entranceZ) - 2.5}
+              width={8}
+              height={5}
+              rx={1}
+              fill={theme!.accent}
+              opacity={0.2}
+              stroke={theme!.signBg}
+              strokeWidth={0.45}
+            />
+            <text x={wx(BUSINESS_CENTER.entranceX)} y={wz(BUSINESS_CENTER.entranceZ) + 1.2} textAnchor="middle" fontSize={2.8} fill={theme!.signBg} fontWeight="bold">{T ? 'ورودی' : 'entrance'}</text>
+          </g>
+        )}
         {isBC && (
           <g>
             <rect x={wx(BUSINESS_CENTER.stairX) - 2.2} y={wz(0) - 7} width={4.4} height={14} rx={0.8} fill="none" stroke={theme!.accent} strokeWidth={0.5} strokeDasharray="1.2 0.8" opacity={0.7} />
@@ -803,7 +819,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   const extra = visualStyle === 'supermarket' && !(e.retailCategories || []).length
                     ? { retailCategories: defaultRetailCategories() }
                     : visualStyle === 'business_center'
-                      ? { width: 28, depth: 24, height: 12, entranceEnabled: false }
+                      ? { width: 28, depth: 24, height: 12, entranceEnabled: true }
                       : {};
                   patch({ visualStyle, ...extra });
                 }}>

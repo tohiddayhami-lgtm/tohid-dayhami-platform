@@ -5,13 +5,14 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, businessCenterFloorY } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, businessCenterFloorY, BUSINESS_CENTER_FLOOR_THEMES } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
 import { BusinessCenterBuilding } from './BusinessCenterBuilding';
+import { BusinessCenterEntrance } from './BusinessCenterEntrance';
 
 interface Props {
   expo: MetaverseExpo;
@@ -402,6 +403,15 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor
             depth={depth}
             playerFloor={playerFloor}
           />
+          {expo.entranceEnabled !== false && (
+            <BusinessCenterEntrance
+              width={width}
+              depth={depth}
+              title={bi(expo.title, lang, lang === 'fa' ? 'ورود مرکز تجاری' : 'Business Center Entrance')}
+              subtitle={bi(expo.subtitle, lang, '') || undefined}
+              accent={BUSINESS_CENTER_FLOOR_THEMES[0]?.signBg}
+            />
+          )}
           <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}

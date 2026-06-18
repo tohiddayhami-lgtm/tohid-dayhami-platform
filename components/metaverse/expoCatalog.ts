@@ -1,4 +1,5 @@
 import type { ExpoVisualStyle, MetaBazaar, MetaverseExpo, EnvPreset } from '../../types';
+import { BUSINESS_CENTER } from './expoUtils';
 
 export type ExpoCatalogFilter = ExpoVisualStyle | 'all';
 
@@ -93,8 +94,8 @@ export const blankExpoForStyle = (style: ExpoVisualStyle): MetaverseExpo => ({
   height: style === 'business_center' ? 12 : 9,
   groundColor: '#cfd4dc',
   wallColor: '#e9edf3',
-  spawn: { x: 0, y: 0, z: style === 'business_center' ? 7 : 8 },
+  spawn: { x: BUSINESS_CENTER.spawnX, y: 0, z: BUSINESS_CENTER.spawnZ },
   booths: [],
   schemaVersion: 1,
-  entranceEnabled: style !== 'business_center',
+  entranceEnabled: true,
 });

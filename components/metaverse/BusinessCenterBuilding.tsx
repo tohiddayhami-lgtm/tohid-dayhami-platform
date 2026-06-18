@@ -80,6 +80,12 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
   const stairCarpetMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#881337', roughness: 0.8 }), []);
   const stairRailMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#d4a574', roughness: 0.4, metalness: 0.2 }), []);
 
+  const southZ = depth / 2 + 0.12;
+  const doorW = 3.8;
+  const doorH = 2.7;
+  const sideSouthW = Math.max(1.2, (width - doorW) / 2 - 0.2);
+  const lintelH = Math.max(0.5, totalH - doorH);
+
   return (
     <group>
       {/* Exterior shell */}
@@ -92,8 +98,18 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
       <mesh position={[width / 2 + 0.12, totalH / 2, 0]} material={shellMat}>
         <boxGeometry args={[0.24, totalH + 0.5, depth + 0.4]} />
       </mesh>
-      <mesh position={[0, totalH + 0.2, depth / 2 + 0.12]} material={shellMat}>
+      <mesh position={[0, totalH + 0.2, southZ]} material={shellMat}>
         <boxGeometry args={[width + 0.4, 0.28, 0.24]} />
+      </mesh>
+      {/* South facade — door opening at lobby */}
+      <mesh position={[-doorW / 2 - sideSouthW / 2, totalH / 2, southZ]} material={shellMat}>
+        <boxGeometry args={[sideSouthW, totalH + 0.5, 0.24]} />
+      </mesh>
+      <mesh position={[doorW / 2 + sideSouthW / 2, totalH / 2, southZ]} material={shellMat}>
+        <boxGeometry args={[sideSouthW, totalH + 0.5, 0.24]} />
+      </mesh>
+      <mesh position={[0, doorH + lintelH / 2, southZ]} material={shellMat}>
+        <boxGeometry args={[doorW, lintelH + 0.5, 0.24]} />
       </mesh>
       <mesh position={[0, totalH + 0.38, 0]} material={shellMat}>
         <boxGeometry args={[width + 0.6, 0.22, depth + 0.6]} />
@@ -133,8 +149,8 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
               />
             ))}
 
-            {/* Floor accent band at slab edge */}
-            <mesh position={[0, y + 0.04, depth / 2 - 0.35]} rotation={[-Math.PI / 2, 0, 0]}>
+            {/* Floor accent band at north edge */}
+            <mesh position={[0, y + 0.04, -depth / 2 + 0.35]} rotation={[-Math.PI / 2, 0, 0]}>
               <planeGeometry args={[width - 1.2, 0.35]} />
               <meshBasicMaterial color={theme.accent} transparent opacity={isActive ? 0.55 : 0.28} toneMapped={false} />
             </mesh>
