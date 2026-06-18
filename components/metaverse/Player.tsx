@@ -5,12 +5,13 @@ import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaverseExpo } from '../../types';
 import { hallDims, EXPO_DEFAULTS } from './expoUtils';
-import type { ControlRef, PlayerPoseRef, TeleportRef } from './expoControls';
+import { isTypingElement, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 
 interface Props {
   expo: MetaverseExpo;
   mode: 'fp' | 'orbit';
   pointerLock: boolean;
+  controlsPaused?: boolean;
   controlRef: ControlRef;
   poseRef: PlayerPoseRef;
   teleportRef: TeleportRef;
@@ -21,7 +22,7 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 // Owns the non-VR camera: walk (WASD / joystick), look (drag or pointer-lock), orbit overview,
 // and double-click teleport. When a WebXR session is active it yields fully to the headset.
-export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, poseRef, teleportRef }) => {
+export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPaused = false, controlRef, poseRef, teleportRef }) => {
   const { camera, gl } = useThree();
   const inXR = useXR((s) => !!s.session);
   const { width, depth } = hallDims(expo);
@@ -48,9 +49,14 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
     return () => { teleportRef.current = null; };
   }, [camera, teleportRef, width, depth, eye, expo.entranceEnabled]);
 
-  // Keyboard (desktop)
+  useEffect(() => {
+    if (controlsPaused) resetControlState(controlRef.current);
+  }, [controlsPaused, controlRef]);
+
+  // Keyboard (desktop) — ignore while a modal/form field has focus (physical KeyW/A/S/D still fire under Persian IME).
   useEffect(() => {
     const k = controlRef.current.keys;
+    const blocked = (e: KeyboardEvent) => controlsPaused || isTypingElement(e.target as Element) || isTypingElement(document.activeElement);
     const set = (code: string, v: boolean) => {
       switch (code) {
         case 'KeyW': case 'ArrowUp': k.forward = v; break;
@@ -60,16 +66,16 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
         case 'ShiftLeft': case 'ShiftRight': controlRef.current.run = v; break;
       }
     };
-    const down = (e: KeyboardEvent) => set(e.code, true);
+    const down = (e: KeyboardEvent) => { if (blocked(e)) return; set(e.code, true); };
     const up = (e: KeyboardEvent) => set(e.code, false);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [controlRef]);
+  }, [controlRef, controlsPaused]);
 
   // Drag-look (desktop / mobile) — disabled while PointerLockControls owns the mouse.
   useEffect(() => {
-    if (pointerLock || mode === 'orbit') return;
+    if (pointerLock || mode === 'orbit' || controlsPaused) return;
     const el = gl.domElement;
     let dragging = false, lastX = 0, lastY = 0;
     const onDown = (e: PointerEvent) => { dragging = true; lastX = e.clientX; lastY = e.clientY; };
@@ -85,12 +91,16 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     return () => { el.removeEventListener('pointerdown', onDown); window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
-  }, [gl, controlRef, pointerLock, mode]);
+  }, [gl, controlRef, pointerLock, mode, controlsPaused]);
 
   useFrame((_, dtRaw) => {
     if (inXR) return;                       // headset controls the camera in VR
     const dt = Math.min(dtRaw, 0.05);
     const c = controlRef.current;
+    if (controlsPaused) {
+      resetControlState(c);
+      return;
+    }
 
     if (mode === 'orbit') {
       // OrbitControls owns the camera; keep posRef + pose in sync for a smooth return to FP.
@@ -142,6 +152,6 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlRef, p
   if (mode === 'orbit') {
     return <OrbitControls makeDefault enablePan={false} maxPolarAngle={Math.PI / 2.05} minDistance={2} maxDistance={Math.max(width, depth)} target={[0, 1, 0]} />;
   }
-  if (pointerLock) return <PointerLockControls makeDefault />;
+  if (pointerLock && !controlsPaused) return <PointerLockControls makeDefault />;
   return null;
 };

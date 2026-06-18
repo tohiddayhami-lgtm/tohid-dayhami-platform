@@ -21,6 +21,22 @@ export const makeControlState = (): ControlState => ({
   run: false,
 });
 
+export const resetControlState = (c: ControlState): void => {
+  c.keys.forward = c.keys.back = c.keys.left = c.keys.right = c.keys.up = c.keys.down = false;
+  c.joy.x = c.joy.y = 0;
+  c.look.x = c.look.y = 0;
+  c.yawDelta = c.pitchDelta = 0;
+  c.run = false;
+};
+
+/** True when focus is in a text field — movement keys must not steal typing (incl. Persian IME). */
+export const isTypingElement = (el: Element | null | undefined): boolean => {
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  return (el as HTMLElement).isContentEditable;
+};
+
 export type ControlRef = MutableRefObject<ControlState>;
 
 // Where the player currently is (read by the minimap; written by <Player> each frame).

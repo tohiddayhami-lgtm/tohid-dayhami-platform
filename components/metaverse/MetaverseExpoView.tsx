@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
-import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
+import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
 import { Player } from './Player';
@@ -188,6 +188,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
   const [boothReservations, setBoothReservations] = useState<Record<string, MetaExpoBoothReservation>>({});
+  const controlsPaused = registrationOpen || !!reserveBooth || !!active;
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
   const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
@@ -253,6 +254,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     window.open(href, '_blank', 'noopener,noreferrer');
   };
   const onSelectBooth = (b: MetaverseBooth) => { if (b.shopSlug) openShopNewTab(b.shopSlug); };
+
+  useEffect(() => {
+    if (!controlsPaused) return;
+    setPointerLock(false);
+    resetControlState(controlRef.current);
+  }, [controlsPaused]);
 
   useEffect(() => {
     return subscribeMetaExpoBoothReservations(bazaar.id, (list) => {
@@ -354,7 +361,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
-          <Player expo={expo} mode={mode} pointerLock={pointerLock} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
+          <Player expo={expo} mode={mode} pointerLock={pointerLock} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
           <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
@@ -392,8 +399,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       <Minimap expo={expo} poseRef={poseRef} />
 
       {/* Mobile joysticks — left = move, right = look/turn */}
-      {caps.touch && <MobileControls controlRef={controlRef} kind="move" />}
-      {caps.touch && <MobileControls controlRef={controlRef} kind="look" />}
+      {!controlsPaused && caps.touch && <MobileControls controlRef={controlRef} kind="move" />}
+      {!controlsPaused && caps.touch && <MobileControls controlRef={controlRef} kind="look" />}
 
       {/* Help hint */}
       {help && (
