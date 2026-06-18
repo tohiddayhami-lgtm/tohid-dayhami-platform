@@ -32,6 +32,7 @@ import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
+const ExpoReserveMapView = React.lazy(() => import('./components/metaverse/ExpoReserveMapView').then(m => ({ default: m.ExpoReserveMapView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
 import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { GlobalSearch } from './components/GlobalSearch';
@@ -225,6 +226,17 @@ const extractExpoSlug = (): string | null => {
   return null;
 };
 
+// Public booth reservation map — ?expo-map=<bazaar slug>
+const extractExpoMapSlug = (): string | null => {
+  try {
+    const s = new URLSearchParams(window.location.search).get('expo-map');
+    if (s) return s;
+  } catch {}
+  const h = window.location.hash;
+  if (h.startsWith('#/expo-map/')) return h.replace('#/expo-map/', '').split('?')[0] || null;
+  return null;
+};
+
 // Extracts a pre-selected service ID from ?service=... — used by per-service share links (?page=form&service=<id>)
 const extractServiceId = (): string | null => {
   try {
@@ -244,12 +256,14 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
+    if (p.get('expo-map')) return 'expo-map';
     if (p.get('expo')) return 'expo';
     if (p.get('bazaar')) return 'bazaar';
     if (p.has('shops')) return 'shopsdir';
     if (p.get('shop') || p.get('c')) return 'metashop';
   } catch {}
   if (!hash || hash === '#' || hash === '#/') return 'landing';
+  if (hash.startsWith('#/expo-map/'))           return 'expo-map';
   if (hash.startsWith('#/expo/'))             return 'expo';
   if (hash.startsWith('#/bazaar/'))           return 'bazaar';
   if (hash === '#/shops')                     return 'shopsdir';
@@ -301,8 +315,11 @@ const App: React.FC = () => {
   const [bazaarLoading, setBazaarLoading] = useState(false);
   // Metaverse expo (3D exhibition) — resolves the parent bazaar by slug, then reads bazaar.expo
   const [expoSlug, setExpoSlug] = useState<string | null>(extractExpoSlug);
+  const [expoMapSlug, setExpoMapSlug] = useState<string | null>(extractExpoMapSlug);
   const [publicExpoBazaar, setPublicExpoBazaar] = useState<MetaBazaar | null>(null);
+  const [publicExpoMapBazaar, setPublicExpoMapBazaar] = useState<MetaBazaar | null>(null);
   const [expoLoading, setExpoLoading] = useState(false);
+  const [expoMapLoading, setExpoMapLoading] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -320,7 +337,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=',
   };
 
   // Public "ثبت درخواست" entry point. If an external URL is configured (e.g. a Google
@@ -399,7 +416,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -435,6 +452,7 @@ const App: React.FC = () => {
       if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
       if (v === 'expo') setExpoSlug(extractExpoSlug());
+      if (v === 'expo-map') setExpoMapSlug(extractExpoMapSlug());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
@@ -1202,6 +1220,20 @@ const App: React.FC = () => {
     setPublicExpoBazaar(null);
   }, [view, expoSlug, metaBazaars]);
 
+  // ── Public expo reservation map: same bazaar slug, 2D floor plan + booth reserve ──
+  useEffect(() => {
+    if (view !== 'expo-map' || !expoMapSlug) { setPublicExpoMapBazaar(null); return; }
+    const local = metaBazaars.find(b => b.slug === expoMapSlug);
+    if (local) { setPublicExpoMapBazaar(local); return; }
+    if (metaBazaars.length === 0) {
+      let cancelled = false;
+      setExpoMapLoading(true);
+      getMetaBazaarBySlug(expoMapSlug).then(b => { if (!cancelled) { setPublicExpoMapBazaar(b); setExpoMapLoading(false); } });
+      return () => { cancelled = true; };
+    }
+    setPublicExpoMapBazaar(null);
+  }, [view, expoMapSlug, metaBazaars]);
+
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
   const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; discountCode?: string; discountAmount?: number; taxRate?: number; taxAmount?: number; taxInclusive?: boolean; total: number; currency: string; }): Promise<string> => {
     const phoneRaw = data.phone.trim();
@@ -1298,6 +1330,32 @@ const App: React.FC = () => {
     };
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
+
+  // ── Public Metaverse Expo reservation map (2D floor plan, shareable link) ──
+  if (view === 'expo-map') {
+    const expo = publicExpoMapBazaar?.expo;
+    const shopBaseUrl = `${window.location.origin}${window.location.pathname}`;
+    if (publicExpoMapBazaar && publicExpoMapBazaar.isActive !== false && expo && expo.enabled) {
+      const mapTitle = (lang === 'fa' ? expo.title?.fa : expo.title?.en) || publicExpoMapBazaar.name;
+      return (
+        <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={mapTitle} />}>
+          <ExpoReserveMapView
+            bazaar={publicExpoMapBazaar}
+            lang={lang}
+            shopBaseUrl={shopBaseUrl}
+            onExit={() => setView('landing')}
+          />
+        </React.Suspense>
+      );
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+        {expoMapLoading || (metaBazaars.length === 0 && expoMapSlug)
+          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
+          : <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'نقشه رزرو یافت نشد' : 'Reservation map not found'}</p><p className="text-sm">{lang === 'fa' ? 'این نمایشگاه وجود ندارد یا غیرفعال است.' : 'This exhibition does not exist or is inactive.'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>}
+      </div>
+    );
+  }
 
   // ── Public Metaverse Expo (3D / WebXR full-screen takeover) ──
   if (view === 'expo') {

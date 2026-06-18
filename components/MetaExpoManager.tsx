@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MetaBazaar, MetaExpoBoothReservation, MetaExpoEvent, MetaExpoRegistration, MetaShop } from '../types';
-import { IconPlus, IconEdit, IconGlobe, IconCopy, IconTrash } from './Icons';
+import { IconPlus, IconEdit, IconGlobe, IconCopy, IconTrash, IconLayout } from './Icons';
 import { Language } from '../App';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import {
@@ -43,6 +43,7 @@ export const MetaExpoManager: React.FC<Props> = ({
   const [category, setCategory] = useState<ExpoCatalogFilter>('all');
   const [draft, setDraft] = useState<MetaBazaar | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedMapId, setCopiedMapId] = useState<string | null>(null);
   const [expoAnalyticsId, setExpoAnalyticsId] = useState<string | null>(null);
   const [expoAnalyticsEvents, setExpoAnalyticsEvents] = useState<MetaExpoEvent[]>([]);
   const [expoAnalyticsLoading, setExpoAnalyticsLoading] = useState(false);
@@ -62,7 +63,10 @@ export const MetaExpoManager: React.FC<Props> = ({
     empty: T ? 'در این دسته نمایشگاه فعالی نیست.' : 'No active exhibitions in this category.',
     emptyHint: T ? 'از دکمه «نمایشگاه جدید» استفاده کنید یا در تب بازارچه‌ها برای یک بازارچه نمایشگاه را فعال کنید.' : 'Click “New exhibition” or enable an expo on a bazaar in the Bazaars tab.',
     open: T ? 'پیش‌نمایش ۳D' : '3D preview',
+    openMap: T ? 'نقشه رزرو' : 'Reserve map',
     copy: T ? 'کپی لینک' : 'Copy link',
+    copyMap: T ? 'کپی لینک نقشه' : 'Copy map link',
+    mapLink: T ? 'لینک نقشه رزرو' : 'Reservation map link',
     copied: T ? 'کپی شد ✓' : 'Copied ✓',
     edit: T ? 'مدیریت' : 'Manage',
     duplicate: T ? 'کپی نمایشگاه' : 'Duplicate',
@@ -102,6 +106,7 @@ export const MetaExpoManager: React.FC<Props> = ({
   };
 
   const expoUrl = (slug: string) => `${shopBaseUrl}?expo=${encodeURIComponent(slug)}`;
+  const expoMapUrl = (slug: string) => `${shopBaseUrl}?expo-map=${encodeURIComponent(slug)}`;
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 
   const uniqueSlug = (base: string, excludeId?: string) => {
@@ -496,6 +501,9 @@ export const MetaExpoManager: React.FC<Props> = ({
                   <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px] text-gray-500 truncate" dir="ltr">
                     <span className="truncate">?expo={b.slug}</span>
                   </div>
+                  <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-100 rounded-lg px-2 py-1.5 text-[11px] text-amber-800 truncate" dir="ltr">
+                    <span className="truncate">?expo-map={b.slug}</span>
+                  </div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {b.slug && (
                       <a href={expoUrl(b.slug)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">
@@ -509,6 +517,21 @@ export const MetaExpoManager: React.FC<Props> = ({
                         className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"
                       >
                         {copiedId === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}
+                      </button>
+                    )}
+                    {b.slug && (
+                      <a href={expoMapUrl(b.slug)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50 flex items-center gap-1" title={t.mapLink}>
+                        <IconLayout className="w-3.5 h-3.5" />{t.openMap}
+                      </a>
+                    )}
+                    {b.slug && (
+                      <button
+                        type="button"
+                        onClick={() => { navigator.clipboard.writeText(expoMapUrl(b.slug)); setCopiedMapId(b.id); setTimeout(() => setCopiedMapId(null), 1800); }}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50 flex items-center gap-1"
+                        title={t.copyMap}
+                      >
+                        {copiedMapId === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copyMap}</>}
                       </button>
                     )}
                     <button type="button" onClick={() => openExpoAnalytics(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">{t.report}</button>

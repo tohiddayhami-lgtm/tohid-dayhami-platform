@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import type { BoothTier, ExpoDecoration, ExpoRetailCategory, ExpoVisualStyle, MetaverseBooth } from '../types';
+import type { BoothTier, ExpoDecoration, ExpoRetailCategory, ExpoVisualStyle, MetaExpoBoothReservation, MetaverseBooth } from '../types';
 import { layoutCarpetRects, planRectPct } from './metaverse/expoUtils';
 
 type DragKind = 'booth' | 'deco' | 'spawn';
@@ -29,6 +29,11 @@ export interface ExpoFloorPlanProps {
   onSpawnMove: (x: number, z: number) => void;
   onSelectBooth: (id: string) => void;
   onSelectDecoration: (id: string) => void;
+  /** Public reservation map: show booths read-only with status colors; click available booths. */
+  reserveMap?: boolean;
+  boothReservations?: Record<string, MetaExpoBoothReservation>;
+  onBoothClick?: (booth: MetaverseBooth) => void;
+  boothLabel?: (booth: MetaverseBooth, index: number) => string;
 }
 
 /** 2D hall floor plan — drag uses local state; commits position only on pointer-up for smooth moves. */
@@ -50,6 +55,10 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   onSpawnMove,
   onSelectBooth,
   onSelectDecoration,
+  reserveMap = false,
+  boothReservations = {},
+  onBoothClick,
+  boothLabel,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -65,6 +74,20 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   const sfTheme = { accent: '#0d9488', planBg: '#f0fdfa', floorColor: '#ccfbf1', boothColor: '#0f766e', carpetColor: '#9f1239', carpetBorder: '#d4a574' };
   const theme = isSF ? sfTheme : null;
   const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
+  const boothReserveStatus = (id: string): 'available' | 'pending' | 'confirmed' => {
+    const r = boothReservations[id];
+    if (!r || r.status === 'cancelled') return 'available';
+    if (r.status === 'confirmed') return 'confirmed';
+    return 'pending';
+  };
+  const boothFill = (b: MetaverseBooth) => {
+    if (!reserveMap) return b.color || theme?.boothColor || '#2d4a1a';
+    const st = boothReserveStatus(b.id);
+    if (st === 'confirmed') return '#15803d';
+    if (st === 'pending') return '#d97706';
+    return b.color || '#2d4a1a';
+  };
+  const showBooths = !readonly || reserveMap;
 
   const toWorld = useCallback((clientX: number, clientY: number) => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -190,23 +213,33 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
             </g>
           );
         })}
-        {!readonly && booths.map((b, i) => {
+        {showBooths && booths.map((b, i) => {
           const p = displayPos(b.id, b.x || 0, b.z || 0);
           const active = dragging?.target === b.id;
+          const reserved = reserveMap && boothReserveStatus(b.id) !== 'available';
+          const label = boothLabel ? boothLabel(b, i) : (T ? `غ ${i + 1}` : `B${i + 1}`);
+          const sub = reserveMap && reserved ? (boothReservations[b.id]?.company || '').slice(0, 12) : tierMark(b.tier);
           return (
             <g
               key={b.id}
               transform={`translate(${wx(p.x)} ${wz(p.z)})`}
-              style={{ cursor: active ? 'grabbing' : 'grab' }}
-              onPointerDown={ev => beginDrag(ev, b.id, 'booth')}
+              style={{ cursor: reserveMap ? (reserved ? 'not-allowed' : 'pointer') : (active ? 'grabbing' : 'grab') }}
+              onPointerDown={ev => {
+                if (reserveMap) {
+                  ev.stopPropagation();
+                  if (!reserved && onBoothClick) onBoothClick(b);
+                  return;
+                }
+                beginDrag(ev, b.id, 'booth');
+              }}
             >
-              <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || theme?.boothColor || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
-              <text x={0} y={6.5} textAnchor="middle" fontSize={2.9} fill="#475569" pointerEvents="none">{T ? `غ ${i + 1}` : `B${i + 1}`}</text>
-              <text x={0} y={10.2} textAnchor="middle" fontSize={2.1} fill="#64748b" pointerEvents="none">{tierMark(b.tier)}</text>
+              <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={boothFill(b)} stroke="#fff" strokeWidth={0.5} opacity={reserved ? 0.92 : 1} />
+              <text x={0} y={6.5} textAnchor="middle" fontSize={2.6} fill="#475569" pointerEvents="none">{label}</text>
+              <text x={0} y={10.2} textAnchor="middle" fontSize={2} fill="#64748b" pointerEvents="none">{sub}</text>
             </g>
           );
         })}
-        {!readonly && decorations.map((d, i) => {
+        {!readonly && !reserveMap && decorations.map((d, i) => {
           const p = displayPos(d.id, d.x || 0, d.z || 0);
           const selected = openDecorationId === d.id;
           const active = dragging?.target === d.id;
@@ -223,6 +256,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
             </g>
           );
         })}
+        {!readonly && !reserveMap && (
         <g
           transform={`translate(${wx(displayPos('__spawn__', spawn?.x || 0, spawn?.z || 0).x)} ${wz(displayPos('__spawn__', spawn?.x || 0, spawn?.z || 0).z)})`}
           style={{ cursor: dragging?.target === '__spawn__' ? 'grabbing' : 'grab' }}
@@ -231,6 +265,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
           <circle r={2.4} fill="#22d3ee" stroke="#0e7490" strokeWidth={0.6} />
           <text x={0} y={-3.2} textAnchor="middle" fontSize={3} fill="#0e7490" fontWeight="bold" pointerEvents="none">{T ? 'شروع' : 'start'}</text>
         </g>
+        )}
       </svg>
     </div>
   );
