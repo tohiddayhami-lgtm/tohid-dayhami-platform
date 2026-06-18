@@ -3,7 +3,7 @@ import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBoot
 import { Language } from '../../App';
 import { ExpoFloorPlan } from '../ExpoFloorPlan';
 import { BoothReservationModal } from './BoothReservationModal';
-import { bi, hallDims, resolveExpoLanguages, isRtlExpoLang, expoPhrase } from './expoUtils';
+import { bi, hallDims, resolveExpoLanguages, isRtlExpoLang } from './expoUtils';
 import { logMetaExpoEvent, subscribeMetaExpoBoothReservations } from '../../services/firebaseService';
 
 interface Props {
@@ -115,7 +115,10 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
             langFa={T}
             layoutHint=""
             boothReservations={boothReservations}
-            boothLabel={(b, i) => bi(b.name, uiLang, `${expoPhrase(uiLang, 'booth')} ${i + 1}`)}
+            boothLabel={(b, i) => {
+              const name = bi(b.name, uiLang, String(i + 1));
+              return name.length > 9 ? `${name.slice(0, 8)}…` : name;
+            }}
             onBoothClick={(b) => {
               track('booth_reserve_click', { boothId: b.id, boothName: bi(b.name, uiLang), targetType: 'booth_reserve', side: 'map_reserve' });
               setReserveBooth(b);

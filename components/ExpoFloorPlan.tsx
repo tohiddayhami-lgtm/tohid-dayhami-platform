@@ -218,7 +218,17 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
           const active = dragging?.target === b.id;
           const reserved = reserveMap && boothReserveStatus(b.id) !== 'available';
           const label = boothLabel ? boothLabel(b, i) : (T ? `غ ${i + 1}` : `B${i + 1}`);
-          const sub = reserveMap && reserved ? (boothReservations[b.id]?.company || '').slice(0, 12) : tierMark(b.tier);
+          const sub = reserveMap
+            ? (reserved ? (boothReservations[b.id]?.company || '').slice(0, 8) : '')
+            : tierMark(b.tier);
+          const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+          const labelFs = reserveMap ? 1.25 : 2.6;
+          const labelY = reserveMap ? 4.8 : 6.5;
+          const subFs = reserveMap ? 0.95 : 2;
+          const subY = reserveMap ? 6.6 : 10.2;
+          const displayLabel = reserveMap ? trim(label, 9) : label;
+          const displaySub = reserveMap && sub ? trim(String(sub), 8) : sub;
+          const subText = reserveMap ? displaySub : sub;
           return (
             <g
               key={b.id}
@@ -234,8 +244,15 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
               }}
             >
               <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={boothFill(b)} stroke="#fff" strokeWidth={0.5} opacity={reserved ? 0.92 : 1} />
-              <text x={0} y={6.5} textAnchor="middle" fontSize={2.6} fill="#475569" pointerEvents="none">{label}</text>
-              <text x={0} y={10.2} textAnchor="middle" fontSize={2} fill="#64748b" pointerEvents="none">{sub}</text>
+              {reserveMap && (
+                <text x={0} y={0.9} textAnchor="middle" fontSize={1.15} fill="#fff" fontWeight="600" pointerEvents="none" opacity={0.95}>
+                  {i + 1}
+                </text>
+              )}
+              <text x={0} y={labelY} textAnchor="middle" fontSize={labelFs} fill="#475569" pointerEvents="none">{displayLabel}</text>
+              {subText ? (
+                <text x={0} y={subY} textAnchor="middle" fontSize={subFs} fill="#64748b" pointerEvents="none">{subText}</text>
+              ) : null}
             </g>
           );
         })}
