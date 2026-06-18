@@ -162,8 +162,10 @@ export const BUSINESS_CENTER = {
   entranceZ: 10.2,
   spawnX: 0,
   spawnZ: 8.6,
-  corridorW: 2.2,
-  hubX: 4,
+  /** Uniform corridor width (m). */
+  corridorW: 2,
+  /** Center of the + junction. */
+  hubX: 3,
   hubZ: 0,
 } as const;
 
