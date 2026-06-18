@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -111,14 +111,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presT: T ? 'پرزنتیشن دیوار انتهایی (PDF)' : 'End-wall presentation (PDF)',
     presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
-    liveT: T ? 'حضور آنلاین و تماس تصویری' : 'Live presence & video call',
-    liveHint: T ? 'بازدیدکننده‌ها در نمایشگاه با نشانگر دیجیتال مینیمال دیده می‌شوند و برای تماس صوتی/تصویری از نمایشگر Google Meet روی دیوار استفاده می‌کنند.' : 'Visitors appear with minimal digital markers and use the Google Meet wall screen for voice/video calls.',
-    presenceEnable: T ? 'نمایش کاربران آنلاین' : 'Show online visitors',
-    avatarsEnable: T ? 'نمایش نشانگر دیجیتال کاربران' : 'Show visitor markers',
-    meetEnable: T ? 'نمایش تماس Google Meet روی دیوار' : 'Show Google Meet wall screen',
-    meetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
-    meetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
-    meetTitleEn: T ? 'عنوان تماس (انگلیسی)' : 'Call title (EN)',
+    boothMeetEnable: T ? 'تماس Google Meet این غرفه' : 'This booth Google Meet',
+    boothMeetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
+    boothMeetTitleFa: T ? 'عنوان تماس (فارسی)' : 'Call title (FA)',
+    boothMeetTitleEn: T ? 'عنوان تماس (انگلیسی)' : 'Call title (EN)',
+    boothMeetHint: T ? 'نمایشگر تماس روی دیوار داخل غرفه؛ کلیک → باز شدن Meet در تب جدید.' : 'Call screen on the booth wall; click opens Meet in a new tab.',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
@@ -319,9 +316,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
   // ── End-wall PDF presentation ──
   const setPres = (p: Partial<ExpoPresentation>) => patch({ presentation: { ...(e.presentation || {}), ...p } });
-  const setMeet = (p: Partial<ExpoMeetWall>) => patch({ meetWall: { ...(e.meetWall || {}), ...p } });
-  const setMeetTitle = (which: 'fa' | 'en', val: string) => setMeet({ title: { ...(e.meetWall?.title || {}), [which]: val } });
-  const setPresence = (p: Partial<NonNullable<MetaverseExpo['presence']>>) => patch({ presence: { ...(e.presence || {}), ...p } });
+  const setBoothMeetTitle = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
+    updBooth(b.id, { meetTitle: { ...(b.meetTitle || {}), [which]: val } });
   const updRetailCategories = (retailCategories: ExpoRetailCategory[]) => patch({ retailCategories });
   const addRetailCategory = () => {
     const i = (e.retailCategories || []).length + 1;
@@ -980,41 +976,6 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             )}
           </div>
 
-          {/* Live presence / Google Meet wall */}
-          <div className="border border-emerald-100 bg-emerald-50/35 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
-              <h5 className="font-bold text-emerald-800 text-sm">💬 {t.liveT}</h5>
-              <div className="flex items-center gap-3 flex-wrap">
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.enabled !== false} onChange={ev => setPresence({ enabled: ev.target.checked })} />{t.presenceEnable}</label>
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={e.presence?.avatarsEnabled !== false} onChange={ev => setPresence({ avatarsEnabled: ev.target.checked })} />{t.avatarsEnable}</label>
-              </div>
-            </div>
-            <p className="text-[11px] text-emerald-700/75 mb-3">{t.liveHint}</p>
-            <div className="rounded-lg bg-white/75 border border-emerald-100 p-3">
-              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                <label className="flex items-center gap-2 text-xs font-bold text-gray-700"><input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={!!e.meetWall?.enabled} onChange={ev => setMeet({ enabled: ev.target.checked })} />{t.meetEnable}</label>
-              </div>
-              {e.meetWall?.enabled && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
-                  <div className="lg:col-span-2"><label className={lbl}>{t.meetUrl}</label><input className={fld + ' dir-ltr'} value={e.meetWall?.url || ''} onChange={ev => setMeet({ url: ev.target.value || undefined })} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></div>
-                  <div><label className={lbl}>{t.adWall}</label>
-                    <select className={fld + ' bg-white'} value={e.meetWall?.wall || 'front'} onChange={ev => setMeet({ wall: ev.target.value as ExpoWall })}>
-                      <option value="back">{t.wallBack}</option><option value="left">{t.wallLeft}</option><option value="right">{t.wallRight}</option><option value="front">{t.wallFront}</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className={lbl}>{t.adW}</label><input type="number" step="0.25" className={fld} value={e.meetWall?.w ?? 5.5} onChange={ev => setMeet({ w: +ev.target.value || 5.5 })} /></div>
-                    <div><label className={lbl}>{t.adH}</label><input type="number" step="0.25" className={fld} value={e.meetWall?.h ?? 3} onChange={ev => setMeet({ h: +ev.target.value || 3 })} /></div>
-                  </div>
-                  <div><label className={lbl}>{t.adPos}</label><input type="number" min={0.05} max={0.95} step={0.05} className={fld} value={e.meetWall?.u ?? 0.5} onChange={ev => setMeet({ u: +ev.target.value || 0.5 })} /></div>
-                  <div><label className={lbl}>{t.adHeight}</label><input type="number" min={0.1} max={0.9} step={0.05} className={fld} value={e.meetWall?.v ?? 0.55} onChange={ev => setMeet({ v: +ev.target.value || 0.55 })} /></div>
-                  <div><label className={lbl}>{t.meetTitleFa}</label><input className={fld} value={e.meetWall?.title?.fa || ''} onChange={ev => setMeetTitle('fa', ev.target.value)} placeholder="تماس تصویری زنده" /></div>
-                  <div><label className={lbl}>{t.meetTitleEn}</label><input className={fld + ' dir-ltr'} value={e.meetWall?.title?.en || ''} onChange={ev => setMeetTitle('en', ev.target.value)} placeholder="Live video call" /></div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Quick setup — N booths → auto-arrange */}
           {!readonly && (
             <div className="border border-indigo-100 bg-indigo-50/50 rounded-xl p-4">
@@ -1122,6 +1083,22 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <option value="back">{t.entranceFacingBack}</option>
                               </select>
                               <p className="text-[10px] text-gray-500 mt-1">{t.entranceFacingHint}</p>
+                            </div>
+                            <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <div className="md:col-span-2">
+                                <label className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                                  <input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={!!b.meetEnabled} onChange={ev => updBooth(b.id, { meetEnabled: ev.target.checked, ...(ev.target.checked ? {} : { meetUrl: undefined }) })} />
+                                  {t.boothMeetEnable}
+                                </label>
+                                <p className="text-[10px] text-emerald-700/75 mt-1">{t.boothMeetHint}</p>
+                              </div>
+                              {b.meetEnabled && (
+                                <>
+                                  <div className="md:col-span-2"><label className={lbl}>{t.boothMeetUrl}</label><input className={fld + ' dir-ltr'} value={b.meetUrl || ''} onChange={ev => updBooth(b.id, { meetUrl: ev.target.value || undefined })} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></div>
+                                  <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="تماس تصویری زنده" /></div>
+                                  <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="Live video call" /></div>
+                                </>
+                              )}
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.posX}</label><input type="number" step="0.5" className={fld} value={b.x ?? 0} onChange={ev => updBooth(b.id, { x: +ev.target.value })} /></div>

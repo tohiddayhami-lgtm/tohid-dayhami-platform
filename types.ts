@@ -707,6 +707,9 @@ export interface MetaverseBooth {
   // auto-play muted & looping on an in-world screen; images render on the wall panel.
   panels?: Partial<Record<BoothFace, string>>;
   hotspots?: MetaverseHotspot[];
+  meetEnabled?: boolean;        // per-booth Google Meet video call screen
+  meetUrl?: string;             // https://meet.google.com/…
+  meetTitle?: MetaShopDirCat;   // optional label on the in-booth screen
 }
 
 // drei <Environment> presets used for image-based lighting / skybox when no custom HDR is given
@@ -804,7 +807,8 @@ export interface MetaverseExpo {
   wallAdScale?: number;         // global multiplier for all environmental wall ads
   wallAdLift?: number;          // global vertical offset in meters for all environmental wall ads
   presentation?: ExpoPresentation; // big page-turnable PDF presentation on a hall wall
-  meetWall?: ExpoMeetWall;      // Google Meet call screen on a selected wall
+  /** @deprecated use per-booth meetUrl on MetaverseBooth */
+  meetWall?: ExpoMeetWall;
   presence?: ExpoPresenceSettings; // realtime visitors + minimal digital markers
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
 }
