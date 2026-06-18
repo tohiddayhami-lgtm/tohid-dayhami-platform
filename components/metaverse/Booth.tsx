@@ -1347,28 +1347,39 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         </group>
       )}
 
-      {/* Per-booth Google Meet screen — opens Meet in a new tab when clicked. */}
-      {booth.meetEnabled && booth.meetUrl && (
-        <group position={[-W / 2 + 0.11, sideY, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <mesh
-            onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-          >
-            <planeGeometry args={[sideW * 0.92, sideH * 0.92]} />
-            <meshStandardMaterial color="#0f172a" emissive="#22c55e" emissiveIntensity={0.28} roughness={0.45} metalness={0.2} />
-          </mesh>
-          <CanvasLabel
-            text={`📹 ${meetLabel}`}
-            width={sideW * 0.86}
-            height={0.28}
-            position={[0, -sideH * 0.22, 0.02]}
-            bg="rgba(6,78,59,.9)"
-            color="#ffffff"
-            onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
-          />
-        </group>
-      )}
+      {/* Per-booth Google Meet — minimal text button on a chosen wall (no background plate). */}
+      {booth.meetEnabled && booth.meetUrl && (() => {
+        const meetFace: BoothFace = booth.meetWall || 'innerLeft';
+        const wallSpec = PANEL_SPECS.find(s => s.face === meetFace) || PANEL_SPECS.find(s => s.face === 'innerLeft')!;
+        const btnW = Math.min(wallSpec.w * 0.72, 1.05);
+        const btnH = 0.2;
+        const meetPointer = {
+          onPointerOver: () => { document.body.style.cursor = 'pointer'; },
+          onPointerOut: () => { document.body.style.cursor = 'auto'; },
+        };
+        return (
+          <group position={wallSpec.position} rotation={wallSpec.rotation}>
+            <mesh
+              position={[0, 0, 0.015]}
+              onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
+              {...meetPointer}
+            >
+              <planeGeometry args={[btnW, btnH]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
+            <CanvasLabel
+              text={`📹 ${meetLabel}`}
+              width={btnW}
+              height={btnH}
+              position={[0, 0, 0.02]}
+              color={accentColor}
+              bold={false}
+              onClick={(e) => { e.stopPropagation(); openBoothMeet(); }}
+              {...meetPointer}
+            />
+          </group>
+        );
+      })()}
 
       {/* Optional life-size transparent PNG people standing behind the reception counter. */}
       {activeManagers.map(({ slot: i, x }) => (
