@@ -58,12 +58,12 @@ export const EXPO_STYLE_CATALOG: ExpoStyleCatalogItem[] = [
   {
     id: 'business_center',
     labelFa: 'دفاتر تجاری',
-    labelEn: 'Commercial offices',
+    labelEn: 'Business centers',
     emoji: '🏢',
     accent: '#c2410c',
     bg: '#fff7ed',
-    descFa: 'راهروی مرکزی — دفاتر شیشه‌ای دو طرف راهرو رو به بازدیدکننده',
-    descEn: 'Central aisle with glass offices facing each other',
+    descFa: 'مرکز تجاری ۳ طبقه با پله و دفاتر',
+    descEn: '3-floor business center with stairs',
   },
 ];
 

@@ -164,11 +164,9 @@ export const BUSINESS_CENTER = {
   spawnZ: 8.6,
   /** Uniform corridor width (m). */
   corridorW: 2,
-  /** Center of the main aisle. */
-  hubX: 0,
+  /** Center of the + junction. */
+  hubX: 3,
   hubZ: 0,
-  /** Offices sit this far from the central aisle (m). */
-  officeOffsetX: 5.5,
 } as const;
 
 export type BusinessCenterFloorId = 0 | 1 | 2;
@@ -246,47 +244,31 @@ export interface BusinessCenterCarpetRect {
   entranceOnly?: boolean;
 }
 
-/** Aisle rows (z) — paired offices face each other across the central corridor. */
-export const BUSINESS_CENTER_AISLE_ROWS = [-7, -4, -1, 2, 5, 8] as const;
+/** Fixed office slots per floor — aligned to walls, doors face the corridor. */
+export const BUSINESS_CENTER_OFFICE_SLOTS: { x: number; z: number; ry: number }[] = [
+  // East wing — storefront faces west toward main corridor
+  { x: 10.5, z: -6, ry: Math.PI / 2 },
+  { x: 10.5, z: -2, ry: Math.PI / 2 },
+  { x: 10.5, z: 2, ry: Math.PI / 2 },
+  { x: 10.5, z: 6, ry: Math.PI / 2 },
+  // North wing — faces south
+  { x: 2, z: -9.5, ry: 0 },
+  { x: 6.5, z: -9.5, ry: 0 },
+  // South wing — faces north
+  { x: 2, z: 9.5, ry: Math.PI },
+  { x: 6.5, z: 9.5, ry: Math.PI },
+  // West wing (clear of stairwell) — faces east
+  { x: -3.5, z: -4.5, ry: -Math.PI / 2 },
+  { x: -3.5, z: 4.5, ry: -Math.PI / 2 },
+];
 
-const facingAisleSlots = (): { x: number; z: number; ry: number }[] =>
-  BUSINESS_CENTER_AISLE_ROWS.flatMap(z => [
-    { x: -BUSINESS_CENTER.officeOffsetX, z, ry: -Math.PI / 2 },
-    { x: BUSINESS_CENTER.officeOffsetX, z, ry: Math.PI / 2 },
-  ]);
-
-/** Fixed office slots per floor — both sides of central aisle, doors face the walkway. */
-export const BUSINESS_CENTER_OFFICE_SLOTS = facingAisleSlots();
-
-/** Tinted zones behind each office column. */
+/** Tinted zones behind each office row (world metres). */
 export const BUSINESS_CENTER_OFFICE_ZONES = [
-  { x: -BUSINESS_CENTER.officeOffsetX, z: 0, w: 4.2, d: 18 },
-  { x: BUSINESS_CENTER.officeOffsetX, z: 0, w: 4.2, d: 18 },
+  { x: 10.5, z: 0, w: 4.2, d: 16 },
+  { x: 4.25, z: -9.5, w: 11, d: 4.2 },
+  { x: 4.25, z: 9.5, w: 11, d: 4.2 },
+  { x: -3.5, z: 0, w: 4.2, d: 11 },
 ] as const;
-
-const carpetFromBounds = (x0: number, x1: number, z0: number, z1: number, entranceOnly?: boolean): BusinessCenterCarpetRect => ({
-  x: (x0 + x1) / 2,
-  z: (z0 + z1) / 2,
-  w: x1 - x0,
-  d: z1 - z0,
-  entranceOnly,
-});
-
-/**
- * Carpet — one central N–S aisle + stair link. No overlapping pieces.
- */
-export const businessCenterCarpetRects = (floor: BusinessCenterFloorId = 0): BusinessCenterCarpetRect[] => {
-  const W = BUSINESS_CENTER.corridorW;
-  const h = W / 2;
-  const { stairX } = BUSINESS_CENTER;
-  const segments: BusinessCenterCarpetRect[] = [
-    carpetFromBounds(-h, h, -9, 9),
-    carpetFromBounds(stairX - h, stairX + h, -6, 6),
-    carpetFromBounds(stairX + h, -h, -h, h),
-  ];
-  if (floor === 0) segments.unshift(carpetFromBounds(-h, h, 8.5, 11.2, true));
-  return segments;
-};
 
 const slotTaken = (booths: { x?: number; z?: number }[], slot: { x: number; z: number }, minDist = 2.2) =>
   booths.some(b => Math.hypot((b.x ?? 0) - slot.x, (b.z ?? 0) - slot.z) < minDist);
@@ -323,6 +305,30 @@ export const snapBusinessCenterBooth = (x: number, z: number, fallbackRy = 0) =>
   if (best.d < 3.2) return { x: best.x, z: best.z, ry: best.ry };
   const g = snapBusinessCenterPosition(x, z);
   return { x: g.x, z: g.z, ry: fallbackRy };
+};
+
+/**
+ * Carpet runners — non-overlapping segments forming a clear + lobby path.
+ * Hub at (hubX, hubZ); entrance path on ground floor only (south).
+ */
+export const businessCenterCarpetRects = (floor: BusinessCenterFloorId = 0): BusinessCenterCarpetRect[] => {
+  const { corridorW: W, hubX: HX, stairX } = BUSINESS_CENTER;
+  const segments: BusinessCenterCarpetRect[] = [
+    { x: -2.5, z: 0, w: 7, d: W },
+    { x: 8.5, z: 0, w: 7, d: W },
+    { x: HX, z: -5.5, w: W, d: 9 },
+    { x: HX, z: 4.2, w: W, d: 5.6 },
+    { x: stairX, z: 0, w: W, d: 12 },
+    { x: -6.5, z: 0, w: 2.8, d: W },
+  ];
+  if (floor === 0) {
+    segments.unshift(
+      { x: 0, z: 9.6, w: 4, d: 2.6, entranceOnly: true },
+      { x: 0, z: 5.5, w: W, d: 6.6, entranceOnly: true },
+      { x: 2, z: 1.1, w: 4.4, d: W, entranceOnly: true },
+    );
+  }
+  return segments;
 };
 
 export const planRectPct = (rect: BusinessCenterCarpetRect, W: number, D: number) => {

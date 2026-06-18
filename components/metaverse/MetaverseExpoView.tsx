@@ -294,7 +294,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     standing: T ? 'ایستاده' : 'Standing',
     heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
     helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
-    helpBusinessCenter: T ? 'با WASD در راهروی مرکزی قدم بزنید · دفاتر دو طرف مسیر را می‌بینید · پله‌ها سمت چپ برای طبقات بالا' : 'WASD along the central aisle · offices on both sides · stairs on the left for upper floors',
+    helpBusinessCenter: T ? 'با WASD حرکت کنید · از پله‌های مرکزی (سمت چپ) برای رفتن به طبقات بالا استفاده کنید · روی دفاتر شیشه‌ای کلیک کنید' : 'WASD to move · use central stairs (left side) to reach upper floors · click glass offices',
     helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
     gotIt: T ? 'متوجه شدم' : 'Got it',
   };
