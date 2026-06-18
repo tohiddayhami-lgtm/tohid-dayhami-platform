@@ -21,6 +21,7 @@ interface Props {
   onFloorTeleport: (x: number, z: number) => void;   // desktop double-click teleport
   onVrTeleport: (v: THREE.Vector3) => void;           // WebXR controller teleport
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
+  onRegistrationKioskClick?: () => void;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -40,7 +41,14 @@ const DoormanImage: React.FC<{ url: string; position: [number, number, number]; 
   );
 };
 
-const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: number; depth: number; onTrack?: Props['onTrack'] }> = ({ expo, lang, width, depth, onTrack }) => {
+const ExpoEntrance: React.FC<{
+  expo: MetaverseExpo;
+  lang: Language;
+  width: number;
+  depth: number;
+  onTrack?: Props['onTrack'];
+  onRegistrationKioskClick?: () => void;
+}> = ({ expo, lang, width, depth, onTrack, onRegistrationKioskClick }) => {
   const z0 = depth / 2 + 7.2;
   const z1 = depth / 2 + 0.55;
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
@@ -60,6 +68,13 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
     return acc;
   }, {});
   const railSeen: Record<string, number> = {};
+  const showRegKiosk = expo.entranceRegistration?.enabled !== false;
+  const kioskLabel = bi(expo.entranceRegistration?.title, lang, lang === 'fa' ? 'ثبت اطلاعات' : 'Register');
+  const kioskZ = z1 + 1.75;
+  const openKiosk = () => {
+    onTrack?.('entrance_kiosk_click', { targetType: 'registration_kiosk', side: 'entrance_gate' });
+    onRegistrationKioskClick?.();
+  };
   const entranceAdTransform = (ad: ExpoEntranceAd): { position: [number, number, number]; rotation: [number, number, number] } => {
     const w = ad.w || 2;
     const h = ad.h || 3.5;
@@ -150,6 +165,38 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
             <DoormanImage url={expo.entranceDoormanImage} position={[3.35, 1.34, z1 + 0.42]} mirror />
           </Suspense>
         </TexBoundary>
+      )}
+      {showRegKiosk && onRegistrationKioskClick && (
+        <group position={[0, 0, kioskZ]}>
+          {/* Small entrance registration gate */}
+          <RoundedBox args={[0.14, 1.05, 0.14]} radius={0.03} smoothness={3} position={[-0.52, 0.52, 0]} castShadow>
+            <meshStandardMaterial color="#064e3b" metalness={0.22} roughness={0.45} />
+          </RoundedBox>
+          <RoundedBox args={[0.14, 1.05, 0.14]} radius={0.03} smoothness={3} position={[0.52, 0.52, 0]} castShadow>
+            <meshStandardMaterial color="#064e3b" metalness={0.22} roughness={0.45} />
+          </RoundedBox>
+          <RoundedBox args={[1.18, 0.1, 0.12]} radius={0.03} smoothness={3} position={[0, 1.02, 0]} castShadow>
+            <meshStandardMaterial color="#fbbf24" emissive="#f59e0b" emissiveIntensity={0.35} toneMapped={false} metalness={0.15} roughness={0.4} />
+          </RoundedBox>
+          <mesh
+            position={[0, 0.62, 0.12]}
+            onClick={(e) => { e.stopPropagation(); openKiosk(); }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          >
+            <boxGeometry args={[0.92, 0.78, 0.08]} />
+            <meshStandardMaterial color="#ecfdf5" emissive="#10b981" emissiveIntensity={0.18} roughness={0.55} />
+          </mesh>
+          <CanvasLabel
+            text={`📝 ${kioskLabel}`}
+            width={0.88}
+            height={0.24}
+            position={[0, 0.62, 0.18]}
+            bg="rgba(6,78,59,.9)"
+            color="#ffffff"
+            onClick={(e) => { e.stopPropagation(); openKiosk(); }}
+          />
+        </group>
       )}
     </group>
   );
@@ -290,7 +337,7 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack, onRegistrationKioskClick }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -410,7 +457,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
         </group>
       ))}
 
-      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} />}
+      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} onRegistrationKioskClick={onRegistrationKioskClick} />}
 
       {/* Perimeter walls */}
       <>

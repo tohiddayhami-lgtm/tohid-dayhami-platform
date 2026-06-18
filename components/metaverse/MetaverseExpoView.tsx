@@ -13,6 +13,7 @@ import { Player } from './Player';
 import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
+import { EntranceRegistrationModal } from './EntranceRegistrationModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
@@ -159,6 +160,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [mode, setMode] = useState<'fp' | 'orbit'>('fp');
   const [pointerLock, setPointerLock] = useState(false);
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
   const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
@@ -195,6 +197,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const T = lang === 'fa';
   const roomId = `expo_${bazaar.id}`;
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
+  const [visitorName, setVisitorName] = useState(visitor.name);
+  const displayName = visitorName || visitor.name;
   const presenceEnabled = expo.presence?.enabled !== false;
   const avatarsEnabled = presenceEnabled && expo.presence?.avatarsEnabled !== false;
   const [visitors, setVisitors] = useState<MetaExpoPresence[]>([]);
@@ -237,7 +241,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         bazaarId: bazaar.id,
         bazaarSlug: bazaar.slug,
         visitorId: visitor.id,
-        name: visitor.name,
+        name: displayName,
         color: visitor.color,
         x: pose.x,
         z: pose.z,
@@ -261,7 +265,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       document.removeEventListener('visibilitychange', onVisibilityChange);
       markInactive();
     };
-  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, visitor.name]);
+  }, [bazaar.id, bazaar.slug, presenceEnabled, roomId, startZ, visitor.color, visitor.id, displayName]);
 
   const toggleMusic = () => {
     const a = audioRef.current; if (!a) return;
@@ -303,6 +307,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onFloorTeleport={(x, z) => teleportRef.current?.(x, z)}
               onVrTeleport={(v) => { originRef.current?.position.copy(v); }}
               onTrack={trackExpoEvent}
+              onRegistrationKioskClick={() => setRegistrationOpen(true)}
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
@@ -359,6 +364,25 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
       {/* Hotspot modal */}
       <HotspotModal hotspot={active} shops={shops} lang={lang} onClose={() => setActive(null)} onOpenShop={openShopNewTab} />
+      <EntranceRegistrationModal
+        open={registrationOpen && !!expo.entranceEnabled && expo.entranceRegistration?.enabled !== false}
+        bazaar={bazaar}
+        visitorId={visitor.id}
+        lang={lang}
+        title={bi(expo.entranceRegistration?.title, lang, lang === 'fa' ? 'ثبت اطلاعات بازدیدکننده' : 'Visitor registration')}
+        onClose={() => setRegistrationOpen(false)}
+        onSubmitted={(fullName) => {
+          setVisitorName(fullName);
+          try {
+            const key = `_meta_expo_visitor_${bazaar.id}`;
+            const saved = localStorage.getItem(key);
+            const parsed = saved ? JSON.parse(saved) : { ...visitor };
+            parsed.name = fullName;
+            localStorage.setItem(key, JSON.stringify(parsed));
+          } catch {}
+        }}
+        onTrack={trackExpoEvent}
+      />
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
       {expo.music && <audio ref={audioRef} src={expo.music} loop muted />}
 

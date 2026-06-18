@@ -75,6 +75,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     entranceT: T ? 'ورودی حرفه‌ای نمایشگاه' : 'Professional expo entrance',
     entranceHint: T ? 'یک راهروی ورود با سردر قابل تبلیغ، بنرهای کنار مسیر و دربان PNG قبل از ورود به سالن نمایش داده می‌شود.' : 'Shows an entry corridor with media arch signage, side ads and PNG doorman before visitors enter the hall.',
     entranceEnable: T ? 'فعال‌سازی ورودی' : 'Enable entrance',
+    regKioskT: T ? 'گیت ثبت اطلاعات ورودی' : 'Entrance registration gate',
+    regKioskHint: T ? 'یک گیت کوچک قابل کلیک در راهروی ورود؛ بازدیدکننده فرم کوتاه پر می‌کند و در بازارچه ذخیره می‌شود.' : 'A small clickable gate in the entry corridor; visitors fill a short form saved to this bazaar.',
+    regKioskEnable: T ? 'فعال‌سازی گیت ثبت‌نام' : 'Enable registration gate',
+    regTitleFa: T ? 'عنوان فرم (فارسی)' : 'Form title (FA)',
+    regTitleEn: T ? 'عنوان فرم (انگلیسی)' : 'Form title (EN)',
     organizerFa: T ? 'متن سردر / برگزارکننده (فارسی)' : 'Arch / organizer text (FA)',
     organizerEn: T ? 'متن سردر / برگزارکننده (انگلیسی)' : 'Arch / organizer text (EN)',
     doormanPng: T ? 'تصویر PNG دربان' : 'Doorman PNG',
@@ -205,6 +210,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   ];
   const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);
   const setEntranceOrganizer = (which: 'fa' | 'en', val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [which]: val } });
+  const setRegTitle = (which: 'fa' | 'en', val: string) => patch({
+    entranceRegistration: { ...(e.entranceRegistration || { enabled: true }), title: { ...(e.entranceRegistration?.title || {}), [which]: val } },
+  });
   const setSpawn = (k: 'x' | 'z', v: number) => patch({ spawn: { x: e.spawn?.x ?? 0, y: 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), [k]: v } });
 
   // ── Entrance media / ads ──
@@ -786,6 +794,30 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
                   <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
                   <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div>
+                      <h6 className="text-xs font-bold text-teal-800">📝 {t.regKioskT}</h6>
+                      <p className="text-[10px] text-teal-700/75 mt-0.5">{t.regKioskHint}</p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs font-bold text-teal-800 shrink-0">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-teal-600"
+                        disabled={readonly}
+                        checked={e.entranceRegistration?.enabled !== false}
+                        onChange={ev => patch({ entranceRegistration: { ...(e.entranceRegistration || {}), enabled: ev.target.checked } })}
+                      />
+                      {t.regKioskEnable}
+                    </label>
+                  </div>
+                  {e.entranceRegistration?.enabled !== false && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div><label className={lbl}>{t.regTitleFa}</label><input className={fld} value={e.entranceRegistration?.title?.fa || ''} onChange={ev => setRegTitle('fa', ev.target.value)} placeholder="ثبت اطلاعات بازدیدکننده" /></div>
+                      <div><label className={lbl}>{t.regTitleEn}</label><input className={fld + ' dir-ltr'} value={e.entranceRegistration?.title?.en || ''} onChange={ev => setRegTitle('en', ev.target.value)} placeholder="Visitor registration" /></div>
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-xl border border-emerald-100 bg-white/70 p-3">
                   <div className="flex items-center justify-between gap-2 mb-2">

@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 
 export const firebaseConfig = {
@@ -1276,6 +1276,26 @@ export const fetchMetaExpoEvents = async (bazaarId: string): Promise<MetaExpoEve
         const q = query(collection(db, 'metaExpoEvents'), where('bazaarId', '==', bazaarId), limit(20000));
         const snap = await getDocs(q);
         return snap.docs.map(d => d.data() as MetaExpoEvent)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch { return []; }
+};
+
+// ── Metaverse Expo entrance visitor registrations ───────────────────────────
+export const saveMetaExpoRegistration = async (registration: MetaExpoRegistration): Promise<void> => {
+    try {
+        if (!registration?.id || !registration?.bazaarId) return;
+        const data = sanitizeData(registration);
+        const proxy = await checkProxyMode();
+        if (proxy) await proxyWrite('metaExpoRegistrations', registration.id, data);
+        else await setDoc(doc(db, 'metaExpoRegistrations', registration.id), data);
+    } catch {}
+};
+
+export const fetchMetaExpoRegistrations = async (bazaarId: string): Promise<MetaExpoRegistration[]> => {
+    try {
+        const q = query(collection(db, 'metaExpoRegistrations'), where('bazaarId', '==', bazaarId), limit(20000));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaExpoRegistration)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     } catch { return []; }
 };

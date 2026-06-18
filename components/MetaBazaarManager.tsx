@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { MetaBazaar, MetaBazaarNode, MetaExpoEvent, MetaShop } from '../types';
+import { MetaBazaar, MetaBazaarNode, MetaExpoEvent, MetaExpoRegistration, MetaShop } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
 import { downloadSample } from './metaShopSamples';
 import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
-import { fetchMetaExpoEvents } from '../services/firebaseService';
+import { fetchMetaExpoEvents, fetchMetaExpoRegistrations } from '../services/firebaseService';
+import { exportExpoRegistrationsCSV } from './metaverse/EntranceRegistrationModal';
 import { expoStyleMeta, bazaarHasActiveExpo, resolveExpoStyle } from './metaverse/expoCatalog';
 
 interface Props {
@@ -62,6 +63,9 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const [expoAnalyticsEvents, setExpoAnalyticsEvents] = useState<MetaExpoEvent[]>([]);
   const [expoAnalyticsLoading, setExpoAnalyticsLoading] = useState(false);
   const [expoAnalyticsRange, setExpoAnalyticsRange] = useState<'today' | 'week' | 'month' | 'all'>('week');
+  const [expoRegistrationsId, setExpoRegistrationsId] = useState<string | null>(null);
+  const [expoRegistrations, setExpoRegistrations] = useState<MetaExpoRegistration[]>([]);
+  const [expoRegistrationsLoading, setExpoRegistrationsLoading] = useState(false);
   const T = lang === 'fa';
 
   const t = {
@@ -97,6 +101,18 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     anTopBooths: T ? 'غرفه‌های پربازتعامل' : 'Top booth interactions', anSides: T ? 'سمت‌ها و نقاط پرتکرار' : 'Top sides / zones',
     anAds: T ? 'تبلیغات پرتکرار' : 'Top ads', anTrend: T ? 'روند ۱۴ روزه بازدید' : '14-day visit trend',
     anMobile: T ? 'موبایل' : 'Mobile', anDesktop: T ? 'دسکتاپ' : 'Desktop', anTablet: T ? 'تبلت' : 'Tablet',
+    regReport: T ? 'ثبت‌نام‌های ورودی' : 'Entrance registrations',
+    regLoading: T ? 'در حال بارگذاری…' : 'Loading…',
+    regEmpty: T ? 'هنوز ثبت‌نامی از گیت ورودی ثبت نشده.' : 'No entrance registrations yet.',
+    regExport: T ? 'خروجی اکسل' : 'Export Excel',
+    regDate: T ? 'تاریخ' : 'Date',
+    regName: T ? 'نام' : 'Name',
+    regCompany: T ? 'شرکت' : 'Company',
+    regProduct: T ? 'محصول/خدمت' : 'Product/service',
+    regWhatsapp: T ? 'واتساپ' : 'WhatsApp',
+    regCity: T ? 'شهر' : 'City',
+    regCountry: T ? 'کشور' : 'Country',
+    regCount: T ? 'ثبت' : 'entries',
   };
 
   const url = (b: MetaBazaar) => `${shopBaseUrl}?bazaar=${encodeURIComponent(b.slug)}`;
@@ -173,11 +189,23 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
 
   const openExpoAnalytics = async (bazaar: MetaBazaar) => {
     setExpoAnalyticsId(bazaar.id);
+    setExpoRegistrationsId(null);
     setExpoAnalyticsLoading(true);
     try {
       setExpoAnalyticsEvents(await fetchMetaExpoEvents(bazaar.id));
     } finally {
       setExpoAnalyticsLoading(false);
+    }
+  };
+
+  const openExpoRegistrations = async (bazaar: MetaBazaar) => {
+    setExpoRegistrationsId(bazaar.id);
+    setExpoAnalyticsId(null);
+    setExpoRegistrationsLoading(true);
+    try {
+      setExpoRegistrations(await fetchMetaExpoRegistrations(bazaar.id));
+    } finally {
+      setExpoRegistrationsLoading(false);
     }
   };
 
@@ -334,6 +362,64 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           readonly={readonly}
         />
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />
+      </div>
+    );
+  }
+
+  if (expoRegistrationsId) {
+    const bazaar = bazaars.find(b => b.id === expoRegistrationsId);
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button onClick={() => setExpoRegistrationsId(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <button onClick={() => bazaar && openExpoRegistrations(bazaar)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">↻ {t.anRefresh}</button>
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-lg font-bold text-gray-800">{t.regReport} — {bazaar?.name}</h3>
+          <button
+            type="button"
+            onClick={() => exportExpoRegistrationsCSV(expoRegistrations, lang, `expo-registrations-${bazaar?.slug || 'bazaar'}-${Date.now()}.csv`)}
+            disabled={expoRegistrations.length === 0}
+            className="text-xs px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 disabled:opacity-40"
+          >
+            ⬇ {t.regExport}
+          </button>
+        </div>
+        {expoRegistrationsLoading ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.regLoading}</div>
+        ) : expoRegistrations.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.regEmpty}</div>
+        ) : (
+          <div className={card + ' overflow-x-auto'}>
+            <p className="text-xs text-gray-500 mb-3">{expoRegistrations.length.toLocaleString()} {t.regCount}</p>
+            <table className="w-full text-xs border-collapse min-w-[720px]">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600">
+                  <th className="p-2 text-start border-b">{t.regDate}</th>
+                  <th className="p-2 text-start border-b">{t.regName}</th>
+                  <th className="p-2 text-start border-b">{t.regCompany}</th>
+                  <th className="p-2 text-start border-b">{t.regProduct}</th>
+                  <th className="p-2 text-start border-b">{t.regWhatsapp}</th>
+                  <th className="p-2 text-start border-b">{t.regCity}</th>
+                  <th className="p-2 text-start border-b">{t.regCountry}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expoRegistrations.map(r => (
+                  <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/80">
+                    <td className="p-2 whitespace-nowrap" dir="ltr">{new Date(r.timestamp).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
+                    <td className="p-2">{r.firstName} {r.lastName}</td>
+                    <td className="p-2">{r.company}</td>
+                    <td className="p-2">{r.productService}</td>
+                    <td className="p-2 dir-ltr">{r.whatsapp}</td>
+                    <td className="p-2">{r.city}</td>
+                    <td className="p-2">{r.country}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   }
@@ -498,6 +584,9 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                   <button onClick={() => { navigator.clipboard.writeText(url(b)); setCopiedId(b.id); setTimeout(() => setCopiedId(null), 1800); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === b.id ? t.copied : <><IconCopy className="w-3.5 h-3.5" />{t.copy}</>}</button>
                   <button onClick={() => downloadBazaar(b)} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓</button>
                   <button onClick={() => openExpoAnalytics(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">{t.expoReport}</button>
+                  {bazaarHasActiveExpo(b) && (
+                    <button onClick={() => openExpoRegistrations(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50">{t.regReport}</button>
+                  )}
                   {!readonly && <button onClick={() => { setUpdTarget(b); updFileRef.current?.click(); }} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒</button>}
                   {!readonly && <button onClick={() => duplicateBazaar(b)} disabled={saving} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50" title={t.duplicate}><IconCopy className="w-3.5 h-3.5" /></button>}
                   {!readonly && <button onClick={() => setDraft(JSON.parse(JSON.stringify(b)))} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}

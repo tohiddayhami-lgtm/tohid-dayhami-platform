@@ -795,6 +795,7 @@ export interface MetaverseExpo {
   entranceArchMediaW?: number;   // width of the large media billboard above the arch (meters)
   entranceArchMediaH?: number;   // height of the large media billboard above the arch (meters)
   entranceAds?: ExpoEntranceAd[]; // side/standing advertising banners around the entry corridor
+  entranceRegistration?: ExpoEntranceRegistration; // clickable registration kiosk at the entrance gate
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
   boothLayout?: string;           // quick-arrange layout id (see expoUtils EXPO_LAYOUT_OPTIONS)
@@ -806,6 +807,31 @@ export interface MetaverseExpo {
   meetWall?: ExpoMeetWall;      // Google Meet call screen on a selected wall
   presence?: ExpoPresenceSettings; // realtime visitors + minimal digital markers
   schemaVersion?: number;       // for future migrations (e.g. splitting into its own collection)
+}
+
+/** Visitor registration kiosk at the expo entrance corridor. */
+export interface ExpoEntranceRegistration {
+  enabled?: boolean;            // default: shown when entrance is enabled
+  title?: MetaShopDirCat;       // optional modal title override
+}
+
+/** A visitor registration submitted at the expo entrance kiosk. Stored in `metaExpoRegistrations`. */
+export interface MetaExpoRegistration {
+  id: string;
+  timestamp: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  bazaarName?: string;
+  visitorId?: string;
+  firstName: string;
+  lastName: string;
+  company: string;
+  productService: string;
+  whatsapp: string;
+  city: string;
+  country: string;
+  device?: 'mobile' | 'tablet' | 'desktop';
+  sessionId?: string;
 }
 
 export interface MetaExpoPresence {
@@ -1240,7 +1266,9 @@ export type MetaExpoEventType =
   | 'booth_panel_click'
   | 'booth_character_click'
   | 'counter_glb_grab'
-  | 'booth_dwell';
+  | 'booth_dwell'
+  | 'entrance_kiosk_click'
+  | 'registration_complete';
 
 export interface MetaExpoEvent {
   id: string;
