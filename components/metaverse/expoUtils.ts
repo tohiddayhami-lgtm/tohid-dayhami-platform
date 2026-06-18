@@ -181,7 +181,7 @@ const arrangeCrossFacing = (n: number) => {
     } else { units.push('single'); remaining -= 1; }
   }
 
-  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(units.length))));
+  const cols = Math.max(1, Math.ceil(Math.sqrt(units.length)));
   const rows = Math.ceil(units.length / cols);
   const width = Math.max(24, cols * blockPitch + 10);
   const depth = Math.max(26, rows * blockPitch + 10);
@@ -451,7 +451,7 @@ export const resolveBusinessCenterPlayerY = (x: number, z: number, prevEyeY: num
 // `facing` / `grid` / `storefront` → cross-facing rows (horizontal + vertical pairs).
 // `perimeter` uses the outside walls.
 export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number; floor?: number }[] } => {
-  const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
+  const n = Math.max(1, Math.floor(count) || 1);
   const cells: { x: number; z: number; ry: number; floor?: number }[] = [];
   const booth = 4;
 

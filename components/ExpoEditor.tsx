@@ -979,7 +979,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                 </div>
                 {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold">{t.applyLayout}</button>}
                 <div className="w-px h-9 bg-indigo-200 mx-1 hidden sm:block" />
-                <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} max={60} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.min(60, +ev.target.value || 1)))} /></div>
+                <div><label className={lbl}>{t.quickCount}</label><input type="number" min={1} className={fld + ' w-28'} value={quickN} onChange={ev => setQuickN(Math.max(1, Math.floor(+ev.target.value || 1)))} /></div>
                 <div><label className={lbl}>{t.boothTier}</label>
                   <select className={fld + ' bg-white min-w-32'} value={quickTier} onChange={ev => setQuickTier(ev.target.value as BoothTier)}>
                     <option value="basic">{t.tierBasic}</option>
