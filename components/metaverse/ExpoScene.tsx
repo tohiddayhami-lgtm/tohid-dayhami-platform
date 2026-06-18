@@ -5,7 +5,7 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, storefrontFlankCarpetRects } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, crossFacingCarpetRects } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
@@ -391,7 +391,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
 
-      {boothVisualStyle === 'storefront' && storefrontFlankCarpetRects().map((c, i) => (
+      {boothVisualStyle === 'storefront' && crossFacingCarpetRects(width, depth).map((c, i) => (
         <group key={`sf-carpet-${i}`}>
           <mesh position={[c.x, 0.025, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[c.w, c.d]} />

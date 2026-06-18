@@ -41,8 +41,8 @@ export const EXPO_STYLE_CATALOG: ExpoStyleCatalogItem[] = [
     emoji: '🏢',
     accent: '#0d9488',
     bg: '#f0fdfa',
-    descFa: 'دفاتر شیشه‌ای دو طرف راهرو — از بغل دیده می‌شوند',
-    descEn: 'Glass offices flanking the walkway — seen from the side',
+    descFa: 'دفاتر شیشه‌ای در ردیف‌های افقی و عمودی روبه‌رو',
+    descEn: 'Glass offices in horizontal and vertical facing rows',
   },
   {
     id: 'supermarket',

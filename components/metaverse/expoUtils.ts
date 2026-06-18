@@ -145,58 +145,82 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'storefront_flank' | 'supermarket' | 'business_center';
+export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket' | 'business_center';
+
+/** Carpet runners for cross-facing aisle grid (N–S + E–W corridors). */
+export const crossFacingCarpetRects = (width: number, depth: number) => {
+  const cw = Math.min(2.4, width * 0.12);
+  const cd = Math.min(2.4, depth * 0.12);
+  return [
+    { x: 0, z: 0, w: cw, d: depth * 0.78 },
+    { x: 0, z: depth / 2 - 5, w: width * 0.72, d: cd },
+  ];
+};
 
 /**
- * دفاتر تجاری — دو ردیف چپ و راست راهرو؛ ویترین به سمت راهرو (بازدید از بغل).
- * West (x<0): ry=-π/2 → door faces +X.  East (x>0): ry=π/2 → door faces -X.
+ * Cross-facing grid — booths face each other across horizontal AND vertical aisles.
+ * Each 4-booth block surrounds a corridor junction; remainder fills with H/V pairs or singles.
  */
-export const STOREFRONT_FLANK_SLOTS: { x: number; z: number; ry: number }[] = (() => {
-  const rows = [8, 4, 0, -4, -8];
-  const slots: { x: number; z: number; ry: number }[] = [];
-  for (const z of rows) {
-    slots.push({ x: -7, z, ry: -Math.PI / 2 });
-    slots.push({ x: 7, z, ry: Math.PI / 2 });
-  }
-  return slots;
-})();
-
-/** Central corridor carpet (2D plan + optional 3D) for storefront flank layout. */
-export const storefrontFlankCarpetRects = () => [
-  { x: 0, z: 0, w: 2.2, d: 22 },
-  { x: 0, z: 10, w: 2.2, d: 4 },
-];
-
-const slotTakenAt = (booths: { x?: number; z?: number }[], slot: { x: number; z: number }, minDist = 2.2) =>
-  booths.some(b => Math.hypot((b.x ?? 0) - slot.x, (b.z ?? 0) - slot.z) < minDist);
-
-export const findNextStorefrontFlankSlot = (booths: { x?: number; z?: number }[]) => {
-  const free = STOREFRONT_FLANK_SLOTS.find(s => !slotTakenAt(booths, s));
-  if (free) return free;
-  const i = booths.length % STOREFRONT_FLANK_SLOTS.length;
-  return STOREFRONT_FLANK_SLOTS[i];
-};
-
-export const snapStorefrontFlankBooth = (x: number, z: number, fallbackRy = 0) => {
-  let best = { x, z, ry: fallbackRy, d: Infinity };
-  for (const s of STOREFRONT_FLANK_SLOTS) {
-    const d = Math.hypot(x - s.x, z - s.z);
-    if (d < best.d) best = { x: s.x, z: s.z, ry: s.ry, d };
-  }
-  if (best.d < 3.5) return { x: best.x, z: best.z, ry: best.ry };
-  return { x: Math.round(x * 2) / 2, z: Math.round(z * 2) / 2, ry: fallbackRy };
-};
-
-const arrangeStorefrontFlank = (n: number) => {
-  const width = 24;
-  const depth = 28;
+const arrangeCrossFacing = (n: number) => {
+  const booth = 4;
+  const aisle = 4.8;
+  const cross = 5;
+  const halfGap = booth / 2 + aisle / 2;
+  const blockPitch = booth * 2 + aisle + cross;
   const cells: { x: number; z: number; ry: number }[] = [];
-  for (let i = 0; i < n; i++) {
-    const slot = STOREFRONT_FLANK_SLOTS[i % STOREFRONT_FLANK_SLOTS.length];
-    cells.push({ x: slot.x, z: slot.z, ry: slot.ry });
+
+  const units: ('cross' | 'h' | 'v' | 'single')[] = [];
+  let remaining = n;
+  while (remaining > 0) {
+    if (remaining >= 4) { units.push('cross'); remaining -= 4; }
+    else if (remaining >= 2) {
+      const hCount = units.filter(u => u === 'h').length;
+      const vCount = units.filter(u => u === 'v').length;
+      units.push(hCount <= vCount ? 'h' : 'v');
+      remaining -= 2;
+    } else { units.push('single'); remaining -= 1; }
   }
-  const spawn = { x: 0, y: 0, z: depth / 2 - 3, ry: Math.PI };
-  return { width, depth, spawn, cells };
+
+  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(units.length))));
+  const rows = Math.ceil(units.length / cols);
+  const width = Math.max(24, cols * blockPitch + 10);
+  const depth = Math.max(26, rows * blockPitch + 10);
+
+  units.forEach((unit, idx) => {
+    const r = Math.floor(idx / cols), c = idx % cols;
+    const colsThisRow = Math.min(cols, units.length - r * cols);
+    const xCenter = (c - (colsThisRow - 1) / 2) * blockPitch;
+    const zCenter = ((rows - 1) / 2 - r) * blockPitch;
+    if (unit === 'cross') {
+      cells.push(
+        { x: +xCenter.toFixed(2), z: +(zCenter - halfGap).toFixed(2), ry: 0 },
+        { x: +xCenter.toFixed(2), z: +(zCenter + halfGap).toFixed(2), ry: Math.PI },
+        { x: +(xCenter - halfGap).toFixed(2), z: +zCenter.toFixed(2), ry: Math.PI / 2 },
+        { x: +(xCenter + halfGap).toFixed(2), z: +zCenter.toFixed(2), ry: -Math.PI / 2 },
+      );
+    } else if (unit === 'h') {
+      cells.push(
+        { x: +xCenter.toFixed(2), z: +(zCenter - halfGap).toFixed(2), ry: 0 },
+        { x: +xCenter.toFixed(2), z: +(zCenter + halfGap).toFixed(2), ry: Math.PI },
+      );
+    } else if (unit === 'v') {
+      cells.push(
+        { x: +(xCenter - halfGap).toFixed(2), z: +zCenter.toFixed(2), ry: Math.PI / 2 },
+        { x: +(xCenter + halfGap).toFixed(2), z: +zCenter.toFixed(2), ry: -Math.PI / 2 },
+      );
+    } else {
+      cells.push({ x: +xCenter.toFixed(2), z: +(zCenter - halfGap).toFixed(2), ry: 0 });
+    }
+  });
+
+  const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
+  return { width, depth, spawn, cells: cells.slice(0, n) };
+};
+
+/** Next free slot when adding a booth to a cross-facing hall. */
+export const findNextCrossFacingSlot = (boothCount: number) => {
+  const { cells } = arrangeCrossFacing(boothCount + 1);
+  return cells[boothCount] ?? cells[cells.length - 1];
 };
 
 /** Meta Business Center — 3 walkable floors with a central stairwell. */
@@ -423,15 +447,16 @@ export const resolveBusinessCenterPlayerY = (x: number, z: number, prevEyeY: num
   return businessCenterEyeY(floor);
 };
 
-// Auto-arrange `count` booths and size the hall to fit. `facing` creates paired booths across
-// walking aisles; `perimeter` uses the outside walls; `grid` keeps the older compact rows.
+// Auto-arrange `count` booths and size the hall to fit.
+// `facing` / `grid` / `storefront` → cross-facing rows (horizontal + vertical pairs).
+// `perimeter` uses the outside walls.
 export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number; floor?: number }[] } => {
   const n = Math.max(1, Math.min(60, Math.floor(count) || 1));
   const cells: { x: number; z: number; ry: number; floor?: number }[] = [];
   const booth = 4;
 
-  if (layout === 'business_center' || layout === 'storefront' || layout === 'storefront_flank') {
-    return arrangeStorefrontFlank(n);
+  if (layout === 'business_center' || layout === 'storefront' || layout === 'facing' || layout === 'grid') {
+    return arrangeCrossFacing(n);
   }
 
   if (layout === 'supermarket') {
@@ -445,31 +470,6 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
       const x = (c - (colsThisRow - 1) / 2) * 7;
       const z = depth / 2 - 8.5 - r * 9;
       cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
-    }
-    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-    return { width, depth, spawn, cells };
-  }
-
-  if (layout === 'facing') {
-    const pairCount = Math.ceil(n / 2);
-    const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(pairCount))));
-    const rows = Math.ceil(pairCount / cols);
-    const sideAisle = 4;
-    const frontAisle = 4.8;
-    const crossAisle = 5;
-    const cellW = booth + sideAisle;
-    const rowPitch = booth * 2 + frontAisle + crossAisle;
-    const halfPairGap = booth / 2 + frontAisle / 2;
-    const width = Math.max(20, cols * cellW + 10);
-    const depth = Math.max(22, rows * rowPitch + 10);
-    for (let i = 0; i < n; i++) {
-      const pair = Math.floor(i / 2);
-      const r = Math.floor(pair / cols), c = pair % cols;
-      const colsThisRow = Math.min(cols, pairCount - r * cols);
-      const x = (c - (colsThisRow - 1) / 2) * cellW;
-      const zCenter = ((rows - 1) / 2 - r) * rowPitch;
-      const side = i % 2;
-      cells.push({ x: +x.toFixed(2), z: +(zCenter + (side === 0 ? -halfPairGap : halfPairGap)).toFixed(2), ry: side === 0 ? 0 : Math.PI });
     }
     const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
     return { width, depth, spawn, cells };
@@ -498,21 +498,7 @@ export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'faci
     return { width, depth, spawn, cells };
   }
 
-  const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(n))));
-  const rows = Math.ceil(n / cols);
-  const cellW = 8; // booth (4m) + generous side aisle
-  const cellD = 9; // booth (4m) + walking aisle in front
-  const width = Math.max(18, cols * cellW + 8);
-  const depth = Math.max(20, rows * cellD + 10);
-  for (let i = 0; i < n; i++) {
-    const r = Math.floor(i / cols), c = i % cols;
-    const colsThisRow = Math.min(cols, n - r * cols);
-    const x = (c - (colsThisRow - 1) / 2) * cellW;
-    const z = ((rows - 1) / 2 - r) * cellD; // row 0 nearest the entrance (+Z), facing the visitor
-    cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: 0 });
-  }
-  const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-  return { width, depth, spawn, cells };
+  return arrangeCrossFacing(n);
 };
 
 // Normalize a phone number for a wa.me link (digits only, drop leading +/00).
