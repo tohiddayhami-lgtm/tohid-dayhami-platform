@@ -789,6 +789,7 @@ export interface MetaverseExpo {
   entranceAds?: ExpoEntranceAd[]; // side/standing advertising banners around the entry corridor
   music?: string;               // optional ambient audio URL
   booths: MetaverseBooth[];
+  boothLayout?: string;           // quick-arrange layout id (see expoUtils EXPO_LAYOUT_OPTIONS)
   retailCategories?: ExpoRetailCategory[]; // supermarket/mall department zones linked to MetaShops
   wallAds?: ExpoWallAd[];       // environmental advertising banners on the perimeter walls
   wallAdScale?: number;         // global multiplier for all environmental wall ads

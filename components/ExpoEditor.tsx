@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextCrossFacingSlot, crossFacingCarpetRects } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 
@@ -51,7 +51,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [quickN, setQuickN] = useState(6);
-  const [quickLayout, setQuickLayout] = useState<ExpoBoothLayout>('facing');
+  const [quickLayout, setQuickLayout] = useState<ExpoBoothLayout>(() => normalizeBoothLayout(expo?.boothLayout || 'cross'));
   const [quickTier, setQuickTier] = useState<BoothTier>('basic');
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,11 +117,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
     quickLayout: T ? 'سبک چیدمان' : 'Layout style',
-    layoutFacing: T ? 'راهرویی روبه‌رو (افقی + عمودی)' : 'Facing aisles (H + V)',
-    layoutGrid: T ? 'شبکه‌ای روبه‌رو' : 'Cross-facing grid',
-    layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
-    layoutStorefront: T ? 'دفاتر تجاری' : 'Commercial offices',
-    layoutSupermarket: T ? 'فروشگاه زنجیره‌ای' : 'Supermarket aisles',
+    layoutHint: T ? 'هر سبک راهروهای منظم با فرش دارد؛ فرش قرمز در ورودی درب نمایشگاه.' : 'Each style has organized aisle carpets; red carpet at the entrance door.',
     applyLayout: T ? 'تغییر چیدمان غرفه‌های فعلی' : 'Rearrange current booths',
     applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
     boothTier: T ? 'نوع غرفه' : 'Booth type',
@@ -222,7 +218,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const isSF = e.visualStyle === 'storefront' || e.visualStyle === 'business_center';
     const onFloor = e.booths || [];
     const idx = onFloor.length;
-    const slot = isSF ? findNextCrossFacingSlot((e.booths || []).length) : null;
+    const slot = findNextLayoutSlot((e.booths || []).length, e.boothLayout || (isSF ? 'storefront' : 'cross'));
     const b: MetaverseBooth = {
       id: newId('booth'),
       name: { fa: T ? (isSF ? `دفتر ${idx + 1}` : `غرفه ${idx + 1}`) : (isSF ? `Office ${idx + 1}` : `Booth ${idx + 1}`), en: isSF ? `Office ${idx + 1}` : `Booth ${idx + 1}` },
@@ -337,8 +333,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   const applyLayoutToBooths = (layout = quickLayout, tier?: BoothTier) => {
     const current = e.booths || [];
     if (current.length === 0) return;
-    const { width, depth, spawn, cells } = autoArrangeBooths(current.length, layout);
-    const cats = layout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
+    const L = normalizeBoothLayout(layout);
+    const { width, depth, spawn, cells } = autoArrangeBooths(current.length, L);
+    const cats = L === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
     const booths = current.map((b, i) => ({
       ...b,
       x: cells[i]?.x ?? b.x,
@@ -346,11 +343,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       ry: cells[i]?.ry ?? b.ry,
       floorId: undefined,
       tier: tier || b.tier || 'basic',
-      categoryId: layout === 'supermarket' && cats.length ? (b.categoryId || cats[i % cats.length].id) : b.categoryId,
+      categoryId: L === 'supermarket' && cats.length ? (b.categoryId || cats[i % cats.length].id) : b.categoryId,
     }));
-    const visualStyle: ExpoVisualStyle | undefined = layout === 'storefront' || layout === 'business_center' ? 'storefront' : layout === 'supermarket' ? 'supermarket' : undefined;
-    const hallPatch = layout === 'storefront' || layout === 'business_center' ? { width, depth, entranceEnabled: true } : { width, depth };
-    patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(layout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
+    const visualStyle: ExpoVisualStyle | undefined = L === 'storefront' ? 'storefront' : L === 'supermarket' ? 'supermarket' : undefined;
+    const hallPatch = { width, depth, entranceEnabled: true };
+    patch({ boothLayout: L, ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(L === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
   };
   const setTierAndApply = (tier: BoothTier) => {
     setQuickTier(tier);
@@ -358,18 +355,19 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const quickBuild = () => {
     if ((e.booths || []).length > 0 && !confirm(t.quickConfirm)) return;
-    const { width, depth, spawn, cells } = autoArrangeBooths(quickN, quickLayout);
-    const cats = quickLayout === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
-    const isSF = quickLayout === 'storefront' || quickLayout === 'business_center';
+    const L = normalizeBoothLayout(quickLayout);
+    const { width, depth, spawn, cells } = autoArrangeBooths(quickN, L);
+    const cats = L === 'supermarket' && !(e.retailCategories || []).length ? defaultRetailCategories() : (e.retailCategories || []);
+    const isSF = L === 'storefront';
     const booths: MetaverseBooth[] = cells.map((c, i) => ({
       id: newId('booth'), name: { fa: isSF ? `دفتر ${i + 1}` : `غرفه ${i + 1}`, en: isSF ? `Office ${i + 1}` : `Booth ${i + 1}` },
       x: c.x, y: 0, z: c.z, ry: c.ry, color: isSF ? '#0f766e' : '#2d4a1a', tier: quickTier,
-      categoryId: quickLayout === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
+      categoryId: L === 'supermarket' && cats.length ? cats[i % cats.length].id : undefined,
       hotspots: [],
     }));
-    const visualStyle: ExpoVisualStyle | undefined = isSF ? 'storefront' : quickLayout === 'supermarket' ? 'supermarket' : undefined;
-    const hallPatch = isSF ? { width, depth, entranceEnabled: true } : { width, depth };
-    patch({ ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(quickLayout === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
+    const visualStyle: ExpoVisualStyle | undefined = isSF ? 'storefront' : L === 'supermarket' ? 'supermarket' : undefined;
+    const hallPatch = { width, depth, entranceEnabled: true };
+    patch({ boothLayout: L, ...hallPatch, spawn, booths, ...(visualStyle ? { visualStyle } : {}), ...(L === 'supermarket' && !(e.retailCategories || []).length ? { retailCategories: cats } : {}) });
     setOpenBooth(null);
   };
 
@@ -577,14 +575,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const boothPw = (4 / W) * 100;
     const boothPh = (4 / D) * 100;
     const cats = e.retailCategories || [];
-    const carpets = crossFacingCarpetRects(W, D);
+    const carpets = layoutCarpetRects(e.boothLayout || 'cross', W, D);
     return (
       <div>
-        <p className="text-[11px] text-slate-600 mb-2">
-          {T
-            ? 'چیدمان روبه‌رو: غرفه‌ها در ردیف‌های افقی و عمودی، دو به دو روبه‌روی هم قرار می‌گیرند. فرش‌ها راهروهای اصلی را نشان می‌دهند.'
-            : 'Facing layout: booths in horizontal and vertical rows, paired across aisles. Carpets mark main walkways.'}
-        </p>
+        <p className="text-[11px] text-slate-600 mb-2">{t.layoutHint}</p>
       <svg
         ref={svgRef} viewBox="0 0 100 100" preserveAspectRatio="none"
         className="w-full rounded-xl border-2 touch-none select-none"
@@ -601,10 +595,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke={theme?.accent || '#cbd5e1'} strokeWidth={0.8} />
         {carpets.map((c, ci) => {
           const r = planRectPct(c, W, D);
+          const fill = c.entrance ? (c.color || '#b91c1c') : (theme?.carpetColor || c.color || '#9f1239');
+          const stroke = c.entrance ? (c.border || '#fca5a5') : (theme?.carpetBorder || c.border || '#d4a574');
           return (
             <g key={`carpet-${ci}`}>
-              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill={theme?.carpetColor || '#9f1239'} opacity={0.35} />
-              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill="none" stroke={theme?.carpetBorder || '#d4a574'} strokeWidth={0.35} opacity={0.65} />
+              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill={fill} opacity={c.entrance ? 0.55 : 0.35} />
+              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill="none" stroke={stroke} strokeWidth={0.35} opacity={0.7} />
             </g>
           );
         })}
@@ -969,12 +965,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               <p className="text-[12px] text-indigo-600/80 mb-3 max-w-2xl">{t.quickHint}</p>
               <div className="flex items-end gap-2 flex-wrap">
                 <div><label className={lbl}>{t.quickLayout}</label>
-                  <select className={fld + ' bg-white min-w-40'} value={quickLayout} onChange={ev => setQuickLayout(ev.target.value as ExpoBoothLayout)}>
-                    <option value="facing">{t.layoutFacing}</option>
-                    <option value="grid">{t.layoutGrid}</option>
-                    <option value="perimeter">{t.layoutPerimeter}</option>
-                    <option value="storefront">{t.layoutStorefront}</option>
-                    <option value="supermarket">{t.layoutSupermarket}</option>
+                  <select className={fld + ' bg-white min-w-52'} value={normalizeBoothLayout(quickLayout)} onChange={ev => setQuickLayout(ev.target.value as ExpoBoothLayout)}>
+                    {EXPO_LAYOUT_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.id}>{T ? opt.labelFa : opt.labelEn}</option>
+                    ))}
                   </select>
                 </div>
                 {(e.booths || []).length > 0 && <button type="button" onClick={() => applyLayoutToBooths()} className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-bold">{t.applyLayout}</button>}

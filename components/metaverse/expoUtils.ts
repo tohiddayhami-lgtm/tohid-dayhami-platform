@@ -145,38 +145,172 @@ export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<Metav
   };
 };
 
-export type ExpoBoothLayout = 'grid' | 'facing' | 'perimeter' | 'storefront' | 'supermarket' | 'business_center';
+export type ExpoBoothLayout =
+  | 'cross' | 'boulevard' | 'avenue' | 'gallery' | 'pavilion'
+  | 'symmetric' | 'perimeter' | 'grand' | 'storefront' | 'supermarket'
+  | 'facing' | 'grid' | 'business_center';
 
-/** Carpet runners for cross-facing aisle grid (N–S + E–W corridors). */
-export const crossFacingCarpetRects = (width: number, depth: number) => {
-  const cw = Math.min(2.4, width * 0.12);
-  const cd = Math.min(2.4, depth * 0.12);
-  return [
-    { x: 0, z: 0, w: cw, d: depth * 0.78 },
-    { x: 0, z: depth / 2 - 5, w: width * 0.72, d: cd },
-  ];
+export interface ExpoCarpetRect {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+  color?: string;
+  border?: string;
+  entrance?: boolean;
+}
+
+export const EXPO_CARPET = {
+  main: '#9f1239',
+  border: '#d4a574',
+  accent: '#1e40af',
+  plaza: '#7f1d1d',
+  entrance: '#b91c1c',
+  entranceBorder: '#fca5a5',
+  entranceStripe: '#fbbf24',
+} as const;
+
+export const EXPO_LAYOUT_OPTIONS: { id: ExpoBoothLayout; labelFa: string; labelEn: string }[] = [
+  { id: 'cross', labelFa: '۱. راهرو متقاطع', labelEn: '1. Cross aisles' },
+  { id: 'boulevard', labelFa: '۲. بلوار مرکزی VIP', labelEn: '2. Central boulevard' },
+  { id: 'avenue', labelFa: '۳. شبلون‌های موازی', labelEn: '3. Parallel avenues' },
+  { id: 'gallery', labelFa: '۴. گالری دوطرفه', labelEn: '4. Twin gallery' },
+  { id: 'pavilion', labelFa: '۵. جزیره‌های نمایشگاهی', labelEn: '5. Pavilion islands' },
+  { id: 'symmetric', labelFa: '۶. قرینه رسمی', labelEn: '6. Symmetric wings' },
+  { id: 'perimeter', labelFa: '۷. دور سالن', labelEn: '7. Perimeter ring' },
+  { id: 'grand', labelFa: '۸. سالن بزرگ', labelEn: '8. Grand hall' },
+  { id: 'storefront', labelFa: '۹. دفاتر تجاری', labelEn: '9. Commercial offices' },
+  { id: 'supermarket', labelFa: '۱۰. فروشگاه زنجیره‌ای', labelEn: '10. Supermarket' },
+];
+
+export const normalizeBoothLayout = (layout?: ExpoBoothLayout | string | null): ExpoBoothLayout => {
+  if (layout === 'facing' || layout === 'grid') return 'cross';
+  if (layout === 'business_center') return 'storefront';
+  const ids = EXPO_LAYOUT_OPTIONS.map(o => o.id);
+  if (layout && ids.includes(layout as ExpoBoothLayout)) return layout as ExpoBoothLayout;
+  return 'cross';
 };
+
+type ArrangeCell = { x: number; z: number; ry: number };
+type ArrangeResult = {
+  width: number;
+  depth: number;
+  spawn: { x: number; y: number; z: number; ry: number };
+  cells: ArrangeCell[];
+};
+
+const BOOTH = 4;
+const spawnFor = (depth: number) => ({ x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI });
+const aw = (span: number) => Math.min(2.5, Math.max(1.8, span * 0.09));
+const carpet = (x: number, z: number, w: number, d: number, color = EXPO_CARPET.main, border = EXPO_CARPET.border): ExpoCarpetRect =>
+  ({ x, z, w, d, color, border });
+
+/** Red carpet at the hall doorway (+ optional exterior strip coordinates). */
+export const entranceCarpetRects = (width: number, depth: number): ExpoCarpetRect[] => [
+  { x: 0, z: depth / 2 - 2.2, w: Math.min(3.4, width * 0.28), d: 4.2, color: EXPO_CARPET.entrance, border: EXPO_CARPET.entranceBorder, entrance: true },
+  { x: 0, z: depth / 2 + 1.2, w: Math.min(4.6, width * 0.34), d: Math.min(6.5, depth * 0.14), color: EXPO_CARPET.entrance, border: EXPO_CARPET.entranceStripe, entrance: true },
+];
+
+/** Organized aisle carpets per layout (+ red entrance carpets). */
+export const layoutCarpetRects = (layout: ExpoBoothLayout | string | undefined, width: number, depth: number): ExpoCarpetRect[] => {
+  const L = normalizeBoothLayout(layout);
+  const w = Math.max(16, width);
+  const d = Math.max(18, depth);
+  const cw = aw(w);
+  const cd = aw(d);
+  const entrance = entranceCarpetRects(w, d);
+  const innerD = d * 0.72;
+  const innerW = w * 0.68;
+
+  const byLayout: Record<ExpoBoothLayout, ExpoCarpetRect[]> = {
+    cross: [
+      carpet(0, 0, cw, innerD),
+      carpet(0, d / 2 - 6, innerW, cd),
+    ],
+    boulevard: [
+      carpet(0, 0, cw, innerD * 0.95),
+      carpet(0, d / 2 - 5, Math.min(3, w * 0.22), cd),
+    ],
+    avenue: (() => {
+      const cols = Math.max(2, Math.ceil(Math.sqrt(Math.ceil(12 / 2))));
+      const out: ExpoCarpetRect[] = [carpet(0, d / 2 - 6, innerW, cd)];
+      for (let c = 0; c < cols; c++) {
+        const x = (c - (cols - 1) / 2) * (BOOTH * 2 + 8);
+        out.push(carpet(x, 0, cw, innerD * 0.82));
+      }
+      return out;
+    })(),
+    gallery: [
+      carpet(0, 0, cw, innerD),
+      carpet(-w * 0.22, 0, cw * 0.75, innerD * 0.9, EXPO_CARPET.accent, '#93c5fd'),
+      carpet(w * 0.22, 0, cw * 0.75, innerD * 0.9, EXPO_CARPET.accent, '#93c5fd'),
+    ],
+    pavilion: (() => {
+      const step = BOOTH * 2 + 10;
+      const out: ExpoCarpetRect[] = [carpet(0, d / 2 - 6, innerW, cd)];
+      for (let gx = -1; gx <= 1; gx++) {
+        for (let gz = -1; gz <= 1; gz++) {
+          if (gx === 0 && gz === 0) continue;
+          out.push(carpet(gx * step, gz * step * 0.85, cw * 0.9, cd * 0.9, EXPO_CARPET.plaza, EXPO_CARPET.border));
+        }
+      }
+      return out;
+    })(),
+    symmetric: [
+      carpet(0, 0, cw, innerD),
+      carpet(-w * 0.18, 0, cw * 0.7, innerD * 0.88),
+      carpet(w * 0.18, 0, cw * 0.7, innerD * 0.88),
+    ],
+    perimeter: [
+      carpet(0, 0, cw, innerD * 0.55),
+      carpet(0, -d * 0.28, innerW * 0.85, cd * 0.8),
+      carpet(0, d * 0.22, innerW * 0.75, cd * 0.75),
+    ],
+    grand: [
+      carpet(0, 0, Math.min(6, w * 0.35), Math.min(10, d * 0.38), EXPO_CARPET.plaza, EXPO_CARPET.entranceStripe),
+      carpet(0, d / 2 - 6, innerW, cd),
+      carpet(0, -d * 0.22, innerW * 0.7, cd * 0.7),
+    ],
+    storefront: [
+      carpet(0, 0, cw, innerD),
+      carpet(0, d / 2 - 6, innerW, cd, '#0f766e', '#5eead4'),
+    ],
+    supermarket: (() => {
+      const out: ExpoCarpetRect[] = [carpet(0, d / 2 - 7, innerW, cd)];
+      for (let lane = 0; lane < 3; lane++) {
+        const x = (lane - 1) * (w / 4);
+        out.push(carpet(x, -d * 0.08, cw * 0.85, innerD * 0.55, EXPO_CARPET.accent, '#93c5fd'));
+      }
+      return out;
+    })(),
+    facing: [],
+    grid: [],
+    business_center: [],
+  };
+
+  return [...entrance, ...(byLayout[L] || byLayout.cross)];
+};
+
+/** @deprecated use layoutCarpetRects */
+export const crossFacingCarpetRects = (width: number, depth: number) =>
+  layoutCarpetRects('cross', width, depth);
 
 /**
  * Cross-facing grid — booths face each other across horizontal AND vertical aisles.
- * Each 4-booth block surrounds a corridor junction; remainder fills with H/V pairs or singles.
  */
-const arrangeCrossFacing = (n: number) => {
-  const booth = 4;
-  const aisle = 4.8;
-  const cross = 5;
-  const halfGap = booth / 2 + aisle / 2;
-  const blockPitch = booth * 2 + aisle + cross;
-  const cells: { x: number; z: number; ry: number }[] = [];
+const arrangeCrossFacing = (n: number, spacing = 1): ArrangeResult => {
+  const aisle = 4.8 * spacing;
+  const cross = 5 * spacing;
+  const halfGap = BOOTH / 2 + aisle / 2;
+  const blockPitch = BOOTH * 2 + aisle + cross;
+  const cells: ArrangeCell[] = [];
 
   const units: ('cross' | 'h' | 'v' | 'single')[] = [];
   let remaining = n;
   while (remaining > 0) {
     if (remaining >= 4) { units.push('cross'); remaining -= 4; }
     else if (remaining >= 2) {
-      const hCount = units.filter(u => u === 'h').length;
-      const vCount = units.filter(u => u === 'v').length;
-      units.push(hCount <= vCount ? 'h' : 'v');
+      units.push(units.filter(u => u === 'h').length <= units.filter(u => u === 'v').length ? 'h' : 'v');
       remaining -= 2;
     } else { units.push('single'); remaining -= 1; }
   }
@@ -213,15 +347,161 @@ const arrangeCrossFacing = (n: number) => {
     }
   });
 
-  const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-  return { width, depth, spawn, cells: cells.slice(0, n) };
+  return { width, depth, spawn: spawnFor(depth), cells: cells.slice(0, n) };
 };
 
-/** Next free slot when adding a booth to a cross-facing hall. */
-export const findNextCrossFacingSlot = (boothCount: number) => {
-  const { cells } = arrangeCrossFacing(boothCount + 1);
+const arrangeBoulevard = (n: number): ArrangeResult => {
+  const aisle = 5.2;
+  const halfGap = BOOTH / 2 + aisle / 2;
+  const rowPitch = BOOTH + 5.5;
+  const pairs = Math.ceil(n / 2);
+  const depth = Math.max(28, pairs * rowPitch + 14);
+  const width = 18;
+  const cells: ArrangeCell[] = [];
+  for (let i = 0; i < n; i++) {
+    const pair = Math.floor(i / 2);
+    const side = i % 2;
+    const z = depth / 2 - 8 - pair * rowPitch;
+    const x = side === 0 ? -halfGap : halfGap;
+    cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: side === 0 ? Math.PI / 2 : -Math.PI / 2 });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+const arrangeAvenue = (n: number): ArrangeResult => {
+  const aisle = 4.8;
+  const halfGap = BOOTH / 2 + aisle / 2;
+  const colPitch = BOOTH * 2 + aisle + 4;
+  const rowPitch = BOOTH * 2 + aisle + 5;
+  const pairCount = Math.ceil(n / 2);
+  const cols = Math.max(1, Math.ceil(Math.sqrt(pairCount)));
+  const rows = Math.ceil(pairCount / cols);
+  const width = Math.max(26, cols * colPitch + 10);
+  const depth = Math.max(28, rows * rowPitch + 12);
+  const cells: ArrangeCell[] = [];
+  for (let i = 0; i < n; i++) {
+    const pair = Math.floor(i / 2);
+    const r = Math.floor(pair / cols), c = pair % cols;
+    const colsThisRow = Math.min(cols, pairCount - r * cols);
+    const x = (c - (colsThisRow - 1) / 2) * colPitch;
+    const zCenter = depth / 2 - 8 - r * rowPitch;
+    const side = i % 2;
+    cells.push({
+      x: +x.toFixed(2),
+      z: +(zCenter + (side === 0 ? -halfGap : halfGap)).toFixed(2),
+      ry: side === 0 ? 0 : Math.PI,
+    });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+const arrangeGallery = (n: number): ArrangeResult => {
+  const slotZ = 7.2;
+  const pairs = Math.ceil(n / 2);
+  const depth = Math.max(28, pairs * slotZ + 14);
+  const width = 26;
+  const wallX = width / 2 - 3.2;
+  const cells: ArrangeCell[] = [];
+  for (let i = 0; i < n; i++) {
+    const pair = Math.floor(i / 2);
+    const side = i % 2;
+    const z = depth / 2 - 8 - pair * slotZ;
+    cells.push({ x: side === 0 ? -wallX : wallX, z: +z.toFixed(2), ry: side === 0 ? Math.PI / 2 : -Math.PI / 2 });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+const arrangeSymmetric = (n: number): ArrangeResult => {
+  const aisle = 5;
+  const halfGap = BOOTH / 2 + aisle / 2;
+  const rowPitch = BOOTH + 5.2;
+  const left = Math.ceil(n / 2);
+  const right = n - left;
+  const rows = Math.max(left, right);
+  const depth = Math.max(28, rows * rowPitch + 14);
+  const width = 28;
+  const cells: ArrangeCell[] = [];
+  for (let i = 0; i < n; i++) {
+    const wing = i < left ? -1 : 1;
+    const local = wing < 0 ? i : i - left;
+    const z = depth / 2 - 8 - local * rowPitch;
+    cells.push({ x: +(wing * halfGap).toFixed(2), z: +z.toFixed(2), ry: wing < 0 ? Math.PI / 2 : -Math.PI / 2 });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+const arrangeGrand = (n: number): ArrangeResult => {
+  const inset = 7;
+  const slot = 7.4;
+  const counts = [0, 0, 0, 0];
+  for (let i = 0; i < n; i++) counts[i % 4]++;
+  const maxSide = Math.max(...counts, 1);
+  const width = Math.max(32, maxSide * slot + inset * 2 + 8);
+  const depth = Math.max(34, maxSide * slot + inset * 2 + 10);
+  const placeAlong = (idx: number, total: number, span: number) =>
+    total <= 1 ? 0 : (idx - (total - 1) / 2) * Math.min(slot, span / Math.max(1, total - 1));
+  const cells: ArrangeCell[] = [];
+  for (let side = 0; side < 4; side++) {
+    for (let k = 0; k < counts[side]; k++) {
+      const xAlong = placeAlong(k, counts[side], width - inset * 2);
+      const zAlong = placeAlong(k, counts[side], depth - inset * 2);
+      if (side === 0) cells.push({ x: +xAlong.toFixed(2), z: +(-depth / 2 + inset).toFixed(2), ry: 0 });
+      else if (side === 1) cells.push({ x: +(width / 2 - inset).toFixed(2), z: +zAlong.toFixed(2), ry: -Math.PI / 2 });
+      else if (side === 2) cells.push({ x: +(-xAlong).toFixed(2), z: +(depth / 2 - inset).toFixed(2), ry: Math.PI });
+      else cells.push({ x: +(-width / 2 + inset).toFixed(2), z: +(-zAlong).toFixed(2), ry: Math.PI / 2 });
+    }
+  }
+  return { width, depth, spawn: spawnFor(depth), cells: cells.slice(0, n) };
+};
+
+const arrangePerimeter = (n: number): ArrangeResult => {
+  const cells: ArrangeCell[] = [];
+  const counts = [0, 0, 0, 0];
+  for (let i = 0; i < n; i++) counts[i % 4]++;
+  const maxSide = Math.max(...counts, 1);
+  const slot = 7.2;
+  const wallClearance = BOOTH / 2 + 1.7;
+  const width = Math.max(24, maxSide * slot + 14);
+  const depth = Math.max(24, maxSide * slot + 14);
+  const placeAlong = (idx: number, total: number, span: number) =>
+    total <= 1 ? 0 : (idx - (total - 1) / 2) * Math.min(slot, span / Math.max(1, total - 1));
+  for (let side = 0; side < 4; side++) {
+    for (let k = 0; k < counts[side]; k++) {
+      const xAlong = placeAlong(k, counts[side], width - 12);
+      const zAlong = placeAlong(k, counts[side], depth - 12);
+      if (side === 0) cells.push({ x: +xAlong.toFixed(2), z: +(-depth / 2 + wallClearance).toFixed(2), ry: 0 });
+      else if (side === 1) cells.push({ x: +(width / 2 - wallClearance).toFixed(2), z: +zAlong.toFixed(2), ry: -Math.PI / 2 });
+      else if (side === 2) cells.push({ x: +(-xAlong).toFixed(2), z: +(depth / 2 - wallClearance).toFixed(2), ry: Math.PI });
+      else cells.push({ x: +(-width / 2 + wallClearance).toFixed(2), z: +(-zAlong).toFixed(2), ry: Math.PI / 2 });
+    }
+  }
+  return { width, depth, spawn: spawnFor(depth), cells: cells.slice(0, n) };
+};
+
+const arrangeSupermarket = (n: number): ArrangeResult => {
+  const cols = Math.min(6, Math.max(2, Math.ceil(Math.sqrt(n))));
+  const rows = Math.ceil(n / cols);
+  const width = Math.max(28, cols * 7 + 12);
+  const depth = Math.max(30, rows * 9 + 14);
+  const cells: ArrangeCell[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / cols), c = i % cols;
+    const colsThisRow = Math.min(cols, n - r * cols);
+    const x = (c - (colsThisRow - 1) / 2) * 7;
+    const z = depth / 2 - 8.5 - r * 9;
+    cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
+  }
+  return { width, depth, spawn: spawnFor(depth), cells };
+};
+
+/** Next free slot when adding a booth. */
+export const findNextLayoutSlot = (boothCount: number, layout: ExpoBoothLayout | string = 'cross') => {
+  const { cells } = autoArrangeBooths(boothCount + 1, normalizeBoothLayout(layout));
   return cells[boothCount] ?? cells[cells.length - 1];
 };
+
+/** @deprecated */
+export const findNextCrossFacingSlot = (boothCount: number) => findNextLayoutSlot(boothCount, 'cross');
 
 /** Meta Business Center — 3 walkable floors with a central stairwell. */
 export const BUSINESS_CENTER = {
@@ -447,58 +727,26 @@ export const resolveBusinessCenterPlayerY = (x: number, z: number, prevEyeY: num
   return businessCenterEyeY(floor);
 };
 
-// Auto-arrange `count` booths and size the hall to fit.
-// `facing` / `grid` / `storefront` → cross-facing rows (horizontal + vertical pairs).
-// `perimeter` uses the outside walls.
-export const autoArrangeBooths = (count: number, layout: ExpoBoothLayout = 'facing'): { width: number; depth: number; spawn: { x: number; y: number; z: number; ry: number }; cells: { x: number; z: number; ry: number; floor?: number }[] } => {
+// Auto-arrange booths — 10 professional layout styles, each with matching aisle carpets.
+export const autoArrangeBooths = (
+  count: number,
+  layout: ExpoBoothLayout = 'cross',
+): ArrangeResult => {
   const n = Math.max(1, Math.floor(count) || 1);
-  const cells: { x: number; z: number; ry: number; floor?: number }[] = [];
-  const booth = 4;
-
-  if (layout === 'business_center' || layout === 'storefront' || layout === 'facing' || layout === 'grid') {
-    return arrangeCrossFacing(n);
+  const L = normalizeBoothLayout(layout);
+  switch (L) {
+    case 'boulevard': return arrangeBoulevard(n);
+    case 'avenue': return arrangeAvenue(n);
+    case 'gallery': return arrangeGallery(n);
+    case 'pavilion': return arrangeCrossFacing(n, 1.28);
+    case 'symmetric': return arrangeSymmetric(n);
+    case 'perimeter': return arrangePerimeter(n);
+    case 'grand': return arrangeGrand(n);
+    case 'storefront': return arrangeCrossFacing(n);
+    case 'supermarket': return arrangeSupermarket(n);
+    case 'cross':
+    default: return arrangeCrossFacing(n);
   }
-
-  if (layout === 'supermarket') {
-    const cols = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(n))));
-    const rows = Math.ceil(n / cols);
-    const width = Math.max(28, cols * 7 + 12);
-    const depth = Math.max(30, rows * 9 + 14);
-    for (let i = 0; i < n; i++) {
-      const r = Math.floor(i / cols), c = i % cols;
-      const colsThisRow = Math.min(cols, n - r * cols);
-      const x = (c - (colsThisRow - 1) / 2) * 7;
-      const z = depth / 2 - 8.5 - r * 9;
-      cells.push({ x: +x.toFixed(2), z: +z.toFixed(2), ry: Math.PI });
-    }
-    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-    return { width, depth, spawn, cells };
-  }
-
-  if (layout === 'perimeter') {
-    const counts = [0, 0, 0, 0];
-    for (let i = 0; i < n; i++) counts[i % 4]++;
-    const maxSide = Math.max(...counts, 1);
-    const slot = 7.2;
-    const wallClearance = booth / 2 + 1.7;
-    const width = Math.max(24, maxSide * slot + 14);
-    const depth = Math.max(24, maxSide * slot + 14);
-    const placeAlong = (idx: number, total: number, span: number) => total <= 1 ? 0 : (idx - (total - 1) / 2) * Math.min(slot, span / Math.max(1, total - 1));
-    for (let side = 0; side < 4; side++) {
-      for (let k = 0; k < counts[side]; k++) {
-        const xAlong = placeAlong(k, counts[side], width - 12);
-        const zAlong = placeAlong(k, counts[side], depth - 12);
-        if (side === 0) cells.push({ x: +xAlong.toFixed(2), z: +(-depth / 2 + wallClearance).toFixed(2), ry: 0 });
-        else if (side === 1) cells.push({ x: +(width / 2 - wallClearance).toFixed(2), z: +zAlong.toFixed(2), ry: -Math.PI / 2 });
-        else if (side === 2) cells.push({ x: +(-xAlong).toFixed(2), z: +(depth / 2 - wallClearance).toFixed(2), ry: Math.PI });
-        else cells.push({ x: +(-width / 2 + wallClearance).toFixed(2), z: +(-zAlong).toFixed(2), ry: Math.PI / 2 });
-      }
-    }
-    const spawn = { x: 0, y: 0, z: +(depth / 2 - 3).toFixed(2), ry: Math.PI };
-    return { width, depth, spawn, cells };
-  }
-
-  return arrangeCrossFacing(n);
 };
 
 // Normalize a phone number for a wa.me link (digits only, drop leading +/00).

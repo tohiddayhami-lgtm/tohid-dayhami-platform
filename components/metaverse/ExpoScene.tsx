@@ -5,7 +5,7 @@ import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, crossFacingCarpetRects } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { WallAd, PresentationScreen } from './WallMedia';
@@ -86,14 +86,14 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
         <planeGeometry args={[Math.min(width, 9.5), apronLen]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.62} metalness={0} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
       </mesh>
-      {/* Welcome carpet / guided corridor. It sits OUTSIDE the front wall and leads into the doorway. */}
+      {/* Welcome red carpet — exterior corridor leading to the doorway */}
       <mesh position={[0, 0.07, carpetZ]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[4.6, carpetLen]} />
-        <meshStandardMaterial color="#0f5132" roughness={0.75} metalness={0.04} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+        <meshStandardMaterial color="#b91c1c" roughness={0.72} metalness={0.05} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
       </mesh>
       <mesh position={[0, 0.092, carpetZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.16, Math.max(0.1, carpetLen - 0.35)]} />
-        <meshStandardMaterial color="#f8fafc" emissive="#dbeafe" emissiveIntensity={0.35} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
+        <planeGeometry args={[0.2, Math.max(0.1, carpetLen - 0.35)]} />
+        <meshStandardMaterial color="#fbbf24" emissive="#f59e0b" emissiveIntensity={0.45} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
       </mesh>
       {/* Low side rails keep the corridor readable without blocking walking. */}
       {[-2.55, 2.55].map(x => (
@@ -391,15 +391,21 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       </TeleportTarget>
       <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
 
-      {boothVisualStyle === 'storefront' && crossFacingCarpetRects(width, depth).map((c, i) => (
-        <group key={`sf-carpet-${i}`}>
-          <mesh position={[c.x, 0.025, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      {layoutCarpetRects(normalizeBoothLayout(expo.boothLayout), width, depth)
+        .filter(c => !(c.entrance && c.z > depth / 2 + 0.5 && expo.entranceEnabled))
+        .map((c, i) => (
+        <group key={`hall-carpet-${i}`}>
+          <mesh position={[c.x, c.entrance ? 0.032 : 0.025, c.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[c.w, c.d]} />
-            <meshStandardMaterial color="#9f1239" roughness={0.88} metalness={0.04} />
+            <meshStandardMaterial
+              color={c.color || (c.entrance ? EXPO_CARPET.entrance : EXPO_CARPET.main)}
+              roughness={0.86}
+              metalness={c.entrance ? 0.08 : 0.04}
+            />
           </mesh>
-          <mesh position={[c.x, 0.04, c.z]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[0.14, c.d - 0.3]} />
-            <meshBasicMaterial color="#d4a574" toneMapped={false} />
+          <mesh position={[c.x, c.entrance ? 0.048 : 0.04, c.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[Math.min(0.18, c.w * 0.08), Math.max(0.2, c.d - 0.35)]} />
+            <meshBasicMaterial color={c.border || (c.entrance ? EXPO_CARPET.entranceStripe : EXPO_CARPET.border)} toneMapped={false} />
           </mesh>
         </group>
       ))}
