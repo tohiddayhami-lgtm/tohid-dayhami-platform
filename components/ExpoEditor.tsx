@@ -158,7 +158,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     entranceFacingLeft: T ? 'سمت چپ' : 'Left side',
     entranceFacingRight: T ? 'سمت راست' : 'Right side',
     entranceFacingBack: T ? 'پشت غرفه' : 'Back toward entrance',
-    entranceFacingHint: T ? 'غرفه در جای خود می‌چرخد؛ چرخش چیدمان (درجه) تغییر نمی‌کند.' : 'Booth spins in place; layout rotation (deg) stays unchanged.',
+    entranceFacingHint: T ? 'غرفه در جای خود می‌چرخد؛ سمت انتخابی عمود بر دیوار ورودی (زاویه صاف، نه کج به درب).' : 'Booth spins in place; chosen side faces the entrance wall square-on (not angled at the door).',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,

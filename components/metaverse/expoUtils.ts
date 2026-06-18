@@ -545,26 +545,17 @@ export const findNextLayoutSlot = (boothCount: number, layout: ExpoBoothLayout |
 /** @deprecated */
 export const findNextCrossFacingSlot = (boothCount: number) => findNextLayoutSlot(boothCount, 'cross');
 
-const ENTRANCE_FACE_YAW: Record<BoothEntranceFacing, number> = {
+/** World yaw so the chosen booth side faces the entrance wall (+Z), perpendicular — not toward the door point. */
+const ENTRANCE_WALL_YAW: Record<BoothEntranceFacing, number> = {
   front: 0,
   back: Math.PI,
-  left: -Math.PI / 2,
-  right: Math.PI / 2,
+  left: Math.PI / 2,
+  right: -Math.PI / 2,
 };
 
-/** In-place Y rotation so the chosen booth face points toward the south entrance wall. */
-export const boothEntranceFacingYaw = (
-  x: number,
-  z: number,
-  hallDepth: number,
-  ry = 0,
-  facing: BoothEntranceFacing = 'front',
-): number => {
-  const dx = -x;
-  const dz = hallDepth / 2 - z;
-  if (Math.hypot(dx, dz) < 0.05) return 0;
-  const toEntrance = Math.atan2(dx, dz);
-  let offset = toEntrance - ry - ENTRANCE_FACE_YAW[facing];
+/** In-place Y rotation; keeps layout `ry`, aligns the selected side square to the south entrance wall. */
+export const boothEntranceFacingYaw = (ry = 0, facing: BoothEntranceFacing = 'front'): number => {
+  let offset = ENTRANCE_WALL_YAW[facing] - ry;
   while (offset > Math.PI) offset -= Math.PI * 2;
   while (offset < -Math.PI) offset += Math.PI * 2;
   return +offset.toFixed(4);

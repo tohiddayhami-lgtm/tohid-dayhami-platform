@@ -909,9 +909,9 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
 
   const entranceFacingYaw = useMemo(() => (
     booth.entranceFacing
-      ? boothEntranceFacingYaw(booth.x || 0, booth.z || 0, hallDepth, booth.ry || 0, booth.entranceFacing)
+      ? boothEntranceFacingYaw(booth.ry || 0, booth.entranceFacing)
       : 0
-  ), [booth.entranceFacing, booth.x, booth.z, booth.ry, hallDepth]);
+  ), [booth.entranceFacing, booth.ry]);
 
   // Media for each of the 6 wall faces
   // screenUrl / bannerImage so older booths keep working.
