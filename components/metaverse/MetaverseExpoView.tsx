@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -18,6 +18,7 @@ import { BoothReservationModal } from './BoothReservationModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
+import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
@@ -191,7 +192,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
-  const [boothReservations, setBoothReservations] = useState<Record<string, MetaExpoBoothReservation>>({});
+  const [boothSummaries, setBoothSummaries] = useState<Record<string, BoothReservationSummary>>({});
   const controlsPaused = registrationOpen || !!reserveBooth || !!active;
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
@@ -267,11 +268,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   useEffect(() => {
     return subscribeMetaExpoBoothReservations(bazaar.id, (list) => {
-      const map: Record<string, MetaExpoBoothReservation> = {};
-      list.forEach(r => {
-        if (r.status === 'pending' || r.status === 'confirmed') map[r.boothId] = r;
-      });
-      setBoothReservations(map);
+      setBoothSummaries(summarizeBoothReservations(list));
     });
   }, [bazaar.id]);
 
@@ -360,7 +357,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onVrTeleport={(v) => { originRef.current?.position.copy(v); }}
               onTrack={trackExpoEvent}
               onRegistrationKioskClick={() => setRegistrationOpen(true)}
-              boothReservations={boothReservations}
+              boothSummaries={boothSummaries}
               onReserveBooth={setReserveBooth}
             />
           </Suspense>

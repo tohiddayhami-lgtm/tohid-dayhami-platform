@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBooth } from '../../types';
+import type { MetaBazaar, MetaExpoEvent, MetaverseBooth } from '../../types';
 import { Language } from '../../App';
 import { ExpoFloorPlan } from '../ExpoFloorPlan';
 import { BoothReservationModal } from './BoothReservationModal';
 import { bi, hallDims, resolveExpoLanguages, isRtlExpoLang } from './expoUtils';
 import { logMetaExpoEvent, subscribeMetaExpoBoothReservations } from '../../services/firebaseService';
+import { boothIsReservable, summarizeBoothReservations } from '../../utils/boothReservationUtils';
+import type { BoothReservationSummary } from '../../utils/boothReservationUtils';
 
 interface Props {
   bazaar: MetaBazaar;
@@ -36,16 +38,12 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
   const [uiLang, setUiLang] = useState<string>(defaultLang);
   const T = isRtlExpoLang(uiLang, expoLangs);
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
-  const [boothReservations, setBoothReservations] = useState<Record<string, MetaExpoBoothReservation>>({});
+  const [boothSummaries, setBoothSummaries] = useState<Record<string, BoothReservationSummary>>({});
   const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
 
   useEffect(() => {
     return subscribeMetaExpoBoothReservations(bazaar.id, (list) => {
-      const map: Record<string, MetaExpoBoothReservation> = {};
-      list.forEach(r => {
-        if (r.status === 'pending' || r.status === 'confirmed') map[r.boothId] = r;
-      });
-      setBoothReservations(map);
+      setBoothSummaries(summarizeBoothReservations(list));
     });
   }, [bazaar.id]);
 
@@ -114,12 +112,13 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
             reserveMap
             langFa={T}
             layoutHint=""
-            boothReservations={boothReservations}
+            boothSummaries={boothSummaries}
             boothLabel={(b, i) => {
               const name = bi(b.name, uiLang, String(i + 1));
               return name.length > 9 ? `${name.slice(0, 8)}…` : name;
             }}
             onBoothClick={(b) => {
+              if (!boothIsReservable(boothSummaries[b.id])) return;
               track('booth_reserve_click', { boothId: b.id, boothName: bi(b.name, uiLang), targetType: 'booth_reserve', side: 'map_reserve' });
               setReserveBooth(b);
             }}

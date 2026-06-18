@@ -54,11 +54,12 @@ export const BoothReservationModal: React.FC<Props> = ({
     submit: T ? 'ثبت رزرو موقت' : 'Submit reservation',
     close: T ? 'بستن' : 'Close',
     saving: T ? 'در حال ثبت…' : 'Saving…',
-    success: T ? 'غرفه به‌صورت موقت برای شرکت شما رزرو شد. پس از تأیید مستر، رزرو قطعی می‌شود.' : 'Booth temporarily reserved for your company. Master will confirm the booking.',
-    taken: T ? 'این غرفه قبلاً رزرو شده است.' : 'This booth is already reserved.',
+    success: T ? 'رزرو موقت شما ثبت شد. پس از تأیید مستر، رزرو قطعی می‌شود.' : 'Your temporary reservation was submitted. Master will confirm the final booking.',
+    taken: T ? 'این غرفه قبلاً رزرو قطعی شده است.' : 'This booth is already booked.',
+    full: T ? 'ظرفیت رزرو موقت این غرفه پر شده (حداکثر ۱۰۰ درخواست).' : 'This booth has reached the temporary reservation limit (100 requests).',
     required: T ? 'لطفاً همه فیلدها را پر کنید.' : 'Please fill in all fields.',
     fail: T ? 'خطا در ثبت. دوباره تلاش کنید.' : 'Save failed. Please try again.',
-    hint: T ? 'پس از ثبت، این غرفه برای دیگران قابل رزرو نیست.' : 'After submitting, this booth cannot be reserved by others.',
+    hint: T ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ اولویت با کسی است که مستر رزروش را قطعی کند.' : 'Multiple people can submit temporary holds; master picks the confirmed winner.',
   };
 
   const reset = () => {
@@ -94,6 +95,7 @@ export const BoothReservationModal: React.FC<Props> = ({
     try {
       const result = await tryReserveBooth(payload);
       if (result === 'taken') { setError(t.taken); return; }
+      if (result === 'full') { setError(t.full); return; }
       if (result === 'error') { setError(t.fail); return; }
       const fullName = `${payload.firstName} ${payload.lastName}`;
       onTrack?.('booth_reservation_complete', {

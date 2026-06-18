@@ -1,5 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
-import type { BoothTier, ExpoDecoration, ExpoRetailCategory, ExpoVisualStyle, MetaExpoBoothReservation, MetaverseBooth } from '../types';
+import type { BoothTier, ExpoDecoration, ExpoRetailCategory, ExpoVisualStyle, MetaverseBooth } from '../types';
+import type { BoothReservationSummary } from '../utils/boothReservationUtils';
+import { boothIsReservable } from '../utils/boothReservationUtils';
 import { layoutCarpetRects, planRectPct } from './metaverse/expoUtils';
 
 type DragKind = 'booth' | 'deco' | 'spawn';
@@ -31,7 +33,7 @@ export interface ExpoFloorPlanProps {
   onSelectDecoration: (id: string) => void;
   /** Public reservation map: show booths read-only with status colors; click available booths. */
   reserveMap?: boolean;
-  boothReservations?: Record<string, MetaExpoBoothReservation>;
+  boothSummaries?: Record<string, BoothReservationSummary>;
   onBoothClick?: (booth: MetaverseBooth) => void;
   boothLabel?: (booth: MetaverseBooth, index: number) => string;
 }
@@ -56,7 +58,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   onSelectBooth,
   onSelectDecoration,
   reserveMap = false,
-  boothReservations = {},
+  boothSummaries = {},
   onBoothClick,
   boothLabel,
 }) => {
@@ -102,10 +104,9 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   const theme = isSF ? sfTheme : null;
   const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
   const boothReserveStatus = (id: string): 'available' | 'pending' | 'confirmed' => {
-    const r = boothReservations[id];
-    if (!r || r.status === 'cancelled') return 'available';
-    if (r.status === 'confirmed') return 'confirmed';
-    return 'pending';
+    const s = boothSummaries[id];
+    if (!s || s.status === 'available') return 'available';
+    return s.status;
   };
   const boothFill = (b: MetaverseBooth) => {
     if (!reserveMap) return b.color || theme?.boothColor || '#2d4a1a';
@@ -244,9 +245,15 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
           const p = displayPos(b.id, b.x || 0, b.z || 0);
           const active = dragging?.target === b.id;
           const reserved = reserveMap && boothReserveStatus(b.id) !== 'available';
+          const booked = reserveMap && boothReserveStatus(b.id) === 'confirmed';
+          const summary = boothSummaries[b.id];
           const label = boothLabel ? boothLabel(b, i) : (T ? `غ ${i + 1}` : `B${i + 1}`);
           const sub = reserveMap
-            ? (reserved ? (boothReservations[b.id]?.company || '').slice(0, 8) : '')
+            ? (summary?.status === 'confirmed' && summary.confirmed
+              ? (summary.confirmed.company || '').slice(0, 8)
+              : summary?.status === 'pending'
+                ? (summary.pendingCount > 1 ? `${T ? 'موقت' : 'Held'} ${summary.pendingCount}` : (T ? 'موقت' : 'Held'))
+                : '')
             : tierMark(b.tier);
           const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
           const labelFs = reserveMap ? 1.25 : 2.6;
@@ -260,7 +267,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
             <g
               key={b.id}
               transform={`translate(${wx(p.x)} ${wz(p.z)})`}
-              style={{ cursor: reserveMap ? (reserved ? 'not-allowed' : 'pointer') : (active ? 'grabbing' : 'grab') }}
+              style={{ cursor: reserveMap ? (booked ? 'not-allowed' : 'pointer') : (active ? 'grabbing' : 'grab') }}
               onPointerDown={ev => {
                 if (!reserveMap) beginDrag(ev, b.id, 'booth');
               }}
@@ -275,8 +282,8 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
                 stroke="#fff"
                 strokeWidth={0.5}
                 opacity={reserved ? 0.92 : 1}
-                onPointerDown={reserveMap && !reserved ? ev => { ev.stopPropagation(); beginReserveTap(ev, b); } : undefined}
-                onPointerUp={reserveMap && !reserved ? ev => { ev.stopPropagation(); endReserveTap(ev); } : undefined}
+                onPointerDown={reserveMap && boothIsReservable(summary) ? ev => { ev.stopPropagation(); beginReserveTap(ev, b); } : undefined}
+                onPointerUp={reserveMap && boothIsReservable(summary) ? ev => { ev.stopPropagation(); endReserveTap(ev); } : undefined}
                 onPointerCancel={reserveMap ? cancelReserveTap : undefined}
               />
               {reserveMap && (

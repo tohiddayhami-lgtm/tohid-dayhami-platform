@@ -4,7 +4,8 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, ExpoVisualStyle, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
+import { boothIsReservable, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
 import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
 import { Hotspot } from './Hotspot';
@@ -25,7 +26,7 @@ interface Props {
   categoryName?: string;
   categoryColor?: string;
   hallDepth?: number;
-  boothReservation?: MetaExpoBoothReservation | null;
+  boothSummary?: BoothReservationSummary | null;
   onReserveBooth?: (b: MetaverseBooth) => void;
 }
 
@@ -889,7 +890,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothReservation, onReserveBooth }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -907,7 +908,15 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const reserveBooth = expoPhrase(lang, 'reserveBooth');
   const reservedPending = expoPhrase(lang, 'reservedPending');
   const reservedConfirmed = expoPhrase(lang, 'reservedConfirmed');
-  const activeReservation = boothReservation && (boothReservation.status === 'pending' || boothReservation.status === 'confirmed') ? boothReservation : null;
+  const showReservationBadge = boothSummary && boothSummary.status !== 'available';
+  const reservationBadgeText = showReservationBadge
+    ? (boothSummary!.status === 'confirmed' && boothSummary!.confirmed
+      ? `${reservedConfirmed} · ${boothSummary!.confirmed.company}`
+      : boothSummary!.pendingCount > 1
+        ? `${reservedPending} (${boothSummary!.pendingCount})`
+        : reservedPending)
+    : '';
+  const canReserve = onReserveBooth && boothIsReservable(boothSummary);
   const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket' || visualStyle === 'business_center';
   const signText = bi(booth.storefrontSignText, lang, name);
   const glassText = bi(booth.storefrontGlassText, lang, expoPhrase(lang, 'glassDefault'));
@@ -1341,18 +1350,19 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         </group>
       )}
 
-      {activeReservation ? (
-        <group position={[0, 0.38, D / 2 + 0.06]}>
+      {showReservationBadge ? (
+        <group position={[0, canReserve ? 0.52 : 0.38, D / 2 + 0.06]}>
           <CanvasLabel
-            text={`${activeReservation.status === 'confirmed' ? reservedConfirmed : reservedPending} · ${activeReservation.company}`}
-            width={1.55}
+            text={reservationBadgeText}
+            width={boothSummary!.status === 'confirmed' ? 1.55 : 1.2}
             height={0.22}
-            bg={activeReservation.status === 'confirmed' ? 'rgba(22,163,74,.88)' : 'rgba(217,119,6,.88)'}
+            bg={boothSummary!.status === 'confirmed' ? 'rgba(220,38,38,.88)' : 'rgba(234,179,8,.88)'}
             color="#ffffff"
             bold={false}
           />
         </group>
-      ) : onReserveBooth ? (
+      ) : null}
+      {canReserve ? (
         <group position={[0, 0.38, D / 2 + 0.06]}>
           <mesh
             onClick={(e) => {

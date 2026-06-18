@@ -13,7 +13,7 @@ import {
   resolveExpoStyle,
 } from './metaverse/expoCatalog';
 import { ExpoVisualStyle } from '../types';
-import { fetchMetaExpoEvents, fetchMetaExpoBoothReservations, fetchMetaExpoRegistrations, updateMetaExpoBoothReservation } from '../services/firebaseService';
+import { fetchMetaExpoEvents, fetchMetaExpoBoothReservations, fetchMetaExpoRegistrations, updateMetaExpoBoothReservation, confirmBoothReservation } from '../services/firebaseService';
 import { exportExpoRegistrationsCSV } from './metaverse/EntranceRegistrationModal';
 import { exportBoothReservationsCSV } from './metaverse/BoothReservationModal';
 
@@ -98,6 +98,7 @@ export const MetaExpoManager: React.FC<Props> = ({
     boothResConfirmed: T ? 'قطعی' : 'Confirmed',
     boothResCancelled: T ? 'لغو شده' : 'Cancelled',
     boothResConfirm: T ? 'رزرو قطعی' : 'Confirm',
+    boothResConfirmHint: T ? 'با قطعی کردن، این شرکت برنده می‌شود و بقیه درخواست‌های موقت همان غرفه لغو می‌شوند.' : 'Confirming picks this company; other pending holds on the same booth are cancelled.',
     boothResCancel: T ? 'لغو رزرو' : 'Cancel',
     boothResAction: T ? 'عملیات' : 'Actions',
     refresh: T ? 'به‌روزرسانی' : 'Refresh',
@@ -230,6 +231,12 @@ export const MetaExpoManager: React.FC<Props> = ({
   const setReservationStatus = async (id: string, status: MetaExpoBoothReservation['status']) => {
     setReservationBusy(id);
     try {
+      if (status === 'confirmed') {
+        await confirmBoothReservation(id);
+        const bazaar = bazaars.find(b => b.id === boothReservationsId);
+        if (bazaar) await openBoothReservations(bazaar);
+        return;
+      }
       await updateMetaExpoBoothReservation(id, { status });
       setBoothReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
     } finally {
@@ -280,13 +287,16 @@ export const MetaExpoManager: React.FC<Props> = ({
             ⬇ {t.boothResExport}
           </button>
         </div>
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">{t.boothResConfirmHint}</p>
         {boothReservationsLoading ? (
           <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.regLoading}</div>
         ) : boothReservations.length === 0 ? (
           <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.boothResEmpty}</div>
         ) : (
           <div className={card + ' overflow-x-auto'}>
-            <p className="text-xs text-gray-500 mb-3">{active.length.toLocaleString()} {T ? 'غرفه فعال' : 'active booths'} · {boothReservations.length.toLocaleString()} {t.regCount}</p>
+            <p className="text-xs text-gray-500 mb-3">
+              {active.filter(r => r.status === 'pending').length.toLocaleString()} {T ? 'درخواست موقت' : 'pending'} · {active.filter(r => r.status === 'confirmed').length.toLocaleString()} {T ? 'قطعی' : 'confirmed'} · {boothReservations.length.toLocaleString()} {t.regCount}
+            </p>
             <table className="w-full text-xs border-collapse min-w-[900px]">
               <thead>
                 <tr className="bg-gray-50 text-gray-600">

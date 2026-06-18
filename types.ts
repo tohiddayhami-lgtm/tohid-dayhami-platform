@@ -858,7 +858,7 @@ export interface MetaExpoRegistration {
   sessionId?: string;
 }
 
-/** Booth reservation request — one active hold per booth (pending or confirmed). */
+/** Booth reservation request — many pending per booth (up to 100); one confirmed winner chosen by master. */
 export type BoothReservationStatus = 'pending' | 'confirmed' | 'cancelled';
 
 export interface MetaExpoBoothReservation {

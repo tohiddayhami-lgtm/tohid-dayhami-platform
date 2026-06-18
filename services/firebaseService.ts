@@ -5,6 +5,7 @@ import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, quer
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
+import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc",
@@ -1315,28 +1316,54 @@ export const fetchMetaExpoRegistrations = async (bazaarId: string): Promise<Meta
 };
 
 // ── Metaverse Expo booth reservations ───────────────────────────────────────
+/** @deprecated Legacy single-doc id; new reservations use unique ids per request. */
 export const boothReservationDocId = (bazaarId: string, boothId: string) => `ber_${bazaarId}_${boothId}`;
 
-export const tryReserveBooth = async (reservation: Omit<MetaExpoBoothReservation, 'id' | 'status'>): Promise<'ok' | 'taken' | 'error'> => {
+const newBoothReservationId = (bazaarId: string, boothId: string) =>
+    `ber_${bazaarId}_${boothId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+export const tryReserveBooth = async (reservation: Omit<MetaExpoBoothReservation, 'id' | 'status'>): Promise<'ok' | 'taken' | 'full' | 'error'> => {
     try {
         if (!reservation?.bazaarId || !reservation?.boothId) return 'error';
-        const id = boothReservationDocId(reservation.bazaarId, reservation.boothId);
+        const active = (await fetchMetaExpoBoothReservations(reservation.bazaarId))
+            .filter(r => r.boothId === reservation.boothId && (r.status === 'pending' || r.status === 'confirmed'));
+        if (active.some(r => r.status === 'confirmed')) return 'taken';
+        const pending = active.filter(r => r.status === 'pending');
+        if (pending.length >= MAX_BOOTH_PENDING_RESERVATIONS) return 'full';
+
+        const id = newBoothReservationId(reservation.bazaarId, reservation.boothId);
+        const payload = sanitizeData({ ...reservation, id, status: 'pending' as const });
         const proxy = await checkProxyMode();
         if (proxy) {
-            const existing = await proxyGet<MetaExpoBoothReservation>('metaExpoBoothReservations', { doc: id });
-            if (existing && (existing.status === 'pending' || existing.status === 'confirmed')) return 'taken';
-            await proxyWrite('metaExpoBoothReservations', id, sanitizeData({ ...reservation, id, status: 'pending' }));
+            await proxyWrite('metaExpoBoothReservations', id, payload);
             return 'ok';
         }
-        const ref = doc(db, 'metaExpoBoothReservations', id);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-            const cur = snap.data() as MetaExpoBoothReservation;
-            if (cur.status === 'pending' || cur.status === 'confirmed') return 'taken';
-        }
-        await setDoc(ref, sanitizeData({ ...reservation, id, status: 'pending' }));
+        await setDoc(doc(db, 'metaExpoBoothReservations', id), payload);
         return 'ok';
     } catch { return 'error'; }
+};
+
+/** Master confirms one pending request; all other active holds on that booth are cancelled. */
+export const confirmBoothReservation = async (id: string): Promise<void> => {
+    try {
+        if (!id) return;
+        const proxy = await checkProxyMode();
+        let target: MetaExpoBoothReservation | null = null;
+        if (proxy) {
+            target = await proxyGet<MetaExpoBoothReservation>('metaExpoBoothReservations', { doc: id });
+        } else {
+            const snap = await getDoc(doc(db, 'metaExpoBoothReservations', id));
+            if (snap.exists()) target = snap.data() as MetaExpoBoothReservation;
+        }
+        if (!target || target.status !== 'pending') return;
+
+        const sameBooth = (await fetchMetaExpoBoothReservations(target.bazaarId))
+            .filter(r => r.boothId === target!.boothId && (r.status === 'pending' || r.status === 'confirmed'));
+
+        await Promise.all(sameBooth.map(r =>
+            updateMetaExpoBoothReservation(r.id, { status: r.id === id ? 'confirmed' : 'cancelled' }),
+        ));
+    } catch {}
 };
 
 export const updateMetaExpoBoothReservation = async (id: string, updates: Partial<MetaExpoBoothReservation>): Promise<void> => {
