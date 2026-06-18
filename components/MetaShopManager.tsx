@@ -4,6 +4,7 @@ import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearc
 import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
+import { MetaExpoManager } from './MetaExpoManager';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { Language } from '../App';
@@ -125,7 +126,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 };
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false }) => {
-  const [section, setSection] = useState<'shops' | 'bazaars'>('shops');
+  const [section, setSection] = useState<'shops' | 'bazaars' | 'expos'>('shops');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
@@ -515,11 +516,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   // ════════════ LIST ════════════
   // Section toggle (Shops | Bazaars)
   const sectionToggle = (
-    <div className="inline-flex bg-gray-100 rounded-lg p-1 mb-1">
-      <button onClick={() => setSection('shops')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'shops' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'فروشگاه‌ها' : 'Shops'}</button>
-      <button onClick={() => setSection('bazaars')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'bazaars' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'بازارچه‌ها' : 'Bazaars'}</button>
+    <div className="inline-flex bg-gray-100 rounded-lg p-1 mb-1 flex-wrap gap-1">
+      <button type="button" onClick={() => setSection('shops')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'shops' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'فروشگاه‌ها' : 'Shops'}</button>
+      <button type="button" onClick={() => setSection('bazaars')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'bazaars' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'بازارچه‌ها' : 'Bazaars'}</button>
+      <button type="button" onClick={() => setSection('expos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'expos' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'نمایشگاه‌های متاورسی' : 'Metaverse expos'}</button>
     </div>
   );
+
+  // ════════════ METAVERSE EXPOS section ════════════
+  if (section === 'expos' && onSaveMetaBazaar && onDeleteMetaBazaar) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <MetaExpoManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
+      </div>
+    );
+  }
 
   // ════════════ BAZAARS section ════════════
   if (section === 'bazaars' && onSaveMetaBazaar && onDeleteMetaBazaar) {

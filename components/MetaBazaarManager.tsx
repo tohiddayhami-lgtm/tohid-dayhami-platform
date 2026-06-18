@@ -5,6 +5,7 @@ import { downloadSample } from './metaShopSamples';
 import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
 import { fetchMetaExpoEvents } from '../services/firebaseService';
+import { expoStyleMeta, bazaarHasActiveExpo, resolveExpoStyle } from './metaverse/expoCatalog';
 
 interface Props {
   bazaars: MetaBazaar[];
@@ -14,6 +15,9 @@ interface Props {
   onSave: (b: MetaBazaar) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   readonly?: boolean;
+  /** When set, open directly in bazaar/expo editor (from MetaExpoManager). */
+  embeddedDraft?: MetaBazaar | null;
+  onEmbeddedClose?: () => void;
 }
 
 let _nid = 0;
@@ -45,8 +49,8 @@ const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
   };
 };
 
-export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopBaseUrl, onSave, onDelete, readonly = false }) => {
-  const [draft, setDraft] = useState<MetaBazaar | null>(null);
+export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopBaseUrl, onSave, onDelete, readonly = false, embeddedDraft, onEmbeddedClose }) => {
+  const [draft, setDraft] = useState<MetaBazaar | null>(embeddedDraft ?? null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const newFileRef = useRef<HTMLInputElement>(null);
@@ -121,13 +125,18 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     r.readAsText(f); e.target.value = ''; setUpdTarget(null);
   };
 
+  const closeDraft = () => {
+    if (onEmbeddedClose) onEmbeddedClose();
+    else setDraft(null);
+  };
+
   const save = async () => {
     if (!draft) return;
     if (!draft.name.trim()) { alert(T ? 'نام بازارچه را وارد کنید.' : 'Enter a name.'); return; }
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
     setSaving(true);
-    try { await onSave({ ...draft, slug }); setDraft(null); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
+    try { await onSave({ ...draft, slug }); closeDraft(); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
   };
 
   const uniqueSlug = (base: string, excludeId?: string) => {
@@ -252,7 +261,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     return (
       <div className="space-y-5 animate-fade-in pb-10">
         <div className="flex items-center justify-between gap-2">
-          <button onClick={() => setDraft(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <button type="button" onClick={closeDraft} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
           <div className="flex items-center gap-2">
             <a href={draft.slug ? url(draft) : undefined} target="_blank" rel="noreferrer" className={`text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
             <button onClick={() => downloadBazaar(draft)} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ {t.download}</button>
@@ -475,7 +484,14 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
               </div>
               <div className="p-4 flex-1 flex flex-col gap-2">
                 <h4 className="font-bold text-gray-800 text-sm truncate">{b.name}</h4>
-                <div className="text-[11px] text-gray-400">{countNodes(b.tree)} {t.nodes} · {(b.levelLabels || []).length} {t.levels}</div>
+                <div className="text-[11px] text-gray-400 flex items-center gap-2 flex-wrap">
+                  <span>{countNodes(b.tree)} {t.nodes} · {(b.levelLabels || []).length} {t.levels}</span>
+                  {bazaarHasActiveExpo(b) && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: expoStyleMeta(resolveExpoStyle(b)).accent }}>
+                      {T ? expoStyleMeta(resolveExpoStyle(b)).labelFa : expoStyleMeta(resolveExpoStyle(b)).labelEn}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px] text-gray-500 truncate" dir="ltr"><IconLink className="w-3 h-3 shrink-0" /><span className="truncate">?bazaar={b.slug}</span></div>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   <a href={url(b)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
