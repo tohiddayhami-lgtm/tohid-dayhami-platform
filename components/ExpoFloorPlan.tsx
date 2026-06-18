@@ -1,10 +1,16 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { BoothTier, ExpoDecoration, ExpoRetailCategory, ExpoVisualStyle, MetaverseBooth } from '../types';
 import type { BoothReservationSummary } from '../utils/boothReservationUtils';
 import { boothIsReservable } from '../utils/boothReservationUtils';
 import { layoutCarpetRects, planRectPct } from './metaverse/expoUtils';
 
 type DragKind = 'booth' | 'deco' | 'spawn';
+
+const MIN_MAP_ZOOM = 1;
+const MAX_MAP_ZOOM = 4;
+const MOBILE_DEFAULT_MAP_ZOOM = 2;
+const clampZoom = (v: number) => Math.min(MAX_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, v));
+const pointerDist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
 interface DragState {
   target: string;
@@ -69,32 +75,90 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   const rafRef = useRef(0);
   const pendingPos = useRef<{ x: number; z: number } | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
-  const reserveTapRef = useRef<{ booth: MetaverseBooth; pointerId: number; x: number; y: number } | null>(null);
+  const [mapZoom, setMapZoom] = useState(1);
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const mapPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const mapPinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const mapPanDragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const mapTapRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
   const RESERVE_TAP_MAX_MOVE = 14;
 
-  const beginReserveTap = (ev: React.PointerEvent, booth: MetaverseBooth) => {
-    reserveTapRef.current = { booth, pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY };
+  useEffect(() => {
+    if (!reserveMap) return;
+    const mq = window.matchMedia('(max-width: 768px), (pointer: coarse)');
+    const apply = () => { if (mq.matches) setMapZoom(MOBILE_DEFAULT_MAP_ZOOM); };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [reserveMap]);
+
+  const applyMapZoom = (next: number) => {
+    const z = clampZoom(next);
+    setMapZoom(z);
+    if (z <= 1) setMapPan({ x: 0, y: 0 });
   };
 
-  const moveReserveTap = (ev: React.PointerEvent) => {
-    const t = reserveTapRef.current;
-    if (!t || t.pointerId !== ev.pointerId) return;
-    if (Math.abs(ev.clientX - t.x) + Math.abs(ev.clientY - t.y) > RESERVE_TAP_MAX_MOVE) {
-      reserveTapRef.current = null;
+  const onMapViewportPointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    mapPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mapPointersRef.current.size === 2) {
+      const pts = [...mapPointersRef.current.values()];
+      mapPinchRef.current = { dist: pointerDist(pts[0], pts[1]), zoom: mapZoom };
+      mapPanDragRef.current = null;
+      mapTapRef.current = null;
+      return;
+    }
+    if (mapPointersRef.current.size === 1) {
+      mapTapRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      if (mapZoom > 1.02) {
+        mapPanDragRef.current = { x: e.clientX, y: e.clientY, panX: mapPan.x, panY: mapPan.y };
+      }
     }
   };
 
-  const endReserveTap = (ev: React.PointerEvent) => {
-    const t = reserveTapRef.current;
-    if (!t || t.pointerId !== ev.pointerId) return;
-    reserveTapRef.current = null;
-    const moved = Math.abs(ev.clientX - t.x) + Math.abs(ev.clientY - t.y);
-    if (moved <= RESERVE_TAP_MAX_MOVE && onBoothClick) onBoothClick(t.booth);
+  const onMapViewportPointerMove = (e: React.PointerEvent) => {
+    if (!mapPointersRef.current.has(e.pointerId)) return;
+    mapPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const tap = mapTapRef.current;
+    if (tap?.pointerId === e.pointerId) {
+      if (Math.abs(e.clientX - tap.x) + Math.abs(e.clientY - tap.y) > RESERVE_TAP_MAX_MOVE) tap.moved = true;
+    }
+    if (mapPointersRef.current.size === 2 && mapPinchRef.current) {
+      const pts = [...mapPointersRef.current.values()];
+      const ratio = pointerDist(pts[0], pts[1]) / mapPinchRef.current.dist;
+      applyMapZoom(mapPinchRef.current.zoom * ratio);
+      return;
+    }
+    const panDrag = mapPanDragRef.current;
+    if (mapPointersRef.current.size === 1 && panDrag && mapZoom > 1.02) {
+      setMapPan({
+        x: panDrag.panX + (e.clientX - panDrag.x),
+        y: panDrag.panY + (e.clientY - panDrag.y),
+      });
+      if (tap) tap.moved = true;
+    }
   };
 
-  const cancelReserveTap = (ev: React.PointerEvent) => {
-    const t = reserveTapRef.current;
-    if (t && t.pointerId === ev.pointerId) reserveTapRef.current = null;
+  const onMapViewportPointerUp = (e: React.PointerEvent) => {
+    const tap = mapTapRef.current;
+    mapPointersRef.current.delete(e.pointerId);
+    if (mapPointersRef.current.size < 2) mapPinchRef.current = null;
+    if (mapPointersRef.current.size === 0) mapPanDragRef.current = null;
+
+    if (tap?.pointerId === e.pointerId && !tap.moved) {
+      const hit = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-booth-id]');
+      const boothId = hit?.getAttribute('data-booth-id');
+      if (boothId) {
+        const booth = booths.find(b => b.id === boothId);
+        if (booth && boothIsReservable(boothSummaries[boothId]) && onBoothClick) onBoothClick(booth);
+      }
+    }
+    if (mapPointersRef.current.size === 0) mapTapRef.current = null;
+  };
+
+  const onMapWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    applyMapZoom(mapZoom + (e.deltaY > 0 ? -0.2 : 0.2));
   };
 
   const W = Math.max(8, width);
@@ -195,23 +259,21 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
 
   const carpets = layoutCarpetRects(boothLayout || 'cross', W, D);
 
-  return (
-    <div>
-      <p className="text-[11px] text-slate-600 mb-2">{layoutHint}</p>
+  const floorSvg = (
       <svg
         ref={svgRef}
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
-        className={`w-full rounded-xl border-2 select-none ${reserveMap ? 'touch-pan-y' : 'touch-none'}`}
+        className={`w-full rounded-xl border-2 select-none ${reserveMap ? '' : 'touch-none'}`}
         style={{
           aspectRatio: `${W} / ${D}`,
           cursor: dragging ? 'grabbing' : 'default',
           borderColor: theme?.accent || '#cbd5e1',
           background: theme ? `linear-gradient(135deg, ${theme.planBg} 0%, ${theme.floorColor} 100%)` : undefined,
         }}
-        onPointerMove={ev => { onSvgMove(ev); if (reserveMap) moveReserveTap(ev); }}
-        onPointerUp={ev => { if (reserveMap) cancelReserveTap(ev); onSvgUp(ev); }}
-        onPointerCancel={ev => { if (reserveMap) cancelReserveTap(ev); onSvgUp(ev); }}
+        onPointerMove={reserveMap ? undefined : onSvgMove}
+        onPointerUp={reserveMap ? undefined : onSvgUp}
+        onPointerCancel={reserveMap ? undefined : onSvgUp}
       >
         <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke={theme?.accent || '#cbd5e1'} strokeWidth={0.8} />
         {carpets.map((c, ci) => {
@@ -282,9 +344,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
                 stroke="#fff"
                 strokeWidth={0.5}
                 opacity={reserved ? 0.92 : 1}
-                onPointerDown={reserveMap && boothIsReservable(summary) ? ev => { ev.stopPropagation(); beginReserveTap(ev, b); } : undefined}
-                onPointerUp={reserveMap && boothIsReservable(summary) ? ev => { ev.stopPropagation(); endReserveTap(ev); } : undefined}
-                onPointerCancel={reserveMap ? cancelReserveTap : undefined}
+                data-booth-id={reserveMap ? b.id : undefined}
               />
               {reserveMap && (
                 <text x={0} y={0.9} textAnchor="middle" fontSize={1.15} fill="#fff" fontWeight="600" pointerEvents="none" opacity={0.95}>
@@ -326,6 +386,64 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
         </g>
         )}
       </svg>
+  );
+
+  return (
+    <div>
+      {layoutHint ? <p className="text-[11px] text-slate-600 mb-2">{layoutHint}</p> : null}
+      {reserveMap ? (
+        <div
+          className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 touch-none"
+          style={{ minHeight: 'min(68vh, 560px)' }}
+          onPointerDown={onMapViewportPointerDown}
+          onPointerMove={onMapViewportPointerMove}
+          onPointerUp={onMapViewportPointerUp}
+          onPointerCancel={onMapViewportPointerUp}
+          onWheel={onMapWheel}
+        >
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{
+              transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(${mapZoom})`,
+              transformOrigin: 'center center',
+              transition: mapPinchRef.current ? 'none' : 'transform 80ms ease-out',
+            }}
+          >
+            <div className="w-full min-w-[280px]">{floorSvg}</div>
+          </div>
+          <div className="absolute bottom-2 end-2 z-10 flex items-center gap-1 rounded-xl bg-white/95 border border-gray-200 shadow-sm p-1">
+            <button
+              type="button"
+              aria-label={T ? 'کوچک‌نمایی' : 'Zoom out'}
+              onClick={() => applyMapZoom(mapZoom - 0.5)}
+              disabled={mapZoom <= MIN_MAP_ZOOM}
+              className="w-8 h-8 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 font-bold"
+            >
+              −
+            </button>
+            <span className="text-[10px] text-gray-500 min-w-[2.5rem] text-center tabular-nums">{Math.round(mapZoom * 100)}%</span>
+            <button
+              type="button"
+              aria-label={T ? 'بزرگ‌نمایی' : 'Zoom in'}
+              onClick={() => applyMapZoom(mapZoom + 0.5)}
+              disabled={mapZoom >= MAX_MAP_ZOOM}
+              className="w-8 h-8 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 font-bold"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              aria-label={T ? 'بازنشانی زوم' : 'Reset zoom'}
+              onClick={() => { setMapZoom(1); setMapPan({ x: 0, y: 0 }); }}
+              className="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 text-xs"
+            >
+              ⟲
+            </button>
+          </div>
+        </div>
+      ) : (
+        floorSvg
+      )}
     </div>
   );
 };

@@ -60,6 +60,7 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
     pending: T ? 'رزرو موقت' : 'Held',
     confirmed: T ? 'رزرو قطعی' : 'Booked',
     hint: T ? 'رزرو از این نقشه همانند رزرو داخل نمایشگاه است و در نمایشگاه متاورسی نمایش داده می‌شود.' : 'Reservations from this map use the same system as in the 3D hall.',
+    zoomHint: T ? 'با دو انگشت زوم کنید، برای جابه‌جایی نقشه بکشید، یا از دکمه‌های + و − استفاده کنید.' : 'Pinch to zoom, drag to pan, or use the + / − buttons.',
   };
 
   const expo3dUrl = `${shopBaseUrl}?expo=${encodeURIComponent(bazaar.slug)}`;
@@ -99,8 +100,9 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
           <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#dc2626] border border-white shadow-sm" />{t.confirmed}</span>
         </div>
         <p className="text-[11px] text-gray-400">{t.hint}</p>
+        <p className="text-[11px] text-indigo-600/80">{t.zoomHint}</p>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-2 sm:p-4">
           <ExpoFloorPlan
             width={width}
             depth={depth}
