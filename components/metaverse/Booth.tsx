@@ -1324,17 +1324,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
 
       {booth.shopSlug && (
         <group position={[0, 0.62, D / 2 - 0.12]}>
-          <Billboard>
-            <mesh onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }}
-              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-              renderOrder={11}>
-              <planeGeometry args={[1.74, 0.42]} />
-              <meshBasicMaterial color={accentColor} toneMapped={false} depthWrite={false} />
-            </mesh>
-            <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
-              onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
-          </Billboard>
+          <mesh onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
+            <planeGeometry args={[1.74, 0.42]} />
+            <meshStandardMaterial color={accentColor} />
+          </mesh>
+          <CanvasLabel text={`🛍 ${enterShop}`} width={1.66} height={0.36} position={[0, 0, 0.01]} color="#ffffff"
+            onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
         </group>
       )}
 
