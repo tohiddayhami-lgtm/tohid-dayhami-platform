@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
+import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout, resolveExpoLanguages, DEFAULT_EXPO_LANGS } from './metaverse/expoUtils';
+import { MetaShopLang } from '../types';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 import { ExpoFloorPlan } from './ExpoFloorPlan';
@@ -42,13 +43,37 @@ const GLB_MAX_BYTES = 70 * 1024 * 1024;
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, visualStyle: 'exhibition', preset: 'warehouse', width: 30, depth: 30, height: 9,
   groundColor: '#cfd4dc', wallColor: '#e9edf3', spawn: { x: 0, y: 0, z: 8 }, booths: [], schemaVersion: 1,
+  defaultLang: 'en', languages: [...DEFAULT_EXPO_LANGS], entranceEnabled: true,
 });
+
+const DirCatInputs: React.FC<{
+  langs: MetaShopLang[];
+  value?: MetaShopDirCat;
+  onChange: (code: string, val: string) => void;
+  fld: string;
+  lbl: string;
+}> = ({ langs, value, onChange, fld, lbl }) => (
+  <>
+    {langs.map(l => (
+      <div key={l.code}>
+        <label className={lbl}>{l.name || l.code} ({l.code})</label>
+        <input
+          className={fld + (l.rtl ? '' : ' dir-ltr')}
+          dir={l.rtl ? 'rtl' : 'ltr'}
+          value={value?.[l.code] || ''}
+          onChange={ev => onChange(l.code, ev.target.value)}
+        />
+      </div>
+    ))}
+  </>
+);
 
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
 export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, readonly = false }) => {
   const T = lang === 'fa';
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
+  const expoLangs = resolveExpoLanguages(e);
   const [openBooth, setOpenBooth] = useState<string | null>(null);
   const [openDecoration, setOpenDecoration] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -95,6 +120,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     entranceAdPos: T ? 'جایگاه بنر' : 'Banner position',
     entranceAdLift: T ? 'فاصله از سردر (متر)' : 'Distance above arch (m)',
     adsJsonSample: T ? 'دانلود JSON نمونه تبلیغات برای AI' : 'Download AI ads JSON sample',
+    expoLangsT: T ? 'زبان‌های نمایشگاه' : 'Exhibition languages',
+    expoLangsHint: T ? 'انگلیسی همیشه فعال است. زبان‌های دیگر (مثل عربی، فارسی) را اضافه کنید و متن هر زبان را در فیلدهای زیر وارد کنید.' : 'English is always available. Add more languages (e.g. Arabic, Persian) and fill each language field below.',
+    defLang: T ? 'زبان پیش‌فرض' : 'Default language',
+    langCode: T ? 'کد' : 'Code', langName: T ? 'نام' : 'Name', langRtl: T ? 'راست‌به‌چپ' : 'RTL',
+    addLang: T ? 'افزودن زبان' : 'Add language',
+    expoJsonSample: T ? 'دانلود JSON نمونه چندزبانه' : 'Download multilingual sample',
     floorplan: T ? 'نقشه‌ی کف (غرفه‌ها و دکور را بکشید)' : 'Floor plan (drag booths & decor)',
     decoT: T ? 'دکوراسیون نمایشگاه' : 'Exhibition decor',
     decoHint: T ? 'هر فایل GLB را در هر نقطه سالن قرار دهید — روی نقشه بکشید، ارتفاع/اندازه/چرخش را تنظیم کنید.' : 'Place any GLB anywhere in the hall — drag on the map, set height, size and rotation.',
@@ -228,11 +259,22 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     { id: 'retail-bakery', title: { fa: 'نان و شیرینی', en: 'Bakery' }, description: { fa: 'نان، شیرینی، کیک و اسنک', en: 'Bread, pastry, cakes and snacks' }, color: '#d97706', shopSlugs: [] },
     { id: 'retail-care', title: { fa: 'بهداشتی و خانه', en: 'Care & Home' }, description: { fa: 'بهداشت، شوینده، لوازم خانه', en: 'Care, cleaning, home items' }, color: '#a855f7', shopSlugs: [] },
   ];
-  const setBi = (field: 'title' | 'subtitle', which: 'fa' | 'en', val: string) => patch({ [field]: { ...(e[field] || {}), [which]: val } } as any);
-  const setEntranceOrganizer = (which: 'fa' | 'en', val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [which]: val } });
-  const setRegTitle = (which: 'fa' | 'en', val: string) => patch({
-    entranceRegistration: { ...(e.entranceRegistration || { enabled: true }), title: { ...(e.entranceRegistration?.title || {}), [which]: val } },
+  const setBi = (field: 'title' | 'subtitle', code: string, val: string) => patch({ [field]: { ...(e[field] || {}), [code]: val } } as any);
+  const setEntranceOrganizer = (code: string, val: string) => patch({ entranceOrganizer: { ...(e.entranceOrganizer || {}), [code]: val } });
+  const setRegTitle = (code: string, val: string) => patch({
+    entranceRegistration: { ...(e.entranceRegistration || { enabled: true }), title: { ...(e.entranceRegistration?.title || {}), [code]: val } },
   });
+  const expoLangRows = () => (e.languages?.length ? e.languages : DEFAULT_EXPO_LANGS);
+  const updExpoLang = (idx: number, p: Partial<MetaShopLang>) => {
+    const rows = [...expoLangRows()];
+    rows[idx] = { ...rows[idx], ...p, code: (p.code ?? rows[idx].code).trim().toLowerCase() };
+    patch({ languages: rows });
+  };
+  const addExpoLang = () => patch({ languages: [...expoLangRows(), { code: '', name: '' }] });
+  const removeExpoLang = (idx: number) => {
+    const rows = expoLangRows().filter((_, i) => i !== idx);
+    patch({ languages: rows.length ? rows : DEFAULT_EXPO_LANGS });
+  };
   const setSpawn = (k: 'x' | 'z', v: number) => patch({ spawn: { x: e.spawn?.x ?? 0, y: 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), [k]: v } });
 
   // ── Entrance media / ads ──
@@ -620,6 +662,77 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
   const previewUrl = `${shopBaseUrl}?expo=${encodeURIComponent(bazaarSlug)}`;
   const shopProducts = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []) : []);
+  const downloadExpoMultilingualSample = () => {
+    const sample = {
+      _instructions: {
+        fa: 'نمونه نمایشگاه چندزبانه (انگلیسی + فارسی + عربی). فیلدهای title، subtitle، entranceOrganizer و name هر غرفه را برای هر زبان پر کنید. languages را در expo تنظیم کنید و defaultLang را انتخاب کنید.',
+        en: 'Multilingual expo sample (English + Persian + Arabic). Fill title, subtitle, entranceOrganizer and booth name for each language. Configure expo.languages and defaultLang.',
+        ar: 'نموذج معرض متعدد اللغات. املأ الحقول لكل لغة واضبط expo.languages و defaultLang.',
+      },
+      expo: {
+        enabled: true,
+        defaultLang: 'en',
+        languages: [
+          { code: 'en', name: 'English' },
+          { code: 'fa', name: 'فارسی', rtl: true },
+          { code: 'ar', name: 'العربية', rtl: true },
+        ],
+        visualStyle: 'exhibition',
+        title: {
+          en: 'International Trade Expo 2026',
+          fa: 'نمایشگاه تجاری بین‌المللی ۱۴۰۵',
+          ar: 'معرض التجارة الدولي ٢٠٢٦',
+        },
+        subtitle: {
+          en: 'Walk the 3D hall — English, Persian and Arabic',
+          fa: 'سالن سه‌بعدی — فارسی، انگلیسی و عربی',
+          ar: 'قاعة ثلاثية الأبعاد — عربي، فارسي وإنجليزي',
+        },
+        entranceEnabled: true,
+        entranceOrganizer: {
+          en: 'Tohid Dayhami Business Solutions',
+          fa: 'توحید دیهمی بیزینس سولوشنز',
+          ar: 'توحيد ديهامي لحلول الأعمال',
+        },
+        entranceRegistration: {
+          enabled: true,
+          title: {
+            en: 'Visitor registration',
+            fa: 'ثبت اطلاعات بازدیدکننده',
+            ar: 'تسجيل الزائر',
+          },
+        },
+        width: 30,
+        depth: 30,
+        height: 9,
+        spawn: { x: 0, y: 0, z: 8 },
+        booths: [
+          {
+            id: 'booth-sample-1',
+            name: { en: 'Iranian Fresh Produce', fa: 'محصولات تازه ایرانی', ar: 'منتجات إيرانية طازجة' },
+            x: -4, y: 0, z: 2,
+            shopSlug: 'iranian-fresh-produce',
+            tier: 'standard',
+          },
+          {
+            id: 'booth-sample-2',
+            name: { en: 'Business Services', fa: 'خدمات تجاری', ar: 'خدمات الأعمال' },
+            x: 4, y: 0, z: 2,
+            shopSlug: 'tohid-services',
+            tier: 'premium',
+          },
+        ],
+      },
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `metashop-sample-expo-multilingual-${bazaarSlug || 'bazaar'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const downloadExpoAdsJsonSample = () => {
     const wallAds = (e.wallAds || []).length > 0 ? (e.wallAds || []).map((ad, i) => ({
       id: ad.id || `wall-ad-${i + 1}`,
@@ -688,6 +801,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               ? <button type="button" onClick={() => onPreview()} title={t.previewHint} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</button>
               : (bazaarSlug && <a href={previewUrl} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</a>)
           )}
+          {e.enabled && <button type="button" onClick={downloadExpoMultilingualSample} className="text-xs px-3 py-2 rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50">⤓ {t.expoJsonSample}</button>}
           {e.enabled && <button type="button" onClick={downloadExpoAdsJsonSample} className="text-xs px-3 py-2 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">⤓ {t.adsJsonSample}</button>}
           <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
             <input type="checkbox" className="w-4 h-4 accent-indigo-600" disabled={readonly} checked={!!e.enabled} onChange={ev => onChange({ ...(expo || blankExpo()), enabled: ev.target.checked })} />
@@ -698,12 +812,32 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
 
       {e.enabled && (
         <div className="space-y-5 animate-fade-in">
+          <div className="border border-gray-100 rounded-xl p-4">
+            <h5 className="font-bold text-gray-700 text-sm mb-1">{t.expoLangsT}</h5>
+            <p className="text-[11px] text-gray-500 mb-3">{t.expoLangsHint}</p>
+            <div className="space-y-2 mb-3">
+              {expoLangRows().map((l, i) => (
+                <div key={`${l.code}-${i}`} className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-100">
+                  <input className={fld + ' w-20 dir-ltr'} placeholder={t.langCode} value={l.code} disabled={l.code === 'en' || readonly} onChange={ev => updExpoLang(i, { code: ev.target.value })} />
+                  <input className={fld + ' flex-1 min-w-[8rem]'} placeholder={t.langName} value={l.name} disabled={readonly} onChange={ev => updExpoLang(i, { name: ev.target.value })} />
+                  <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" disabled={readonly} checked={!!l.rtl} onChange={ev => updExpoLang(i, { rtl: ev.target.checked })} />{t.langRtl}</label>
+                  {l.code !== 'en' && !readonly && <button type="button" onClick={() => removeExpoLang(i)} className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg"><IconTrash className="w-3.5 h-3.5" /></button>}
+                </div>
+              ))}
+            </div>
+            {!readonly && <button type="button" onClick={addExpoLang} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addLang}</button>}
+            <div className="mt-3"><label className={lbl}>{t.defLang}</label>
+              <select className={fld + ' bg-white max-w-xs'} value={e.defaultLang || 'en'} disabled={readonly} onChange={ev => patch({ defaultLang: ev.target.value })}>
+                {expoLangs.map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}
+              </select>
+            </div>
+          </div>
+
           {/* Hall settings */}
           <div className="border border-gray-100 rounded-xl p-4">
             <h5 className="font-bold text-gray-700 text-sm mb-3">{t.hall}</h5>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div><label className={lbl}>{t.titleFa}</label><input className={fld} value={e.title?.fa || ''} onChange={ev => setBi('title', 'fa', ev.target.value)} /></div>
-              <div><label className={lbl}>{t.titleEn}</label><input className={fld + ' dir-ltr'} value={e.title?.en || ''} onChange={ev => setBi('title', 'en', ev.target.value)} /></div>
+              <DirCatInputs langs={expoLangs} value={e.title} onChange={(code, val) => setBi('title', code, val)} fld={fld} lbl={lbl} />
               <div><label className={lbl}>{t.preset}</label><select className={fld + ' bg-white'} value={e.preset || 'warehouse'} onChange={ev => patch({ preset: ev.target.value as EnvPreset })}>{PRESETS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
               <div><label className={lbl}>{t.visualStyle}</label>
                 <select className={fld + ' bg-white'} value={e.visualStyle === 'business_center' ? 'storefront' : (e.visualStyle || 'exhibition')} onChange={ev => {
@@ -720,8 +854,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   <option value="supermarket">{t.styleSupermarket}</option>
                 </select>
               </div>
-              <div><label className={lbl}>{t.subFa}</label><input className={fld} value={e.subtitle?.fa || ''} onChange={ev => setBi('subtitle', 'fa', ev.target.value)} /></div>
-              <div><label className={lbl}>{t.subEn}</label><input className={fld + ' dir-ltr'} value={e.subtitle?.en || ''} onChange={ev => setBi('subtitle', 'en', ev.target.value)} /></div>
+              <DirCatInputs langs={expoLangs} value={e.subtitle} onChange={(code, val) => setBi('subtitle', code, val)} fld={fld} lbl={lbl} />
               <div className="grid grid-cols-3 gap-2">
                 <div><label className={lbl}>{t.width}</label><input type="number" className={fld} value={e.width ?? 30} onChange={ev => patch({ width: +ev.target.value })} /></div>
                 <div><label className={lbl}>{t.depth}</label><input type="number" className={fld} value={e.depth ?? 30} onChange={ev => patch({ depth: +ev.target.value })} /></div>
@@ -750,8 +883,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             {e.entranceEnabled && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div><label className={lbl}>{t.organizerFa}</label><input className={fld} value={e.entranceOrganizer?.fa || ''} onChange={ev => setEntranceOrganizer('fa', ev.target.value)} placeholder={e.title?.fa || ''} /></div>
-                  <div><label className={lbl}>{t.organizerEn}</label><input className={fld + ' dir-ltr'} value={e.entranceOrganizer?.en || ''} onChange={ev => setEntranceOrganizer('en', ev.target.value)} placeholder={e.title?.en || ''} /></div>
+                  <DirCatInputs langs={expoLangs} value={e.entranceOrganizer} onChange={setEntranceOrganizer} fld={fld} lbl={lbl} />
                   <ImgUpload id="entrance-doorman" value={e.entranceDoormanImage} onUrl={u => patch({ entranceDoormanImage: u || undefined })} label={t.doormanPng} />
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
@@ -773,8 +905,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   </div>
                   {e.entranceRegistration?.enabled !== false && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div><label className={lbl}>{t.regTitleFa}</label><input className={fld} value={e.entranceRegistration?.title?.fa || ''} onChange={ev => setRegTitle('fa', ev.target.value)} placeholder="ثبت اطلاعات بازدیدکننده" /></div>
-                      <div><label className={lbl}>{t.regTitleEn}</label><input className={fld + ' dir-ltr'} value={e.entranceRegistration?.title?.en || ''} onChange={ev => setRegTitle('en', ev.target.value)} placeholder="Visitor registration" /></div>
+                      <DirCatInputs langs={expoLangs} value={e.entranceRegistration?.title} onChange={setRegTitle} fld={fld} lbl={lbl} />
                     </div>
                   )}
                 </div>
@@ -1101,8 +1232,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                       {open && (
                         <div className="border-t border-gray-100 p-3 space-y-3 bg-gray-50/50">
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <div><label className={lbl}>{t.boothFa}</label><input className={fld} value={b.name?.fa || ''} onChange={ev => updBooth(b.id, { name: { ...(b.name || {}), fa: ev.target.value } })} /></div>
-                            <div><label className={lbl}>{t.boothEn}</label><input className={fld + ' dir-ltr'} value={b.name?.en || ''} onChange={ev => updBooth(b.id, { name: { ...(b.name || {}), en: ev.target.value } })} /></div>
+                            <DirCatInputs langs={expoLangs} value={b.name} onChange={(code, val) => updBooth(b.id, { name: { ...(b.name || {}), [code]: val } })} fld={fld} lbl={lbl} />
                             <div><label className={lbl}>{t.shop}</label>
                               <div className="flex gap-1.5">
                                 <select className={fld + ' bg-white'} value={b.shopSlug || ''} onChange={ev => applyShopToBooth(b, ev.target.value)}>

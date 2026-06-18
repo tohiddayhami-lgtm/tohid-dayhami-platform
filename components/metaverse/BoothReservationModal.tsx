@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBooth } from '../../types';
 import { Language } from '../../App';
-import { bi } from './expoUtils';
+import { bi, isRtlExpoLang, expoPhrase } from './expoUtils';
 import { tryReserveBooth } from '../../services/firebaseService';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   bazaar: MetaBazaar;
   booth: MetaverseBooth | null;
   visitorId: string;
-  lang: Language;
+  lang: string;
   onClose: () => void;
   onReserved: () => void;
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
@@ -27,7 +27,7 @@ const getSessionId = () => {
 export const BoothReservationModal: React.FC<Props> = ({
   open, bazaar, booth, visitorId, lang, onClose, onReserved, onTrack,
 }) => {
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
@@ -40,7 +40,7 @@ export const BoothReservationModal: React.FC<Props> = ({
 
   if (!open || !booth) return null;
 
-  const boothName = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
+  const boothName = bi(booth.name, lang, expoPhrase(lang, 'booth'));
 
   const t = {
     title: T ? 'رزرو غرفه' : 'Reserve booth',
@@ -157,7 +157,7 @@ export const BoothReservationModal: React.FC<Props> = ({
 
 export const exportBoothReservationsCSV = (rows: MetaExpoBoothReservation[], lang: Language, filename: string) => {
   if (!rows.length) return;
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang);
   const headers = T
     ? ['تاریخ', 'غرفه', 'نام', 'نام خانوادگی', 'شرکت', 'سمت', 'محصول', 'واتساپ', 'وضعیت']
     : ['Date', 'Booth', 'First name', 'Last name', 'Company', 'Job title', 'Product', 'WhatsApp', 'Status'];

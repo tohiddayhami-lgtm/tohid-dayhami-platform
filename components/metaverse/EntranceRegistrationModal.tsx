@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import type { MetaBazaar, MetaExpoEvent, MetaExpoRegistration } from '../../types';
 import { Language } from '../../App';
 import { saveMetaExpoRegistration } from '../../services/firebaseService';
+import { isRtlExpoLang } from './expoUtils';
 
 interface Props {
   open: boolean;
   bazaar: MetaBazaar;
   visitorId: string;
-  lang: Language;
+  lang: string;
   title?: string;
   onClose: () => void;
   onSubmitted: (profile: { name: string; company: string; jobTitle: string }) => void;
@@ -26,7 +27,7 @@ const getSessionId = () => {
 export const EntranceRegistrationModal: React.FC<Props> = ({
   open, bazaar, visitorId, lang, title, onClose, onSubmitted, onTrack,
 }) => {
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [company, setCompany] = useState('');
@@ -155,7 +156,7 @@ export const EntranceRegistrationModal: React.FC<Props> = ({
 /** CSV export helper for admin — opens in Excel with UTF-8 BOM. */
 export const exportExpoRegistrationsCSV = (rows: MetaExpoRegistration[], lang: Language, filename: string) => {
   if (!rows.length) return;
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang);
   const headers = T
     ? ['تاریخ', 'نام', 'نام خانوادگی', 'شرکت', 'سمت', 'محصول/خدمت', 'واتساپ', 'شهر', 'کشور']
     : ['Date', 'First name', 'Last name', 'Company', 'Job title', 'Product/service', 'WhatsApp', 'City', 'Country'];

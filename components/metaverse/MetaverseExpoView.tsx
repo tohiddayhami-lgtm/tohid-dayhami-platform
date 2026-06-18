@@ -5,7 +5,7 @@ import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
-import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
+import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
@@ -181,7 +181,11 @@ const ExpoAnalyticsTracker: React.FC<{
 export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit }) => {
   const expo = bazaar.expo!;
   const caps = useDeviceCapabilities();
-  const [lang, setLang] = useState<Language>((expo.defaultLang === 'fa' || expo.defaultLang === 'en') ? expo.defaultLang : initialLang);
+  const expoLangs = useMemo(() => resolveExpoLanguages(expo), [expo.languages]);
+  const defaultExpoLang = expo.defaultLang && expoLangs.some(l => l.code === expo.defaultLang)
+    ? expo.defaultLang
+    : (expoLangs[0]?.code || 'en');
+  const [lang, setLang] = useState<string>(defaultExpoLang);
   const [mode, setMode] = useState<'fp' | 'orbit'>('fp');
   const [pointerLock, setPointerLock] = useState(false);
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
@@ -222,7 +226,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     EXPO_DEFAULTS.eyeHeight,
     startZ,
   ];
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang, expoLangs);
   const roomId = `expo_${bazaar.id}`;
   const visitor = useMemo(() => liveVisitor(bazaar.id), [bazaar.id]);
   const [visitorName, setVisitorName] = useState(visitor.name);
@@ -322,17 +326,17 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   };
 
   const ui = {
-    exit: T ? 'خروج' : 'Exit',
-    fp: T ? 'اول‌شخص' : 'First-person',
-    orbit: T ? 'نمای کلی' : 'Overview',
-    lock: T ? 'حالت غوطه‌ور' : 'Immersive',
-    vr: T ? 'ورود به VR' : 'Enter VR',
-    seated: T ? 'نشسته' : 'Seated',
-    standing: T ? 'ایستاده' : 'Standing',
-    heightHint: T ? 'ارتفاع دید برای عینک VR' : 'VR viewing height',
-    helpDesktop: T ? 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید' : 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
-    helpTouch: T ? 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید' : 'Left stick = move · right stick = look/turn · tap markers & booths',
-    gotIt: T ? 'متوجه شدم' : 'Got it',
+    exit: expoUi(lang, 'exit'),
+    fp: expoUi(lang, 'fp'),
+    orbit: expoUi(lang, 'orbit'),
+    lock: expoUi(lang, 'lock'),
+    vr: expoUi(lang, 'vr'),
+    seated: expoUi(lang, 'seated'),
+    standing: expoUi(lang, 'standing'),
+    heightHint: expoUi(lang, 'heightHint'),
+    helpDesktop: expoUi(lang, 'helpDesktop'),
+    helpTouch: expoUi(lang, 'helpTouch'),
+    gotIt: expoUi(lang, 'gotIt'),
   };
 
   const chip = 'px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 shadow transition-colors';
@@ -380,7 +384,16 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <div className="px-3 py-2 rounded-lg bg-black/40 text-white text-sm font-bold backdrop-blur max-w-[40vw] truncate">{bi(expo.title, lang, bazaar.name)}</div>
         </div>
         <div className="flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
-          <button onClick={() => setLang(l => l === 'fa' ? 'en' : 'fa')} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{T ? 'EN' : 'فا'}</button>
+          <select
+            value={lang}
+            onChange={e => setLang(e.target.value)}
+            className={chip + ' bg-white/90 text-gray-900 hover:bg-white cursor-pointer max-w-[9rem] truncate'}
+            title={expoLangs.find(l => l.code === lang)?.name || lang}
+          >
+            {expoLangs.map(l => (
+              <option key={l.code} value={l.code}>{l.name || l.code}</option>
+            ))}
+          </select>
           <button onClick={() => setMode(m => m === 'fp' ? 'orbit' : 'fp')} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{mode === 'fp' ? '🛰 ' + ui.orbit : '🚶 ' + ui.fp}</button>
           {caps.finePointer && mode === 'fp' && (
             <button onClick={() => setPointerLock(p => !p)} className={chip + (pointerLock ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🔒 {ui.lock}</button>
@@ -419,7 +432,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         bazaar={bazaar}
         visitorId={visitor.id}
         lang={lang}
-        title={bi(expo.entranceRegistration?.title, lang, lang === 'fa' ? 'ثبت اطلاعات بازدیدکننده' : 'Visitor registration')}
+        title={bi(expo.entranceRegistration?.title, lang, expoPhrase(lang, 'visitorReg'))}
         onClose={() => setRegistrationOpen(false)}
         onSubmitted={(profile) => {
           setVisitorName(profile.name);

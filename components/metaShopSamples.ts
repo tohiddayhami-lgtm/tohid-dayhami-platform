@@ -188,15 +188,43 @@ export const BAZAAR_SAMPLE: MetaBazaar = {
       ],
     },
   ],
+  expo: {
+    enabled: true,
+    defaultLang: 'en',
+    languages: [
+      { code: 'en', name: 'English' },
+      { code: 'fa', name: 'فارسی', rtl: true },
+      { code: 'ar', name: 'العربية', rtl: true },
+    ],
+    visualStyle: 'exhibition',
+    title: {
+      en: 'Tohid Dayhami Virtual Bazaar',
+      fa: 'بازارچه مجازی توحید دیهمی',
+      ar: 'سوق توحيد ديهامي الافتراضي',
+    },
+    subtitle: {
+      en: 'Explore shops in English, Persian or Arabic',
+      fa: 'فروشگاه‌ها را به فارسی، انگلیسی یا عربی ببینید',
+      ar: 'استكشف المتاجر بالعربية أو الفارسية أو الإنجليزية',
+    },
+    entranceEnabled: true,
+    width: 30,
+    depth: 30,
+    height: 9,
+    spawn: { x: 0, y: 0, z: 8 },
+    booths: [],
+  },
 };
 
-export const downloadSample = (kind: 'products' | 'services' | 'bazaar') => {
-  const data = kind === 'products' ? PRODUCTS_SAMPLE : kind === 'services' ? SERVICES_SAMPLE : BAZAAR_SAMPLE;
+export const downloadSample = (kind: 'products' | 'services' | 'bazaar' | 'expo') => {
+  const data = kind === 'products' ? PRODUCTS_SAMPLE : kind === 'services' ? SERVICES_SAMPLE : kind === 'expo'
+    ? { _instructions: { fa: 'نمونه expo چندزبانه — در JSON بازارچه قرار دهید یا Update from JSON', en: 'Multilingual expo sample — merge into bazaar JSON' }, expo: BAZAAR_SAMPLE.expo }
+    : BAZAAR_SAMPLE;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = kind === 'bazaar' ? 'metashop-sample-bazaar.json' : `metashop-sample-${kind}.json`;
+  a.download = kind === 'bazaar' ? 'metashop-sample-bazaar.json' : kind === 'expo' ? 'metashop-sample-expo.json' : `metashop-sample-${kind}.json`;
   a.click();
   URL.revokeObjectURL(url);
 };

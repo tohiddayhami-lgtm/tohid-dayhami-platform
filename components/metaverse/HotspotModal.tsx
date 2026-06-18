@@ -1,12 +1,12 @@
 import React from 'react';
 import type { MetaverseHotspot, MetaShop, MetaShopProduct } from '../../types';
 import { Language } from '../../App';
-import { bi, videoEmbed, waLink, HOTSPOT_ICON } from './expoUtils';
+import { bi, videoEmbed, waLink, HOTSPOT_ICON, isRtlExpoLang } from './expoUtils';
 
 interface Props {
   hotspot: MetaverseHotspot | null;
   shops: MetaShop[];
-  lang: Language;
+  lang: string;
   onClose: () => void;
   onOpenShop: (slug: string) => void;
 }
@@ -15,7 +15,7 @@ interface Props {
 // full shop (order/company/product/page) deep-links into the existing public shop via onOpenShop.
 export const HotspotModal: React.FC<Props> = ({ hotspot, shops, lang, onClose, onOpenShop }) => {
   if (!hotspot) return null;
-  const T = lang === 'fa';
+  const T = isRtlExpoLang(lang);
   const h = hotspot;
   const shop = h.shopSlug ? shops.find(s => s.slug === h.shopSlug) : undefined;
   const product: MetaShopProduct | undefined = shop && h.productRef ? shop.products.find(p => p.id === h.productRef) : undefined;

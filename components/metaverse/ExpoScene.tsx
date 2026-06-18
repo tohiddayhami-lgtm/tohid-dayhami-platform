@@ -10,7 +10,7 @@ import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
 import { WallAd, PresentationScreen } from './WallMedia';
-import { bi } from './expoUtils';
+import { bi, expoPhrase } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
@@ -54,8 +54,8 @@ const ExpoEntrance: React.FC<{
 }> = ({ expo, lang, width, depth, onTrack, onRegistrationKioskClick }) => {
   const z0 = depth / 2 + 7.2;
   const z1 = depth / 2 + 0.55;
-  const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
-  const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
+  const organizer = bi(expo.entranceOrganizer || expo.title, lang, expoPhrase(lang, 'organizer'));
+  const title = bi(expo.title, lang, expoPhrase(lang, 'enterExpo'));
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const entranceAds = (expo.entranceAds || []).filter(ad => ad.enabled !== false);
   const apronStart = depth / 2 + 0.18;
@@ -72,7 +72,7 @@ const ExpoEntrance: React.FC<{
   }, {});
   const railSeen: Record<string, number> = {};
   const showRegKiosk = expo.entranceRegistration?.enabled !== false;
-  const kioskLabel = bi(expo.entranceRegistration?.title, lang, lang === 'fa' ? 'ثبت اطلاعات' : 'Register');
+  const kioskLabel = bi(expo.entranceRegistration?.title, lang, expoPhrase(lang, 'register'));
   const kioskZ = z1 + 1.75;
   const openKiosk = () => {
     onTrack?.('entrance_kiosk_click', { targetType: 'registration_kiosk', side: 'entrance_gate' });
@@ -147,7 +147,7 @@ const ExpoEntrance: React.FC<{
             key={ad.id}
             image={ad.image}
             url={ad.url}
-            title={bi(ad.title, lang, lang === 'fa' ? 'تبلیغات ورودی' : 'Entrance ad')}
+            title={bi(ad.title, lang, expoPhrase(lang, 'entranceAd'))}
             w={ad.w || 2}
             h={ad.h || 3.5}
             position={position}
@@ -277,9 +277,9 @@ const RetailCategoryZone: React.FC<{
 }> = ({ cat, index, total, width, depth, lang }) => {
   const { x, z, zoneW, zoneD } = retailZoneFrame(cat, index, total, width, depth);
   const color = cat.color || '#16a34a';
-  const title = bi(cat.title, lang, lang === 'fa' ? 'دسته‌بندی' : 'Department');
+  const title = bi(cat.title, lang, expoPhrase(lang, 'category'));
   const desc = bi(cat.description, lang, '');
-  const aisleLabel = lang === 'fa' ? `راهروی ${index + 1}` : `Aisle ${index + 1}`;
+  const aisleLabel = `${expoPhrase(lang, 'aisle')} ${index + 1}`;
   return (
     <group position={[x, 0.025, z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -303,7 +303,7 @@ const RetailCategoryZone: React.FC<{
 
 const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: number; depth: number; lang: Language }> = ({ categories, width, depth, lang }) => {
   if (categories.length === 0) return null;
-  const title = lang === 'fa' ? 'راهنمای بخش‌های فروشگاه' : 'Store Department Guide';
+  const title = expoPhrase(lang, 'deptGuide');
   const z = depth / 2 - 2.15;
   return (
     <group position={[Math.min(width / 2 - 2.1, 5.4), 0, z]} rotation={[0, Math.PI, 0]}>
@@ -314,7 +314,7 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
       <CanvasLabel text={title} width={4.25} height={0.44} position={[0, 3.02, 0.145]} bg="rgba(255,255,255,.1)" color="#ffffff" />
       {categories.slice(0, 8).map((cat, i) => {
         const y = 2.46 - i * 0.28;
-        const label = `${lang === 'fa' ? 'راهرو' : 'Aisle'} ${i + 1} · ${bi(cat.title, lang, '')}`;
+        const label = `${expoPhrase(lang, 'aisle')} ${i + 1} · ${bi(cat.title, lang, '')}`;
         return (
           <group key={cat.id} position={[0, y, 0]}>
             <mesh position={[-2.0, 0, -0.15]}>

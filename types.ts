@@ -586,7 +586,7 @@ export interface MetaShopTheme {
 export interface MetaShopColorOption { name: string; hex: string; hex2?: string; }
 
 // Bilingual bazaar category / subcategory label
-export interface MetaShopDirCat { fa?: string; en?: string; }
+export interface MetaShopDirCat { fa?: string; en?: string; ar?: string; zh?: string; [lang: string]: string | undefined; }
 
 // ── Meta Bazaar: a curated, multi-level directory of shops with its own link ──
 export interface MetaBazaarNode {
@@ -796,7 +796,8 @@ export interface ExpoDecoration {
 
 export interface MetaverseExpo {
   enabled: boolean;
-  defaultLang?: string;         // 'fa' | 'en' (visitor can still toggle)
+  defaultLang?: string;         // opening language code (visitor can switch)
+  languages?: MetaShopLang[];   // supported languages — English is always included
   visualStyle?: ExpoVisualStyle; // exhibition booths, glass storefronts, or supermarket departments
   title?: MetaShopDirCat;
   subtitle?: MetaShopDirCat;

@@ -6,7 +6,7 @@ import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { BoothTier, ExpoVisualStyle, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
+import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
@@ -891,7 +891,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // and an optional auto-playing LCD screen).
 export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothReservation, onReserveBooth }) => {
   const accent = booth.color || '#2d4a1a';
-  const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
+  const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
   const tier: BoothTier = booth.tier || 'basic';
   const tierSpec = {
@@ -903,14 +903,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const W = 4, D = 4, wallH = 3.2;          // keep the core footprint stable so layout/buttons don't shift
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
-  const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
-  const reserveBooth = lang === 'fa' ? 'رزرو غرفه' : 'Reserve';
-  const reservedPending = lang === 'fa' ? 'رزرو موقت' : 'Held';
-  const reservedConfirmed = lang === 'fa' ? 'رزرو قطعی' : 'Booked';
+  const enterShop = expoPhrase(lang, 'enterShop');
+  const reserveBooth = expoPhrase(lang, 'reserveBooth');
+  const reservedPending = expoPhrase(lang, 'reservedPending');
+  const reservedConfirmed = expoPhrase(lang, 'reservedConfirmed');
   const activeReservation = boothReservation && (boothReservation.status === 'pending' || boothReservation.status === 'confirmed') ? boothReservation : null;
   const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket' || visualStyle === 'business_center';
   const signText = bi(booth.storefrontSignText, lang, name);
-  const glassText = bi(booth.storefrontGlassText, lang, lang === 'fa' ? 'خدمات و محصولات ویژه' : 'Services & special offers');
+  const glassText = bi(booth.storefrontGlassText, lang, expoPhrase(lang, 'glassDefault'));
   const premiumSignText = bi(booth.premiumSignText, lang, name);
   const premiumSignColor = booth.premiumSignColor || accent;
 
@@ -946,7 +946,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const legacyWhatsapps = (booth as any).managerWhatsapps as string[] | undefined;
   const managerLinks = managerSlots.map(i => booth.managerLinks?.[i] || legacyWhatsapps?.[i] || '');
   const managerAudios = managerSlots.map(i => (
-    lang === 'fa'
+    (lang === 'fa' || lang === 'ar')
       ? (booth.managerAudiosFa?.[i] || booth.managerAudios?.[i] || booth.managerAudiosEn?.[i] || '')
       : (booth.managerAudiosEn?.[i] || booth.managerAudios?.[i] || booth.managerAudiosFa?.[i] || '')
   ));
@@ -1028,8 +1028,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const shelfD = 1.38;
     const shelfH = 2.35;
     const productColors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#8b5cf6', '#ec4899', '#84cc16'];
-    const categoryLabel = categoryName || (lang === 'fa' ? 'بخش فروشگاهی' : 'Department');
-    const shopAction = lang === 'fa' ? 'محصولات برند' : 'Brand products';
+    const categoryLabel = categoryName || expoPhrase(lang, 'department');
+    const shopAction = expoPhrase(lang, 'brandProducts');
     const brandMark = (name || 'B').trim().slice(0, 2);
     const signColor = categoryColor || accent;
     return (

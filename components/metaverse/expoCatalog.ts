@@ -1,4 +1,5 @@
 import type { ExpoVisualStyle, MetaBazaar, MetaverseExpo, EnvPreset } from '../../types';
+import { DEFAULT_EXPO_LANGS } from './expoUtils';
 
 export type ExpoCatalogFilter = ExpoVisualStyle | 'all';
 
@@ -80,6 +81,8 @@ export const filterBazaarsByExpoStyle = (
 
 export const blankExpoForStyle = (style: ExpoVisualStyle): MetaverseExpo => ({
   enabled: true,
+  defaultLang: 'en',
+  languages: [...DEFAULT_EXPO_LANGS],
   visualStyle: style === 'business_center' ? 'storefront' : style,
   preset: 'warehouse' as EnvPreset,
   width: style === 'storefront' || style === 'business_center' ? 24 : 30,

@@ -1,11 +1,93 @@
-import type { MetaShopDirCat, MetaverseExpo, MetaverseBooth, MetaShop, BoothEntranceFacing } from '../../types';
-import { Language } from '../../App';
+import type { MetaShopDirCat, MetaShopLang, MetaverseExpo, MetaverseBooth, MetaShop, BoothEntranceFacing } from '../../types';
 
-// ── Bilingual label resolver (mirrors the {fa,en} pattern used across MetaShop/MetaBazaar) ──
-export const bi = (v: MetaShopDirCat | undefined | null, lang: Language, fallback = ''): string => {
+export type ExpoLangCode = string;
+
+export const DEFAULT_EXPO_LANGS: MetaShopLang[] = [
+  { code: 'en', name: 'English' },
+  { code: 'fa', name: 'فارسی', rtl: true },
+];
+
+/** English is always available; merge configured languages without duplicates. */
+export const resolveExpoLanguages = (expo?: MetaverseExpo | null): MetaShopLang[] => {
+  const map = new Map<string, MetaShopLang>();
+  map.set('en', { code: 'en', name: 'English' });
+  (expo?.languages || []).forEach(l => {
+    const code = (l.code || '').trim().toLowerCase();
+    if (!code) return;
+    map.set(code, { code, name: (l.name || code).trim(), rtl: l.rtl });
+  });
+  if (map.size === 1) map.set('fa', { code: 'fa', name: 'فارسی', rtl: true });
+  return Array.from(map.values());
+};
+
+export const isRtlExpoLang = (code: string, langs?: MetaShopLang[]) =>
+  langs?.find(l => l.code === code)?.rtl ?? (code === 'fa' || code === 'ar');
+
+// ── Bilingual / multilingual label resolver ──
+export const bi = (v: MetaShopDirCat | undefined | null, lang: ExpoLangCode, fallback = ''): string => {
   if (!v) return fallback;
-  if (lang === 'fa') return (v.fa || v.en || fallback);
-  return (v.en || v.fa || fallback);
+  const code = (lang || 'en').toLowerCase();
+  const direct = v[code];
+  if (direct?.trim()) return direct;
+  if (code !== 'en' && v.en?.trim()) return v.en;
+  if (code !== 'fa' && v.fa?.trim()) return v.fa;
+  const any = Object.values(v).find(s => typeof s === 'string' && s.trim());
+  return (any as string | undefined) || fallback;
+};
+
+const EXPO_PHRASES: Record<string, Partial<Record<string, string>>> = {
+  booth: { fa: 'غرفه', en: 'Booth', ar: 'جناح' },
+  enterShop: { fa: 'ورود به فروشگاه', en: 'Enter shop', ar: 'دخول المتجر' },
+  reserveBooth: { fa: 'رزرو غرفه', en: 'Reserve', ar: 'حجز الجناح' },
+  reservedPending: { fa: 'رزرو موقت', en: 'Held', ar: 'محجوز مؤقتًا' },
+  reservedConfirmed: { fa: 'رزرو قطعی', en: 'Booked', ar: 'محجوز نهائيًا' },
+  glassDefault: { fa: 'خدمات و محصولات ویژه', en: 'Services & special offers', ar: 'خدمات وعروض خاصة' },
+  department: { fa: 'بخش فروشگاهی', en: 'Department', ar: 'قسم المتجر' },
+  brandProducts: { fa: 'محصولات برند', en: 'Brand products', ar: 'منتجات العلامة' },
+  organizer: { fa: 'برگزارکننده نمایشگاه', en: 'Exhibition Organizer', ar: 'منظم المعرض' },
+  enterExpo: { fa: 'ورود به نمایشگاه', en: 'Enter Exhibition', ar: 'دخول المعرض' },
+  register: { fa: 'ثبت اطلاعات', en: 'Register', ar: 'تسجيل' },
+  entranceAd: { fa: 'تبلیغات ورودی', en: 'Entrance ad', ar: 'إعلان المدخل' },
+  category: { fa: 'دسته‌بندی', en: 'Department', ar: 'قسم' },
+  deptGuide: { fa: 'راهنمای بخش‌های فروشگاه', en: 'Store Department Guide', ar: 'دليل أقسام المتجر' },
+  visitorReg: { fa: 'ثبت اطلاعات بازدیدکننده', en: 'Visitor registration', ar: 'تسجيل الزائر' },
+  aisle: { fa: 'راهرو', en: 'Aisle', ar: 'ممر' },
+};
+
+export const expoPhrase = (lang: ExpoLangCode, key: keyof typeof EXPO_PHRASES, fallback = ''): string => {
+  const pack = EXPO_PHRASES[key];
+  if (!pack) return fallback;
+  const code = (lang || 'en').toLowerCase();
+  return pack[code] || pack.en || pack.fa || fallback;
+};
+
+const EXPO_UI: Record<string, Record<string, string>> = {
+  fa: {
+    exit: 'خروج', fp: 'اول‌شخص', orbit: 'نمای کلی', lock: 'حالت غوطه‌ور', vr: 'ورود به VR',
+    seated: 'نشسته', standing: 'ایستاده', gotIt: 'متوجه شدم',
+    helpDesktop: 'با WASD/کلیدهای جهت‌دار راه بروید · با درگ ماوس نگاه کنید · دوبار کلیک روی کف = پرش · روی نشانگرها کلیک کنید',
+    helpTouch: 'اهرم چپ = حرکت · اهرم راست = چرخش/نگاه · روی نشانگرها و غرفه‌ها بزنید',
+    heightHint: 'ارتفاع دید برای عینک VR',
+  },
+  en: {
+    exit: 'Exit', fp: 'First-person', orbit: 'Overview', lock: 'Immersive', vr: 'Enter VR',
+    seated: 'Seated', standing: 'Standing', gotIt: 'Got it',
+    helpDesktop: 'WASD / arrows to move · drag to look · double-click floor to teleport · click markers',
+    helpTouch: 'Left stick = move · right stick = look/turn · tap markers & booths',
+    heightHint: 'VR viewing height',
+  },
+  ar: {
+    exit: 'خروج', fp: 'منظور أول', orbit: 'نظرة عامة', lock: 'غامر', vr: 'دخول VR',
+    seated: 'جالس', standing: 'واقف', gotIt: 'حسنًا',
+    helpDesktop: 'WASD / الأسهم للتحرك · اسحب للنظر · نقرتان على الأرض للانتقال · انقر العلامات',
+    helpTouch: 'العصا اليسرى = حركة · اليمنى = نظر · المس العلامات والأجنحة',
+    heightHint: 'ارتفاع الرؤية لنظارات VR',
+  },
+};
+
+export const expoUi = (lang: ExpoLangCode, key: string): string => {
+  const code = (lang || 'en').toLowerCase();
+  return EXPO_UI[code]?.[key] || EXPO_UI.en?.[key] || EXPO_UI.fa?.[key] || key;
 };
 
 // Sensible hall defaults so a freshly-enabled expo already looks like a room.
@@ -126,7 +208,7 @@ export const isHtmlFile = (url?: string): boolean => !!url && /\.html?(\?.*)?$/i
 
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
 // accent color, logo, and panels (cover image inside-back, first product video for the LCD).
-export const shopToBoothFields = (shop: MetaShop, lang: Language): Partial<MetaverseBooth> => {
+export const shopToBoothFields = (shop: MetaShop, lang: ExpoLangCode): Partial<MetaverseBooth> => {
   const fa = (shop.i18n?.fa?.title) || shop.title || shop.name;
   const en = shop.title || shop.name; // shop titles are single-language; reuse name for EN
   const firstVideo = (shop.products || []).find(p => p.videoUrl)?.videoUrl;
