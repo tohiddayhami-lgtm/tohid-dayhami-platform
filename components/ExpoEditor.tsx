@@ -69,7 +69,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     styleExhibition: T ? 'نمایشگاهی کلاسیک' : 'Classic exhibition',
     styleStorefront: T ? 'مغازه شیشه‌ای' : 'Glass storefront shops',
     styleSupermarket: T ? 'مرکز خرید / فروشگاه زنجیره‌ای' : 'Mall / supermarket departments',
-    styleBusinessCenter: T ? 'مرکز تجاری متا (۳ طبقه + پله)' : 'Meta Business Center (3 floors + stairs)',
+    styleBusinessCenter: T ? 'دفاتر تجاری (۳ طبقه)' : 'Commercial offices (3 floors)',
     width: T ? 'عرض سالن (متر)' : 'Width (m)', depth: T ? 'عمق سالن (متر)' : 'Depth (m)', height: T ? 'ارتفاع سقف (متر)' : 'Ceiling height (m)',
     preset: T ? 'محیط/نور' : 'Environment', ground: T ? 'رنگ کف' : 'Ground color', wall: T ? 'رنگ دیوار' : 'Wall color',
     envGlb: T ? 'مدل محیط سفارشی (GLB)' : 'Custom environment GLB', skybox: T ? 'آسمان/HDR (URL)' : 'Skybox / HDR (URL)', music: T ? 'موزیک محیط (URL)' : 'Ambient music (URL)',
@@ -124,7 +124,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     layoutPerimeter: T ? 'دور سالن' : 'Perimeter',
     layoutStorefront: T ? 'خیابان مغازه‌ای' : 'Storefront street',
     layoutSupermarket: T ? 'فروشگاه زنجیره‌ای' : 'Supermarket aisles',
-    layoutBusinessCenter: T ? 'مرکز تجاری ۳ طبقه' : '3-floor business center',
+    layoutBusinessCenter: T ? 'دفاتر تجاری — راهروی دوطرفه' : 'Offices — facing aisle',
     boothFloor: T ? 'طبقه دفتر' : 'Office floor',
     applyLayout: T ? 'تغییر چیدمان غرفه‌های فعلی' : 'Rearrange current booths',
     applyTierAll: T ? 'اعمال نوع به همه' : 'Apply type to all',
@@ -622,7 +622,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
         {isBC && (
           <p className="text-[11px] text-slate-600 mb-2">
             {T
-              ? 'دفاتر روی جایگاه‌های مشخص چیده می‌شوند (کادر خط‌چین = خالی). فرش‌ها راهروهای اصلی، شاخه شمال/جنوب و پله را نشان می‌دهند.'
+              ? 'دفاتر دو طرف راهرو چیده می‌شوند (ویترین رو به مسیر). کادر خط‌چین = جایگاه خالی.'
               : 'Offices snap to fixed slots (dashed = empty). Carpets mark main corridor, north/south arms, and stairs.'}
           </p>
         )}
@@ -1147,10 +1147,10 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 {(e.retailCategories || []).map(c => <option key={c.id} value={c.id}>{(T ? c.title?.fa : c.title?.en) || c.title?.fa || c.title?.en || c.id}</option>)}
                               </select>
                             </div>
-                            <div><label className={lbl}>{t.storefrontSignFa}</label><input className={fld} value={b.storefrontSignText?.fa || ''} onChange={ev => setBoothStorefrontSign(b, 'fa', ev.target.value)} placeholder={b.name?.fa || ''} /></div>
-                            <div><label className={lbl}>{t.storefrontSignEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontSignText?.en || ''} onChange={ev => setBoothStorefrontSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>
-                            <div><label className={lbl}>{t.storefrontGlassFa}</label><input className={fld} value={b.storefrontGlassText?.fa || ''} onChange={ev => setBoothGlassText(b, 'fa', ev.target.value)} placeholder="خدمات، محصولات ویژه، مشاوره" /></div>
-                            <div><label className={lbl}>{t.storefrontGlassEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontGlassText?.en || ''} onChange={ev => setBoothGlassText(b, 'en', ev.target.value)} placeholder="Services, offers, consultation" /></div>
+                            <div><label className={lbl}>{e.visualStyle === 'business_center' ? (T ? 'تابلو سردر دفتر (فارسی)' : 'Office sign (FA)') : t.storefrontSignFa}</label><input className={fld} value={b.storefrontSignText?.fa || ''} onChange={ev => setBoothStorefrontSign(b, 'fa', ev.target.value)} placeholder={b.name?.fa || ''} /></div>
+                            <div><label className={lbl}>{e.visualStyle === 'business_center' ? (T ? 'تابلو سردر دفتر (انگلیسی)' : 'Office sign (EN)') : t.storefrontSignEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontSignText?.en || ''} onChange={ev => setBoothStorefrontSign(b, 'en', ev.target.value)} placeholder={b.name?.en || ''} /></div>
+                            <div><label className={lbl}>{e.visualStyle === 'business_center' ? (T ? 'متن روی شیشه دفتر (فارسی)' : 'Office glass text (FA)') : t.storefrontGlassFa}</label><input className={fld} value={b.storefrontGlassText?.fa || ''} onChange={ev => setBoothGlassText(b, 'fa', ev.target.value)} placeholder="خدمات، محصولات ویژه، مشاوره" /></div>
+                            <div><label className={lbl}>{e.visualStyle === 'business_center' ? (T ? 'متن روی شیشه دفتر (انگلیسی)' : 'Office glass text (EN)') : t.storefrontGlassEn}</label><input className={fld + ' dir-ltr'} value={b.storefrontGlassText?.en || ''} onChange={ev => setBoothGlassText(b, 'en', ev.target.value)} placeholder="Services, offers, consultation" /></div>
                             <div><label className={lbl}>{t.color}</label><div className="flex gap-2"><input type="color" value={b.color || '#2d4a1a'} onChange={ev => updBooth(b.id, { color: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={b.color || ''} onChange={ev => updBooth(b.id, { color: ev.target.value })} /></div></div>
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.scale}</label><input type="number" step="0.1" className={fld} value={b.scale ?? 1} onChange={ev => updBooth(b.id, { scale: +ev.target.value })} /></div>

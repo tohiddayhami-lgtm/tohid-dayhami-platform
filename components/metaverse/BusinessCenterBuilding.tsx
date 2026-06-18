@@ -22,16 +22,10 @@ const CarpetStrip: React.FC<{
   d: number;
   y: number;
   mat: THREE.Material;
-  borderMat: THREE.Material;
-}> = ({ x, z, w, d, y, mat, borderMat }) => (
-  <group position={[x, y, z]}>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]} material={borderMat}>
-      <planeGeometry args={[w + 0.14, d + 0.14]} />
-    </mesh>
-    <mesh rotation={[-Math.PI / 2, 0, 0]} material={mat}>
-      <planeGeometry args={[w, d]} />
-    </mesh>
-  </group>
+}> = ({ x, z, w, d, y, mat }) => (
+  <mesh position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]} material={mat}>
+    <planeGeometry args={[w, d]} />
+  </mesh>
 );
 
 /**
@@ -64,18 +58,9 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
     [],
   );
   const carpetMats = useMemo(
-    () => BUSINESS_CENTER_FLOOR_THEMES.map(t => new THREE.MeshStandardMaterial({ color: t.carpetColor, roughness: 0.85, metalness: 0.05 })),
+    () => BUSINESS_CENTER_FLOOR_THEMES.map(t => new THREE.MeshStandardMaterial({ color: t.carpetColor, roughness: 0.88 })),
     [],
   );
-  const carpetBorderMats = useMemo(
-    () => BUSINESS_CENTER_FLOOR_THEMES.map(t => new THREE.MeshBasicMaterial({ color: t.carpetBorder, transparent: true, opacity: 0.55, toneMapped: false, side: THREE.DoubleSide })),
-    [],
-  );
-  const accentMats = useMemo(
-    () => BUSINESS_CENTER_FLOOR_THEMES.map(t => new THREE.MeshStandardMaterial({ color: t.accent, roughness: 0.45 })),
-    [],
-  );
-
   const shellMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.55 }), []);
   const stairCarpetMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#881337', roughness: 0.8 }), []);
   const stairRailMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#d4a574', roughness: 0.4, metalness: 0.2 }), []);
@@ -145,7 +130,6 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
                 d={c.d}
                 y={y + 0.05}
                 mat={carpetMats[floor]}
-                borderMat={carpetBorderMats[floor]}
               />
             ))}
 
@@ -168,12 +152,12 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
               </>
             )}
 
-            {/* Corridor side walls */}
-            <mesh position={[width / 2 - 0.5, y + 1.6, 0]} material={wallMats[floor]}>
-              <boxGeometry args={[0.1, 3.2, depth - 2]} />
+            {/* Corridor side walls — frame the central aisle */}
+            <mesh position={[BUSINESS_CENTER.officeOffsetX + 2.8, y + 1.6, 0]} material={wallMats[floor]}>
+              <boxGeometry args={[0.1, 3.2, depth - 3]} />
             </mesh>
-            <mesh position={[-width / 2 + 4.5, y + 1.6, 0]} material={wallMats[floor]}>
-              <boxGeometry args={[0.1, 3.2, depth - 2]} />
+            <mesh position={[-BUSINESS_CENTER.officeOffsetX - 2.8, y + 1.6, 0]} material={wallMats[floor]}>
+              <boxGeometry args={[0.1, 3.2, depth - 3]} />
             </mesh>
 
             {/* Floor sign at lobby */}
@@ -181,8 +165,7 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
               text={theme.labelFa}
               width={3.2}
               height={0.42}
-              position={[width / 2 - 3.2, y + 2.55, -1.5]}
-              rotation={[0, -Math.PI / 2, 0]}
+              position={[0, y + 2.55, -2]}
               bg={theme.signBg}
               color="#ffffff"
             />
@@ -190,16 +173,14 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
               text={theme.labelEn}
               width={2.6}
               height={0.28}
-              position={[width / 2 - 3.2, y + 2.1, -1.5]}
-              rotation={[0, -Math.PI / 2, 0]}
+              position={[0, y + 2.1, -2]}
               bg="rgba(255,255,255,.9)"
               color={theme.signBg}
               bold={false}
             />
 
-            {/* Active-floor highlight ring in atrium */}
             {isActive && (
-              <mesh position={[3, y + 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <mesh position={[0, y + 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
                 <ringGeometry args={[2.4, 3.6, 32]} />
                 <meshBasicMaterial color={theme.accent} transparent opacity={0.22} toneMapped={false} side={THREE.DoubleSide} />
               </mesh>
@@ -229,29 +210,6 @@ export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
       </mesh>
       <mesh position={[stairX + 1.1, stairRise / 2 + 0.8, 0]} material={stairRailMat}>
         <boxGeometry args={[0.06, 0.06, stairLen * 0.95]} />
-      </mesh>
-
-      {/* Stairs landing markers on each floor */}
-      {[0, 1, 2].map(floor => {
-        const y = businessCenterFloorY(floor);
-        const theme = BUSINESS_CENTER_FLOOR_THEMES[floor];
-        return (
-          <group key={`stair-mark-${floor}`}>
-            <mesh position={[stairX, y + 0.055, stairZMax - 0.7]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[2.1, 1]} />
-              <meshBasicMaterial color={theme.carpetColor} toneMapped={false} />
-            </mesh>
-            <mesh position={[stairX, y + 0.07, stairZMin + 0.7]} rotation={[-Math.PI / 2, 0, 0]}>
-              <planeGeometry args={[2.1, 1]} />
-              <meshBasicMaterial color={theme.carpetBorder} transparent opacity={0.7} toneMapped={false} />
-            </mesh>
-          </group>
-        );
-      })}
-
-      {/* Stair direction arrow on ground floor */}
-      <mesh position={[stairX, businessCenterFloorY(0) + 0.08, stairZMax - 1.2]} rotation={[-Math.PI / 2, 0, 0]} material={accentMats[0]}>
-        <planeGeometry args={[1.4, 0.5]} />
       </mesh>
     </group>
   );
