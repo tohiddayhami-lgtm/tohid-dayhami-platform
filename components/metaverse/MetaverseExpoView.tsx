@@ -211,9 +211,14 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   useEffect(() => {
     if (!isBusinessCenter) return;
+    let last = -1;
     const id = window.setInterval(() => {
-      setCurrentFloor(poseRef.current.floor ?? 0);
-    }, 150);
+      const f = poseRef.current.floor ?? 0;
+      if (f !== last) {
+        last = f;
+        setCurrentFloor(f);
+      }
+    }, 200);
     return () => window.clearInterval(id);
   }, [isBusinessCenter]);
 
@@ -298,13 +303,18 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
-      <Canvas dpr={[1, 1.5]} camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+      <Canvas
+        dpr={isBusinessCenter ? [0.85, 1.15] : [1, 1.5]}
+        camera={{ fov: 72, near: 0.1, far: isBusinessCenter ? 120 : 2000, position: spawn }}
+        gl={{ antialias: !isBusinessCenter, powerPreference: 'high-performance' }}
+      >
         <XR store={store}>
           <Suspense fallback={null}>
             <ExpoScene
               expo={expo}
               shops={shops}
               lang={lang}
+              playerFloor={currentFloor}
               onSelectHotspot={setActive}
               onSelectBooth={onSelectBooth}
               onFloorTeleport={(x, z) => teleportRef.current?.(x, z)}

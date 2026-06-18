@@ -17,6 +17,7 @@ interface Props {
   expo: MetaverseExpo;
   shops?: MetaShop[];
   lang: Language;
+  playerFloor?: number;
   onSelectHotspot: (h: MetaverseHotspot) => void;
   onSelectBooth: (b: MetaverseBooth) => void;
   onFloorTeleport: (x: number, z: number) => void;   // desktop double-click teleport
@@ -291,7 +292,7 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, playerFloor = 0, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -370,16 +371,20 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
 
   return (
     <>
-      {/* Lighting — flat & even (no shadows), so every booth is lit identically. Fully procedural
-          so the hall is lit instantly with NO network fetch. */}
-      <ambientLight intensity={1.15} />
-      <hemisphereLight intensity={0.9} groundColor="#ffffff" color="#ffffff" />
-      {/* Two soft, opposing, shadow-less fills cancel out directional darkening on any booth. */}
-      <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
-      <directionalLight position={[-width, height * 2, -depth]} intensity={0.45} />
+      {/* Lighting — business center uses minimal lights (no shadows) for performance */}
+      <ambientLight intensity={isBusinessCenter ? 1.35 : 1.15} />
+      <hemisphereLight intensity={isBusinessCenter ? 0.55 : 0.9} groundColor="#ffffff" color="#ffffff" />
+      {!isBusinessCenter && (
+        <>
+          <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
+          <directionalLight position={[-width, height * 2, -depth]} intensity={0.45} />
+        </>
+      )}
 
-      {/* Procedural sky background (instant). A custom HDR is loaded only when provided. */}
-      {expo.skyboxUrl ? (
+      {/* Sky / background */}
+      {isBusinessCenter ? (
+        <color attach="background" args={['#dce3ed']} />
+      ) : expo.skyboxUrl ? (
         <TexBoundary key={expo.skyboxUrl}>
           <Suspense fallback={null}>
             <Environment files={expo.skyboxUrl} background />
@@ -389,29 +394,26 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
         <Sky distance={450000} sunPosition={[10, 8, 5]} turbidity={6} rayleigh={1.2} />
       )}
 
-      {/* Floor (also the teleport target for both desktop double-click and WebXR) */}
+      {/* Floor + teleport */}
       {isBusinessCenter ? (
         <>
           <BusinessCenterBuilding
             width={width}
             depth={depth}
-            lang={lang}
             wallColor={wall}
             accentColor={expo.wallColor || '#0f766e'}
+            playerFloor={playerFloor}
           />
-          {[0, 1, 2].map(floor => (
-            <TeleportTarget key={`floor-tp-${floor}`} onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
-              <mesh
-                rotation={[-Math.PI / 2, 0, 0]}
-                position={[0, businessCenterFloorY(floor) + 0.02, 0]}
-                receiveShadow
-                onDoubleClick={(e) => { e.stopPropagation(); onFloorTeleport(e.point.x, e.point.z); }}
-              >
-                <planeGeometry args={[width, depth]} />
-                <meshStandardMaterial color={ground} transparent opacity={0} />
-              </mesh>
-            </TeleportTarget>
-          ))}
+          <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, businessCenterFloorY(playerFloor) + 0.02, 0]}
+              onDoubleClick={(e) => { e.stopPropagation(); onFloorTeleport(e.point.x, e.point.z); }}
+            >
+              <planeGeometry args={[width, depth]} />
+              <meshBasicMaterial visible={false} />
+            </mesh>
+          </TeleportTarget>
         </>
       ) : (
       <TeleportTarget onTeleport={(v: THREE.Vector3) => onVrTeleport(v)}>
@@ -477,14 +479,11 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       )}
 
       {isBusinessCenter && (
-        <>
-          <pointLight position={[0, 6, 0]} intensity={0.6} distance={40} color="#fff7ed" />
-          <pointLight position={[0, 10, 0]} intensity={0.45} distance={40} color="#e0f2fe" />
-        </>
+        <pointLight position={[0, businessCenterFloorY(playerFloor) + 2.8, 0]} intensity={0.4} distance={28} color="#fff7ed" />
       )}
 
       {/* Optional custom environment / hall GLB */}
-      {expo.environmentUrl && (
+      {expo.environmentUrl && !isBusinessCenter && (
         <TexBoundary key={expo.environmentUrl}>
           <Suspense fallback={null}>
             <GltfModel url={expo.environmentUrl} />
@@ -571,8 +570,11 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       ))}
       {visualStyle === 'supermarket' && <SupermarketDirectory categories={retailCategories} width={width} depth={depth} lang={lang} />}
 
-      {/* Brand shelves / booths */}
-      {supermarketShelves.map((b, i) => {
+      {/* Brand shelves / booths — business center: current floor only */}
+      {(isBusinessCenter
+        ? supermarketShelves.filter(b => (b.floorId ?? 0) === playerFloor)
+        : supermarketShelves
+      ).map((b, i) => {
         const renderBooth = boothForRender(boothWithFloor(b), i);
         return (
           <Booth

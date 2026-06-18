@@ -1,224 +1,131 @@
-import React from 'react';
-import { RoundedBox } from '@react-three/drei';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { Language } from '../../App';
 import { BUSINESS_CENTER, businessCenterFloorY } from './expoUtils';
-import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
   width: number;
   depth: number;
-  lang: Language;
   wallColor?: string;
   accentColor?: string;
+  playerFloor?: number;
 }
 
-const OFFICE_W = 4.2;
-const OFFICE_D = 3.8;
-const OFFICE_H = 3.35;
-const GLASS = '#93c5fd';
-
-/** Procedural 3-floor commercial building with ceiling offices + central stairs. */
-export const BusinessCenterBuilding: React.FC<Props> = ({
+/**
+ * Lightweight 3-floor shell — booths are the glass offices; no per-room geometry or lights.
+ * Keeps draw calls low for smooth walking on mid-range devices.
+ */
+export const BusinessCenterBuilding: React.FC<Props> = React.memo(({
   width,
   depth,
-  lang,
   wallColor = '#e2e8f0',
   accentColor = '#0f766e',
+  playerFloor = 0,
 }) => {
-  const floorLabels = lang === 'fa'
-    ? ['همکف · لابی', 'طبقه اول · دفاتر تجاری', 'طبقه دوم · دفاتر تجاری']
-    : ['Ground · Lobby', '1st Floor · Offices', '2nd Floor · Offices'];
+  const totalH = BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors;
+  const { stairX, stairZMin, stairZMax } = BUSINESS_CENTER;
+  const stairLen = stairZMax - stairZMin;
+  const stairRise = BUSINESS_CENTER.floorHeight * (BUSINESS_CENTER.floors - 1);
 
-  const officeSlots: { x: number; z: number; ry: number }[] = [
-    { x: width / 2 - 3.2, z: depth / 2 - 4.5, ry: Math.PI },
-    { x: width / 2 - 3.2, z: 0, ry: Math.PI },
-    { x: width / 2 - 3.2, z: -depth / 2 + 4.5, ry: Math.PI },
-    { x: 2, z: -depth / 2 + 3.2, ry: 0 },
-    { x: 8, z: -depth / 2 + 3.2, ry: 0 },
-    { x: 2, z: depth / 2 - 3.2, ry: Math.PI },
-    { x: 8, z: depth / 2 - 3.2, ry: Math.PI },
-  ];
-
-  const renderOffice = (x: number, z: number, ry: number, floor: number, idx: number) => {
-    const baseY = businessCenterFloorY(floor);
-    const rot = ry;
-    const glassFacing = ry === Math.PI ? 1 : -1;
-    return (
-      <group key={`office-${floor}-${idx}`} position={[x, baseY, z]} rotation={[0, rot, 0]}>
-        {/* Floor slab inside unit */}
-        <mesh position={[0, 0.04, 0]} receiveShadow>
-          <boxGeometry args={[OFFICE_W, 0.08, OFFICE_D]} />
-          <meshStandardMaterial color="#f1f5f9" roughness={0.55} />
-        </mesh>
-        {/* Side & back walls */}
-        <mesh position={[-OFFICE_W / 2 + 0.06, OFFICE_H / 2, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.12, OFFICE_H, OFFICE_D]} />
-          <meshStandardMaterial color={wallColor} roughness={0.65} />
-        </mesh>
-        <mesh position={[OFFICE_W / 2 - 0.06, OFFICE_H / 2, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.12, OFFICE_H, OFFICE_D]} />
-          <meshStandardMaterial color={wallColor} roughness={0.65} />
-        </mesh>
-        <mesh position={[0, OFFICE_H / 2, -OFFICE_D / 2 + 0.06]} castShadow receiveShadow>
-          <boxGeometry args={[OFFICE_W, OFFICE_H, 0.12]} />
-          <meshStandardMaterial color={wallColor} roughness={0.65} />
-        </mesh>
-        {/* Ceiling (سقف دفتر) */}
-        <mesh position={[0, OFFICE_H, 0]} castShadow receiveShadow>
-          <boxGeometry args={[OFFICE_W, 0.14, OFFICE_D]} />
-          <meshStandardMaterial color="#f8fafc" emissive="#ffffff" emissiveIntensity={0.08} roughness={0.4} />
-        </mesh>
-        {/* Glass storefront toward corridor */}
-        <mesh position={[0, OFFICE_H * 0.48, glassFacing * (OFFICE_D / 2 - 0.04)]}>
-          <boxGeometry args={[OFFICE_W * 0.82, OFFICE_H * 0.72, 0.06]} />
-          <meshStandardMaterial color={GLASS} transparent opacity={0.38} metalness={0.55} roughness={0.12} side={THREE.DoubleSide} />
-        </mesh>
-        {/* Door frame */}
-        <mesh position={[0, OFFICE_H * 0.38, glassFacing * (OFFICE_D / 2 - 0.02)]}>
-          <boxGeometry args={[1.1, 2.2, 0.08]} />
-          <meshStandardMaterial color={accentColor} metalness={0.35} roughness={0.35} />
-        </mesh>
-        {/* Ceiling light panel */}
-        <mesh position={[0, OFFICE_H - 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[OFFICE_W * 0.55, OFFICE_D * 0.45]} />
-          <meshStandardMaterial color="#ffffff" emissive="#fff7ed" emissiveIntensity={0.65} toneMapped={false} />
-        </mesh>
-        <pointLight position={[0, OFFICE_H - 0.2, 0]} intensity={0.35} distance={6} color="#fff7ed" />
-      </group>
-    );
-  };
-
-  const renderStairs = () => {
-    const steps: React.ReactNode[] = [];
-    const totalSteps = 36;
-    const { stairX, stairZMin, stairZMax } = BUSINESS_CENTER;
-    for (let i = 0; i < totalSteps; i++) {
-      const t = i / (totalSteps - 1);
-      const z = stairZMax - t * (stairZMax - stairZMin);
-      const y = t * BUSINESS_CENTER.floorHeight * (BUSINESS_CENTER.floors - 1);
-      steps.push(
-        <RoundedBox
-          key={`step-${i}`}
-          args={[2.2, 0.18, 0.55]}
-          radius={0.03}
-          smoothness={2}
-          position={[stairX, y + 0.09, z]}
-          castShadow
-          receiveShadow
-        >
-          <meshStandardMaterial color={i % 2 === 0 ? '#cbd5e1' : '#94a3b8'} roughness={0.55} metalness={0.12} />
-        </RoundedBox>,
-      );
-    }
-    return (
-      <group>
-        {steps}
-        {/* Stairwell glass shaft */}
-        <mesh position={[stairX, BUSINESS_CENTER.floorHeight * 1.2, 0]}>
-          <boxGeometry args={[0.08, BUSINESS_CENTER.floorHeight * 2.4, depth * 0.7]} />
-          <meshStandardMaterial color={GLASS} transparent opacity={0.12} side={THREE.DoubleSide} />
-        </mesh>
-        <mesh position={[stairX - 1.15, BUSINESS_CENTER.floorHeight * 1.2, 0]}>
-          <boxGeometry args={[0.08, BUSINESS_CENTER.floorHeight * 2.4, depth * 0.7]} />
-          <meshStandardMaterial color={GLASS} transparent opacity={0.12} side={THREE.DoubleSide} />
-        </mesh>
-        <CanvasLabel
-          text={lang === 'fa' ? 'پله‌ها ↑' : 'Stairs ↑'}
-          width={1.4}
-          height={0.32}
-          position={[stairX, 2.2, stairZMax - 1.2]}
-          bg={accentColor}
-          color="#ffffff"
-        />
-      </group>
-    );
-  };
-
-  const renderFloor = (floor: number) => {
-    const y = businessCenterFloorY(floor);
-    const isGround = floor === 0;
-    return (
-      <group key={`floor-${floor}`}>
-        {/* Main corridor slab */}
-        <mesh position={[0, y, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[width, depth]} />
-          <meshStandardMaterial
-            color={isGround ? '#e8ecf2' : '#f1f5f9'}
-            roughness={0.72}
-            metalness={isGround ? 0.04 : 0.02}
-            polygonOffset
-            polygonOffsetFactor={1}
-            polygonOffsetUnits={1}
-          />
-        </mesh>
-        {/* Atrium opening ring (visual) */}
-        <mesh position={[3, y + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[2.5, 4.2, 48]} />
-          <meshStandardMaterial color={accentColor} transparent opacity={0.12} side={THREE.DoubleSide} />
-        </mesh>
-        {/* Floor label */}
-        <CanvasLabel
-          text={floorLabels[floor]}
-          width={3.2}
-          height={0.38}
-          position={[width / 2 - 4.5, y + 2.8, 0]}
-          rotation={[0, -Math.PI / 2, 0]}
-          bg="rgba(15,23,42,.88)"
-          color="#ffffff"
-        />
-        {/* Perimeter railing toward atrium */}
-        {floor > 0 && (
-          <mesh position={[3, y + 0.55, 0]}>
-            <torusGeometry args={[3.8, 0.04, 8, 48]} />
-            <meshStandardMaterial color="#64748b" metalness={0.5} roughness={0.35} />
-          </mesh>
-        )}
-        {/* Offices on this floor */}
-        {officeSlots.map((slot, i) => renderOffice(slot.x, slot.z, slot.ry, floor, i))}
-        {/* Floor divider slab between levels (except top) */}
-        {floor < BUSINESS_CENTER.floors - 1 && (
-          <mesh position={[0, y + BUSINESS_CENTER.floorHeight - 0.08, 0]} receiveShadow>
-            <boxGeometry args={[width, 0.16, depth]} />
-            <meshStandardMaterial color="#cbd5e1" roughness={0.6} />
-          </mesh>
-        )}
-      </group>
-    );
-  };
+  const wallMat = useMemo(() => new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.75 }), [wallColor]);
+  const shellMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.6 }), []);
+  const floorMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#e8ecf2', roughness: 0.8 }), []);
+  const ceilMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.65 }), []);
+  const stairMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.7 }), []);
+  const railMat = useMemo(() => new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.5 }), []);
 
   return (
     <group>
-      {/* Exterior shell */}
-      <mesh position={[0, BUSINESS_CENTER.floorHeight * 1.5, -depth / 2 - 0.15]} castShadow receiveShadow>
-        <boxGeometry args={[width + 0.6, BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors + 1, 0.3]} />
-        <meshStandardMaterial color="#334155" roughness={0.55} metalness={0.2} />
+      {/* Exterior shell — 4 walls + roof (5 meshes) */}
+      <mesh position={[0, totalH / 2, -depth / 2 - 0.12]} material={shellMat}>
+        <boxGeometry args={[width + 0.4, totalH + 0.5, 0.24]} />
       </mesh>
-      <mesh position={[-width / 2 - 0.15, BUSINESS_CENTER.floorHeight * 1.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.3, BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors + 1, depth + 0.6]} />
-        <meshStandardMaterial color="#334155" roughness={0.55} metalness={0.2} />
+      <mesh position={[-width / 2 - 0.12, totalH / 2, 0]} material={shellMat}>
+        <boxGeometry args={[0.24, totalH + 0.5, depth + 0.4]} />
       </mesh>
-      <mesh position={[width / 2 + 0.15, BUSINESS_CENTER.floorHeight * 1.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.3, BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors + 1, depth + 0.6]} />
-        <meshStandardMaterial color="#334155" roughness={0.55} metalness={0.2} />
+      <mesh position={[width / 2 + 0.12, totalH / 2, 0]} material={shellMat}>
+        <boxGeometry args={[0.24, totalH + 0.5, depth + 0.4]} />
       </mesh>
-      {/* Roof */}
-      <mesh position={[0, BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors + 0.5, 0]} castShadow receiveShadow>
-        <boxGeometry args={[width + 0.8, 0.35, depth + 0.8]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.45} metalness={0.25} />
+      <mesh position={[0, totalH + 0.2, depth / 2 + 0.12]} material={shellMat}>
+        <boxGeometry args={[width + 0.4, 0.28, 0.24]} />
       </mesh>
-      {/* Building title */}
-      <CanvasLabel
-        text={lang === 'fa' ? 'مرکز تجاری متا' : 'Meta Business Center'}
-        width={5.5}
-        height={0.55}
-        position={[0, BUSINESS_CENTER.floorHeight * BUSINESS_CENTER.floors + 1.2, depth / 2 + 0.5]}
-        bg={accentColor}
-        color="#ffffff"
-      />
+      <mesh position={[0, totalH + 0.38, 0]} material={shellMat}>
+        <boxGeometry args={[width + 0.6, 0.22, depth + 0.6]} />
+      </mesh>
 
-      {Array.from({ length: BUSINESS_CENTER.floors }, (_, f) => renderFloor(f))}
-      {renderStairs()}
+      {/* Per-floor slabs + corridor ceiling (only geometry, booths fill offices) */}
+      {[0, 1, 2].map(floor => {
+        const y = businessCenterFloorY(floor);
+        return (
+          <group key={floor}>
+            <mesh position={[0, y, 0]} rotation={[-Math.PI / 2, 0, 0]} material={floorMat}>
+              <planeGeometry args={[width - 0.4, depth - 0.4]} />
+            </mesh>
+            {floor < BUSINESS_CENTER.floors - 1 && (
+              <mesh position={[0, y + BUSINESS_CENTER.floorHeight - 0.06, 0]} material={ceilMat}>
+                <boxGeometry args={[width - 0.4, 0.1, depth - 0.4]} />
+              </mesh>
+            )}
+            {/* Corridor side walls (open toward center atrium) */}
+            <mesh position={[width / 2 - 0.5, y + 1.6, 0]} material={wallMat}>
+              <boxGeometry args={[0.1, 3.2, depth - 2]} />
+            </mesh>
+            <mesh position={[-width / 2 + 4.5, y + 1.6, 0]} material={wallMat}>
+              <boxGeometry args={[0.1, 3.2, depth - 2]} />
+            </mesh>
+          </group>
+        );
+      })}
+
+      {/* Single stair ramp (2 segments) instead of dozens of step meshes */}
+      {[0, 1].map(seg => {
+        const baseY = businessCenterFloorY(seg);
+        const midZ = (stairZMax + stairZMin) / 2;
+        const angle = Math.atan2(BUSINESS_CENTER.floorHeight, stairLen);
+        return (
+          <mesh
+            key={`ramp-${seg}`}
+            position={[stairX, baseY + BUSINESS_CENTER.floorHeight / 2, midZ]}
+            rotation={[angle, 0, 0]}
+            material={stairMat}
+          >
+            <boxGeometry args={[2.1, 0.14, stairLen + 0.4]} />
+          </mesh>
+        );
+      })}
+      {/* Stair rails — 2 thin boxes */}
+      <mesh position={[stairX - 1.1, stairRise / 2 + 0.8, 0]} material={railMat}>
+        <boxGeometry args={[0.06, 0.06, stairLen * 0.95]} />
+      </mesh>
+      <mesh position={[stairX + 1.1, stairRise / 2 + 0.8, 0]} material={railMat}>
+        <boxGeometry args={[0.06, 0.06, stairLen * 0.95]} />
+      </mesh>
+
+      {/* Atrium accent — one low-poly ring on active floor only */}
+      <mesh
+        position={[3, businessCenterFloorY(playerFloor) + 0.03, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[2.2, 3.4, 24]} />
+        <meshBasicMaterial color={accentColor} transparent opacity={0.15} toneMapped={false} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Floor indicator plaque (cheap mesh, no canvas texture) */}
+      <mesh position={[width / 2 - 2.8, businessCenterFloorY(playerFloor) + 2.4, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[2.4, 0.45]} />
+        <meshBasicMaterial color="#0f172a" toneMapped={false} />
+      </mesh>
+      <mesh position={[width / 2 - 2.75, businessCenterFloorY(playerFloor) + 2.4, 0.01]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[2.2, 0.08]} />
+        <meshBasicMaterial color={accentColor} toneMapped={false} />
+      </mesh>
+
+      {/* Stairs hint — colored strip at ramp base */}
+      <mesh position={[stairX, businessCenterFloorY(0) + 0.05, stairZMax - 0.8]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2, 0.9]} />
+        <meshBasicMaterial color={accentColor} toneMapped={false} />
+      </mesh>
     </group>
   );
-};
+});
+
+BusinessCenterBuilding.displayName = 'BusinessCenterBuilding';
