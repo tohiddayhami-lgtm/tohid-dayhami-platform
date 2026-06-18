@@ -96,9 +96,9 @@ export const ExpoReserveMapView: React.FC<Props> = ({ bazaar, lang: initialLang,
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
-          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#2d4a1a] border border-white shadow-sm" />{t.available}</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-600 border border-white shadow-sm" />{t.pending}</span>
-          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-700 border border-white shadow-sm" />{t.confirmed}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#22c55e] border border-white shadow-sm" />{t.available}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#eab308] border border-white shadow-sm" />{t.pending}</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#dc2626] border border-white shadow-sm" />{t.confirmed}</span>
         </div>
         <p className="text-[11px] text-gray-400">{t.hint}</p>
 

@@ -83,9 +83,9 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   const boothFill = (b: MetaverseBooth) => {
     if (!reserveMap) return b.color || theme?.boothColor || '#2d4a1a';
     const st = boothReserveStatus(b.id);
-    if (st === 'confirmed') return '#15803d';
-    if (st === 'pending') return '#d97706';
-    return b.color || '#2d4a1a';
+    if (st === 'confirmed') return '#dc2626';
+    if (st === 'pending') return '#eab308';
+    return '#22c55e';
   };
   const showBooths = !readonly || reserveMap;
 
