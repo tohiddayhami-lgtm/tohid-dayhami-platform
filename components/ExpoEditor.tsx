@@ -4,6 +4,7 @@ import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
+import { ExpoFloorPlan } from './ExpoFloorPlan';
 
 interface Props {
   expo?: MetaverseExpo;
@@ -293,7 +294,6 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
   };
   const setDecoName = (d: ExpoDecoration, which: 'fa' | 'en', val: string) =>
     updDecoration(d.id, { name: { ...(d.name || {}), [which]: val } });
-  const isDecoId = (id: string | null) => !!(id && (e.decorations || []).some(d => d.id === id));
 
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
@@ -607,113 +607,6 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     );
   };
 
-  // ── 2D floor-plan (drag to place) ──
-  const FloorPlan: React.FC = () => {
-    const svgRef = useRef<SVGSVGElement>(null);
-    const W = Math.max(8, e.width || 30), D = Math.max(8, e.depth || 30);
-    const dragId = useRef<string | null>(null);
-    const isSF = e.visualStyle === 'storefront' || e.visualStyle === 'business_center';
-    const sfTheme = { accent: '#0d9488', planBg: '#f0fdfa', floorColor: '#ccfbf1', boothColor: '#0f766e', boothZone: '#99f6e4', carpetColor: '#9f1239', carpetBorder: '#d4a574', signBg: '#0f766e' };
-    const theme = isSF ? sfTheme : null;
-    const tierMark = (tier?: BoothTier) => tier === 'premium' ? 'P' : tier === 'standard' ? 'S' : 'B';
-    const visibleBooths = e.booths || [];
-    const decorations = e.decorations || [];
-    const toWorld = (clientX: number, clientY: number) => {
-      const r = svgRef.current!.getBoundingClientRect();
-      const nx = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-      const ny = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
-      return { x: +(nx * W - W / 2).toFixed(2), z: +(ny * D - D / 2).toFixed(2) };
-    };
-    const onMove = (ev: React.PointerEvent) => {
-      if (!dragId.current) return;
-      const { x, z } = toWorld(ev.clientX, ev.clientY);
-      if (dragId.current === '__spawn__') setSpawn('x', x), setSpawn('z', z);
-      else if (isDecoId(dragId.current)) updDecoration(dragId.current!, { x, z });
-      else updBooth(dragId.current, { x, z });
-    };
-    const wx = (x: number) => ((x + W / 2) / W) * 100;
-    const wz = (z: number) => ((z + D / 2) / D) * 100;
-    const boothPw = (4 / W) * 100;
-    const boothPh = (4 / D) * 100;
-    const cats = e.retailCategories || [];
-    const carpets = layoutCarpetRects(e.boothLayout || 'cross', W, D);
-    return (
-      <div>
-        <p className="text-[11px] text-slate-600 mb-2">{t.layoutHint}</p>
-      <svg
-        ref={svgRef} viewBox="0 0 100 100" preserveAspectRatio="none"
-        className="w-full rounded-xl border-2 touch-none select-none"
-        style={{
-          aspectRatio: `${W} / ${D}`,
-          cursor: dragId.current ? 'grabbing' : 'default',
-          borderColor: theme?.accent || '#cbd5e1',
-          background: theme ? `linear-gradient(135deg, ${theme.planBg} 0%, ${theme.floorColor} 100%)` : undefined,
-        }}
-        onPointerMove={onMove}
-        onPointerUp={() => { dragId.current = null; }}
-        onPointerLeave={() => { dragId.current = null; }}
-      >
-        <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke={theme?.accent || '#cbd5e1'} strokeWidth={0.8} />
-        {carpets.map((c, ci) => {
-          const r = planRectPct(c, W, D);
-          const fill = c.entrance ? (c.color || '#b91c1c') : (theme?.carpetColor || c.color || '#9f1239');
-          const stroke = c.entrance ? (c.border || '#fca5a5') : (theme?.carpetBorder || c.border || '#d4a574');
-          return (
-            <g key={`carpet-${ci}`}>
-              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill={fill} opacity={c.entrance ? 0.55 : 0.35} />
-              <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={0.6} fill="none" stroke={stroke} strokeWidth={0.35} opacity={0.7} />
-            </g>
-          );
-        })}
-        {e.visualStyle === 'supermarket' && cats.map((c, i) => {
-          const rows = Math.max(1, Math.ceil(cats.length / 2));
-          const col = i % 2;
-          const row = Math.floor(i / 2);
-          const x = col === 0 ? 6 : 52;
-          const y = 8 + row * (84 / rows);
-          const h = Math.max(12, 72 / rows);
-          return (
-            <g key={c.id}>
-              <rect x={x} y={y} width={42} height={h} rx={2} fill={c.color || '#16a34a'} opacity={0.12} stroke={c.color || '#16a34a'} strokeWidth={0.4} />
-              <text x={x + 21} y={y + 4.2} textAnchor="middle" fontSize={2.8} fill={c.color || '#166534'} fontWeight="bold">{(T ? c.title?.fa : c.title?.en) || c.title?.fa || c.title?.en || ''}</text>
-            </g>
-          );
-        })}
-        {!readonly && visibleBooths.map((b, i) => (
-          <g key={b.id} transform={`translate(${wx(b.x || 0)} ${wz(b.z || 0)})`} style={{ cursor: 'grab' }}
-            onPointerDown={ev => { ev.stopPropagation(); (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = b.id; }}
-            onClick={() => { setOpenBooth(b.id); setOpenDecoration(null); }}
-          >
-            <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={b.color || theme?.boothColor || '#2d4a1a'} stroke="#fff" strokeWidth={0.5} />
-            <text x={0} y={6.5} textAnchor="middle" fontSize={2.9} fill="#475569">{T ? `غ ${i + 1}` : `B${i + 1}`}</text>
-            <text x={0} y={10.2} textAnchor="middle" fontSize={2.1} fill="#64748b">{tierMark(b.tier)}</text>
-          </g>
-        ))}
-        {!readonly && decorations.map((d, i) => {
-          const selected = openDecoration === d.id;
-          return (
-            <g key={d.id} transform={`translate(${wx(d.x || 0)} ${wz(d.z || 0)})`} style={{ cursor: 'grab' }}
-              onPointerDown={ev => { ev.stopPropagation(); (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = d.id; }}
-              onClick={() => { setOpenDecoration(d.id); setOpenBooth(null); }}
-            >
-              {selected && <circle r={4.2} fill="none" stroke="#f59e0b" strokeWidth={0.55} strokeDasharray="1.2 0.8" />}
-              <polygon points="0,-2.6 2.2,0 0,2.6 -2.2,0" fill={d.modelUrl ? '#f59e0b' : '#d1d5db'} stroke="#fff" strokeWidth={0.45} />
-              <text x={0} y={5.8} textAnchor="middle" fontSize={2.5} fill="#b45309" fontWeight="bold">{T ? `د${i + 1}` : `D${i + 1}`}</text>
-            </g>
-          );
-        })}
-        {/* spawn marker */}
-        <g transform={`translate(${wx(e.spawn?.x || 0)} ${wz(e.spawn?.z || 0)})`} style={{ cursor: 'grab' }}
-          onPointerDown={ev => { (ev.target as Element).setPointerCapture?.(ev.pointerId); dragId.current = '__spawn__'; }}
-        >
-          <circle r={2.4} fill="#22d3ee" stroke="#0e7490" strokeWidth={0.6} />
-          <text x={0} y={-3.2} textAnchor="middle" fontSize={3} fill="#0e7490" fontWeight="bold">{T ? 'شروع' : 'start'}</text>
-        </g>
-      </svg>
-      </div>
-    );
-  };
-
   const previewUrl = `${shopBaseUrl}?expo=${encodeURIComponent(bazaarSlug)}`;
   const shopProducts = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []) : []);
   const downloadExpoAdsJsonSample = () => {
@@ -930,7 +823,25 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                 </button>
               )}
             </div>
-            <FloorPlan />
+            <ExpoFloorPlan
+              width={e.width || 30}
+              depth={e.depth || 30}
+              visualStyle={e.visualStyle}
+              boothLayout={e.boothLayout}
+              booths={e.booths || []}
+              decorations={e.decorations || []}
+              spawn={e.spawn}
+              retailCategories={e.retailCategories}
+              readonly={readonly}
+              langFa={T}
+              openDecorationId={openDecoration}
+              layoutHint={t.layoutHint}
+              onBoothMove={(id, x, z) => updBooth(id, { x, z })}
+              onDecorationMove={(id, x, z) => updDecoration(id, { x, z })}
+              onSpawnMove={(x, z) => patch({ spawn: { x: e.spawn?.x ?? 0, y: e.spawn?.y ?? 0, z: e.spawn?.z ?? 0, ...(e.spawn || {}), x, z } })}
+              onSelectBooth={id => { setOpenBooth(id); setOpenDecoration(null); }}
+              onSelectDecoration={id => { setOpenDecoration(id); setOpenBooth(null); }}
+            />
           </div>
 
           {/* Hall decorations */}
