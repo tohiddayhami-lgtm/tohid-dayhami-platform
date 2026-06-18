@@ -67,6 +67,33 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   const rafRef = useRef(0);
   const pendingPos = useRef<{ x: number; z: number } | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const reserveTapRef = useRef<{ booth: MetaverseBooth; pointerId: number; x: number; y: number } | null>(null);
+  const RESERVE_TAP_MAX_MOVE = 14;
+
+  const beginReserveTap = (ev: React.PointerEvent, booth: MetaverseBooth) => {
+    reserveTapRef.current = { booth, pointerId: ev.pointerId, x: ev.clientX, y: ev.clientY };
+  };
+
+  const moveReserveTap = (ev: React.PointerEvent) => {
+    const t = reserveTapRef.current;
+    if (!t || t.pointerId !== ev.pointerId) return;
+    if (Math.abs(ev.clientX - t.x) + Math.abs(ev.clientY - t.y) > RESERVE_TAP_MAX_MOVE) {
+      reserveTapRef.current = null;
+    }
+  };
+
+  const endReserveTap = (ev: React.PointerEvent) => {
+    const t = reserveTapRef.current;
+    if (!t || t.pointerId !== ev.pointerId) return;
+    reserveTapRef.current = null;
+    const moved = Math.abs(ev.clientX - t.x) + Math.abs(ev.clientY - t.y);
+    if (moved <= RESERVE_TAP_MAX_MOVE && onBoothClick) onBoothClick(t.booth);
+  };
+
+  const cancelReserveTap = (ev: React.PointerEvent) => {
+    const t = reserveTapRef.current;
+    if (t && t.pointerId === ev.pointerId) reserveTapRef.current = null;
+  };
 
   const W = Math.max(8, width);
   const D = Math.max(8, depth);
@@ -174,16 +201,16 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
         ref={svgRef}
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
-        className="w-full rounded-xl border-2 touch-none select-none"
+        className={`w-full rounded-xl border-2 select-none ${reserveMap ? 'touch-pan-y' : 'touch-none'}`}
         style={{
           aspectRatio: `${W} / ${D}`,
           cursor: dragging ? 'grabbing' : 'default',
           borderColor: theme?.accent || '#cbd5e1',
           background: theme ? `linear-gradient(135deg, ${theme.planBg} 0%, ${theme.floorColor} 100%)` : undefined,
         }}
-        onPointerMove={onSvgMove}
-        onPointerUp={onSvgUp}
-        onPointerCancel={onSvgUp}
+        onPointerMove={ev => { onSvgMove(ev); if (reserveMap) moveReserveTap(ev); }}
+        onPointerUp={ev => { if (reserveMap) cancelReserveTap(ev); onSvgUp(ev); }}
+        onPointerCancel={ev => { if (reserveMap) cancelReserveTap(ev); onSvgUp(ev); }}
       >
         <rect x={0.5} y={0.5} width={99} height={99} fill="none" stroke={theme?.accent || '#cbd5e1'} strokeWidth={0.8} />
         {carpets.map((c, ci) => {
@@ -235,15 +262,23 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
               transform={`translate(${wx(p.x)} ${wz(p.z)})`}
               style={{ cursor: reserveMap ? (reserved ? 'not-allowed' : 'pointer') : (active ? 'grabbing' : 'grab') }}
               onPointerDown={ev => {
-                if (reserveMap) {
-                  ev.stopPropagation();
-                  if (!reserved && onBoothClick) onBoothClick(b);
-                  return;
-                }
-                beginDrag(ev, b.id, 'booth');
+                if (!reserveMap) beginDrag(ev, b.id, 'booth');
               }}
             >
-              <rect x={-3.2} y={-3.2} width={6.4} height={6.4} rx={1} fill={boothFill(b)} stroke="#fff" strokeWidth={0.5} opacity={reserved ? 0.92 : 1} />
+              <rect
+                x={-3.2}
+                y={-3.2}
+                width={6.4}
+                height={6.4}
+                rx={1}
+                fill={boothFill(b)}
+                stroke="#fff"
+                strokeWidth={0.5}
+                opacity={reserved ? 0.92 : 1}
+                onPointerDown={reserveMap && !reserved ? ev => { ev.stopPropagation(); beginReserveTap(ev, b); } : undefined}
+                onPointerUp={reserveMap && !reserved ? ev => { ev.stopPropagation(); endReserveTap(ev); } : undefined}
+                onPointerCancel={reserveMap ? cancelReserveTap : undefined}
+              />
               {reserveMap && (
                 <text x={0} y={0.9} textAnchor="middle" fontSize={1.15} fill="#fff" fontWeight="600" pointerEvents="none" opacity={0.95}>
                   {i + 1}
