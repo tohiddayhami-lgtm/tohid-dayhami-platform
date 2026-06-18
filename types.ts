@@ -857,6 +857,29 @@ export interface MetaExpoRegistration {
   sessionId?: string;
 }
 
+/** Booth reservation request — one active hold per booth (pending or confirmed). */
+export type BoothReservationStatus = 'pending' | 'confirmed' | 'cancelled';
+
+export interface MetaExpoBoothReservation {
+  id: string;
+  timestamp: string;
+  bazaarId: string;
+  bazaarSlug: string;
+  bazaarName?: string;
+  boothId: string;
+  boothName?: string;
+  firstName: string;
+  lastName: string;
+  company: string;
+  jobTitle: string;
+  productService: string;
+  whatsapp: string;
+  status: BoothReservationStatus;
+  visitorId?: string;
+  sessionId?: string;
+  device?: 'mobile' | 'tablet' | 'desktop';
+}
+
 export interface MetaExpoPresence {
   id: string;
   roomId: string;
@@ -1294,7 +1317,9 @@ export type MetaExpoEventType =
   | 'decoration_click'
   | 'booth_dwell'
   | 'entrance_kiosk_click'
-  | 'registration_complete';
+  | 'registration_complete'
+  | 'booth_reserve_click'
+  | 'booth_reservation_complete';
 
 export interface MetaExpoEvent {
   id: string;

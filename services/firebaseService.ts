@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 
 export const firebaseConfig = {
@@ -1298,6 +1298,77 @@ export const fetchMetaExpoRegistrations = async (bazaarId: string): Promise<Meta
         return snap.docs.map(d => d.data() as MetaExpoRegistration)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     } catch { return []; }
+};
+
+// ── Metaverse Expo booth reservations ───────────────────────────────────────
+export const boothReservationDocId = (bazaarId: string, boothId: string) => `ber_${bazaarId}_${boothId}`;
+
+export const tryReserveBooth = async (reservation: Omit<MetaExpoBoothReservation, 'id' | 'status'>): Promise<'ok' | 'taken' | 'error'> => {
+    try {
+        if (!reservation?.bazaarId || !reservation?.boothId) return 'error';
+        const id = boothReservationDocId(reservation.bazaarId, reservation.boothId);
+        const proxy = await checkProxyMode();
+        if (proxy) {
+            const existing = await proxyGet<MetaExpoBoothReservation>('metaExpoBoothReservations', { doc: id });
+            if (existing && (existing.status === 'pending' || existing.status === 'confirmed')) return 'taken';
+            await proxyWrite('metaExpoBoothReservations', id, sanitizeData({ ...reservation, id, status: 'pending' }));
+            return 'ok';
+        }
+        const ref = doc(db, 'metaExpoBoothReservations', id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+            const cur = snap.data() as MetaExpoBoothReservation;
+            if (cur.status === 'pending' || cur.status === 'confirmed') return 'taken';
+        }
+        await setDoc(ref, sanitizeData({ ...reservation, id, status: 'pending' }));
+        return 'ok';
+    } catch { return 'error'; }
+};
+
+export const updateMetaExpoBoothReservation = async (id: string, updates: Partial<MetaExpoBoothReservation>): Promise<void> => {
+    try {
+        if (!id) return;
+        const data = sanitizeData(updates);
+        const proxy = await checkProxyMode();
+        if (proxy) {
+            const existing = await proxyGet<MetaExpoBoothReservation>('metaExpoBoothReservations', { doc: id });
+            if (!existing) return;
+            await proxyWrite('metaExpoBoothReservations', id, sanitizeData({ ...existing, ...data }));
+            return;
+        }
+        await updateDoc(doc(db, 'metaExpoBoothReservations', id), data);
+    } catch {}
+};
+
+export const fetchMetaExpoBoothReservations = async (bazaarId: string): Promise<MetaExpoBoothReservation[]> => {
+    try {
+        const q = query(collection(db, 'metaExpoBoothReservations'), where('bazaarId', '==', bazaarId), limit(2000));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as MetaExpoBoothReservation)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch { return []; }
+};
+
+export const subscribeMetaExpoBoothReservations = (
+    bazaarId: string,
+    callback: (reservations: MetaExpoBoothReservation[]) => void,
+): (() => void) => {
+    const normalize = (items: MetaExpoBoothReservation[]) =>
+        callback(items.filter(r => r.bazaarId === bazaarId));
+    let inner: (() => void) | null = null;
+    let gone = false;
+    checkProxyMode().then(proxy => {
+        if (gone) return;
+        if (proxy) inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 4000 });
+        else {
+            inner = onSnapshot(
+                query(collection(db, 'metaExpoBoothReservations'), where('bazaarId', '==', bazaarId), limit(2000)),
+                snap => normalize(snap.docs.map(d => d.data() as MetaExpoBoothReservation)),
+                () => {},
+            );
+        }
+    });
+    return () => { gone = true; inner?.(); };
 };
 
 // ── Metaverse Expo live presence ────────────────────────────────────────────

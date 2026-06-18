@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoBoothReservation, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
@@ -23,6 +23,8 @@ interface Props {
   onVrTeleport: (v: THREE.Vector3) => void;           // WebXR controller teleport
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
   onRegistrationKioskClick?: () => void;
+  boothReservations?: Record<string, MetaExpoBoothReservation>;
+  onReserveBooth?: (b: MetaverseBooth) => void;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -338,7 +340,7 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack, onRegistrationKioskClick }) => {
+export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack, onRegistrationKioskClick, boothReservations = {}, onReserveBooth }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -590,6 +592,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
             onTrack={onTrack}
             visualStyle={boothVisualStyle}
             hallDepth={depth}
+            boothReservation={boothReservations[b.id] || null}
+            onReserveBooth={onReserveBooth}
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
           />

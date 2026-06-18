@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { MetaBazaar, MetaExpoEvent, MetaExpoRegistration, MetaShop } from '../types';
+import { MetaBazaar, MetaExpoBoothReservation, MetaExpoEvent, MetaExpoRegistration, MetaShop } from '../types';
 import { IconPlus, IconEdit, IconGlobe, IconCopy, IconTrash } from './Icons';
 import { Language } from '../App';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -13,8 +13,9 @@ import {
   resolveExpoStyle,
 } from './metaverse/expoCatalog';
 import { ExpoVisualStyle } from '../types';
-import { fetchMetaExpoEvents, fetchMetaExpoRegistrations } from '../services/firebaseService';
+import { fetchMetaExpoEvents, fetchMetaExpoBoothReservations, fetchMetaExpoRegistrations, updateMetaExpoBoothReservation } from '../services/firebaseService';
 import { exportExpoRegistrationsCSV } from './metaverse/EntranceRegistrationModal';
+import { exportBoothReservationsCSV } from './metaverse/BoothReservationModal';
 
 interface Props {
   bazaars: MetaBazaar[];
@@ -45,6 +46,10 @@ export const MetaExpoManager: React.FC<Props> = ({
   const [expoRegistrationsId, setExpoRegistrationsId] = useState<string | null>(null);
   const [expoRegistrations, setExpoRegistrations] = useState<MetaExpoRegistration[]>([]);
   const [expoRegistrationsLoading, setExpoRegistrationsLoading] = useState(false);
+  const [boothReservationsId, setBoothReservationsId] = useState<string | null>(null);
+  const [boothReservations, setBoothReservations] = useState<MetaExpoBoothReservation[]>([]);
+  const [boothReservationsLoading, setBoothReservationsLoading] = useState(false);
+  const [reservationBusy, setReservationBusy] = useState<string | null>(null);
 
   const t = {
     title: T ? 'نمایشگاه‌های متاورسی' : 'Metaverse exhibitions',
@@ -75,6 +80,17 @@ export const MetaExpoManager: React.FC<Props> = ({
     regCity: T ? 'شهر' : 'City',
     regCountry: T ? 'کشور' : 'Country',
     regCount: T ? 'ثبت' : 'entries',
+    boothResReport: T ? 'رزرو غرفه‌ها' : 'Booth reservations',
+    boothResEmpty: T ? 'هنوز رزرو غرفه‌ای ثبت نشده.' : 'No booth reservations yet.',
+    boothResExport: T ? 'خروجی اکسل' : 'Export Excel',
+    boothResBooth: T ? 'غرفه' : 'Booth',
+    boothResStatus: T ? 'وضعیت' : 'Status',
+    boothResPending: T ? 'موقت' : 'Pending',
+    boothResConfirmed: T ? 'قطعی' : 'Confirmed',
+    boothResCancelled: T ? 'لغو شده' : 'Cancelled',
+    boothResConfirm: T ? 'رزرو قطعی' : 'Confirm',
+    boothResCancel: T ? 'لغو رزرو' : 'Cancel',
+    boothResAction: T ? 'عملیات' : 'Actions',
     refresh: T ? 'به‌روزرسانی' : 'Refresh',
     back: T ? 'بازگشت' : 'Back',
     count: (n: number) => T ? `${n} مورد` : `${n} items`,
@@ -120,6 +136,7 @@ export const MetaExpoManager: React.FC<Props> = ({
   const openExpoAnalytics = async (bazaar: MetaBazaar) => {
     setExpoAnalyticsId(bazaar.id);
     setExpoRegistrationsId(null);
+    setBoothReservationsId(null);
     setExpoAnalyticsLoading(true);
     try {
       setExpoAnalyticsEvents(await fetchMetaExpoEvents(bazaar.id));
@@ -131,11 +148,34 @@ export const MetaExpoManager: React.FC<Props> = ({
   const openExpoRegistrations = async (bazaar: MetaBazaar) => {
     setExpoRegistrationsId(bazaar.id);
     setExpoAnalyticsId(null);
+    setBoothReservationsId(null);
     setExpoRegistrationsLoading(true);
     try {
       setExpoRegistrations(await fetchMetaExpoRegistrations(bazaar.id));
     } finally {
       setExpoRegistrationsLoading(false);
+    }
+  };
+
+  const openBoothReservations = async (bazaar: MetaBazaar) => {
+    setBoothReservationsId(bazaar.id);
+    setExpoAnalyticsId(null);
+    setExpoRegistrationsId(null);
+    setBoothReservationsLoading(true);
+    try {
+      setBoothReservations(await fetchMetaExpoBoothReservations(bazaar.id));
+    } finally {
+      setBoothReservationsLoading(false);
+    }
+  };
+
+  const setReservationStatus = async (id: string, status: MetaExpoBoothReservation['status']) => {
+    setReservationBusy(id);
+    try {
+      await updateMetaExpoBoothReservation(id, { status });
+      setBoothReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+    } finally {
+      setReservationBusy(null);
     }
   };
 
@@ -152,6 +192,88 @@ export const MetaExpoManager: React.FC<Props> = ({
         embeddedDraft={draft}
         onEmbeddedClose={() => setDraft(null)}
       />
+    );
+  }
+
+  if (boothReservationsId) {
+    const bazaar = bazaars.find(b => b.id === boothReservationsId);
+    const active = boothReservations.filter(r => r.status === 'pending' || r.status === 'confirmed');
+    const statusBadge = (s: MetaExpoBoothReservation['status']) => {
+      if (s === 'confirmed') return 'bg-emerald-100 text-emerald-800';
+      if (s === 'cancelled') return 'bg-gray-100 text-gray-500';
+      return 'bg-amber-100 text-amber-800';
+    };
+    const statusText = (s: MetaExpoBoothReservation['status']) =>
+      s === 'confirmed' ? t.boothResConfirmed : s === 'cancelled' ? t.boothResCancelled : t.boothResPending;
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button type="button" onClick={() => setBoothReservationsId(null)} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <button type="button" onClick={() => bazaar && openBoothReservations(bazaar)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">↻ {t.refresh}</button>
+        </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-lg font-bold text-gray-800">{t.boothResReport} — {(T ? bazaar?.expo?.title?.fa || bazaar?.title?.fa : bazaar?.expo?.title?.en || bazaar?.title?.en) || bazaar?.name}</h3>
+          <button
+            type="button"
+            onClick={() => exportBoothReservationsCSV(boothReservations, lang, `booth-reservations-${bazaar?.slug || 'expo'}-${Date.now()}.csv`)}
+            disabled={boothReservations.length === 0}
+            className="text-xs px-4 py-2 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 disabled:opacity-40"
+          >
+            ⬇ {t.boothResExport}
+          </button>
+        </div>
+        {boothReservationsLoading ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.regLoading}</div>
+        ) : boothReservations.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.boothResEmpty}</div>
+        ) : (
+          <div className={card + ' overflow-x-auto'}>
+            <p className="text-xs text-gray-500 mb-3">{active.length.toLocaleString()} {T ? 'غرفه فعال' : 'active booths'} · {boothReservations.length.toLocaleString()} {t.regCount}</p>
+            <table className="w-full text-xs border-collapse min-w-[900px]">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600">
+                  <th className="p-2 text-start border-b">{t.regDate}</th>
+                  <th className="p-2 text-start border-b">{t.boothResBooth}</th>
+                  <th className="p-2 text-start border-b">{t.regName}</th>
+                  <th className="p-2 text-start border-b">{t.regCompany}</th>
+                  <th className="p-2 text-start border-b">{t.regJobTitle}</th>
+                  <th className="p-2 text-start border-b">{t.regProduct}</th>
+                  <th className="p-2 text-start border-b">{t.regWhatsapp}</th>
+                  <th className="p-2 text-start border-b">{t.boothResStatus}</th>
+                  {!readonly && <th className="p-2 text-start border-b">{t.boothResAction}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {boothReservations.map(r => (
+                  <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/80">
+                    <td className="p-2 whitespace-nowrap" dir="ltr">{new Date(r.timestamp).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
+                    <td className="p-2">{r.boothName || r.boothId}</td>
+                    <td className="p-2">{r.firstName} {r.lastName}</td>
+                    <td className="p-2">{r.company}</td>
+                    <td className="p-2">{r.jobTitle || '—'}</td>
+                    <td className="p-2">{r.productService}</td>
+                    <td className="p-2 dir-ltr">{r.whatsapp}</td>
+                    <td className="p-2"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusBadge(r.status)}`}>{statusText(r.status)}</span></td>
+                    {!readonly && (
+                      <td className="p-2 whitespace-nowrap">
+                        {r.status === 'pending' && (
+                          <div className="flex items-center gap-1.5">
+                            <button type="button" disabled={reservationBusy === r.id} onClick={() => setReservationStatus(r.id, 'confirmed')} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">{t.boothResConfirm}</button>
+                            <button type="button" disabled={reservationBusy === r.id} onClick={() => setReservationStatus(r.id, 'cancelled')} className="text-[10px] px-2 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">{t.boothResCancel}</button>
+                          </div>
+                        )}
+                        {r.status === 'confirmed' && (
+                          <button type="button" disabled={reservationBusy === r.id} onClick={() => setReservationStatus(r.id, 'cancelled')} className="text-[10px] px-2 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">{t.boothResCancel}</button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -338,6 +460,7 @@ export const MetaExpoManager: React.FC<Props> = ({
                     )}
                     <button type="button" onClick={() => openExpoAnalytics(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">{t.report}</button>
                     <button type="button" onClick={() => openExpoRegistrations(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50">{t.regReport}</button>
+                    <button type="button" onClick={() => openBoothReservations(b)} className="text-xs px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50">{t.boothResReport}</button>
                     {!readonly && (
                       <button type="button" onClick={() => setDraft(JSON.parse(JSON.stringify(b)))} className="text-xs px-2.5 py-1.5 rounded-lg text-indigo-600 border border-indigo-200 hover:bg-indigo-50 flex items-center gap-1">
                         <IconEdit className="w-3.5 h-3.5" />{t.edit}

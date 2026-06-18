@@ -4,7 +4,7 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, ExpoVisualStyle, MetaExpoBoothReservation, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
 import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
 import { Hotspot } from './Hotspot';
@@ -25,6 +25,8 @@ interface Props {
   categoryName?: string;
   categoryColor?: string;
   hallDepth?: number;
+  boothReservation?: MetaExpoBoothReservation | null;
+  onReserveBooth?: (b: MetaverseBooth) => void;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -887,7 +889,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30 }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothReservation, onReserveBooth }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -902,6 +904,10 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
   const enterShop = lang === 'fa' ? 'ورود به فروشگاه' : 'Enter shop';
+  const reserveBooth = lang === 'fa' ? 'رزرو غرفه' : 'Reserve';
+  const reservedPending = lang === 'fa' ? 'رزرو موقت' : 'Held';
+  const reservedConfirmed = lang === 'fa' ? 'رزرو قطعی' : 'Booked';
+  const activeReservation = boothReservation && (boothReservation.status === 'pending' || boothReservation.status === 'confirmed') ? boothReservation : null;
   const storefront = visualStyle === 'storefront' || visualStyle === 'supermarket' || visualStyle === 'business_center';
   const signText = bi(booth.storefrontSignText, lang, name);
   const glassText = bi(booth.storefrontGlassText, lang, lang === 'fa' ? 'خدمات و محصولات ویژه' : 'Services & special offers');
@@ -1334,6 +1340,49 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             onClick={(e) => { e.stopPropagation(); trackBoothSelect('counter'); }} />
         </group>
       )}
+
+      {activeReservation ? (
+        <group position={[0, 0.38, D / 2 + 0.06]}>
+          <CanvasLabel
+            text={`${activeReservation.status === 'confirmed' ? reservedConfirmed : reservedPending} · ${activeReservation.company}`}
+            width={1.55}
+            height={0.22}
+            bg={activeReservation.status === 'confirmed' ? 'rgba(22,163,74,.88)' : 'rgba(217,119,6,.88)'}
+            color="#ffffff"
+            bold={false}
+          />
+        </group>
+      ) : onReserveBooth ? (
+        <group position={[0, 0.38, D / 2 + 0.06]}>
+          <mesh
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrack?.('booth_reserve_click', { ...trackBase, targetType: 'booth_reserve', side: 'booth_reserve' });
+              onReserveBooth(booth);
+            }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          >
+            <planeGeometry args={[0.92, 0.22]} />
+            <meshBasicMaterial color="#b45309" transparent opacity={0.92} toneMapped={false} depthWrite={false} />
+          </mesh>
+          <CanvasLabel
+            text={reserveBooth}
+            width={0.86}
+            height={0.18}
+            position={[0, 0, 0.01]}
+            color="#ffffff"
+            bold={false}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrack?.('booth_reserve_click', { ...trackBase, targetType: 'booth_reserve', side: 'booth_reserve' });
+              onReserveBooth(booth);
+            }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          />
+        </group>
+      ) : null}
 
       <CanvasLabel
         text={num ? `${num} · ${name}` : name}

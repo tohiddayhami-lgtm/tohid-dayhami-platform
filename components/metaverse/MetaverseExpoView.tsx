@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoBoothReservation, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims } from './expoUtils';
 import { makeControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -14,9 +14,10 @@ import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
 import { HotspotModal } from './HotspotModal';
 import { EntranceRegistrationModal } from './EntranceRegistrationModal';
+import { BoothReservationModal } from './BoothReservationModal';
 import { VrRig, VRButton } from './XRControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
-import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
+import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { CanvasLabel } from './CanvasLabel';
 
 interface Props {
@@ -185,6 +186,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [pointerLock, setPointerLock] = useState(false);
   const [active, setActive] = useState<MetaverseHotspot | null>(null);
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
+  const [boothReservations, setBoothReservations] = useState<Record<string, MetaExpoBoothReservation>>({});
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
   const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
@@ -250,6 +253,16 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     window.open(href, '_blank', 'noopener,noreferrer');
   };
   const onSelectBooth = (b: MetaverseBooth) => { if (b.shopSlug) openShopNewTab(b.shopSlug); };
+
+  useEffect(() => {
+    return subscribeMetaExpoBoothReservations(bazaar.id, (list) => {
+      const map: Record<string, MetaExpoBoothReservation> = {};
+      list.forEach(r => {
+        if (r.status === 'pending' || r.status === 'confirmed') map[r.boothId] = r;
+      });
+      setBoothReservations(map);
+    });
+  }, [bazaar.id]);
 
   useEffect(() => {
     if (!presenceEnabled) return;
@@ -336,6 +349,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onVrTeleport={(v) => { originRef.current?.position.copy(v); }}
               onTrack={trackExpoEvent}
               onRegistrationKioskClick={() => setRegistrationOpen(true)}
+              boothReservations={boothReservations}
+              onReserveBooth={setReserveBooth}
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
@@ -413,6 +428,16 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             localStorage.setItem(key, JSON.stringify(parsed));
           } catch {}
         }}
+        onTrack={trackExpoEvent}
+      />
+      <BoothReservationModal
+        open={!!reserveBooth}
+        bazaar={bazaar}
+        booth={reserveBooth}
+        visitorId={visitor.id}
+        lang={lang}
+        onClose={() => setReserveBooth(null)}
+        onReserved={() => setReserveBooth(null)}
         onTrack={trackExpoEvent}
       />
       {/* Ambient music (starts muted; unmuted via the 🔊 button to satisfy autoplay policies) */}
