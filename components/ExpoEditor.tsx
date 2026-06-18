@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, ExpoMeetWall, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout } from './metaverse/expoUtils';
 import { Language } from '../App';
@@ -153,6 +153,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     boothFa: T ? 'نام غرفه (فارسی)' : 'Booth name (FA)', boothEn: T ? 'نام غرفه (انگلیسی)' : 'Booth name (EN)',
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
     color: T ? 'رنگ غرفه' : 'Booth color', scale: T ? 'مقیاس' : 'Scale', rot: T ? 'چرخش (درجه)' : 'Rotation (deg)',
+    entranceFacing: T ? 'سمت رو به درب ورود' : 'Side facing entrance',
+    entranceFacingFront: T ? 'روبه‌رو (جلو)' : 'Front toward entrance',
+    entranceFacingLeft: T ? 'سمت چپ' : 'Left side',
+    entranceFacingRight: T ? 'سمت راست' : 'Right side',
+    entranceFacingBack: T ? 'پشت غرفه' : 'Back toward entrance',
+    entranceFacingHint: T ? 'غرفه در جای خود می‌چرخد؛ چرخش چیدمان (درجه) تغییر نمی‌کند.' : 'Booth spins in place; layout rotation (deg) stays unchanged.',
     logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,
@@ -1050,6 +1056,21 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.scale}</label><input type="number" step="0.1" className={fld} value={b.scale ?? 1} onChange={ev => updBooth(b.id, { scale: +ev.target.value })} /></div>
                               <div><label className={lbl}>{t.rot}</label><input type="number" className={fld} value={Math.round(((b.ry || 0) * 180 / Math.PI))} onChange={ev => updBooth(b.id, { ry: (+ev.target.value) * Math.PI / 180 })} /></div>
+                            </div>
+                            <div>
+                              <label className={lbl}>{t.entranceFacing}</label>
+                              <select
+                                className={fld + ' bg-white'}
+                                value={b.entranceFacing || ''}
+                                onChange={ev => updBooth(b.id, { entranceFacing: (ev.target.value || undefined) as BoothEntranceFacing | undefined })}
+                              >
+                                <option value="">{T ? '— پیش‌فرض چیدمان —' : '— layout default —'}</option>
+                                <option value="front">{t.entranceFacingFront}</option>
+                                <option value="left">{t.entranceFacingLeft}</option>
+                                <option value="right">{t.entranceFacingRight}</option>
+                                <option value="back">{t.entranceFacingBack}</option>
+                              </select>
+                              <p className="text-[10px] text-gray-500 mt-1">{t.entranceFacingHint}</p>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div><label className={lbl}>{t.posX}</label><input type="number" step="0.5" className={fld} value={b.x ?? 0} onChange={ev => updBooth(b.id, { x: +ev.target.value })} /></div>

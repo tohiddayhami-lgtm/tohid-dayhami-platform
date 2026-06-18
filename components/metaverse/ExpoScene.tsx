@@ -556,6 +556,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
             onSelectBooth={onSelectBooth}
             onTrack={onTrack}
             visualStyle={boothVisualStyle}
+            hallDepth={depth}
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
           />

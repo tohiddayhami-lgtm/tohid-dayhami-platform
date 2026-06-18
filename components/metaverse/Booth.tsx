@@ -6,7 +6,7 @@ import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { Language } from '../../App';
-import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed } from './expoUtils';
+import { bi, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { CanvasLabel } from './CanvasLabel';
@@ -23,6 +23,7 @@ interface Props {
   visualStyle?: ExpoVisualStyle;
   categoryName?: string;
   categoryColor?: string;
+  hallDepth?: number;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -885,7 +886,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30 }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, lang === 'fa' ? 'غرفه' : 'Booth');
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -906,7 +907,13 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
   const premiumSignText = bi(booth.premiumSignText, lang, name);
   const premiumSignColor = booth.premiumSignColor || accent;
 
-  // Media for each of the 6 wall faces (3 inner + 3 outer). innerBack falls back to the legacy
+  const entranceFacingYaw = useMemo(() => (
+    booth.entranceFacing
+      ? boothEntranceFacingYaw(booth.x || 0, booth.z || 0, hallDepth, booth.ry || 0, booth.entranceFacing)
+      : 0
+  ), [booth.entranceFacing, booth.x, booth.z, booth.ry, hallDepth]);
+
+  // Media for each of the 6 wall faces
   // screenUrl / bannerImage so older booths keep working.
   const P = booth.panels || {};
   const panelUrl = (face: BoothFace): string | undefined =>
@@ -1003,6 +1010,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const signColor = categoryColor || accent;
     return (
       <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
+        <group rotation={[0, entranceFacingYaw, 0]}>
         <mesh position={[0, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[shelfW + 1.1, shelfD + 1.45]} />
           <meshStandardMaterial color={categoryColor || accent} transparent opacity={0.13} roughness={0.82} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
@@ -1115,12 +1123,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             }}
           />
         ))}
+        </group>
       </group>
     );
   }
 
   return (
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
+      <group rotation={[0, entranceFacingYaw, 0]}>
       {booth.modelUrl ? (
         <TexBoundary key={booth.modelUrl}>
           <Suspense fallback={null}>
@@ -1412,6 +1422,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           }}
         />
       ))}
+      </group>
     </group>
   );
 };

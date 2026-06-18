@@ -1,4 +1,4 @@
-import type { MetaShopDirCat, MetaverseExpo, MetaverseBooth, MetaShop } from '../../types';
+import type { MetaShopDirCat, MetaverseExpo, MetaverseBooth, MetaShop, BoothEntranceFacing } from '../../types';
 import { Language } from '../../App';
 
 // ── Bilingual label resolver (mirrors the {fa,en} pattern used across MetaShop/MetaBazaar) ──
@@ -544,6 +544,31 @@ export const findNextLayoutSlot = (boothCount: number, layout: ExpoBoothLayout |
 
 /** @deprecated */
 export const findNextCrossFacingSlot = (boothCount: number) => findNextLayoutSlot(boothCount, 'cross');
+
+const ENTRANCE_FACE_YAW: Record<BoothEntranceFacing, number> = {
+  front: 0,
+  back: Math.PI,
+  left: -Math.PI / 2,
+  right: Math.PI / 2,
+};
+
+/** In-place Y rotation so the chosen booth face points toward the south entrance wall. */
+export const boothEntranceFacingYaw = (
+  x: number,
+  z: number,
+  hallDepth: number,
+  ry = 0,
+  facing: BoothEntranceFacing = 'front',
+): number => {
+  const dx = -x;
+  const dz = hallDepth / 2 - z;
+  if (Math.hypot(dx, dz) < 0.05) return 0;
+  const toEntrance = Math.atan2(dx, dz);
+  let offset = toEntrance - ry - ENTRANCE_FACE_YAW[facing];
+  while (offset > Math.PI) offset -= Math.PI * 2;
+  while (offset < -Math.PI) offset += Math.PI * 2;
+  return +offset.toFixed(4);
+};
 
 /** Meta Business Center — 3 walkable floors with a central stairwell. */
 export const BUSINESS_CENTER = {

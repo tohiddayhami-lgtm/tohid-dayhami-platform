@@ -653,6 +653,9 @@ export interface MetaverseHotspot {
 // The six panel surfaces of a booth: each of the 3 walls has an inner face (toward the booth
 // interior) and an outer face (the aisle side). Each can show an image OR a video link.
 export type BoothFace = 'innerBack' | 'innerLeft' | 'innerRight' | 'outerBack' | 'outerLeft' | 'outerRight';
+
+/** Which booth side points toward the hall entrance (+Z wall); geometry spins in place, `ry` unchanged. */
+export type BoothEntranceFacing = 'front' | 'left' | 'right' | 'back';
 export type BoothTier = 'basic' | 'standard' | 'premium';
 export type ExpoVisualStyle = 'exhibition' | 'storefront' | 'supermarket' | 'business_center';
 
@@ -675,6 +678,7 @@ export interface MetaverseBooth {
   // placement on the hall floor
   x: number; y: number; z: number;
   ry?: number;                  // facing rotation (radians)
+  entranceFacing?: BoothEntranceFacing; // which booth side faces the hall entrance (in-place, keeps ry)
   scale?: number;               // uniform scale (default 1)
   tier?: BoothTier;             // visual/advertising package: basic, standard, premium
   // visuals
