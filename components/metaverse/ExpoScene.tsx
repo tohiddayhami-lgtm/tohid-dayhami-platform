@@ -46,7 +46,7 @@ const ExpoEntrance: React.FC<{ expo: MetaverseExpo; lang: Language; width: numbe
   const organizer = bi(expo.entranceOrganizer || expo.title, lang, lang === 'fa' ? 'برگزارکننده نمایشگاه' : 'Exhibition Organizer');
   const title = bi(expo.title, lang, lang === 'fa' ? 'ورود به نمایشگاه' : 'Enter Exhibition');
   const primary = expo.wallColor || EXPO_DEFAULTS.wallColor;
-  const entranceAds = expo.entranceAds || [];
+  const entranceAds = (expo.entranceAds || []).filter(ad => ad.enabled !== false);
   const apronStart = depth / 2 + 0.18;
   const apronEnd = z0 + 0.55;
   const apronLen = apronEnd - apronStart;
@@ -470,7 +470,7 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
         const adScale = expo.wallAdScale ?? 1.35;
         const adLift = expo.wallAdLift ?? 2;
         const byWall: Record<string, typeof expo.wallAds> = {};
-        (expo.wallAds || []).forEach(a => { (byWall[a.wall] = byWall[a.wall] || []).push(a); });
+        (expo.wallAds || []).filter(a => a.enabled !== false).forEach(a => { (byWall[a.wall] = byWall[a.wall] || []).push(a); });
         const out: React.ReactElement[] = [];
         Object.keys(byWall).forEach(wall => {
           const list = byWall[wall]!;

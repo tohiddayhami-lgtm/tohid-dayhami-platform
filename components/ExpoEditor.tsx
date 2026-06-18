@@ -99,6 +99,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     adLiftAll: T ? 'بالا بردن همه تابلوها (متر)' : 'Lift all banners (m)',
     adScaleOne: T ? 'بزرگ‌نمایی همین تابلو' : 'This banner scale',
     adLiftOne: T ? 'بالا/پایین همین تابلو (متر)' : 'This banner lift (m)',
+    adEnabled: T ? 'نمایش تابلو' : 'Show banner',
     meter: T ? 'متر' : 'm',
     adPos: T ? 'موقعیت افقی (۰ تا ۱)' : 'Horizontal (0–1)', adHeight: T ? 'ارتفاع (۰ تا ۱)' : 'Height (0–1)', adW: T ? 'عرض (متر)' : 'Width (m)', adH: T ? 'ارتفاع (متر)' : 'Height (m)',
     wallBack: T ? 'دیوار انتهایی' : 'Back', wallLeft: T ? 'چپ' : 'Left', wallRight: T ? 'راست' : 'Right', wallFront: T ? 'ورودی' : 'Front',
@@ -658,6 +659,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       scale: ad.scale ?? 1,
       lift: ad.lift ?? 0,
       title: ad.title || { fa: `تبلیغات محیطی ${i + 1}`, en: `Wall Advertising ${i + 1}` },
+      enabled: ad.enabled !== false,
       image: ad.image || 'PASTE_GENERATED_IMAGE_OR_VIDEO_GIF_PDF_URL_HERE',
       url: ad.url || 'https://example.com',
     })) : [
@@ -673,6 +675,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       h: ad.h || bannerSize(ad.size).h,
       lift: ad.lift ?? (ad.position === 'aboveArch' ? 0.75 : undefined),
       title: ad.title || { fa: `تبلیغات ورودی ${i + 1}`, en: `Entrance Advertising ${i + 1}` },
+      enabled: ad.enabled !== false,
       image: ad.image || 'PASTE_GENERATED_IMAGE_OR_VIDEO_GIF_PDF_URL_HERE',
       url: ad.url || 'https://example.com',
     })) : [
@@ -788,7 +791,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   {(e.entranceAds || []).length === 0 ? <p className="text-sm text-emerald-700/50 text-center py-2">{t.noEntranceAds}</p> : (
                     <div className="space-y-2">
                       {(e.entranceAds || []).map(ad => (
-                        <div key={ad.id} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-2 items-end">
+                        <div key={ad.id} className={`rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-2 items-end ${ad.enabled === false ? 'opacity-50' : ''}`}>
+                          <div className="lg:col-span-8">
+                            <label className="flex items-center gap-2 text-xs font-bold text-emerald-800">
+                              <input type="checkbox" className="w-4 h-4 accent-emerald-600" disabled={readonly} checked={ad.enabled !== false} onChange={ev => updEntranceAd(ad.id, { enabled: ev.target.checked })} />
+                              {t.adEnabled}
+                            </label>
+                          </div>
                           <div><label className={lbl}>{t.entranceAdPos}</label>
                             <select className={fld + ' bg-white'} value={ad.position} onChange={ev => updEntranceAd(ad.id, { position: ev.target.value as ExpoEntranceAdPosition })}>
                               {ENTRANCE_AD_POSITIONS.map(p => <option key={p.key} value={p.key}>{T ? p.fa : p.en}</option>)}
@@ -868,7 +877,13 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
             {(e.wallAds || []).length === 0 ? <p className="text-sm text-gray-400 text-center py-2">{t.noAds}</p> : (
               <div className="space-y-2">
                 {(e.wallAds || []).map((ad, idx, ads) => (
-                  <div key={ad.id} className="rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end">
+                  <div key={ad.id} className={`rounded-lg border border-gray-200 p-2.5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 items-end ${ad.enabled === false ? 'opacity-50' : ''}`}>
+                    <div className="lg:col-span-6">
+                      <label className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                        <input type="checkbox" className="w-4 h-4 accent-indigo-600" disabled={readonly} checked={ad.enabled !== false} onChange={ev => updWallAd(ad.id, { enabled: ev.target.checked })} />
+                        {t.adEnabled}
+                      </label>
+                    </div>
                     <div><label className={lbl}>{t.adWall}</label>
                       <select className={fld + ' bg-white'} value={ad.wall} onChange={ev => updWallAd(ad.id, { wall: ev.target.value as ExpoWall })}>
                         <option value="back">{t.wallBack}</option><option value="left">{t.wallLeft}</option><option value="right">{t.wallRight}</option><option value="front">{t.wallFront}</option>

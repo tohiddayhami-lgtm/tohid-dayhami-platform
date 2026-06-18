@@ -725,6 +725,7 @@ export interface ExpoWallAd {
   image?: string;        // banner image URL
   url?: string;          // hyperlink — opens in a new tab
   title?: MetaShopDirCat;
+  enabled?: boolean;     // false = hidden in the 3D hall (default: shown)
   // Position is auto-distributed along the wall based on the hall — no manual u/v needed.
 }
 
@@ -740,6 +741,7 @@ export interface ExpoEntranceAd {
   image?: string;
   url?: string;
   title?: MetaShopDirCat;
+  enabled?: boolean;     // false = hidden in the 3D hall (default: shown)
 }
 
 // A large page-turnable PDF presentation mounted on a hall wall (default the far/end wall).
