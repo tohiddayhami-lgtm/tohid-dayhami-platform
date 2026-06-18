@@ -980,12 +980,13 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     onTrack?.('hotspot_click', { ...trackBase, targetType: 'google_meet', targetName: meetCaption || (lang === 'fa' ? 'Google Meet' : 'Google Meet'), side: 'booth_meet' });
     openManagerLink(booth.meetUrl);
   };
-  const meetBadgeEl = (bw: number, bd: number, wy: number) => booth.meetEnabled && booth.meetUrl ? (
+  const meetBadgeEl = (bw: number, bd: number, opts?: { y?: number; frontZ?: number }) => booth.meetEnabled && booth.meetUrl ? (
     <BoothMeetBadge
       side={booth.meetSide || 'left'}
       boothW={bw}
       boothD={bd}
-      wallY={wy}
+      y={opts?.y}
+      frontZ={opts?.frontZ}
       label={meetCaption || undefined}
       onClick={openBoothMeet}
     />
@@ -1140,7 +1141,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             }}
           />
         ))}
-        {meetBadgeEl(shelfW, shelfD, shelfH * 0.62)}
+        {meetBadgeEl(shelfW, shelfD, { y: shelfH * 0.46, frontZ: shelfD / 2 + 0.28 })}
         </group>
       </group>
     );
@@ -1156,7 +1157,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               <GltfModel url={booth.modelUrl} scale={booth.modelScale ?? 1} autoFit={4} />
             </Suspense>
           </TexBoundary>
-          {meetBadgeEl(W, D, sideY)}
+          {meetBadgeEl(W, D)}
         </group>
       ) : (
         <group>
@@ -1357,7 +1358,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               )}
             </group>
           )}
-          {meetBadgeEl(W, D, sideY)}
+          {meetBadgeEl(W, D)}
         </group>
       )}
 

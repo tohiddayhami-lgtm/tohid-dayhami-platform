@@ -710,7 +710,7 @@ export interface MetaverseBooth {
   meetEnabled?: boolean;        // per-booth Google Meet video call badge
   meetUrl?: string;             // https://meet.google.com/…
   meetTitle?: MetaShopDirCat;   // optional short caption under the icon
-  meetSide?: 'left' | 'right';  // which booth flank shows the icon (default left)
+  meetSide?: 'left' | 'right';  // left/right of center counter on the visitor-facing front (default left)
 }
 
 // drei <Environment> presets used for image-based lighting / skybox when no custom HDR is given

@@ -54,23 +54,23 @@ interface Props {
   side: 'left' | 'right';
   boothW: number;
   boothD: number;
-  /** Height on the side wall — align with booth side panels. */
-  wallY: number;
+  /** Defaults to counter height on standard booths. */
+  y?: number;
+  /** Defaults to just in front of the visitor-facing counter. */
+  frontZ?: number;
   label?: string;
   onClick: () => void;
 }
 
-/** Small Google Meet call badge flush on a booth flank (same frame as outer side panels). */
-export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, wallY, label, onClick }) => {
+/** Small Google Meet badge on the visitor-facing front — left or right of the center counter. */
+export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, y = 1.06, frontZ, label, onClick }) => {
   const texture = useMemo(() => buildMeetIconTexture(), []);
   useEffect(() => () => texture.dispose(), [texture]);
 
   const iconSize = 0.3;
-  const wallInset = 0.1;
-  const x = side === 'right' ? boothW / 2 + wallInset : -boothW / 2 - wallInset;
-  const y = wallY;
-  const z = boothD * 0.18;
-  const yaw = side === 'right' ? Math.PI / 2 : -Math.PI / 2;
+  const counterHalfW = boothW * 0.26;
+  const x = side === 'left' ? -(counterHalfW + 0.58) : counterHalfW + 0.58;
+  const z = frontZ ?? boothD / 2 - 0.32;
 
   const stop = (e: ThreeEvent<MouseEvent>) => e.stopPropagation();
   const pointer = {
@@ -79,7 +79,7 @@ export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, wallY, l
   };
 
   return (
-    <group position={[x, y, z]} rotation={[0, yaw, 0]}>
+    <group position={[x, y, z]}>
       <mesh
         onClick={(e) => { stop(e); onClick(); }}
         {...pointer}
