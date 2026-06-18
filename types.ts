@@ -683,6 +683,8 @@ export interface MetaverseBooth {
   tier?: BoothTier;             // visual/advertising package: basic, standard, premium
   // visuals
   modelUrl?: string;            // optional custom GLB/GLTF (Storage documents/ URL) — overrides procedural booth
+  modelScale?: number;          // GLB size multiplier after auto-fit (default 1)
+  modelRy?: number;             // GLB extra Y rotation (radians), in-place on top of layout ry
   color?: string;               // accent color for the procedural booth
   floorId?: 0 | 1 | 2;          // legacy business_center floor (deprecated)
   categoryId?: string;            // supermarket: retail department zone

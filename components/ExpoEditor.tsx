@@ -160,7 +160,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     entranceFacingRight: T ? 'سمت راست' : 'Right side',
     entranceFacingBack: T ? 'پشت غرفه' : 'Back toward entrance',
     entranceFacingHint: T ? 'غرفه در جای خود می‌چرخد؛ سمت انتخابی عمود بر دیوار ورودی (زاویه صاف، نه کج به درب).' : 'Booth spins in place; chosen side faces the entrance wall square-on (not angled at the door).',
-    logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
+    logo: T ? 'لوگو' : 'Logo', banner: T ? 'بنر' : 'Banner', glb: T ? 'مدل GLB غرفه' : 'Booth GLB model',
+    glbScale: T ? 'مقیاس مدل GLB' : 'GLB model scale',
+    glbRot: T ? 'چرخش مدل (درجه)' : 'Model rotation (°)',
+    glbAdjustHint: T ? 'مدل در جای خود می‌چرخد؛ اندازهٔ اولیه خودکار با غرفهٔ استاندارد (۴×۴ متر) هم‌تراز می‌شود.' : 'Model spins in place; initial size auto-fits the standard 4×4 m booth footprint.',
+    upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود…' : 'Uploading…', clear: T ? 'حذف' : 'Clear',
     counterGlb: (n: number) => T ? `GLB مینیاتوری روی کانتر ${n}` : `Counter miniature GLB ${n}`,
     managerPng: (n: number) => T ? `PNG مدیرعامل / شخص ${n} پشت کانتر` : `Manager/person PNG ${n} behind counter`,
     managerActive: (n: number) => T ? `نمایش شخص ${n}` : `Show person ${n}`,
@@ -1109,7 +1113,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <AudioUpload id={`manager-audio-en-${i + 1}-${b.id}`} value={b.managerAudiosEn?.[i]} onUrl={u => setBoothManagerAudio(b, i, 'en', u)} label={t.managerAudioEn(i + 1)} />
                               </React.Fragment>
                             ))}
-                            <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined })} label={t.glb} />
+                            <GlbUpload id={`glb-${b.id}`} value={b.modelUrl} onUrl={u => updBooth(b.id, { modelUrl: u || undefined, ...(u ? {} : { modelScale: undefined, modelRy: undefined }) })} label={t.glb} />
+                            {b.modelUrl && (
+                              <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-violet-100 bg-violet-50/40 p-2.5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div><label className={lbl}>{t.glbScale}</label><input type="number" min={0.05} max={10} step={0.05} className={fld} value={b.modelScale ?? 1} onChange={ev => updBooth(b.id, { modelScale: +ev.target.value || 1 })} /></div>
+                                <div><label className={lbl}>{t.glbRot}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((b.modelRy || 0) * 180 / Math.PI)} onChange={ev => updBooth(b.id, { modelRy: (+ev.target.value) * Math.PI / 180 })} /></div>
+                                <p className="md:col-span-2 text-[10px] text-violet-700/80">{t.glbAdjustHint}</p>
+                              </div>
+                            )}
                           </div>
 
                           {/* Six wall panels (3 inner + 3 outer) — image or video per surface */}

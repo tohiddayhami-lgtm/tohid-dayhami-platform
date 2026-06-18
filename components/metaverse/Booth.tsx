@@ -896,7 +896,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     standard: { panel: 1.12, side: 1.12, glow: 1.9, trim: 0.12 },
     premium: { panel: 1.2, side: 1.18, glow: 2.5, trim: 0.2 },
   }[tier];
-  const scale = booth.scale || 1;
+  const scale = booth.modelUrl ? 1 : (booth.scale || 1);
   const W = 4, D = 4, wallH = 3.2;          // keep the core footprint stable so layout/buttons don't shift
   const accentColor = useMemo(() => new THREE.Color(accent), [accent]);
   const accentDark = useMemo(() => new THREE.Color(accent).multiplyScalar(0.6), [accent]);
@@ -1132,11 +1132,13 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     <group position={[booth.x || 0, booth.y || 0, booth.z || 0]} rotation={[0, booth.ry || 0, 0]} scale={scale}>
       <group rotation={[0, entranceFacingYaw, 0]}>
       {booth.modelUrl ? (
-        <TexBoundary key={booth.modelUrl}>
-          <Suspense fallback={null}>
-            <GltfModel url={booth.modelUrl} />
-          </Suspense>
-        </TexBoundary>
+        <group rotation={[0, booth.modelRy || 0, 0]}>
+          <TexBoundary key={booth.modelUrl}>
+            <Suspense fallback={null}>
+              <GltfModel url={booth.modelUrl} scale={booth.modelScale ?? 1} autoFit={4} />
+            </Suspense>
+          </TexBoundary>
+        </group>
       ) : (
         <group>
           {/* Carpet base + accent inlay */}
