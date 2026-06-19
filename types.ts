@@ -30,6 +30,8 @@ export interface SubService {
   title: string;
   titleEn?: string;
   price?: Price;
+  /** Optional multi-currency tariffs (overrides single price when set). */
+  prices?: Price[];
   routeDepartmentId?: string; // auto-route requests of this sub-service to a department
   routePosition?: string;     // auto-route requests of this sub-service to a position/سمت (takes priority over department)
 }
@@ -42,6 +44,8 @@ export interface ServiceOption {
   descriptionEn?: string;
   icon?: string;
   price?: Price;
+  /** Optional multi-currency tariffs (overrides single price when set). */
+  prices?: Price[];
   isActive: boolean;
   subServices?: SubService[];
   defaultCommission?: number;

@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { ServiceOption, Currency, SubService, AppConfig } from '../types';
+import { ServiceOption, Currency, SubService, AppConfig, Price } from '../types';
 import { IconPlus, IconEdit, IconTrash, IconCheck, IconFileText, IconCopy } from './Icons';
 import { Language } from '../App';
+import { ServicePriceList } from './ServicePriceList';
 
 interface Props {
   services: ServiceOption[];
@@ -25,6 +26,7 @@ const blankSub = () => ({ title: '', titleEn: '', amount: 0, currency: 'OMR' as 
 export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly = false, lang, config }) => {
   const departments = config?.departments || [];
   const roles = config?.personnelRoles || [];
+  const [managerTab, setManagerTab] = useState<'manage' | 'pricelist'>('manage');
   // which card is open
   const [openId,      setOpenId]      = useState<string | null>(null);
   // which service is in edit mode (null = add-new panel)
@@ -187,7 +189,8 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
           'فیلدهای id را تغییر ندهید — برای حفظ یکپارچگی سیستم لازم است.',
           'برای افزودن خدمت جدید، یک شیء با id منحصربه‌فرد اضافه کنید مثل: s-new1',
           'isActive: true یعنی در فرم مشتری نمایش داده می‌شود.',
-          'currency: IRR | OMR | USD',
+          'currency: IRR | OMR | USD | EUR | AED | AUD',
+          'prices: آرایه چند ارزی [{ amount, currency }] — اختیاری؛ اگر پر باشد جایگزین price تکی می‌شود',
         ],
         fieldGuide: {
           id: 'شناسه یکتا — تغییر ندهید',
@@ -197,7 +200,8 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
           descriptionEn: 'توضیحات انگلیسی',
           icon: 'ایموجی آیکون',
           'price.amount': 'مبلغ تعرفه پایه (عدد)',
-          'price.currency': 'واحد پول: IRR | OMR | USD',
+          'price.currency': 'واحد پول: IRR | OMR | USD | EUR | AED | AUD',
+          prices: 'آرایه قیمت چند ارزی [{ amount, currency }]',
           isActive: 'نمایش در فرم مشتری: true | false',
           subServices: 'آرایه زیرمجموعه‌ها (اختیاری)',
         },
@@ -210,6 +214,7 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
         descriptionEn: s.descriptionEn || '',
         icon: s.icon || '',
         price: { amount: s.price?.amount || 0, currency: s.price?.currency || 'OMR' },
+        ...(s.prices?.length ? { prices: s.prices } : {}),
         isActive: s.isActive,
         defaultCommission: s.defaultCommission || 0,
         subServices: (s.subServices || []).map(sub => ({
@@ -217,6 +222,7 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
           title: sub.title,
           titleEn: sub.titleEn || '',
           price: { amount: sub.price?.amount || 0, currency: sub.price?.currency || 'OMR' },
+          ...(sub.prices?.length ? { prices: sub.prices } : {}),
         })),
       })),
     };
@@ -241,9 +247,18 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
         const arr: unknown[] = Array.isArray(raw) ? raw : (raw?.services ?? []);
         if (!Array.isArray(arr) || arr.length === 0) throw new Error('آرایه services یافت نشد');
         // validate minimum fields
+        const parsePrice = (p: unknown): Price => {
+          const o = p as Record<string, unknown>;
+          return { amount: Number(o?.amount || 0), currency: String(o?.currency || 'OMR') as Currency };
+        };
+        const parsePrices = (it: Record<string, unknown>): Price[] | undefined => {
+          if (!Array.isArray(it.prices) || !it.prices.length) return undefined;
+          return (it.prices as unknown[]).map(parsePrice).filter(p => p.amount > 0);
+        };
         const parsed: ServiceOption[] = arr.map((item: unknown, i: number) => {
           const it = item as Record<string, unknown>;
           if (!it.title) throw new Error(`آیتم ${i+1}: فیلد title اجباری است`);
+          const prices = parsePrices(it);
           return {
             id:             String(it.id || `s-imp-${Date.now()}-${i}`),
             title:          String(it.title),
@@ -251,15 +266,20 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
             description:    String(it.description || ''),
             descriptionEn:  String(it.descriptionEn || it.description || ''),
             icon:           String(it.icon || '✨'),
-            price:          it.price ? { amount: Number((it.price as Record<string,unknown>).amount||0), currency: String((it.price as Record<string,unknown>).currency||'OMR') as Currency } : { amount:0, currency:'OMR' as Currency },
+            price:          it.price ? parsePrice(it.price) : { amount:0, currency:'OMR' as Currency },
+            ...(prices?.length ? { prices } : {}),
             isActive:       it.isActive !== false,
             defaultCommission: Number(it.defaultCommission || 0),
-            subServices:    Array.isArray(it.subServices) ? (it.subServices as Record<string,unknown>[]).map((sub, j) => ({
-              id:      String(sub.id || `sub-imp-${Date.now()}-${j}`),
-              title:   String(sub.title || ''),
-              titleEn: String(sub.titleEn || sub.title || ''),
-              price:   sub.price ? { amount: Number((sub.price as Record<string,unknown>).amount||0), currency: String((sub.price as Record<string,unknown>).currency||'OMR') as Currency } : { amount:0, currency:'OMR' as Currency },
-            })) : [],
+            subServices:    Array.isArray(it.subServices) ? (it.subServices as Record<string,unknown>[]).map((sub, j) => {
+              const subPrices = parsePrices(sub);
+              return {
+                id:      String(sub.id || `sub-imp-${Date.now()}-${j}`),
+                title:   String(sub.title || ''),
+                titleEn: String(sub.titleEn || sub.title || ''),
+                price:   sub.price ? parsePrice(sub.price) : { amount:0, currency:'OMR' as Currency },
+                ...(subPrices?.length ? { prices: subPrices } : {}),
+              };
+            }) : [],
           };
         });
         setImportData(parsed);
@@ -305,9 +325,10 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm gap-3">
         <div>
-          <h2 className="text-base font-bold text-gray-800">خدمات و تعرفه‌ها</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{services.length} خدمت ثبت‌شده</p>
+          <h2 className="text-base font-bold text-gray-800">{lang === 'fa' ? 'خدمات و تعرفه‌ها' : 'Services & Tariffs'}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{services.length} {lang === 'fa' ? 'خدمت ثبت‌شده' : 'services'}</p>
         </div>
+        {managerTab === 'manage' && (
         <div className="flex gap-2 flex-wrap">
           {/* Export */}
           <button
@@ -341,7 +362,30 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
             </button>
           )}
         </div>
+        )}
       </div>
+
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-full sm:w-auto">
+        <button
+          type="button"
+          onClick={() => setManagerTab('manage')}
+          className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${managerTab === 'manage' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+        >
+          {lang === 'fa' ? 'مدیریت خدمات' : 'Manage services'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setManagerTab('pricelist'); cancelEdit(); }}
+          className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all ${managerTab === 'pricelist' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+        >
+          {lang === 'fa' ? 'لیست قیمت' : 'Price list'}
+        </button>
+      </div>
+
+      {managerTab === 'pricelist' ? (
+        <ServicePriceList services={services} onUpdate={onUpdate} readonly={readonly} lang={lang} config={config} />
+      ) : (
+      <>
 
       {/* ── Import Error ── */}
       {importStatus === 'error' && (
@@ -695,6 +739,8 @@ export const ServiceManager: React.FC<Props> = ({ services, onUpdate, readonly =
           );
         })}
       </div>
+      </>
+      )}
     </div>
   );
 };
