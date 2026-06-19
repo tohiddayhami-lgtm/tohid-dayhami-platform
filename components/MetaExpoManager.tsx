@@ -107,7 +107,7 @@ export const MetaExpoManager: React.FC<Props> = ({
   };
 
   const expoUrl = (slug: string) => `${shopBaseUrl}?expo=${encodeURIComponent(slug)}`;
-  const expoMapUrl = (slug: string) => `${shopBaseUrl}?expo-map=${encodeURIComponent(slug)}`;
+  const expoMapUrl = (slug: string) => `${shopBaseUrl}?page=expo-map&bazaar=${encodeURIComponent(slug)}`;
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 
   const uniqueSlug = (base: string, excludeId?: string) => {
@@ -512,7 +512,7 @@ export const MetaExpoManager: React.FC<Props> = ({
                     <span className="truncate">?expo={b.slug}</span>
                   </div>
                   <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-100 rounded-lg px-2 py-1.5 text-[11px] text-amber-800 truncate" dir="ltr">
-                    <span className="truncate">?expo-map={b.slug}</span>
+                    <span className="truncate">?page=expo-map&bazaar={b.slug}</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {b.slug && (

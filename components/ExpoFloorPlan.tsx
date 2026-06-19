@@ -99,7 +99,7 @@ export const ExpoFloorPlan: React.FC<ExpoFloorPlanProps> = ({
   };
 
   const onMapViewportPointerDown = (e: React.PointerEvent) => {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* Safari iOS */ }
     mapPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (mapPointersRef.current.size === 2) {
       const pts = [...mapPointersRef.current.values()];

@@ -226,11 +226,13 @@ const extractExpoSlug = (): string | null => {
   return null;
 };
 
-// Public booth reservation map — ?expo-map=<bazaar slug>
+// Public booth reservation map — ?page=expo-map&bazaar=<slug> (Safari/social-safe) or ?expo-map=<slug>
 const extractExpoMapSlug = (): string | null => {
   try {
-    const s = new URLSearchParams(window.location.search).get('expo-map');
-    if (s) return s;
+    const p = new URLSearchParams(window.location.search);
+    const direct = p.get('expo-map');
+    if (direct) return direct;
+    if (p.get('page') === 'expo-map') return p.get('bazaar') || p.get('slug') || null;
   } catch {}
   const h = window.location.hash;
   if (h.startsWith('#/expo-map/')) return h.replace('#/expo-map/', '').split('?')[0] || null;
@@ -257,6 +259,7 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'news')     return 'news';
     if (p.get('form'))       return 'custom-form';
     if (p.get('expo-map')) return 'expo-map';
+    if (p.get('page') === 'expo-map') return 'expo-map';
     if (p.get('expo')) return 'expo';
     if (p.get('bazaar')) return 'bazaar';
     if (p.has('shops')) return 'shopsdir';
@@ -319,7 +322,7 @@ const App: React.FC = () => {
   const [publicExpoBazaar, setPublicExpoBazaar] = useState<MetaBazaar | null>(null);
   const [publicExpoMapBazaar, setPublicExpoMapBazaar] = useState<MetaBazaar | null>(null);
   const [expoLoading, setExpoLoading] = useState(false);
-  const [expoMapLoading, setExpoMapLoading] = useState(false);
+  const [expoMapResolved, setExpoMapResolved] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -459,9 +462,21 @@ const App: React.FC = () => {
     };
     window.addEventListener('popstate', handleNav);
     window.addEventListener('hashchange', handleNav);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const v = parseUrl(window.location.search, window.location.hash);
+      if (!v) return;
+      if (v === 'expo-map') setExpoMapSlug(extractExpoMapSlug());
+      if (v === 'expo') setExpoSlug(extractExpoSlug());
+      if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
+      if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
+      setViewState(v);
+    };
+    window.addEventListener('pageshow', onPageShow);
     return () => {
       window.removeEventListener('popstate', handleNav);
       window.removeEventListener('hashchange', handleNav);
+      window.removeEventListener('pageshow', onPageShow);
     };
   }, [currentUser]);
 
@@ -1222,12 +1237,25 @@ const App: React.FC = () => {
 
   // ── Public expo reservation map: cache hit from subscribe, else fetch by slug immediately ──
   useEffect(() => {
-    if (view !== 'expo-map' || !expoMapSlug) { setPublicExpoMapBazaar(null); setExpoMapLoading(false); return; }
+    if (view !== 'expo-map' || !expoMapSlug) {
+      setPublicExpoMapBazaar(null);
+      setExpoMapResolved(false);
+      return;
+    }
     const local = metaBazaars.find(b => b.slug === expoMapSlug);
-    if (local) { setPublicExpoMapBazaar(local); setExpoMapLoading(false); return; }
+    if (local) {
+      setPublicExpoMapBazaar(local);
+      setExpoMapResolved(true);
+      return;
+    }
     let cancelled = false;
-    setExpoMapLoading(true);
-    getMetaBazaarBySlug(expoMapSlug).then(b => { if (!cancelled) { setPublicExpoMapBazaar(b); setExpoMapLoading(false); } });
+    setExpoMapResolved(false);
+    getMetaBazaarBySlug(expoMapSlug).then(b => {
+      if (!cancelled) {
+        setPublicExpoMapBazaar(b);
+        setExpoMapResolved(true);
+      }
+    });
     return () => { cancelled = true; };
   }, [view, expoMapSlug, metaBazaars]);
 
@@ -1333,7 +1361,7 @@ const App: React.FC = () => {
     const expo = publicExpoMapBazaar?.expo;
     const shopBaseUrl = `${window.location.origin}${window.location.pathname}`;
     const ready = !!(publicExpoMapBazaar && publicExpoMapBazaar.isActive !== false && expo && expo.enabled);
-    const loading = !ready && (expoMapLoading || !!expoMapSlug);
+    const loading = !ready && !!expoMapSlug && !expoMapResolved;
     const mapTitle = ready
       ? ((lang === 'fa' ? expo!.title?.fa : expo!.title?.en) || publicExpoMapBazaar!.name)
       : (lang === 'fa' ? 'نقشه رزرو' : 'Reservation map');
