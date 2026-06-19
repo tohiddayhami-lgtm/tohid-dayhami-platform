@@ -1,4 +1,4 @@
-import React, { Suspense, useRef } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
@@ -11,7 +11,7 @@ import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
 import { useEnvironmentCollision } from './EnvironmentCollisionContext';
-import { environmentCollisionEnabled } from './expoEnvironmentCollision';
+import { environmentCollisionEnabled, syncCollisionMatrices } from './expoEnvironmentCollision';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi, expoPhrase } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
@@ -350,13 +350,30 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
   const useCustomHall = !!expo.environmentUrl && expo.environmentReplacesHall !== false;
   const envAutoFit = expo.environmentAutoFit !== false ? Math.max(width, depth) : undefined;
   const envCollision = useEnvironmentCollision();
-  const registerEnvCollision = environmentCollisionEnabled(expo)
-    ? (meshes: THREE.Mesh[]) => {
-        if (!envCollision) return;
-        envCollision.meshesRef.current = meshes;
-        envCollision.ready.current = meshes.length > 0;
-      }
-    : undefined;
+  const registerEnvCollision = useCallback((meshes: THREE.Mesh[]) => {
+    if (!envCollision) return;
+    envCollision.meshesRef.current = meshes;
+    envCollision.ready.current = meshes.length > 0;
+    if (meshes.length) syncCollisionMatrices(envCollision.rootRef.current);
+  }, [envCollision]);
+
+  const envCollisionOn = environmentCollisionEnabled(expo);
+  useEffect(() => {
+    if (!envCollisionOn || !envCollision?.ready.current) return;
+    syncCollisionMatrices(envCollision.rootRef.current);
+  }, [
+    envCollisionOn,
+    envCollision,
+    expo.environmentUrl,
+    expo.environmentX,
+    expo.environmentY,
+    expo.environmentZ,
+    expo.environmentRy,
+    expo.environmentScale,
+    expo.environmentAutoFit,
+    width,
+    depth,
+  ]);
   const t = 0.2; // wall thickness
   const visualStyle = expo.visualStyle || 'exhibition';
   const boothVisualStyle = visualStyle === 'business_center' ? 'storefront' : visualStyle;
@@ -533,7 +550,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
                 url={expo.environmentUrl}
                 scale={expo.environmentScale ?? 1}
                 autoFit={envAutoFit}
-                onCollisionMeshes={registerEnvCollision}
+                forEnvironment
+                onCollisionMeshes={envCollisionOn ? registerEnvCollision : undefined}
               />
             </group>
           </Suspense>

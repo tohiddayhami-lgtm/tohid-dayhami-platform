@@ -1,18 +1,19 @@
 import * as THREE from 'three';
 
 const DOWN = new THREE.Vector3(0, -1, 0);
-const UP = new THREE.Vector3(0, 1, 0);
 const _origin = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _normal = new THREE.Vector3();
+const _out = new THREE.Vector3();
 const raycaster = new THREE.Raycaster();
+raycaster.firstHitOnly = true;
 
 export const ENV_COLLISION = {
   playerRadius: 0.35,
   maxStepUp: 0.42,
   maxStepDown: 1.4,
   walkableNormalY: 0.32,
-  bodyHeights: [0.3, 0.85, 1.45] as const,
+  bodyHeights: [0.55, 1.25] as const,
   wallProbeDist: 0.38,
   groundRayStart: 12,
   groundRayMax: 16,
@@ -76,10 +77,7 @@ export const isPositionBlocked = (
   feetY: number,
 ): boolean => {
   const { playerRadius, bodyHeights } = ENV_COLLISION;
-  const probes = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [0.707, 0.707], [-0.707, 0.707], [0.707, -0.707], [-0.707, -0.707],
-  ];
+  const probes = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
   for (const h of bodyHeights) {
     const y = feetY + h;
     for (const [ux, uz] of probes) {
@@ -125,15 +123,16 @@ export const resolveEnvPosition = (
   eyeHeight: number,
   dx: number,
   dz: number,
+  out = _out,
 ): THREE.Vector3 => {
   const feetY = pos.y - eyeHeight;
   const moved = resolveHorizontalMove(meshes, pos.x, pos.z, feetY, dx, dz);
   const grounded = applyGroundHeight(meshes, moved.x, moved.z, feetY, eyeHeight);
-  if (grounded) return new THREE.Vector3(moved.x, grounded.y, moved.z);
+  if (grounded) return out.set(moved.x, grounded.y, moved.z);
   if (!isPositionBlocked(meshes, moved.x, moved.z, feetY)) {
-    return new THREE.Vector3(moved.x, pos.y, moved.z);
+    return out.set(moved.x, pos.y, moved.z);
   }
-  return pos.clone();
+  return out.copy(pos);
 };
 
 export const resolveEnvTeleport = (
@@ -142,11 +141,12 @@ export const resolveEnvTeleport = (
   z: number,
   eyeHeight: number,
   fallbackY: number,
+  out = _out,
 ): THREE.Vector3 => {
   const ground = sampleGroundY(meshes, x, z);
   const y = ground != null ? ground + eyeHeight : fallbackY;
   if (isPositionBlocked(meshes, x, z, y - eyeHeight)) {
-    return new THREE.Vector3(x, fallbackY, z);
+    return out.set(x, fallbackY, z);
   }
-  return new THREE.Vector3(x, y, z);
+  return out.set(x, y, z);
 };

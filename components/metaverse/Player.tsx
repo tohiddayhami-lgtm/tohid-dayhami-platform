@@ -11,7 +11,6 @@ import {
   environmentCollisionEnabled,
   resolveEnvPosition,
   resolveEnvTeleport,
-  syncCollisionMatrices,
 } from './expoEnvironmentCollision';
 
 interface Props {
@@ -52,7 +51,6 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPause
     camera.rotation.set(0, yawRef.current, 0);
     teleportRef.current = (x: number, z: number) => {
       if (collisionReady()) {
-        syncCollisionMatrices(envCollision!.rootRef.current);
         const next = resolveEnvTeleport(collisionMeshes(), x, z, eye, eye);
         posRef.current.copy(next);
         return;
@@ -154,7 +152,6 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPause
       const dz = (dir.z * mf + right.z * ms) * speed;
 
       if (collisionReady()) {
-        syncCollisionMatrices(envCollision!.rootRef.current);
         const next = resolveEnvPosition(collisionMeshes(), posRef.current, eye, dx, dz);
         posRef.current.copy(next);
       } else {
@@ -165,11 +162,6 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPause
         posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m + (expo.entranceEnabled ? 8 : 0));
         posRef.current.y = eye;
       }
-    } else if (collisionReady()) {
-      // Snap to stairs / floor even when standing still (e.g. after scene load).
-      syncCollisionMatrices(envCollision!.rootRef.current);
-      const grounded = resolveEnvPosition(collisionMeshes(), posRef.current, eye, 0, 0);
-      if (Math.abs(grounded.y - posRef.current.y) > 0.001) posRef.current.copy(grounded);
     } else {
       posRef.current.y = eye;
     }

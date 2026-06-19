@@ -343,7 +343,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
       <Canvas
-        dpr={[1, 1.5]}
+        dpr={expo.environmentUrl ? [1, 1.25] : [1, 1.5]}
         camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
       >

@@ -8,7 +8,6 @@ import { useEnvironmentCollision } from './EnvironmentCollisionContext';
 import {
   environmentCollisionEnabled,
   resolveEnvPosition,
-  syncCollisionMatrices,
 } from './expoEnvironmentCollision';
 
 const _pos = new THREE.Vector3();
@@ -36,25 +35,15 @@ export const VrEnvironmentCollision: React.FC<{
       return;
     }
 
-    syncCollisionMatrices(envCollision.rootRef.current);
     const dx = origin.position.x - prevOrigin.current.x;
     const dz = origin.position.z - prevOrigin.current.z;
+    if (Math.abs(dx) < 1e-5 && Math.abs(dz) < 1e-5) return;
 
-    if (Math.abs(dx) > 1e-5 || Math.abs(dz) > 1e-5) {
-      _pos.set(prevOrigin.current.x, prevOrigin.current.y, prevOrigin.current.z);
-      const next = resolveEnvPosition(meshes, _pos, eye, dx, dz);
-      origin.position.x = next.x;
-      origin.position.z = next.z;
-      origin.position.y = next.y + eyeOffsetY;
-    } else if (envCollision.ready.current) {
-      _pos.copy(origin.position);
-      _pos.y -= eyeOffsetY;
-      const snapped = resolveEnvPosition(meshes, _pos, eye, 0, 0);
-      if (Math.abs(snapped.y - _pos.y) > 0.002) {
-        origin.position.y = snapped.y + eyeOffsetY;
-      }
-    }
-
+    _pos.set(prevOrigin.current.x, prevOrigin.current.y, prevOrigin.current.z);
+    const next = resolveEnvPosition(meshes, _pos, eye, dx, dz);
+    origin.position.x = next.x;
+    origin.position.z = next.z;
+    origin.position.y = next.y + eyeOffsetY;
     prevOrigin.current.copy(origin.position);
   });
 
