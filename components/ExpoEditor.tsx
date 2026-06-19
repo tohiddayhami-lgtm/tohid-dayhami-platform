@@ -255,14 +255,16 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envCollision: T ? 'برخورد فیزیکی (دیوار و پله)' : 'Physical collision (walls & stairs)',
     envCollisionHint: T ? 'از عبور از دیوارها جلوگیری می‌کند و روی پله‌ها و طبقات بالا می‌رود.' : 'Blocks walking through walls and lets you climb stairs to upper floors.',
     envMap: T ? 'نقشه محیط ۲D' : '2D environment map',
-    envMediaT: T ? 'رسانه و دکمه‌های محیط سفارشی' : 'Custom environment media & buttons',
-    envMediaHint: T ? 'تصویر، ویدئو، PDF، مدل GLB و دکمه تماس/واتساپ را در محیط GLB قرار دهید. فایل آپلود کنید یا لینک بگذارید. روی نقشه جابه‌جا کنید یا از «ادیت ۳D» تنظیم کنید.' : 'Place images, videos, PDFs, GLB models and call/WhatsApp buttons in the GLB hall. Upload files or paste a URL. Drag on the map or use «3D edit».',
+    envMediaT: T ? 'رسانه و دکمه‌های فضای نمایشگاه' : 'Exhibition hall media & buttons',
+    envMediaHint: T ? 'تصویر، ویدئو، PDF، مدل GLB و دکمه تماس/واتساپ را در فضای سالن قرار دهید (با یا بدون GLB سفارشی). فایل آپلود کنید یا لینک بگذارید. روی نقشه جابه‌جا کنید یا از «ادیت ۳D» تنظیم کنید.' : 'Place images, videos, PDFs, GLB models and call/WhatsApp buttons in the hall (with or without custom GLB). Upload or paste a URL. Drag on the map or use «3D edit».',
     envMediaFile: T ? 'فایل / لینک' : 'File / URL',
     addEnvMedia: T ? 'افزودن رسانه' : 'Add media',
     addEnvBtn: T ? 'افزودن دکمه' : 'Add button',
     noEnvMedia: T ? 'هنوز رسانه‌ای در محیط قرار نداده‌اید.' : 'No environment media yet.',
     envEdit3d: T ? 'ورود به ادیت محیط (۳D/VR)' : 'Enter environment edit (3D/VR)',
-    envEdit3dHint: T ? 'ذخیره و باز کردن نمایشگاه در حالت ادیت — جابه‌جایی، اندازه و دکمه‌ها با ماوس یا کنترلر VR' : 'Save and open expo in edit mode — move, resize and buttons with mouse or VR controller',
+    envEdit3dHint: T ? 'ذخیره و باز کردن نمایشگاه در حالت ادیت — قرار دادن رسانه و دکمه در فضای سالن (با یا بدون GLB) با ماوس یا VR' : 'Save and open expo in edit mode — place media & buttons in the hall (with or without custom GLB) via mouse or VR',
+    hallSpaceT: T ? 'فضای نمایشگاه (نقشه ۲D)' : 'Exhibition hall space (2D map)',
+    hallSpaceHint: T ? 'ورود بازدیدکننده و رسانه‌ها را روی نقشه سالن تنظیم کنید — با یا بدون مدل GLB سفارشی.' : 'Set visitor entry and media on the hall map — with or without a custom GLB.',
     envKind: T ? 'نوع' : 'Kind',
     envAction: T ? 'عمل دکمه' : 'Button action',
     framePad: T ? 'حاشیه مشکی (متر)' : 'Black border (m)',
@@ -939,7 +941,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <div><h4 className="font-bold text-gray-800">{t.title}</h4><p className="text-xs text-gray-400 max-w-md">{t.hint}</p></div>
         </div>
         <div className="flex items-center gap-2">
-          {e.enabled && e.environmentUrl && onEnvironmentEdit && (
+          {e.enabled && onEnvironmentEdit && (
             <button type="button" onClick={() => onEnvironmentEdit()} title={t.envEdit3dHint} className="text-xs px-3 py-2 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-1">✏️ {t.envEdit3d}</button>
           )}
           {e.enabled && (
@@ -1025,6 +1027,136 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   environmentZ: undefined,
                 }),
               })} label={t.envGlb} />
+
+              <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-amber-100 bg-amber-50/35 p-3 space-y-3">
+                <div>
+                  <h6 className="text-xs font-bold text-amber-900">{t.hallSpaceT}</h6>
+                  <p className="text-[10px] text-amber-800/80 mt-1 leading-relaxed">{t.hallSpaceHint}</p>
+                </div>
+
+                <ExpoEnvironmentMap
+                  width={e.width ?? 30}
+                  depth={e.depth ?? 30}
+                  spawn={e.spawn}
+                  environmentX={e.environmentX ?? 0}
+                  environmentZ={e.environmentZ ?? 0}
+                  environmentScale={e.environmentScale ?? 1}
+                  environmentRy={e.environmentRy ?? 0}
+                  environmentAutoFit={e.environmentAutoFit !== false}
+                  hasCustomGlb={!!e.environmentUrl}
+                  environmentMedia={e.environmentMedia || []}
+                  selectedMediaId={openEnvMedia}
+                  readonly={readonly}
+                  langFa={T}
+                  onSpawnMove={(x, z) => patch({
+                    spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), x, z },
+                    entranceEnabled: false,
+                  })}
+                  onSpawnRyChange={ry => patch({
+                    spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry },
+                  })}
+                  onEnvMove={(x, z) => patch({ environmentX: x, environmentZ: z })}
+                  onScaleChange={scale => patch({ environmentScale: scale })}
+                  onRotationChange={ry => patch({ environmentRy: ry })}
+                  onMediaMove={(id, x, z) => updEnvMediaItem(id, { x, z })}
+                  onSelectMedia={id => { setOpenEnvMedia(id); setOpenBooth(null); setOpenDecoration(null); }}
+                />
+
+                {/* Hall media list */}
+                <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h6 className="text-xs font-bold text-orange-900">{t.envMediaT}</h6>
+                      <p className="text-[10px] text-orange-700/80 mt-0.5 leading-relaxed">{t.envMediaHint}</p>
+                    </div>
+                    {!readonly && (
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => addEnvMedia('image')} className="text-[11px] px-2 py-1 rounded bg-white border border-orange-200 hover:bg-orange-50 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvMedia}</button>
+                        <button type="button" onClick={() => addEnvMedia('button')} className="text-[11px] px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvBtn}</button>
+                      </div>
+                    )}
+                  </div>
+                  {(e.environmentMedia || []).length === 0 ? (
+                    <p className="text-[11px] text-orange-600/60 text-center py-2">{t.noEnvMedia}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(e.environmentMedia || []).map(m => (
+                        <div key={m.id} className={`rounded-lg border p-2.5 space-y-2 ${openEnvMedia === m.id ? 'border-orange-400 bg-white' : 'border-orange-100 bg-white/70'}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <button type="button" onClick={() => setOpenEnvMedia(openEnvMedia === m.id ? null : m.id)} className="text-xs font-bold text-orange-900 flex items-center gap-1">
+                              <IconEdit className="w-3.5 h-3.5" />
+                              {m.kind === 'button' ? '🔘' : m.kind === 'video' ? '▶' : m.kind === 'glb' ? '📦' : '🖼'}
+                              {(T ? m.title?.fa : m.title?.en) || m.title?.fa || m.title?.en || m.id}
+                            </button>
+                            {!readonly && <button type="button" onClick={() => delEnvMedia(m.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}
+                          </div>
+                          {openEnvMedia === m.id && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                              <div><label className={lbl}>{t.envKind}</label>
+                                <select className={fld + ' bg-white'} value={m.kind} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { kind: ev.target.value as ExpoEnvironmentMediaKind })}>
+                                  <option value="image">{T ? 'تصویر' : 'Image'}</option>
+                                  <option value="video">{T ? 'ویدئو' : 'Video'}</option>
+                                  <option value="pdf">PDF</option>
+                                  <option value="html">HTML</option>
+                                  <option value="audio">{T ? 'صوت' : 'Audio'}</option>
+                                  <option value="glb">GLB</option>
+                                  <option value="button">{T ? 'دکمه' : 'Button'}</option>
+                                </select>
+                              </div>
+                              <DirCatInputs langs={expoLangs} value={m.title} onChange={(code, val) => setEnvMediaTitle(m, code as 'fa' | 'en', val)} fld={fld} lbl={T ? 'عنوان' : 'Title'} />
+                              {m.kind !== 'button' && (
+                                <EnvMediaField id={`env-media-${m.id}`} kind={m.kind} value={m.url} onUrl={u => updEnvMediaItem(m.id, { url: u || undefined })} />
+                              )}
+                              {m.kind === 'button' && (
+                                <>
+                                  <div><label className={lbl}>{t.envAction}</label>
+                                    <select className={fld + ' bg-white'} value={m.action || 'url'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { action: ev.target.value as ExpoEnvironmentButtonAction })}>
+                                      <option value="url">URL</option>
+                                      <option value="whatsapp">WhatsApp</option>
+                                      <option value="phone">{T ? 'تماس' : 'Phone'}</option>
+                                      <option value="meet">Meet</option>
+                                      <option value="contact">{T ? 'کارت تماس' : 'Contact card'}</option>
+                                    </select>
+                                  </div>
+                                  {(m.action === 'whatsapp' || m.action === 'phone' || m.action === 'contact') && (
+                                    <div><label className={lbl}>{t.hPhone}</label><input className={fld + ' dir-ltr'} value={m.phone || m.whatsapp || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { phone: ev.target.value, whatsapp: m.action === 'whatsapp' ? ev.target.value : m.whatsapp })} /></div>
+                                  )}
+                                  {m.action === 'contact' && <div><label className={lbl}>{t.hEmail}</label><input className={fld + ' dir-ltr'} value={m.email || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { email: ev.target.value })} /></div>}
+                                  {(m.action === 'url' || m.action === 'meet') && <div className="md:col-span-2"><label className={lbl}>{t.hUrl}</label><input className={fld + ' dir-ltr'} value={m.meetUrl || m.url || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, m.action === 'meet' ? { meetUrl: ev.target.value } : { url: ev.target.value })} /></div>}
+                                </>
+                              )}
+                              <div><label className={lbl}>{t.posX}</label><input type="number" step={0.25} className={fld} value={m.x} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { x: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.posY}</label><input type="number" step={0.25} className={fld} value={m.y} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { y: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.posZ}</label><input type="number" step={0.25} className={fld} value={m.z} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { z: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.width}</label><input type="number" min={0.3} max={12} step={0.1} className={fld} value={m.w ?? 2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { w: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.height}</label><input type="number" min={0.3} max={8} step={0.1} className={fld} value={m.h ?? 1.2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { h: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.scale}</label><input type="number" min={0.2} max={8} step={0.05} className={fld} value={m.scale ?? 1} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { scale: +ev.target.value })} /></div>
+                              <div><label className={lbl}>{t.rot}</label><input type="number" step={5} className={fld} value={Math.round((m.ry || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { ry: (+ev.target.value) * Math.PI / 180 })} /></div>
+                              {(m.kind === 'pdf' || (m.url && /\.pdf(\?.*)?$/i.test(m.url))) && (
+                                <>
+                                  <div><label className={lbl}>{t.framePad}</label><input type="number" min={0} max={1} step={0.01} className={fld} value={m.framePad ?? 0} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { framePad: +ev.target.value })} title={t.framePadHint} /></div>
+                                  <div><label className={lbl}>{t.pdfFit}</label>
+                                    <select className={fld + ' bg-white'} value={m.pdfFit || 'contain'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { pdfFit: ev.target.value as 'contain' | 'cover' | 'fill' })}>
+                                      <option value="contain">{t.pdfFitContain}</option>
+                                      <option value="cover">{t.pdfFitCover}</option>
+                                      <option value="fill">{t.pdfFitFill}</option>
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div><label className={lbl}>{t.spawnDir}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.spawn?.ry ?? Math.PI) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry: (+ev.target.value) * Math.PI / 180 } })} /></div>
+                </div>
+              </div>
+
               {e.environmentUrl && (
                 <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3 space-y-3">
                   <div>
@@ -1047,125 +1179,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                   </div>
                   <p className="text-[10px] text-violet-600/80">{t.envCollisionHint}</p>
 
-                  <ExpoEnvironmentMap
-                    width={e.width ?? 30}
-                    depth={e.depth ?? 30}
-                    spawn={e.spawn}
-                    environmentX={e.environmentX ?? 0}
-                    environmentZ={e.environmentZ ?? 0}
-                    environmentScale={e.environmentScale ?? 1}
-                    environmentRy={e.environmentRy ?? 0}
-                    environmentAutoFit={e.environmentAutoFit !== false}
-                    environmentMedia={e.environmentMedia || []}
-                    selectedMediaId={openEnvMedia}
-                    readonly={readonly}
-                    langFa={T}
-                    onSpawnMove={(x, z) => patch({
-                      spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), x, z },
-                      entranceEnabled: false,
-                    })}
-                    onSpawnRyChange={ry => patch({
-                      spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry },
-                    })}
-                    onEnvMove={(x, z) => patch({ environmentX: x, environmentZ: z })}
-                    onScaleChange={scale => patch({ environmentScale: scale })}
-                    onRotationChange={ry => patch({ environmentRy: ry })}
-                    onMediaMove={(id, x, z) => updEnvMediaItem(id, { x, z })}
-                    onSelectMedia={id => { setOpenEnvMedia(id); setOpenBooth(null); setOpenDecoration(null); }}
-                  />
-
-                  {/* Environment media list */}
-                  <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h6 className="text-xs font-bold text-orange-900">{t.envMediaT}</h6>
-                        <p className="text-[10px] text-orange-700/80 mt-0.5 leading-relaxed">{t.envMediaHint}</p>
-                      </div>
-                      {!readonly && (
-                        <div className="flex gap-1.5">
-                          <button type="button" onClick={() => addEnvMedia('image')} className="text-[11px] px-2 py-1 rounded bg-white border border-orange-200 hover:bg-orange-50 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvMedia}</button>
-                          <button type="button" onClick={() => addEnvMedia('button')} className="text-[11px] px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvBtn}</button>
-                        </div>
-                      )}
-                    </div>
-                    {(e.environmentMedia || []).length === 0 ? (
-                      <p className="text-[11px] text-orange-600/60 text-center py-2">{t.noEnvMedia}</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {(e.environmentMedia || []).map(m => (
-                          <div key={m.id} className={`rounded-lg border p-2.5 space-y-2 ${openEnvMedia === m.id ? 'border-orange-400 bg-white' : 'border-orange-100 bg-white/70'}`}>
-                            <div className="flex items-center justify-between gap-2">
-                              <button type="button" onClick={() => setOpenEnvMedia(openEnvMedia === m.id ? null : m.id)} className="text-xs font-bold text-orange-900 flex items-center gap-1">
-                                <IconEdit className="w-3.5 h-3.5" />
-                                {m.kind === 'button' ? '🔘' : m.kind === 'video' ? '▶' : m.kind === 'glb' ? '📦' : '🖼'}
-                                {(T ? m.title?.fa : m.title?.en) || m.title?.fa || m.title?.en || m.id}
-                              </button>
-                              {!readonly && <button type="button" onClick={() => delEnvMedia(m.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}
-                            </div>
-                            {openEnvMedia === m.id && (
-                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                <div><label className={lbl}>{t.envKind}</label>
-                                  <select className={fld + ' bg-white'} value={m.kind} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { kind: ev.target.value as ExpoEnvironmentMediaKind })}>
-                                    <option value="image">{T ? 'تصویر' : 'Image'}</option>
-                                    <option value="video">{T ? 'ویدئو' : 'Video'}</option>
-                                    <option value="pdf">PDF</option>
-                                    <option value="html">HTML</option>
-                                    <option value="audio">{T ? 'صوت' : 'Audio'}</option>
-                                    <option value="glb">GLB</option>
-                                    <option value="button">{T ? 'دکمه' : 'Button'}</option>
-                                  </select>
-                                </div>
-                                <DirCatInputs langs={expoLangs} value={m.title} onChange={(code, val) => setEnvMediaTitle(m, code as 'fa' | 'en', val)} fld={fld} lbl={T ? 'عنوان' : 'Title'} />
-                                {m.kind !== 'button' && (
-                                  <EnvMediaField id={`env-media-${m.id}`} kind={m.kind} value={m.url} onUrl={u => updEnvMediaItem(m.id, { url: u || undefined })} />
-                                )}
-                                {m.kind === 'button' && (
-                                  <>
-                                    <div><label className={lbl}>{t.envAction}</label>
-                                      <select className={fld + ' bg-white'} value={m.action || 'url'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { action: ev.target.value as ExpoEnvironmentButtonAction })}>
-                                        <option value="url">URL</option>
-                                        <option value="whatsapp">WhatsApp</option>
-                                        <option value="phone">{T ? 'تماس' : 'Phone'}</option>
-                                        <option value="meet">Meet</option>
-                                        <option value="contact">{T ? 'کارت تماس' : 'Contact card'}</option>
-                                      </select>
-                                    </div>
-                                    {(m.action === 'whatsapp' || m.action === 'phone' || m.action === 'contact') && (
-                                      <div><label className={lbl}>{t.hPhone}</label><input className={fld + ' dir-ltr'} value={m.phone || m.whatsapp || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { phone: ev.target.value, whatsapp: m.action === 'whatsapp' ? ev.target.value : m.whatsapp })} /></div>
-                                    )}
-                                    {m.action === 'contact' && <div><label className={lbl}>{t.hEmail}</label><input className={fld + ' dir-ltr'} value={m.email || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { email: ev.target.value })} /></div>}
-                                    {(m.action === 'url' || m.action === 'meet') && <div className="md:col-span-2"><label className={lbl}>{t.hUrl}</label><input className={fld + ' dir-ltr'} value={m.meetUrl || m.url || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, m.action === 'meet' ? { meetUrl: ev.target.value } : { url: ev.target.value })} /></div>}
-                                  </>
-                                )}
-                                <div><label className={lbl}>{t.posX}</label><input type="number" step={0.25} className={fld} value={m.x} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { x: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.posY}</label><input type="number" step={0.25} className={fld} value={m.y} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { y: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.posZ}</label><input type="number" step={0.25} className={fld} value={m.z} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { z: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.width}</label><input type="number" min={0.3} max={12} step={0.1} className={fld} value={m.w ?? 2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { w: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.height}</label><input type="number" min={0.3} max={8} step={0.1} className={fld} value={m.h ?? 1.2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { h: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.scale}</label><input type="number" min={0.2} max={8} step={0.05} className={fld} value={m.scale ?? 1} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { scale: +ev.target.value })} /></div>
-                                <div><label className={lbl}>{t.rot}</label><input type="number" step={5} className={fld} value={Math.round((m.ry || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { ry: (+ev.target.value) * Math.PI / 180 })} /></div>
-                                {(m.kind === 'pdf' || (m.url && /\.pdf(\?.*)?$/i.test(m.url))) && (
-                                  <>
-                                    <div><label className={lbl}>{t.framePad}</label><input type="number" min={0} max={1} step={0.01} className={fld} value={m.framePad ?? 0} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { framePad: +ev.target.value })} title={t.framePadHint} /></div>
-                                    <div><label className={lbl}>{t.pdfFit}</label>
-                                      <select className={fld + ' bg-white'} value={m.pdfFit || 'contain'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { pdfFit: ev.target.value as 'contain' | 'cover' | 'fill' })}>
-                                        <option value="contain">{t.pdfFitContain}</option>
-                                        <option value="cover">{t.pdfFitCover}</option>
-                                        <option value="fill">{t.pdfFitFill}</option>
-                                      </select>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    <div><label className={lbl}>{t.spawnDir}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.spawn?.ry ?? Math.PI) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry: (+ev.target.value) * Math.PI / 180 } })} /></div>
                     <div><label className={lbl}>{t.envScale}</label><input type="number" min={0.05} max={20} step={0.05} className={fld} value={e.environmentScale ?? 1} disabled={readonly} onChange={ev => patch({ environmentScale: +ev.target.value || 1 })} /></div>
                     <div><label className={lbl}>{t.envRot}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.environmentRy || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ environmentRy: (+ev.target.value) * Math.PI / 180 })} /></div>
                     <div><label className={lbl}>{t.envPos} X</label><input type="number" step={0.1} className={fld} value={e.environmentX ?? 0} disabled={readonly} onChange={ev => patch({ environmentX: +ev.target.value })} /></div>

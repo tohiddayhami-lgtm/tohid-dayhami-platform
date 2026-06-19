@@ -201,7 +201,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
 
   const environmentEditExpo = async () => {
     if (!draft) return;
-    if (!draft.expo?.environmentUrl) { alert(T ? 'ابتدا مدل محیط GLB را آپلود کنید.' : 'Upload a custom environment GLB first.'); return; }
+    if (!draft.expo?.enabled) { alert(T ? 'ابتدا نمایشگاه را فعال کنید.' : 'Enable the expo first.'); return; }
     if (!draft.name.trim()) { alert(T ? 'ابتدا نام بازارچه را وارد کنید.' : 'Enter a bazaar name first.'); return; }
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }

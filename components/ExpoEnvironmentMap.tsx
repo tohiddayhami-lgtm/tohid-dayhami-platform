@@ -19,6 +19,7 @@ export interface ExpoEnvironmentMapProps {
   environmentScale?: number;
   environmentRy?: number;
   environmentAutoFit?: boolean;
+  hasCustomGlb?: boolean;
   readonly?: boolean;
   langFa: boolean;
   onSpawnMove: (x: number, z: number) => void;
@@ -44,6 +45,7 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
   environmentScale = 1,
   environmentRy = 0,
   environmentAutoFit = true,
+  hasCustomGlb = true,
   readonly,
   langFa: T,
   onSpawnMove,
@@ -172,8 +174,12 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
   for (let g = -D / 2; g <= D / 2 + 0.01; g += gridStep) gridLinesZ.push(g);
 
   const labels = {
-    title: T ? 'نقشه محیط سفارشی (۲D)' : 'Custom environment map (2D)',
-    hint: T ? 'محیط بنفش را بکشید · گوشه مقیاس · دستگیره چرخش · فیروزه‌ای = ورود · نارنجی = رسانه' : 'Drag violet hall · corner scale · rotate handle · cyan = entry · orange = media',
+    title: hasCustomGlb
+      ? (T ? 'نقشه فضای نمایشگاه (۲D)' : 'Exhibition hall map (2D)')
+      : (T ? 'نقشه سالن نمایشگاه (۲D)' : 'Exhibition hall map (2D)'),
+    hint: hasCustomGlb
+      ? (T ? 'محیط بنفش = GLB · فیروزه‌ای = ورود · نارنجی = رسانه' : 'Violet = GLB env · cyan = entry · orange = media')
+      : (T ? 'فیروزه‌ای = نقطه ورود · نارنجی = رسانه و دکمه — روی نقشه بکشید' : 'Cyan = entry spawn · orange = media & buttons — drag on map'),
     hall: T ? 'سالن' : 'Hall',
     glb: T ? 'محیط GLB' : 'GLB env',
     spawn: T ? 'ورود' : 'Entry',
@@ -240,7 +246,8 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
         <line x1={8} y1={98.2} x2={92} y2={98.2} stroke="#a78bfa" strokeWidth={0.35} strokeDasharray="2 1.5" opacity={0.7} />
         <text x={50} y={99.2} textAnchor="middle" fontSize={2} fill="#7c3aed" opacity={0.75}>{T ? 'جلوی سالن (+Z)' : 'Front (+Z)'}</text>
 
-        {/* GLB footprint — rotated group */}
+        {/* GLB footprint — only when custom environment uploaded */}
+        {hasCustomGlb && (
         <g transform={`translate(${cx} ${cz}) rotate(${rotDeg} 0 0)`}>
           <rect
             x={-halfPctW}
@@ -259,13 +266,13 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
           {environmentAutoFit && (
             <text x={0} y={4.2} textAnchor="middle" fontSize={2} fill="#6d28d9" pointerEvents="none">{labels.autoFit}</text>
           )}
-          {/* center cross */}
           <line x1={-2} y1={0} x2={2} y2={0} stroke="#7c3aed" strokeWidth={0.25} opacity={0.6} pointerEvents="none" />
           <line x1={0} y1={-2} x2={0} y2={2} stroke="#7c3aed" strokeWidth={0.25} opacity={0.6} pointerEvents="none" />
         </g>
+        )}
 
         {/* rotation handle */}
-        {!readonly && (
+        {!readonly && hasCustomGlb && (
           <g>
             <line x1={cx} y1={cz} x2={rotHx} y2={rotHz} stroke="#7c3aed" strokeWidth={0.35} strokeDasharray="1 0.8" opacity={0.65} />
             <circle
@@ -283,7 +290,7 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
         )}
 
         {/* scale handle (corner) */}
-        {!readonly && (
+        {!readonly && hasCustomGlb && (
           <g>
             <circle
               cx={scaleWx}

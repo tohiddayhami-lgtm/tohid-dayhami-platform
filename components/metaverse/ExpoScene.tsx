@@ -570,8 +570,8 @@ export const ExpoScene: React.FC<Props> = ({
         </TexBoundary>
       )}
 
-      {/* Custom-environment media (screens, files, buttons) */}
-      {expo.environmentUrl && (environmentMedia || expo.environmentMedia || []).map(item => (
+      {/* Custom-environment media (screens, files, buttons) — default hall or custom GLB */}
+      {(environmentMedia || expo.environmentMedia || []).map(item => (
         <EnvironmentMediaItem
           key={item.id}
           item={item}
@@ -584,7 +584,7 @@ export const ExpoScene: React.FC<Props> = ({
         />
       ))}
 
-      {environmentEditMode && expo.environmentUrl && onUpdateEnvMedia && onAddEnvMedia && (
+      {environmentEditMode && onUpdateEnvMedia && onAddEnvMedia && (
         <EnvironmentEditGizmos
           hallWidth={width}
           hallDepth={depth}

@@ -1409,7 +1409,7 @@ const App: React.FC = () => {
             lang={lang}
             onExit={() => setView('landing')}
             onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
-            environmentEditMode={allowEnvEdit && !!expo.environmentUrl}
+            environmentEditMode={allowEnvEdit}
             onSaveExpo={allowEnvEdit ? async (updatedExpo) => {
               await saveMetaBazaarToCloud({ ...publicExpoBazaar, expo: updatedExpo });
             } : undefined}
