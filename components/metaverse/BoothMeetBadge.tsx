@@ -6,7 +6,7 @@ import { CanvasLabel } from './CanvasLabel';
 
 const ICON_PX = 128;
 
-const buildMeetIconTexture = () => {
+const buildWhatsAppIconTexture = () => {
   const cvs = document.createElement('canvas');
   cvs.width = ICON_PX;
   cvs.height = ICON_PX;
@@ -15,31 +15,33 @@ const buildMeetIconTexture = () => {
 
   ctx.clearRect(0, 0, ICON_PX, ICON_PX);
 
-  ctx.fillStyle = '#00897B';
+  ctx.fillStyle = '#25D366';
   ctx.beginPath();
   ctx.arc(c, c, c * 0.88, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  if ((ctx as CanvasRenderingContext2D & { roundRect?: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect) {
-    (ctx as CanvasRenderingContext2D & { roundRect: (x: number, y: number, w: number, h: number, r: number) => void }).roundRect(c - 30, c - 18, 44, 30, 7);
-  } else {
-    ctx.rect(c - 30, c - 18, 44, 30);
-  }
+  ctx.arc(c - 4, c + 2, c * 0.42, 0, Math.PI * 2);
   ctx.fill();
 
+  ctx.fillStyle = '#25D366';
   ctx.beginPath();
-  ctx.moveTo(c + 16, c - 6);
-  ctx.lineTo(c + 34, c - 14);
-  ctx.lineTo(c + 34, c + 2);
+  ctx.moveTo(c + 18, c + 30);
+  ctx.lineTo(c + 34, c + 44);
+  ctx.lineTo(c + 28, c + 26);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#00897B';
+  ctx.strokeStyle = '#25D366';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(c - 12, c - 3, 7, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(c - 18, c - 6);
+  ctx.lineTo(c - 18, c + 10);
+  ctx.quadraticCurveTo(c - 18, c + 22, c - 6, c + 22);
+  ctx.lineTo(c + 8, c + 22);
+  ctx.stroke();
 
   const tex = new THREE.CanvasTexture(cvs);
   tex.anisotropy = 4;
@@ -57,9 +59,9 @@ interface Props {
   onClick: () => void;
 }
 
-/** Google Meet badge on the visitor-facing front — billboards toward camera with a gentle spin. */
+/** WhatsApp contact badge on the visitor-facing front — billboards toward camera with a gentle spin. */
 export const BoothMeetBadge: React.FC<Props> = ({ side, boothW, boothD, y = 1.06, frontZ, label, onClick }) => {
-  const texture = useMemo(() => buildMeetIconTexture(), []);
+  const texture = useMemo(() => buildWhatsAppIconTexture(), []);
   const spinRef = useRef<THREE.Group>(null);
   useEffect(() => () => texture.dispose(), [texture]);
 

@@ -989,21 +989,21 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const href = /^https?:\/\//i.test(v) ? v : /^\+?\d[\d\s-]+$/.test(v) ? `https://wa.me/${v.replace(/[^\d]/g, '')}` : `https://${v}`;
     window.open(href, '_blank', 'noopener,noreferrer');
   };
-  const meetCaption = bi(booth.meetTitle, lang, '');
-  const openBoothMeet = () => {
+  const waCaption = bi(booth.meetTitle, lang, lang === 'fa' || lang === 'ar' ? 'واتساپ' : 'WhatsApp');
+  const openBoothWhatsApp = () => {
     if (!booth.meetUrl) return;
-    onTrack?.('hotspot_click', { ...trackBase, targetType: 'google_meet', targetName: meetCaption || (lang === 'fa' ? 'Google Meet' : 'Google Meet'), side: 'booth_meet' });
+    onTrack?.('hotspot_click', { ...trackBase, targetType: 'whatsapp', targetName: waCaption, side: 'booth_whatsapp' });
     openManagerLink(booth.meetUrl);
   };
-  const meetBadgeEl = (bw: number, bd: number, opts?: { y?: number; frontZ?: number }) => booth.meetEnabled && booth.meetUrl ? (
+  const whatsappBadgeEl = (bw: number, bd: number, opts?: { y?: number; frontZ?: number }) => booth.meetEnabled && booth.meetUrl ? (
     <BoothMeetBadge
       side={booth.meetSide || 'left'}
       boothW={bw}
       boothD={bd}
       y={opts?.y}
       frontZ={opts?.frontZ}
-      label={meetCaption || undefined}
-      onClick={openBoothMeet}
+      label={waCaption || undefined}
+      onClick={openBoothWhatsApp}
     />
   ) : null;
   const toggleManagerAudio = (index: number, raw?: string) => {
@@ -1156,7 +1156,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             }}
           />
         ))}
-        {meetBadgeEl(shelfW, shelfD, { y: shelfH * 0.46, frontZ: shelfD / 2 + 0.28 })}
+        {whatsappBadgeEl(shelfW, shelfD, { y: shelfH * 0.46, frontZ: shelfD / 2 + 0.28 })}
         </group>
       </group>
     );
@@ -1423,7 +1423,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
         </TexBoundary>
       ) : null)}
 
-      {meetBadgeEl(W, D)}
+      {whatsappBadgeEl(W, D)}
 
       {/* Life-size PNG people behind the reception counter. */}
       {activeManagers.map(({ slot: i, x }) => (

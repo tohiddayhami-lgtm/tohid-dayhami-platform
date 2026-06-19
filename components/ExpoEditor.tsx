@@ -160,14 +160,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     presT: T ? 'پرزنتیشن دیوار انتهایی (PDF)' : 'End-wall presentation (PDF)',
     presHint: T ? 'یک فایل PDF بزرگ روی دیوار نمایش داده می‌شود و بازدیدکننده با موبایل یا عینک VR صفحه‌ها را جلو/عقب می‌زند.' : 'A large PDF shown on the wall; visitors flip pages forward/back with phone or VR.',
     presEnable: T ? 'فعال‌سازی پرزنتیشن' : 'Enable presentation', presPdf: T ? 'فایل PDF' : 'PDF file', presUploaded: T ? 'بارگذاری شد ✓' : 'Uploaded ✓',
-    boothMeetEnable: T ? 'تماس Google Meet این غرفه' : 'This booth Google Meet',
-    boothMeetUrl: T ? 'لینک Google Meet' : 'Google Meet link',
+    boothMeetEnable: T ? 'واتساپ این غرفه' : 'Booth WhatsApp',
+    boothMeetUrl: T ? 'لینک واتساپ' : 'WhatsApp link',
     boothMeetSide: T ? 'جای آیکون' : 'Icon side',
     boothMeetSideLeft: T ? 'چپ کانتر (جلوی غرفه)' : 'Left of counter (front)',
     boothMeetSideRight: T ? 'راست کانتر (جلوی غرفه)' : 'Right of counter (front)',
     boothMeetTitleFa: T ? 'متن کوتاه زیر آیکون (فارسی)' : 'Short caption (FA)',
     boothMeetTitleEn: T ? 'متن کوتاه زیر آیکون (انگلیسی)' : 'Short caption (EN)',
-    boothMeetHint: T ? 'آیکون کوچک Meet جلوی غرفه کنار کانتر؛ کلیک → باز شدن تماس در تب جدید.' : 'Small Meet icon on the booth front by the counter; click opens the call in a new tab.',
+    boothMeetHint: T ? 'آیکون واتساپ جلوی غرفه کنار کانتر؛ کلیک → باز شدن چت در تب جدید.' : 'WhatsApp icon on the booth front by the counter; click opens chat in a new tab.',
     quickTitle: T ? 'چیدمان سریع' : 'Quick setup',
     quickHint: T ? 'برای تغییر جای غرفه‌های موجود، سبک را انتخاب کنید و «تغییر چیدمان غرفه‌های فعلی» را بزنید. دکمه ساخت از نو، غرفه‌ها را دوباره می‌سازد.' : 'To rearrange existing booths, pick a style and click "Rearrange current booths". Rebuild creates booths from scratch.',
     quickCount: T ? 'تعداد غرفه‌ها' : 'Number of booths',
@@ -1295,15 +1295,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                               </div>
                               {b.meetEnabled && (
                                 <>
-                                  <div className="md:col-span-2"><label className={lbl}>{t.boothMeetUrl}</label><input className={fld + ' dir-ltr'} value={b.meetUrl || ''} onChange={ev => updBooth(b.id, { meetUrl: ev.target.value || undefined })} placeholder="https://meet.google.com/xxx-xxxx-xxx" /></div>
+                                  <div className="md:col-span-2"><label className={lbl}>{t.boothMeetUrl}</label><input className={fld + ' dir-ltr'} value={b.meetUrl || ''} onChange={ev => updBooth(b.id, { meetUrl: ev.target.value || undefined })} placeholder="https://wa.me/98912… یا +98912…" /></div>
                                   <div><label className={lbl}>{t.boothMeetSide}</label>
                                     <select className={fld + ' bg-white'} value={b.meetSide || 'left'} onChange={ev => updBooth(b.id, { meetSide: ev.target.value as 'left' | 'right' })}>
                                       <option value="left">{t.boothMeetSideLeft}</option>
                                       <option value="right">{t.boothMeetSideRight}</option>
                                     </select>
                                   </div>
-                                  <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="تماس تصویری" /></div>
-                                  <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="Video call" /></div>
+                                  <div><label className={lbl}>{t.boothMeetTitleFa}</label><input className={fld} value={b.meetTitle?.fa || ''} onChange={ev => setBoothMeetTitle(b, 'fa', ev.target.value)} placeholder="واتساپ" /></div>
+                                  <div><label className={lbl}>{t.boothMeetTitleEn}</label><input className={fld + ' dir-ltr'} value={b.meetTitle?.en || ''} onChange={ev => setBoothMeetTitle(b, 'en', ev.target.value)} placeholder="WhatsApp" /></div>
                                 </>
                               )}
                             </div>

@@ -707,8 +707,8 @@ export interface MetaverseBooth {
   // auto-play muted & looping on an in-world screen; images render on the wall panel.
   panels?: Partial<Record<BoothFace, string>>;
   hotspots?: MetaverseHotspot[];
-  meetEnabled?: boolean;        // per-booth Google Meet video call badge
-  meetUrl?: string;             // https://meet.google.com/…
+  meetEnabled?: boolean;        // per-booth WhatsApp contact badge (legacy field name)
+  meetUrl?: string;             // https://wa.me/… or phone number
   meetTitle?: MetaShopDirCat;   // optional short caption under the icon
   meetSide?: 'left' | 'right';  // left/right of center counter on the visitor-facing front (default left)
 }
