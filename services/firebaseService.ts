@@ -145,6 +145,8 @@ const proxyPoll = <T>(
 // ── End Iran Proxy ──────────────────────────────────────────────────────────
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
 const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
+/** Must match storage.rules isDocumentFile() limit. */
+export const DOCUMENT_MAX_BYTES = 120 * 1024 * 1024;
 const STORAGE_ROOT = "tohid-dayhami-platform";
 export type CentralStorageFolder = "uploads" | "images" | "documents" | "temp";
 export const storageFolders: Record<CentralStorageFolder, string> = {
@@ -353,11 +355,18 @@ const normalizeStoragePath = (pathOrUrl: string) => {
 const getStorageErrorMessage = (error: unknown) => {
     const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
     const storagePath = typeof error === "object" && error && "storagePath" in error ? String((error as { storagePath?: unknown }).storagePath) : "نامشخص";
+    const fileSize = typeof error === "object" && error && "fileSize" in error ? Number((error as { fileSize?: unknown }).fileSize) : NaN;
     const message = error instanceof Error ? error.message : "";
     const details = `Bucket: ${CENTRAL_STORAGE_BUCKET} | Path: ${storagePath} | Code: ${code || "unknown"}`;
+    const sizeMb = Number.isFinite(fileSize) && fileSize > 0 ? (fileSize / (1024 * 1024)).toFixed(1) : "";
+    const maxMb = (DOCUMENT_MAX_BYTES / (1024 * 1024)).toFixed(0);
 
     if (code === "storage/unauthorized") {
-        return `دسترسی آپلود در Firebase Storage مجاز نیست — معمولاً به‌خاطر حجم بیش از حد مجاز در Rules (حداکثر ۱۲۰ مگابایت برای documents) یا Publish نشدن Rules است. پروژه ${CENTRAL_STORAGE_PROJECT_ID}، App Check و storage.rules را بررسی کنید. ${details}`;
+        const overLimit = Number.isFinite(fileSize) && fileSize >= DOCUMENT_MAX_BYTES;
+        if (overLimit) {
+            return `حجم فایل (${sizeMb} مگابایت) بیش از حد مجاز (${maxMb} مگابایت) است. فایل را فشرده کنید یا مدل را سبک‌تر کنید. ${details}`;
+        }
+        return `دسترسی آپلود در Firebase Storage رد شد${sizeMb ? ` (حجم فایل: ${sizeMb} مگابایت)` : ""}. اگر حجم زیر ${maxMb} مگابایت است، معمولاً storage.rules روی پروژه ${CENTRAL_STORAGE_PROJECT_ID} Publish نشده — دستور «firebase deploy --only storage» را اجرا کنید و دوباره تلاش کنید. ${details}`;
     }
 
     if (code === "storage/bucket-not-found") {
@@ -399,6 +408,7 @@ export const uploadFile = (
                 Object.assign(error, {
                     storageBucket: CENTRAL_STORAGE_BUCKET,
                     storagePath: path,
+                    fileSize: file.size,
                 });
                 reject(error);
             },
