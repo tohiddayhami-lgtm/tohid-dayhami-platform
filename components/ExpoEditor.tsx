@@ -6,6 +6,7 @@ import { MetaShopLang } from '../types';
 import { Language } from '../App';
 import { IconPlus, IconTrash, IconGlobe, IconUpload, IconEdit } from './Icons';
 import { ExpoFloorPlan } from './ExpoFloorPlan';
+import { ExpoEnvironmentMap } from './ExpoEnvironmentMap';
 
 interface Props {
   expo?: MetaverseExpo;
@@ -248,6 +249,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envHint: T ? 'مدل GLB مرکز سالن قرار می‌گیرد؛ غرفه‌ها روی همان مختصات نقشه کف داخل این محیط نمایش داده می‌شوند. ابعاد سالن را با مدل هماهنگ کنید.' : 'The GLB is centered in the hall; booths use the same floor-plan coordinates inside this environment. Match hall width/depth to your model.',
     envCollision: T ? 'برخورد فیزیکی (دیوار و پله)' : 'Physical collision (walls & stairs)',
     envCollisionHint: T ? 'از عبور از دیوارها جلوگیری می‌کند و روی پله‌ها و طبقات بالا می‌رود.' : 'Blocks walking through walls and lets you climb stairs to upper floors.',
+    envMap: T ? 'نقشه محیط ۲D' : '2D environment map',
+    spawnDir: T ? 'جهت نگاه ورود (درجه)' : 'Entry facing (°)',
     tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
       product: T ? 'محصول' : 'Product', company: T ? 'پروفایل شرکت' : 'Company', video: T ? 'ویدئو' : 'Video', pdf: T ? 'کاتالوگ PDF' : 'PDF', image: T ? 'تصویر' : 'Image',
@@ -909,7 +912,32 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     </label>
                   </div>
                   <p className="text-[10px] text-violet-600/80">{t.envCollisionHint}</p>
+
+                  <ExpoEnvironmentMap
+                    width={e.width ?? 30}
+                    depth={e.depth ?? 30}
+                    spawn={e.spawn}
+                    environmentX={e.environmentX ?? 0}
+                    environmentZ={e.environmentZ ?? 0}
+                    environmentScale={e.environmentScale ?? 1}
+                    environmentRy={e.environmentRy ?? 0}
+                    environmentAutoFit={e.environmentAutoFit !== false}
+                    readonly={readonly}
+                    langFa={T}
+                    onSpawnMove={(x, z) => patch({
+                      spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), x, z },
+                      entranceEnabled: false,
+                    })}
+                    onSpawnRyChange={ry => patch({
+                      spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry },
+                    })}
+                    onEnvMove={(x, z) => patch({ environmentX: x, environmentZ: z })}
+                    onScaleChange={scale => patch({ environmentScale: scale })}
+                    onRotationChange={ry => patch({ environmentRy: ry })}
+                  />
+
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    <div><label className={lbl}>{t.spawnDir}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.spawn?.ry ?? Math.PI) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry: (+ev.target.value) * Math.PI / 180 } })} /></div>
                     <div><label className={lbl}>{t.envScale}</label><input type="number" min={0.05} max={20} step={0.05} className={fld} value={e.environmentScale ?? 1} disabled={readonly} onChange={ev => patch({ environmentScale: +ev.target.value || 1 })} /></div>
                     <div><label className={lbl}>{t.envRot}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.environmentRy || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ environmentRy: (+ev.target.value) * Math.PI / 180 })} /></div>
                     <div><label className={lbl}>{t.envPos} X</label><input type="number" step={0.1} className={fld} value={e.environmentX ?? 0} disabled={readonly} onChange={ev => patch({ environmentX: +ev.target.value })} /></div>
