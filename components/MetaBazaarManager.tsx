@@ -188,13 +188,31 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     if (!draft.name.trim()) { alert(T ? 'ابتدا نام بازارچه را وارد کنید.' : 'Enter a bazaar name first.'); return; }
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
-    // Open the tab synchronously (inside the click) so popup blockers don't kill it.
     const w = window.open('', '_blank');
     setSaving(true);
     try {
       await onSave({ ...draft, slug });
       setDraft(d => d ? { ...d, slug } : d);
       const url = `${shopBaseUrl}?expo=${encodeURIComponent(slug)}`;
+      if (w) w.location.href = url; else window.open(url, '_blank');
+    } catch { if (w) w.close(); alert(T ? 'خطا در ذخیره' : 'Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  const environmentEditExpo = async () => {
+    if (!draft) return;
+    if (!draft.expo?.environmentUrl) { alert(T ? 'ابتدا مدل محیط GLB را آپلود کنید.' : 'Upload a custom environment GLB first.'); return; }
+    if (!draft.name.trim()) { alert(T ? 'ابتدا نام بازارچه را وارد کنید.' : 'Enter a bazaar name first.'); return; }
+    const slug = (draft.slug || '').trim() || slugify(draft.name);
+    if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
+    const w = window.open('', '_blank');
+    setSaving(true);
+    try {
+      const saved = { ...draft, slug };
+      await onSave(saved);
+      setDraft(d => d ? { ...d, slug } : d);
+      try { sessionStorage.setItem('expo_env_edit_bazaar', saved.id); } catch {}
+      const url = `${shopBaseUrl}?expo=${encodeURIComponent(slug)}&env-edit=1`;
       if (w) w.location.href = url; else window.open(url, '_blank');
     } catch { if (w) w.close(); alert(T ? 'خطا در ذخیره' : 'Save failed'); }
     finally { setSaving(false); }
@@ -331,6 +349,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           shopBaseUrl={shopBaseUrl}
           onChange={(expo) => upd({ expo })}
           onPreview={previewExpo}
+          onEnvironmentEdit={environmentEditExpo}
           readonly={readonly}
         />
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />

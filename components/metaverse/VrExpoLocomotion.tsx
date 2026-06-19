@@ -9,27 +9,36 @@ import {
   environmentCollisionEnabled,
   resolveEnvPosition,
 } from './expoEnvironmentCollision';
-import { LOCO, clampY } from './expoLocomotion';
+import { LOCO, clampY, readVrStick, resolveVrGamepads } from './expoLocomotion';
 
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
+const SNAP_TURN_RAD = (30 * Math.PI) / 180;
+const SNAP_TURN_DEAD = 0.5;
 
-const readStick = (gp: Gamepad, primary: boolean) => {
-  const ax = primary ? (gp.axes[0] ?? 0) : (gp.axes[2] ?? gp.axes[0] ?? 0);
-  const ay = primary ? (gp.axes[1] ?? 0) : (gp.axes[3] ?? gp.axes[1] ?? 0);
-  return { x: Math.abs(ax) > 0.15 ? ax : 0, y: Math.abs(ay) > 0.15 ? ay : 0 };
+const _euler = new THREE.Euler();
+
+/** Head-yaw basis on the floor — strafe/forward stay horizontal (standard VR locomotion). */
+const headFlatBasis = (camera: THREE.Camera, fwd: THREE.Vector3, right: THREE.Vector3) => {
+  camera.getWorldDirection(fwd);
+  fwd.y = 0;
+  if (fwd.lengthSq() < 1e-6) {
+    _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+    fwd.set(Math.sin(_euler.y), 0, -Math.cos(_euler.y));
+  }
+  fwd.normalize();
+  right.crossVectors(fwd, UP).normalize();
 };
 
-/** Walk locomotion with Quest thumbsticks (disabled while flying). */
+/** Walk locomotion with Quest thumbsticks — mount only while not flying (see MetaverseExpoView). */
 export const VrWalkLocomotion: React.FC<{
   originRef: React.RefObject<THREE.Group | null>;
-  enabled: boolean;
-}> = ({ originRef, enabled }) => {
+}> = ({ originRef }) => {
   useXRControllerLocomotion(
     originRef,
-    enabled ? { speed: 3 } : false,
-    enabled ? { type: 'snap', degrees: 30, deadZone: 0.5 } : false,
+    { speed: 3 },
+    { type: 'snap', degrees: 30, deadZone: SNAP_TURN_DEAD },
   );
   return null;
 };
@@ -50,6 +59,7 @@ export const VrFlyJumpLocomotion: React.FC<{
   const grounded = useRef(true);
   const prevJumpBtn = useRef(false);
   const prevOrigin = useRef<THREE.Vector3 | null>(null);
+  const prevSnapTurnX = useRef(0);
 
   useFrame((_, dt) => {
     if (!session || !originRef.current) return;
@@ -62,33 +72,41 @@ export const VrFlyJumpLocomotion: React.FC<{
     }
 
     if (flyMode) {
-      let mx = 0, mz = 0, my = 0;
-      for (const src of session.inputSources) {
-        const gp = src.gamepad;
-        if (!gp) continue;
-        if (src.handedness === 'left') {
-          const s = readStick(gp, true);
-          mx = s.x; mz = -s.y;
-        } else if (src.handedness === 'right') {
-          const s = readStick(gp, true);
-          my = -s.y;
-          if (gp.buttons[4]?.pressed) my += 1;
-          if (gp.buttons[5]?.pressed) my -= 1;
-        }
+      const { left, right } = resolveVrGamepads(session);
+      let mf = 0, ms = 0, mv = 0, turnX = 0;
+
+      if (left) {
+        const s = readVrStick(left);
+        // Quest: push stick forward → negative Y; match desktop horizontalInput sign.
+        mf = -s.y;
+        ms = s.x;
       }
-      camera.getWorldDirection(_fwd);
-      if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1);
-      _fwd.normalize();
-      _right.crossVectors(_fwd, UP).normalize();
+      if (right) {
+        const s = readVrStick(right);
+        mv = -s.y;
+        turnX = s.x;
+        if (right.buttons[4]?.pressed) mv += 1;
+        if (right.buttons[5]?.pressed) mv -= 1;
+      }
+
+      // Right-stick snap-turn (same 30° as walk mode).
+      if (Math.abs(turnX) > SNAP_TURN_DEAD && Math.abs(prevSnapTurnX.current) <= SNAP_TURN_DEAD) {
+        origin.rotation.y -= Math.sign(turnX) * SNAP_TURN_RAD;
+      }
+      prevSnapTurnX.current = turnX;
+
+      headFlatBasis(camera, _fwd, _right);
       const speed = LOCO.flySpeed * rawDt;
       const vSpeed = LOCO.flyVerticalSpeed * rawDt;
-      origin.position.addScaledVector(_fwd, mz * speed);
-      origin.position.addScaledVector(_right, mx * speed);
-      origin.position.y += my * vSpeed;
+      origin.position.addScaledVector(_fwd, mf * speed);
+      origin.position.addScaledVector(_right, ms * speed);
+      origin.position.y += mv * vSpeed;
       origin.position.y = clampY(origin.position.y - eyeOffsetY) + eyeOffsetY;
       prevOrigin.current.copy(origin.position);
       return;
     }
+
+    prevSnapTurnX.current = 0;
 
     // Walk: jump on A/X (button 4)
     let jumpBtn = false;

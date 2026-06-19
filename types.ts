@@ -798,6 +798,34 @@ export interface ExpoDecoration {
   audioUrlEn?: string;
 }
 
+/** Media / interactive button placed in a custom GLB environment (world coordinates). */
+export type ExpoEnvironmentMediaKind =
+  | 'image' | 'video' | 'pdf' | 'html' | 'audio' | 'glb' | 'button';
+
+export type ExpoEnvironmentButtonAction =
+  | 'url' | 'whatsapp' | 'phone' | 'meet' | 'contact';
+
+export interface ExpoEnvironmentMedia {
+  id: string;
+  kind: ExpoEnvironmentMediaKind;
+  x: number;
+  y: number;
+  z: number;
+  ry?: number;                  // Y rotation (radians)
+  w?: number;                   // screen width in meters (default 2)
+  h?: number;                   // screen height in meters (default 1.2)
+  scale?: number;               // uniform scale multiplier (default 1)
+  url?: string;                 // media file / link
+  title?: MetaShopDirCat;       // label on map & button caption
+  action?: ExpoEnvironmentButtonAction;
+  phone?: string;
+  whatsapp?: string;
+  email?: string;
+  meetUrl?: string;
+  icon?: string;                // emoji glyph for buttons
+  color?: string;               // accent color
+}
+
 export interface MetaverseExpo {
   enabled: boolean;
   defaultLang?: string;         // opening language code (visitor can switch)
@@ -815,6 +843,7 @@ export interface MetaverseExpo {
   environmentAutoFit?: boolean; // fit GLB footprint to max(width, depth) — default true when URL set
   environmentReplacesHall?: boolean; // hide procedural walls/floor/ceiling — default true when URL set
   environmentCollision?: boolean; // block walking through walls; follow stairs/floors — default true when URL set
+  environmentMedia?: ExpoEnvironmentMedia[]; // free-placed screens, files & buttons inside custom GLB hall
   skyboxUrl?: string;           // optional HDR / equirectangular image
   preset?: EnvPreset;           // drei Environment preset when no custom HDR
   groundColor?: string;

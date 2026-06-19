@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -20,6 +20,7 @@ import { EnvironmentCollisionProvider } from './EnvironmentCollisionContext';
 import { VrEnvironmentCollision } from './VrEnvironmentCollision';
 import { VrWalkLocomotion, VrFlyJumpLocomotion } from './VrExpoLocomotion';
 import { ExpoFlyControls } from './ExpoFlyControls';
+import { EnvironmentEditToolbar } from './EnvironmentEditMode';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
@@ -31,6 +32,8 @@ interface Props {
   lang: Language;
   onExit: () => void;
   onOpenShop: (slug: string) => void;
+  environmentEditMode?: boolean;
+  onSaveExpo?: (expo: MetaBazaar['expo']) => Promise<void>;
 }
 
 type ExpoTrackFn = (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
@@ -183,7 +186,7 @@ const ExpoAnalyticsTracker: React.FC<{
 
 // Full-screen 3D / WebXR exhibition viewer. Orchestrates the Canvas (scene + player + XR rig)
 // and all 2D chrome (top bar, minimap, joystick, hotspot modal). Lazy-loaded by App.tsx.
-export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit }) => {
+export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit, onOpenShop, environmentEditMode = false, onSaveExpo }) => {
   const expo = bazaar.expo!;
   const caps = useDeviceCapabilities();
   const expoLangs = useMemo(() => resolveExpoLanguages(expo), [expo.languages]);
@@ -198,10 +201,79 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
   const [boothSummaries, setBoothSummaries] = useState<Record<string, BoothReservationSummary>>({});
   const controlsPaused = registrationOpen || !!reserveBooth || !!active;
+
+  const updEnvMediaItem = useCallback((id: string, patch: Partial<ExpoEnvironmentMedia>) => {
+    setEnvMedia(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
+  }, []);
+
+  const addEnvMedia = useCallback((kind: ExpoEnvironmentMediaKind) => {
+    const n = envMedia.length;
+    const item: ExpoEnvironmentMedia = {
+      id: newEnvMediaId(),
+      kind,
+      x: 0,
+      y: 1.5,
+      z: 0,
+      w: kind === 'button' ? 0.8 : 2,
+      h: kind === 'button' ? 0.8 : 1.2,
+      scale: 1,
+      title: { fa: kind === 'button' ? 'دکمه' : 'رسانه', en: kind === 'button' ? 'Button' : 'Media' },
+      ...(kind === 'button' ? { action: 'whatsapp', icon: '💬' } : {}),
+    };
+    setEnvMedia(prev => [...prev, item]);
+    setSelectedEnvMediaId(item.id);
+  }, [envMedia.length]);
+
+  const addEnvMediaAt = useCallback((kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => {
+    const item: ExpoEnvironmentMedia = {
+      id: newEnvMediaId(),
+      kind,
+      x: at.x,
+      y: at.y,
+      z: at.z,
+      w: kind === 'button' ? 0.8 : 2,
+      h: kind === 'button' ? 0.8 : 1.2,
+      scale: 1,
+      title: { fa: kind === 'button' ? 'دکمه' : 'رسانه', en: kind === 'button' ? 'Button' : 'Media' },
+      ...(kind === 'button' ? { action: 'whatsapp', icon: '💬' } : {}),
+    };
+    setEnvMedia(prev => [...prev, item]);
+    setSelectedEnvMediaId(item.id);
+  }, []);
+
+  const deleteSelectedEnvMedia = useCallback(() => {
+    if (!selectedEnvMediaId) return;
+    setEnvMedia(prev => prev.filter(m => m.id !== selectedEnvMediaId));
+    setSelectedEnvMediaId(null);
+  }, [selectedEnvMediaId]);
+
+  const saveEnvMedia = useCallback(async () => {
+    if (!onSaveExpo) return;
+    setEnvSaving(true);
+    try {
+      await onSaveExpo({ ...expo, environmentMedia: envMedia });
+      alert(isRtlExpoLang(lang, expoLangs) ? 'محیط ذخیره شد.' : 'Environment saved.');
+    } catch {
+      alert(isRtlExpoLang(lang, expoLangs) ? 'خطا در ذخیره' : 'Save failed.');
+    } finally {
+      setEnvSaving(false);
+    }
+  }, [onSaveExpo, expo, envMedia, lang, expoLangs]);
+
+  const exitEnvEdit = useCallback(() => {
+    try { sessionStorage.removeItem('expo_env_edit_bazaar'); } catch {}
+    const url = new URL(window.location.href);
+    url.searchParams.delete('env-edit');
+    window.location.href = url.toString();
+  }, []);
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
-  const [flyMode, setFlyMode] = useState(false);
+  const [flyMode, setFlyMode] = useState(environmentEditMode);
   const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
+  const [envMedia, setEnvMedia] = useState<ExpoEnvironmentMedia[]>(expo.environmentMedia || []);
+  const [selectedEnvMediaId, setSelectedEnvMediaId] = useState<string | null>(null);
+  const [envSaving, setEnvSaving] = useState(false);
+  const newEnvMediaId = () => `em-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
   // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
   // then slide them apart and remove the overlay. A hard cap prevents getting stuck. ──
@@ -378,13 +450,19 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onRegistrationKioskClick={() => setRegistrationOpen(true)}
               boothSummaries={boothSummaries}
               onReserveBooth={setReserveBooth}
+              environmentEditMode={environmentEditMode}
+              environmentMedia={envMedia}
+              selectedEnvMediaId={selectedEnvMediaId}
+              onSelectEnvMedia={setSelectedEnvMediaId}
+              onUpdateEnvMedia={updEnvMediaItem}
+              onAddEnvMedia={addEnvMediaAt}
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} flyMode={flyMode} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
           <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
-          <VrWalkLocomotion originRef={originRef} enabled={!flyMode} />
+          {!flyMode && <VrWalkLocomotion originRef={originRef} />}
           <VrFlyJumpLocomotion expo={expo} originRef={originRef} flyMode={flyMode} eyeOffsetY={seated ? 0.55 : 0} />
           {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
@@ -436,6 +514,20 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           {caps.vrSupported && <VRButton store={store} label={ui.vr} />}
         </div>
       </div>
+
+      {environmentEditMode && (
+        <EnvironmentEditToolbar
+          langFa={T}
+          mediaCount={envMedia.length}
+          selected={envMedia.find(m => m.id === selectedEnvMediaId) || null}
+          saving={envSaving}
+          onAdd={addEnvMedia}
+          onDelete={deleteSelectedEnvMedia}
+          onSave={saveEnvMedia}
+          onExit={exitEnvEdit}
+          onPatchSelected={patch => selectedEnvMediaId && updEnvMediaItem(selectedEnvMediaId, patch)}
+        />
+      )}
 
       {/* Minimap */}
       <Minimap expo={expo} poseRef={poseRef} />

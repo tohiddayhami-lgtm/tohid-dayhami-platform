@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import type { BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
@@ -15,6 +15,8 @@ import { environmentCollisionEnabled, syncCollisionMatrices } from './expoEnviro
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi, expoPhrase } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
+import { EnvironmentMediaItem } from './EnvironmentMediaItem';
+import { EnvironmentEditGizmos } from './EnvironmentEditMode';
 
 interface Props {
   expo: MetaverseExpo;
@@ -28,6 +30,12 @@ interface Props {
   onRegistrationKioskClick?: () => void;
   boothSummaries?: Record<string, BoothReservationSummary>;
   onReserveBooth?: (b: MetaverseBooth) => void;
+  environmentEditMode?: boolean;
+  environmentMedia?: ExpoEnvironmentMedia[];
+  selectedEnvMediaId?: string | null;
+  onSelectEnvMedia?: (id: string | null) => void;
+  onUpdateEnvMedia?: (id: string, patch: Partial<ExpoEnvironmentMedia>) => void;
+  onAddEnvMedia?: (kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => void;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -343,7 +351,11 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 
 // The full 3D environment: image-based lighting, sky, floor + perimeter walls sized to the
 // hall dimensions, an optional custom environment GLB, and every booth.
-export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack, onRegistrationKioskClick, boothSummaries = {}, onReserveBooth }) => {
+export const ExpoScene: React.FC<Props> = ({
+  expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack,
+  onRegistrationKioskClick, boothSummaries = {}, onReserveBooth,
+  environmentEditMode, environmentMedia, selectedEnvMediaId, onSelectEnvMedia, onUpdateEnvMedia, onAddEnvMedia,
+}) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
@@ -556,6 +568,32 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
             </group>
           </Suspense>
         </TexBoundary>
+      )}
+
+      {/* Custom-environment media (screens, files, buttons) */}
+      {expo.environmentUrl && (environmentMedia || expo.environmentMedia || []).map(item => (
+        <EnvironmentMediaItem
+          key={item.id}
+          item={item}
+          lang={lang}
+          editMode={environmentEditMode}
+          selected={item.id === selectedEnvMediaId}
+          onSelect={id => onSelectEnvMedia?.(id)}
+          onSelectHotspot={onSelectHotspot}
+          onTrack={onTrack}
+        />
+      ))}
+
+      {environmentEditMode && expo.environmentUrl && onUpdateEnvMedia && onAddEnvMedia && (
+        <EnvironmentEditGizmos
+          hallWidth={width}
+          hallDepth={depth}
+          media={environmentMedia || expo.environmentMedia || []}
+          selectedId={selectedEnvMediaId ?? null}
+          onSelect={onSelectEnvMedia || (() => {})}
+          onUpdate={onUpdateEnvMedia}
+          onAdd={onAddEnvMedia}
+        />
       )}
 
       {/* Free-placed hall decorations (GLB props) */}

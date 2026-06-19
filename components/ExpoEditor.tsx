@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoEnvironmentButtonAction } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout, resolveExpoLanguages, DEFAULT_EXPO_LANGS } from './metaverse/expoUtils';
 import { MetaShopLang } from '../types';
@@ -16,6 +16,7 @@ interface Props {
   shopBaseUrl: string;
   onChange: (expo: MetaverseExpo) => void;
   onPreview?: () => void | Promise<void>;  // saves the bazaar, then opens the 3D preview
+  onEnvironmentEdit?: () => void | Promise<void>;  // saves, then opens 3D environment edit mode
   readonly?: boolean;
 }
 
@@ -71,12 +72,13 @@ const DirCatInputs: React.FC<{
 
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
-export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, readonly = false }) => {
+export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, onEnvironmentEdit, readonly = false }) => {
   const T = lang === 'fa';
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
   const expoLangs = resolveExpoLanguages(e);
   const [openBooth, setOpenBooth] = useState<string | null>(null);
   const [openDecoration, setOpenDecoration] = useState<string | null>(null);
+  const [openEnvMedia, setOpenEnvMedia] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [quickN, setQuickN] = useState(6);
@@ -250,6 +252,15 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envCollision: T ? 'برخورد فیزیکی (دیوار و پله)' : 'Physical collision (walls & stairs)',
     envCollisionHint: T ? 'از عبور از دیوارها جلوگیری می‌کند و روی پله‌ها و طبقات بالا می‌رود.' : 'Blocks walking through walls and lets you climb stairs to upper floors.',
     envMap: T ? 'نقشه محیط ۲D' : '2D environment map',
+    envMediaT: T ? 'رسانه و دکمه‌های محیط سفارشی' : 'Custom environment media & buttons',
+    envMediaHint: T ? 'تصویر، ویدئو، PDF، مدل GLB و دکمه تماس/واتساپ را در محیط GLB قرار دهید. روی نقشه جابه‌جا کنید یا از «ادیت ۳D» با لپ‌تاپ یا عینک متاورس تنظیم کنید.' : 'Place images, videos, PDFs, GLB models and call/WhatsApp buttons in the GLB hall. Drag on the map or use «3D edit» on laptop or Meta Quest.',
+    addEnvMedia: T ? 'افزودن رسانه' : 'Add media',
+    addEnvBtn: T ? 'افزودن دکمه' : 'Add button',
+    noEnvMedia: T ? 'هنوز رسانه‌ای در محیط قرار نداده‌اید.' : 'No environment media yet.',
+    envEdit3d: T ? 'ورود به ادیت محیط (۳D/VR)' : 'Enter environment edit (3D/VR)',
+    envEdit3dHint: T ? 'ذخیره و باز کردن نمایشگاه در حالت ادیت — جابه‌جایی، اندازه و دکمه‌ها با ماوس یا کنترلر VR' : 'Save and open expo in edit mode — move, resize and buttons with mouse or VR controller',
+    envKind: T ? 'نوع' : 'Kind',
+    envAction: T ? 'عمل دکمه' : 'Button action',
     spawnDir: T ? 'جهت نگاه ورود (درجه)' : 'Entry facing (°)',
     tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
@@ -359,6 +370,36 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const field = which === 'fa' ? 'audioUrlFa' : 'audioUrlEn';
     updDecoration(d.id, { [field]: url || undefined, ...(which === 'fa' ? { audioUrl: undefined } : {}) } as Partial<ExpoDecoration>);
   };
+
+  // ── Custom environment media (screens, files, buttons) ──
+  const updEnvMedia = (items: ExpoEnvironmentMedia[]) => patch({ environmentMedia: items });
+  const addEnvMedia = (kind: ExpoEnvironmentMediaKind = 'image') => {
+    const n = (e.environmentMedia || []).length;
+    const item: ExpoEnvironmentMedia = {
+      id: newId('em'),
+      kind,
+      x: (n % 5) * 2 - 4,
+      y: 1.5,
+      z: Math.floor(n / 5) * 2 - 2,
+      w: kind === 'button' ? 0.8 : 2,
+      h: kind === 'button' ? 0.8 : 1.2,
+      scale: 1,
+      title: { fa: kind === 'button' ? `دکمه ${n + 1}` : `رسانه ${n + 1}`, en: kind === 'button' ? `Button ${n + 1}` : `Media ${n + 1}` },
+      ...(kind === 'button' ? { action: 'whatsapp' as ExpoEnvironmentButtonAction, icon: '💬' } : {}),
+    };
+    updEnvMedia([...(e.environmentMedia || []), item]);
+    setOpenEnvMedia(item.id);
+    setOpenBooth(null);
+    setOpenDecoration(null);
+  };
+  const updEnvMediaItem = (id: string, p: Partial<ExpoEnvironmentMedia>) =>
+    updEnvMedia((e.environmentMedia || []).map(m => m.id === id ? { ...m, ...p } : m));
+  const delEnvMedia = (id: string) => {
+    updEnvMedia((e.environmentMedia || []).filter(m => m.id !== id));
+    if (openEnvMedia === id) setOpenEnvMedia(null);
+  };
+  const setEnvMediaTitle = (m: ExpoEnvironmentMedia, which: 'fa' | 'en', val: string) =>
+    updEnvMediaItem(m.id, { title: { ...(m.title || {}), [which]: val } });
 
   const setBoothPremiumSign = (b: MetaverseBooth, which: 'fa' | 'en', val: string) =>
     updBooth(b.id, { premiumSignText: { ...(b.premiumSignText || {}), [which]: val } });
@@ -808,6 +849,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
           <div><h4 className="font-bold text-gray-800">{t.title}</h4><p className="text-xs text-gray-400 max-w-md">{t.hint}</p></div>
         </div>
         <div className="flex items-center gap-2">
+          {e.enabled && e.environmentUrl && onEnvironmentEdit && (
+            <button type="button" onClick={() => onEnvironmentEdit()} title={t.envEdit3dHint} className="text-xs px-3 py-2 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 flex items-center gap-1">✏️ {t.envEdit3d}</button>
+          )}
           {e.enabled && (
             onPreview
               ? <button type="button" onClick={() => onPreview()} title={t.previewHint} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.preview}</button>
@@ -922,6 +966,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     environmentScale={e.environmentScale ?? 1}
                     environmentRy={e.environmentRy ?? 0}
                     environmentAutoFit={e.environmentAutoFit !== false}
+                    environmentMedia={e.environmentMedia || []}
+                    selectedMediaId={openEnvMedia}
                     readonly={readonly}
                     langFa={T}
                     onSpawnMove={(x, z) => patch({
@@ -934,7 +980,87 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                     onEnvMove={(x, z) => patch({ environmentX: x, environmentZ: z })}
                     onScaleChange={scale => patch({ environmentScale: scale })}
                     onRotationChange={ry => patch({ environmentRy: ry })}
+                    onMediaMove={(id, x, z) => updEnvMediaItem(id, { x, z })}
+                    onSelectMedia={id => { setOpenEnvMedia(id); setOpenBooth(null); setOpenDecoration(null); }}
                   />
+
+                  {/* Environment media list */}
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h6 className="text-xs font-bold text-orange-900">{t.envMediaT}</h6>
+                        <p className="text-[10px] text-orange-700/80 mt-0.5 leading-relaxed">{t.envMediaHint}</p>
+                      </div>
+                      {!readonly && (
+                        <div className="flex gap-1.5">
+                          <button type="button" onClick={() => addEnvMedia('image')} className="text-[11px] px-2 py-1 rounded bg-white border border-orange-200 hover:bg-orange-50 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvMedia}</button>
+                          <button type="button" onClick={() => addEnvMedia('button')} className="text-[11px] px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"><IconPlus className="w-3 h-3" />{t.addEnvBtn}</button>
+                        </div>
+                      )}
+                    </div>
+                    {(e.environmentMedia || []).length === 0 ? (
+                      <p className="text-[11px] text-orange-600/60 text-center py-2">{t.noEnvMedia}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(e.environmentMedia || []).map(m => (
+                          <div key={m.id} className={`rounded-lg border p-2.5 space-y-2 ${openEnvMedia === m.id ? 'border-orange-400 bg-white' : 'border-orange-100 bg-white/70'}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <button type="button" onClick={() => setOpenEnvMedia(openEnvMedia === m.id ? null : m.id)} className="text-xs font-bold text-orange-900 flex items-center gap-1">
+                                <IconEdit className="w-3.5 h-3.5" />
+                                {m.kind === 'button' ? '🔘' : m.kind === 'video' ? '▶' : m.kind === 'glb' ? '📦' : '🖼'}
+                                {(T ? m.title?.fa : m.title?.en) || m.title?.fa || m.title?.en || m.id}
+                              </button>
+                              {!readonly && <button type="button" onClick={() => delEnvMedia(m.id)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}
+                            </div>
+                            {openEnvMedia === m.id && (
+                              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                <div><label className={lbl}>{t.envKind}</label>
+                                  <select className={fld + ' bg-white'} value={m.kind} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { kind: ev.target.value as ExpoEnvironmentMediaKind })}>
+                                    <option value="image">{T ? 'تصویر' : 'Image'}</option>
+                                    <option value="video">{T ? 'ویدئو' : 'Video'}</option>
+                                    <option value="pdf">PDF</option>
+                                    <option value="html">HTML</option>
+                                    <option value="audio">{T ? 'صوت' : 'Audio'}</option>
+                                    <option value="glb">GLB</option>
+                                    <option value="button">{T ? 'دکمه' : 'Button'}</option>
+                                  </select>
+                                </div>
+                                <DirCatInputs langs={expoLangs} value={m.title} onChange={(code, val) => setEnvMediaTitle(m, code as 'fa' | 'en', val)} fld={fld} lbl={T ? 'عنوان' : 'Title'} />
+                                {m.kind !== 'button' && (
+                                  <div className="md:col-span-2"><label className={lbl}>{t.hUrl}</label><input className={fld + ' dir-ltr'} value={m.url || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { url: ev.target.value })} /></div>
+                                )}
+                                {m.kind === 'button' && (
+                                  <>
+                                    <div><label className={lbl}>{t.envAction}</label>
+                                      <select className={fld + ' bg-white'} value={m.action || 'url'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { action: ev.target.value as ExpoEnvironmentButtonAction })}>
+                                        <option value="url">URL</option>
+                                        <option value="whatsapp">WhatsApp</option>
+                                        <option value="phone">{T ? 'تماس' : 'Phone'}</option>
+                                        <option value="meet">Meet</option>
+                                        <option value="contact">{T ? 'کارت تماس' : 'Contact card'}</option>
+                                      </select>
+                                    </div>
+                                    {(m.action === 'whatsapp' || m.action === 'phone' || m.action === 'contact') && (
+                                      <div><label className={lbl}>{t.hPhone}</label><input className={fld + ' dir-ltr'} value={m.phone || m.whatsapp || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { phone: ev.target.value, whatsapp: m.action === 'whatsapp' ? ev.target.value : m.whatsapp })} /></div>
+                                    )}
+                                    {m.action === 'contact' && <div><label className={lbl}>{t.hEmail}</label><input className={fld + ' dir-ltr'} value={m.email || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { email: ev.target.value })} /></div>}
+                                    {(m.action === 'url' || m.action === 'meet') && <div className="md:col-span-2"><label className={lbl}>{t.hUrl}</label><input className={fld + ' dir-ltr'} value={m.meetUrl || m.url || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, m.action === 'meet' ? { meetUrl: ev.target.value } : { url: ev.target.value })} /></div>}
+                                  </>
+                                )}
+                                <div><label className={lbl}>{t.posX}</label><input type="number" step={0.25} className={fld} value={m.x} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { x: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.posY}</label><input type="number" step={0.25} className={fld} value={m.y} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { y: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.posZ}</label><input type="number" step={0.25} className={fld} value={m.z} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { z: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.width}</label><input type="number" min={0.3} max={12} step={0.1} className={fld} value={m.w ?? 2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { w: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.height}</label><input type="number" min={0.3} max={8} step={0.1} className={fld} value={m.h ?? 1.2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { h: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.scale}</label><input type="number" min={0.2} max={8} step={0.05} className={fld} value={m.scale ?? 1} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { scale: +ev.target.value })} /></div>
+                                <div><label className={lbl}>{t.rot}</label><input type="number" step={5} className={fld} value={Math.round((m.ry || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { ry: (+ev.target.value) * Math.PI / 180 })} /></div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     <div><label className={lbl}>{t.spawnDir}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.spawn?.ry ?? Math.PI) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ spawn: { ...(e.spawn || { x: 0, y: 0, z: 8 }), ry: (+ev.target.value) * Math.PI / 180 } })} /></div>

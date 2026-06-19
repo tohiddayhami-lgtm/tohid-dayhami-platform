@@ -226,6 +226,13 @@ const extractExpoSlug = (): string | null => {
   return null;
 };
 
+const extractEnvEditFlag = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).get('env-edit') === '1';
+  } catch {}
+  return false;
+};
+
 // Public booth reservation map — ?page=expo-map&bazaar=<slug> (Safari/social-safe) or ?expo-map=<slug>
 const extractExpoMapSlug = (): string | null => {
   try {
@@ -318,6 +325,7 @@ const App: React.FC = () => {
   const [bazaarLoading, setBazaarLoading] = useState(false);
   // Metaverse expo (3D exhibition) — resolves the parent bazaar by slug, then reads bazaar.expo
   const [expoSlug, setExpoSlug] = useState<string | null>(extractExpoSlug);
+  const [envEditMode, setEnvEditMode] = useState(extractEnvEditFlag);
   const [expoMapSlug, setExpoMapSlug] = useState<string | null>(extractExpoMapSlug);
   const [publicExpoBazaar, setPublicExpoBazaar] = useState<MetaBazaar | null>(null);
   const [publicExpoMapBazaar, setPublicExpoMapBazaar] = useState<MetaBazaar | null>(null);
@@ -454,7 +462,7 @@ const App: React.FC = () => {
       if (v === 'custom-form' && fid) setCustomFormId(fid);
       if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
-      if (v === 'expo') setExpoSlug(extractExpoSlug());
+      if (v === 'expo') { setExpoSlug(extractExpoSlug()); setEnvEditMode(extractEnvEditFlag()); }
       if (v === 'expo-map') setExpoMapSlug(extractExpoMapSlug());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
@@ -467,7 +475,7 @@ const App: React.FC = () => {
       const v = parseUrl(window.location.search, window.location.hash);
       if (!v) return;
       if (v === 'expo-map') setExpoMapSlug(extractExpoMapSlug());
-      if (v === 'expo') setExpoSlug(extractExpoSlug());
+      if (v === 'expo') { setExpoSlug(extractExpoSlug()); setEnvEditMode(extractEnvEditFlag()); }
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
       if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
       setViewState(v);
@@ -1388,6 +1396,11 @@ const App: React.FC = () => {
     const expo = publicExpoBazaar?.expo;
     if (publicExpoBazaar && publicExpoBazaar.isActive !== false && expo && expo.enabled) {
       const expoTitle = (lang === 'fa' ? expo.title?.fa : expo.title?.en) || publicExpoBazaar.name;
+      const allowEnvEdit = envEditMode && (() => {
+        try {
+          return sessionStorage.getItem('expo_env_edit_bazaar') === publicExpoBazaar.id;
+        } catch { return false; }
+      })();
       return (
         <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={expoTitle} />}>
           <MetaverseExpoView
@@ -1396,6 +1409,10 @@ const App: React.FC = () => {
             lang={lang}
             onExit={() => setView('landing')}
             onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+            environmentEditMode={allowEnvEdit && !!expo.environmentUrl}
+            onSaveExpo={allowEnvEdit ? async (updatedExpo) => {
+              await saveMetaBazaarToCloud({ ...publicExpoBazaar, expo: updatedExpo });
+            } : undefined}
           />
         </React.Suspense>
       );

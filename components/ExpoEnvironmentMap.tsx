@@ -1,11 +1,13 @@
 import React, { useCallback, useRef, useState } from 'react';
+import type { ExpoEnvironmentMedia } from '../types';
 
-type DragKind = 'spawn' | 'env' | 'scale' | 'rotate' | 'spawn-ry';
+type DragKind = 'spawn' | 'env' | 'scale' | 'rotate' | 'spawn-ry' | 'media';
 
 interface DragState {
   kind: DragKind;
   x: number;
   z: number;
+  mediaId?: string;
 }
 
 export interface ExpoEnvironmentMapProps {
@@ -24,6 +26,10 @@ export interface ExpoEnvironmentMapProps {
   onEnvMove: (x: number, z: number) => void;
   onScaleChange: (scale: number) => void;
   onRotationChange: (ry: number) => void;
+  environmentMedia?: ExpoEnvironmentMedia[];
+  selectedMediaId?: string | null;
+  onMediaMove?: (id: string, x: number, z: number) => void;
+  onSelectMedia?: (id: string) => void;
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -45,6 +51,10 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
   onEnvMove,
   onScaleChange,
   onRotationChange,
+  environmentMedia = [],
+  selectedMediaId,
+  onMediaMove,
+  onSelectMedia,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -82,13 +92,13 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
     return { x: spawn?.x ?? 0, z: spawn?.z ?? 0 };
   };
 
-  const beginDrag = (ev: React.PointerEvent, kind: DragKind, x: number, z: number) => {
+  const beginDrag = (ev: React.PointerEvent, kind: DragKind, x: number, z: number, mediaId?: string) => {
     if (readonly) return;
     ev.preventDefault();
     ev.stopPropagation();
     (ev.currentTarget as Element).setPointerCapture(ev.pointerId);
     if (kind === 'scale') scaleStart.current = environmentScale || 1;
-    const state: DragState = { kind, x, z };
+    const state: DragState = { kind, x, z, mediaId };
     dragRef.current = state;
     setDragging(state);
   };
@@ -129,6 +139,11 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
       onRotationChange(ry);
       return;
     }
+    if (d.kind === 'media' && d.mediaId) {
+      dragRef.current = { ...d, x, z };
+      setDragging({ ...d, x, z });
+      return;
+    }
   };
 
   const commitDrag = () => {
@@ -136,6 +151,7 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
     if (!d) return;
     if (d.kind === 'spawn') onSpawnMove(d.x, d.z);
     else if (d.kind === 'env') onEnvMove(d.x, d.z);
+    else if (d.kind === 'media' && d.mediaId && onMediaMove) onMediaMove(d.mediaId, d.x, d.z);
     dragRef.current = null;
     setDragging(null);
   };
@@ -157,7 +173,7 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
 
   const labels = {
     title: T ? 'نقشه محیط سفارشی (۲D)' : 'Custom environment map (2D)',
-    hint: T ? 'محیط بنفش را بکشید · گوشه برای مقیاس · دستگیره بالا برای چرخش · دایره فیروزه‌ای = نقطه ورود' : 'Drag violet hall · corner = scale · top handle = rotate · cyan dot = entry spawn',
+    hint: T ? 'محیط بنفش را بکشید · گوشه مقیاس · دستگیره چرخش · فیروزه‌ای = ورود · نارنجی = رسانه' : 'Drag violet hall · corner scale · rotate handle · cyan = entry · orange = media',
     hall: T ? 'سالن' : 'Hall',
     glb: T ? 'محیط GLB' : 'GLB env',
     spawn: T ? 'ورود' : 'Entry',
@@ -282,6 +298,34 @@ export const ExpoEnvironmentMap: React.FC<ExpoEnvironmentMapProps> = ({
             <text x={scaleWx} y={scaleWz + 4.5} textAnchor="middle" fontSize={2.2} fill="#92400e" pointerEvents="none">{labels.scale}</text>
           </g>
         )}
+
+        {/* environment media markers */}
+        {environmentMedia.map(m => {
+          const isSel = m.id === selectedMediaId;
+          const mx = dragging?.kind === 'media' && dragging.mediaId === m.id ? dragging.x : m.x;
+          const mz = dragging?.kind === 'media' && dragging.mediaId === m.id ? dragging.z : m.z;
+          const glyph = m.kind === 'button' ? '🔘' : m.kind === 'video' ? '▶' : m.kind === 'glb' ? '📦' : '🖼';
+          return (
+            <g key={m.id} transform={`translate(${wx(mx)} ${wz(mz)})`}>
+              <rect
+                x={-2.2}
+                y={-2.2}
+                width={4.4}
+                height={4.4}
+                rx={0.8}
+                fill={isSel ? '#f59e0b' : '#fb923c'}
+                stroke={isSel ? '#fff' : '#c2410c'}
+                strokeWidth={isSel ? 0.6 : 0.4}
+                style={{ cursor: readonly ? 'default' : 'grab' }}
+                onPointerDown={ev => {
+                  onSelectMedia?.(m.id);
+                  beginDrag(ev, 'media', mx, mz, m.id);
+                }}
+              />
+              <text x={0} y={0.8} textAnchor="middle" fontSize={2.4} pointerEvents="none">{glyph}</text>
+            </g>
+          );
+        })}
 
         {/* spawn / entry */}
         <g transform={`translate(${wx(sp.x)} ${wz(sp.z)})`}>
