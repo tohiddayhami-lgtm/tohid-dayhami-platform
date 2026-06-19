@@ -357,7 +357,7 @@ const getStorageErrorMessage = (error: unknown) => {
     const details = `Bucket: ${CENTRAL_STORAGE_BUCKET} | Path: ${storagePath} | Code: ${code || "unknown"}`;
 
     if (code === "storage/unauthorized") {
-        return `دسترسی آپلود در Firebase Storage مجاز نیست — معمولاً به‌خاطر حجم بیش از حد مجاز در Rules (حداکثر ۱۰۰ مگابایت برای documents) یا Publish نشدن Rules است. پروژه ${CENTRAL_STORAGE_PROJECT_ID}، App Check و storage.rules را بررسی کنید. ${details}`;
+        return `دسترسی آپلود در Firebase Storage مجاز نیست — معمولاً به‌خاطر حجم بیش از حد مجاز در Rules (حداکثر ۱۲۰ مگابایت برای documents) یا Publish نشدن Rules است. پروژه ${CENTRAL_STORAGE_PROJECT_ID}، App Check و storage.rules را بررسی کنید. ${details}`;
     }
 
     if (code === "storage/bucket-not-found") {

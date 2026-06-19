@@ -41,6 +41,7 @@ const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: stri
 
 const MANAGER_SLOTS = [0, 1, 2, 3, 4] as const;
 const GLB_MAX_BYTES = 100 * 1024 * 1024;
+const ENV_GLB_MAX_BYTES = 120 * 1024 * 1024;
 
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, visualStyle: 'exhibition', preset: 'warehouse', width: 30, depth: 30, height: 9,
@@ -242,6 +243,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     hPos: T ? 'موقعیت نسبت به غرفه (X/Y/Z)' : 'Position vs booth (X/Y/Z)',
     edit: T ? 'ویرایش غرفه' : 'Edit booth', glbErr: T ? 'فقط فایل GLB/GLTF مجاز است.' : 'Only GLB/GLTF files allowed.',
     glbTooBig: T ? 'حجم فایل GLB بیش از ۱۰۰ مگابایت است.' : 'GLB file exceeds 100MB.',
+    envGlbTooBig: T ? 'حجم مدل محیط سفارشی بیش از ۱۲۰ مگابایت است.' : 'Custom environment GLB exceeds 120MB.',
+    envGlbMax: T ? 'حداکثر حجم: ۱۲۰ مگابایت' : 'Max size: 120MB',
     envGlbSettings: T ? 'تنظیمات مدل محیط' : 'Environment model settings',
     envReplacesHall: T ? 'جایگزین سالن پیش‌فرض (دیوار/کف/سقف)' : 'Replace default hall (walls/floor/ceiling)',
     envAutoFit: T ? 'هم‌تراز با ابعاد سالن (عرض/عمق)' : 'Fit to hall dimensions (width/depth)',
@@ -582,9 +585,9 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     setUploading(key);
     uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'images');
   };
-  const uploadGlb = (key: string, file: File, onUrl: (u: string) => void) => {
+  const uploadGlb = (key: string, file: File, onUrl: (u: string) => void, maxBytes = GLB_MAX_BYTES) => {
     if (!/\.(glb|gltf)$/i.test(file.name)) { alert(t.glbErr); return; }
-    if (file.size > GLB_MAX_BYTES) { alert(t.glbTooBig); return; }
+    if (file.size > maxBytes) { alert(maxBytes === ENV_GLB_MAX_BYTES ? t.envGlbTooBig : t.glbTooBig); return; }
     setUploading(key);
     uploadFileWithProgress(file, () => {}, u => { onUrl(u); setUploading(null); }, err => { alert(err.message); setUploading(null); }, 'documents');
   };
@@ -651,16 +654,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
       </div>
     );
   };
-  const GlbUpload: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string }> = ({ id, value, onUrl, label }) => {
+  const GlbUpload: React.FC<{ id: string; value?: string; onUrl: (u: string) => void; label: string; maxBytes?: number; hint?: string }> = ({ id, value, onUrl, label, maxBytes, hint }) => {
     const ref = useRef<HTMLInputElement>(null);
+    const limit = maxBytes ?? GLB_MAX_BYTES;
     return (
       <div>
         <label className={lbl}>{label}</label>
+        {hint && <p className="text-[10px] text-gray-400 mb-1">{hint}</p>}
         <div className="flex items-center gap-2">
           {value && <span className="text-[11px] text-emerald-600 font-bold">✓ GLB</span>}
           <button type="button" onClick={() => ref.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconUpload className="w-3.5 h-3.5" />{uploading === id ? t.uploading : t.upload}</button>
           {value && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
-          <input type="file" ref={ref} className="hidden" accept=".glb,.gltf,model/gltf-binary" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadGlb(id, f, onUrl); ev.target.value = ''; }} />
+          <input type="file" ref={ref} className="hidden" accept=".glb,.gltf,model/gltf-binary" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadGlb(id, f, onUrl, limit); ev.target.value = ''; }} />
         </div>
       </div>
     );
@@ -1003,7 +1008,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               </div>
               <div><label className={lbl}>{t.ground}</label><div className="flex gap-2"><input type="color" value={e.groundColor || '#cfd4dc'} onChange={ev => patch({ groundColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.groundColor || ''} onChange={ev => patch({ groundColor: ev.target.value })} /></div></div>
               <div><label className={lbl}>{t.wall}</label><div className="flex gap-2"><input type="color" value={e.wallColor || '#e9edf3'} onChange={ev => patch({ wallColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.wallColor || ''} onChange={ev => patch({ wallColor: ev.target.value })} /></div></div>
-              <GlbUpload id="env-glb" value={e.environmentUrl} onUrl={u => patch({
+              <GlbUpload id="env-glb" value={e.environmentUrl} maxBytes={ENV_GLB_MAX_BYTES} hint={t.envGlbMax} onUrl={u => patch({
                 environmentUrl: u || undefined,
                 ...(u ? {
                   environmentReplacesHall: e.environmentReplacesHall ?? true,

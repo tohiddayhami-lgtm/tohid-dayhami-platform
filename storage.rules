@@ -10,7 +10,7 @@ service firebase.storage {
     // GLB/GLTF, video, PDF and other large assets in documents/
     function isDocumentFile() {
       return request.resource != null
-        && request.resource.size < 100 * 1024 * 1024;
+        && request.resource.size < 120 * 1024 * 1024;
     }
 
     match /tohid-dayhami-platform/uploads/{allPaths=**} {
