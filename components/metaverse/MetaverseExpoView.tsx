@@ -200,14 +200,22 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [reserveBooth, setReserveBooth] = useState<MetaverseBooth | null>(null);
   const [boothSummaries, setBoothSummaries] = useState<Record<string, BoothReservationSummary>>({});
+  const [help, setHelp] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [flyMode, setFlyMode] = useState(environmentEditMode);
+  const [seated, setSeated] = useState(false);
+  const [envMedia, setEnvMedia] = useState<ExpoEnvironmentMedia[]>(expo.environmentMedia || []);
+  const [selectedEnvMediaId, setSelectedEnvMediaId] = useState<string | null>(null);
+  const [envSaving, setEnvSaving] = useState(false);
   const controlsPaused = registrationOpen || !!reserveBooth || !!active;
+
+  const newEnvMediaId = () => `em-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
   const updEnvMediaItem = useCallback((id: string, patch: Partial<ExpoEnvironmentMedia>) => {
     setEnvMedia(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
   }, []);
 
   const addEnvMedia = useCallback((kind: ExpoEnvironmentMediaKind) => {
-    const n = envMedia.length;
     const item: ExpoEnvironmentMedia = {
       id: newEnvMediaId(),
       kind,
@@ -222,7 +230,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     };
     setEnvMedia(prev => [...prev, item]);
     setSelectedEnvMediaId(item.id);
-  }, [envMedia.length]);
+  }, []);
 
   const addEnvMediaAt = useCallback((kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => {
     const item: ExpoEnvironmentMedia = {
@@ -266,14 +274,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     url.searchParams.delete('env-edit');
     window.location.href = url.toString();
   }, []);
-  const [help, setHelp] = useState(true);
-  const [muted, setMuted] = useState(true);
-  const [flyMode, setFlyMode] = useState(environmentEditMode);
-  const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
-  const [envMedia, setEnvMedia] = useState<ExpoEnvironmentMedia[]>(expo.environmentMedia || []);
-  const [selectedEnvMediaId, setSelectedEnvMediaId] = useState<string | null>(null);
-  const [envSaving, setEnvSaving] = useState(false);
-  const newEnvMediaId = () => `em-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
   // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
   // then slide them apart and remove the overlay. A hard cap prevents getting stuck. ──
