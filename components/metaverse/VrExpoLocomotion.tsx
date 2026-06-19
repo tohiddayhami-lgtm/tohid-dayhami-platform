@@ -1,5 +1,7 @@
 import React, { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { useXR, useXRControllerLocomotion, useXRStore } from '@react-three/xr';
+import * as THREE from 'three';
 import type { MetaverseExpo } from '../../types';
 import { EXPO_DEFAULTS } from './expoUtils';
 import { useEnvironmentCollision } from './EnvironmentCollisionContext';
