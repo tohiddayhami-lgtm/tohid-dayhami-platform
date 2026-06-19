@@ -25,12 +25,13 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
 }) => {
   const inXR = useXR((s) => !!s.session);
   const dragRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
+  const rotateRef = useRef<{ id: string } | null>(null);
 
   const selected = media.find(m => m.id === selectedId);
 
   const onFloorClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    if (dragRef.current) return;
+    if (dragRef.current || rotateRef.current) return;
     if (!selectedId) {
       onAdd('image', { x: e.point.x, y: 1.5, z: e.point.z });
       return;
@@ -60,20 +61,48 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
 
   const endDrag = () => { dragRef.current = null; };
 
-  // VR: thumbstick nudges selected item (left stick only)
+  const beginRotate = (e: ThreeEvent<PointerEvent>, id: string) => {
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    onSelect(id);
+    rotateRef.current = { id };
+  };
+
+  const onRotateMove = (e: ThreeEvent<PointerEvent>) => {
+    const r = rotateRef.current;
+    if (!r) return;
+    const item = media.find(m => m.id === r.id);
+    if (!item) return;
+    e.stopPropagation();
+    const dx = e.point.x - item.x;
+    const dz = e.point.z - item.z;
+    onUpdate(r.id, { ry: Math.atan2(dx, dz) });
+  };
+
+  const endRotate = () => { rotateRef.current = null; };
+
+  // VR: left stick = move, right stick X = rotate selected item
   useFrame((_, dt) => {
     if (!inXR || !selectedId || !selected) return;
     const session = (navigator as any).xr?.session as XRSession | undefined;
     if (!session) return;
-    const { left } = resolveVrGamepads(session);
-    if (!left) return;
-    const s = readVrStick(left);
-    if (!s.x && !s.y) return;
-    const speed = 2.5 * dt;
-    onUpdate(selectedId, {
-      x: clamp(selected.x + s.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
-      z: clamp(selected.z - s.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
-    });
+    const { left, right } = resolveVrGamepads(session);
+    if (left) {
+      const s = readVrStick(left);
+      if (s.x || s.y) {
+        const speed = 2.5 * dt;
+        onUpdate(selectedId, {
+          x: clamp(selected.x + s.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
+          z: clamp(selected.z - s.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
+        });
+      }
+    }
+    if (right) {
+      const s = readVrStick(right);
+      if (Math.abs(s.x) > 0.2) {
+        onUpdate(selectedId, { ry: (selected.ry ?? 0) + s.x * dt * 2.2 });
+      }
+    }
   });
 
   useEffect(() => {
@@ -126,28 +155,53 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
         </mesh>
       ))}
 
-      {/* drag handles on selected item */}
-      {selected && (
-        <group position={[selected.x, selected.y ?? 1.5, selected.z]}>
-          <mesh
-            position={[0, 0, 0]}
-            onPointerDown={(e) => beginDrag(e, selected.id)}
-            onPointerMove={onDragMove}
-            onPointerUp={endDrag}
-          >
-            <sphereGeometry args={[0.18, 16, 16]} />
-            <meshBasicMaterial color="#f59e0b" transparent opacity={0.85} />
-          </mesh>
-          <mesh position={[0, 0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: (selected.y ?? 1.5) + 0.25 }); }}>
-            <coneGeometry args={[0.12, 0.2, 12]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-          <mesh position={[0, -0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: Math.max(0.2, (selected.y ?? 1.5) - 0.25) }); }}>
-            <coneGeometry args={[0.12, 0.2, 12]} rotation={[Math.PI, 0, 0]} />
-            <meshBasicMaterial color="#38bdf8" />
-          </mesh>
-        </group>
-      )}
+      {/* drag + rotate handles on selected item */}
+      {selected && (() => {
+        const ry = selected.ry ?? 0;
+        const rotDist = 0.75;
+        const rotX = Math.sin(ry) * rotDist;
+        const rotZ = -Math.cos(ry) * rotDist;
+        return (
+          <group position={[selected.x, selected.y ?? 1.5, selected.z]} rotation={[0, ry, 0]}>
+            {/* facing indicator */}
+            <mesh position={[0, 0, -0.45]} rotation={[-Math.PI / 2, 0, 0]}>
+              <coneGeometry args={[0.08, 0.22, 12]} />
+              <meshBasicMaterial color="#a78bfa" />
+            </mesh>
+            <mesh
+              position={[0, 0, 0]}
+              onPointerDown={(e) => beginDrag(e, selected.id)}
+              onPointerMove={onDragMove}
+              onPointerUp={endDrag}
+            >
+              <sphereGeometry args={[0.18, 16, 16]} />
+              <meshBasicMaterial color="#f59e0b" transparent opacity={0.85} />
+            </mesh>
+            <mesh position={[0, 0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: (selected.y ?? 1.5) + 0.25 }); }}>
+              <coneGeometry args={[0.12, 0.2, 12]} />
+              <meshBasicMaterial color="#38bdf8" />
+            </mesh>
+            <mesh position={[0, -0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: Math.max(0.2, (selected.y ?? 1.5) - 0.25) }); }}>
+              <coneGeometry args={[0.12, 0.2, 12]} rotation={[Math.PI, 0, 0]} />
+              <meshBasicMaterial color="#38bdf8" />
+            </mesh>
+            {/* rotation ring + draggable handle */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[rotDist - 0.04, rotDist + 0.04, 48]} />
+              <meshBasicMaterial color="#7c3aed" transparent opacity={0.45} />
+            </mesh>
+            <mesh
+              position={[rotX, 0.15, rotZ]}
+              onPointerDown={(e) => beginRotate(e, selected.id)}
+              onPointerMove={onRotateMove}
+              onPointerUp={endRotate}
+            >
+              <sphereGeometry args={[0.14, 16, 16]} />
+              <meshBasicMaterial color="#a78bfa" />
+            </mesh>
+          </group>
+        );
+      })()}
     </group>
   );
 };
@@ -173,12 +227,22 @@ export const EnvironmentEditToolbar: React.FC<{
     save: T ? 'ذخیره' : 'Save',
     exit: T ? 'خروج' : 'Exit',
     del: T ? 'حذف' : 'Delete',
-    hint: T ? 'کلیک روی زمین = افزودن · کلیک آیتم = انتخاب · فلش‌ها جابه‌جایی · Q/E ارتفاع · +/- اندازه · VR: استیک چپ' : 'Click floor = add · click item = select · arrows move · Q/E height · +/- scale · VR: left stick',
+    hint: T ? 'کلیک زمین = افزودن · انتخاب آیتم · فلش‌ها جابه‌جایی · Q/E ارتفاع · ↺↻ چرخش · حلقه بنفش = چرخش با ماوس' : 'Click floor = add · select item · arrows move · Q/E height · ↺↻ rotate · violet ring = drag-rotate',
     count: T ? `${mediaCount} آیتم` : `${mediaCount} items`,
     w: T ? 'عرض' : 'Width',
     h: T ? 'ارتفاع' : 'Height',
     scale: T ? 'مقیاس' : 'Scale',
+    rot: T ? 'چرخش' : 'Rotation',
+    rotLeft: T ? 'چرخش چپ' : 'Rotate left',
+    rotRight: T ? 'چرخش راست' : 'Rotate right',
     action: T ? 'عمل دکمه' : 'Button action',
+  };
+
+  const rotDeg = Math.round(((selected?.ry ?? 0) * 180) / Math.PI);
+  const nudgeRot = (deltaDeg: number) => {
+    if (!selected) return;
+    const next = (selected.ry ?? 0) + (deltaDeg * Math.PI) / 180;
+    onPatchSelected({ ry: next });
   };
 
   return (
@@ -205,6 +269,21 @@ export const EnvironmentEditToolbar: React.FC<{
               </label>
               <label className="text-[10px] flex items-center gap-1">{t.scale}
                 <input type="number" min={0.2} max={8} step={0.05} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.scale ?? 1} onChange={e => onPatchSelected({ scale: +e.target.value })} />
+              </label>
+              <span className="text-[10px] flex items-center gap-0.5 text-slate-300">{t.rot}</span>
+              <button type="button" title={t.rotLeft} onClick={() => nudgeRot(-15)} className="text-[11px] px-2 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600">↺</button>
+              <button type="button" title={t.rotRight} onClick={() => nudgeRot(15)} className="text-[11px] px-2 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600">↻</button>
+              <label className="text-[10px] flex items-center gap-1">
+                <input
+                  type="number"
+                  min={-360}
+                  max={360}
+                  step={5}
+                  className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs"
+                  value={rotDeg}
+                  onChange={e => onPatchSelected({ ry: (+e.target.value * Math.PI) / 180 })}
+                />
+                <span>°</span>
               </label>
               {selected.kind === 'button' && (
                 <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selected.action || 'url'} onChange={e => onPatchSelected({ action: e.target.value as any })}>
