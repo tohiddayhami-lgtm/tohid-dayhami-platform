@@ -72,10 +72,42 @@ export const clampY = (y: number) => Math.max(LOCO.minY, Math.min(LOCO.maxY, y))
 
 const VR_STICK_DEAD = 0.15;
 
-/** Quest / Touch primary thumbstick (axes 0,1) with dead-zone. */
+/** WebXR Input Profiles component ids (Quest / Touch / etc.). */
+export const XR_THUMBSTICK = 'xr-standard-thumbstick';
+export const XR_PRIMARY_BTN = 'xr-standard-primary-button';
+export const XR_SECONDARY_BTN = 'xr-standard-secondary-button';
+
+export type XrGamepadComponent = { xAxis?: number; yAxis?: number; button?: number; state?: string };
+export type XrInputSourceStateLike = {
+  type: string;
+  inputSource: XRInputSource;
+  gamepad: Record<string, XrGamepadComponent>;
+};
+
+export const getXrController = (states: XrInputSourceStateLike[], hand: XRHandedness) =>
+  states.find(s => s.type === 'controller' && s.inputSource.handedness === hand) ?? null;
+
+/** Thumbstick via @pmndrs/xr layout (correct axes on Quest 3 — not raw gamepad.axes[0,1]). */
+export const readXrThumbstick = (ctrl: XrInputSourceStateLike | null, dead = VR_STICK_DEAD) => {
+  const stick = ctrl?.gamepad?.[XR_THUMBSTICK];
+  const ax = stick?.xAxis ?? 0;
+  const ay = stick?.yAxis ?? 0;
+  return {
+    x: Math.abs(ax) > dead ? ax : 0,
+    y: Math.abs(ay) > dead ? ay : 0,
+  };
+};
+
+export const isXrButtonPressed = (ctrl: XrInputSourceStateLike | null, componentId: string) => {
+  const btn = ctrl?.gamepad?.[componentId];
+  return btn?.state === 'pressed' || (btn?.button ?? 0) >= 0.95;
+};
+
+/** Fallback when XR store is unavailable — Quest thumbstick is usually axes 2,3. */
 export const readVrStick = (gp: Gamepad) => {
-  const ax = gp.axes[0] ?? 0;
-  const ay = gp.axes[1] ?? 0;
+  const useQuestStick = gp.axes.length >= 4;
+  const ax = useQuestStick ? (gp.axes[2] ?? 0) : (gp.axes[0] ?? 0);
+  const ay = useQuestStick ? (gp.axes[3] ?? 0) : (gp.axes[1] ?? 0);
   return {
     x: Math.abs(ax) > VR_STICK_DEAD ? ax : 0,
     y: Math.abs(ay) > VR_STICK_DEAD ? ay : 0,

@@ -18,7 +18,7 @@ import { BoothReservationModal } from './BoothReservationModal';
 import { VrRig, VRButton } from './XRControls';
 import { EnvironmentCollisionProvider } from './EnvironmentCollisionContext';
 import { VrEnvironmentCollision } from './VrEnvironmentCollision';
-import { VrWalkLocomotion, VrFlyJumpLocomotion } from './VrExpoLocomotion';
+import { VrWalkLocomotion, VrFlyLocomotion, VrFlyJumpLocomotion, VrFlyModeToggle } from './VrExpoLocomotion';
 import { ExpoFlyControls } from './ExpoFlyControls';
 import { EnvironmentEditToolbar } from './EnvironmentEditMode';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
@@ -421,6 +421,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     helpDesktop: expoUi(lang, 'helpDesktop'),
     helpTouch: expoUi(lang, 'helpTouch'),
     gotIt: expoUi(lang, 'gotIt'),
+    helpVr: expoUi(lang, 'helpVr'),
     fly: expoUi(lang, 'fly'),
     flyOn: expoUi(lang, 'flyOn'),
     flyOff: expoUi(lang, 'flyOff'),
@@ -463,8 +464,10 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
           <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
           {!flyMode && <VrWalkLocomotion originRef={originRef} />}
+          {flyMode && <VrFlyLocomotion originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           <VrFlyJumpLocomotion expo={expo} originRef={originRef} flyMode={flyMode} eyeOffsetY={seated ? 0.55 : 0} />
           {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
+          {mode === 'fp' && <VrFlyModeToggle onToggle={() => setFlyMode(f => !f)} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
           </EnvironmentCollisionProvider>
         </XR>
@@ -541,7 +544,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       {help && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-[90vw]">
           <div className="bg-black/55 text-white text-xs md:text-sm rounded-xl px-4 py-2.5 backdrop-blur flex items-center gap-3 shadow-lg">
-            <span>{caps.touch ? ui.helpTouch : ui.helpDesktop}</span>
+            <span>{caps.vrSupported ? ui.helpVr : caps.touch ? ui.helpTouch : ui.helpDesktop}</span>
             <button onClick={() => setHelp(false)} className="shrink-0 px-2.5 py-1 rounded-lg bg-white/90 text-gray-900 font-bold">{ui.gotIt}</button>
           </div>
         </div>

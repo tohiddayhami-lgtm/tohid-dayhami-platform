@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
-import { useXR } from '@react-three/xr';
+import { useXR, useXRStore } from '@react-three/xr';
 import * as THREE from 'three';
 import type { ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
-import { readVrStick, resolveVrGamepads } from './expoLocomotion';
+import { getXrController, readVrStick, readXrThumbstick, resolveVrGamepads } from './expoLocomotion';
 
 export const ENV_EDIT_SESSION_KEY = 'expo_env_edit_bazaar';
 
@@ -24,6 +24,7 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
   hallWidth, hallDepth, media, selectedId, onSelect, onUpdate, onAdd,
 }) => {
   const inXR = useXR((s) => !!s.session);
+  const xrStore = useXRStore();
   const dragRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
   const rotateRef = useRef<{ id: string } | null>(null);
 
@@ -84,24 +85,37 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
   // VR: left stick = move, right stick X = rotate selected item
   useFrame((_, dt) => {
     if (!inXR || !selectedId || !selected) return;
-    const session = (navigator as any).xr?.session as XRSession | undefined;
-    if (!session) return;
-    const { left, right } = resolveVrGamepads(session);
-    if (left) {
-      const s = readVrStick(left);
-      if (s.x || s.y) {
-        const speed = 2.5 * dt;
-        onUpdate(selectedId, {
-          x: clamp(selected.x + s.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
-          z: clamp(selected.z - s.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
-        });
+    const { inputSourceStates } = xrStore.getState();
+    const leftCtrl = getXrController(inputSourceStates as any, 'left');
+    const rightCtrl = getXrController(inputSourceStates as any, 'right');
+    const leftStick = leftCtrl ? readXrThumbstick(leftCtrl) : null;
+    const rightStick = rightCtrl ? readXrThumbstick(rightCtrl) : null;
+
+    if (leftStick && (leftStick.x || leftStick.y)) {
+      const speed = 2.5 * dt;
+      onUpdate(selectedId, {
+        x: clamp(selected.x + leftStick.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
+        z: clamp(selected.z - leftStick.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
+      });
+    } else {
+      const session = (navigator as any).xr?.session as XRSession | undefined;
+      if (session) {
+        const { left } = resolveVrGamepads(session);
+        if (left) {
+          const s = readVrStick(left);
+          if (s.x || s.y) {
+            const speed = 2.5 * dt;
+            onUpdate(selectedId, {
+              x: clamp(selected.x + s.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
+              z: clamp(selected.z - s.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
+            });
+          }
+        }
       }
     }
-    if (right) {
-      const s = readVrStick(right);
-      if (Math.abs(s.x) > 0.2) {
-        onUpdate(selectedId, { ry: (selected.ry ?? 0) + s.x * dt * 2.2 });
-      }
+
+    if (rightStick && Math.abs(rightStick.x) > 0.2) {
+      onUpdate(selectedId, { ry: (selected.ry ?? 0) + rightStick.x * dt * 2.2 });
     }
   });
 
