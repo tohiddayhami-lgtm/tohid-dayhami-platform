@@ -30,9 +30,9 @@ import {
 import { MetaShopView } from './components/MetaShopView';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
+import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
-const ExpoReserveMapView = React.lazy(() => import('./components/metaverse/ExpoReserveMapView').then(m => ({ default: m.ExpoReserveMapView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
 import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { GlobalSearch } from './components/GlobalSearch';
@@ -1220,18 +1220,15 @@ const App: React.FC = () => {
     setPublicExpoBazaar(null);
   }, [view, expoSlug, metaBazaars]);
 
-  // ── Public expo reservation map: same bazaar slug, 2D floor plan + booth reserve ──
+  // ── Public expo reservation map: cache hit from subscribe, else fetch by slug immediately ──
   useEffect(() => {
-    if (view !== 'expo-map' || !expoMapSlug) { setPublicExpoMapBazaar(null); return; }
+    if (view !== 'expo-map' || !expoMapSlug) { setPublicExpoMapBazaar(null); setExpoMapLoading(false); return; }
     const local = metaBazaars.find(b => b.slug === expoMapSlug);
-    if (local) { setPublicExpoMapBazaar(local); return; }
-    if (metaBazaars.length === 0) {
-      let cancelled = false;
-      setExpoMapLoading(true);
-      getMetaBazaarBySlug(expoMapSlug).then(b => { if (!cancelled) { setPublicExpoMapBazaar(b); setExpoMapLoading(false); } });
-      return () => { cancelled = true; };
-    }
-    setPublicExpoMapBazaar(null);
+    if (local) { setPublicExpoMapBazaar(local); setExpoMapLoading(false); return; }
+    let cancelled = false;
+    setExpoMapLoading(true);
+    getMetaBazaarBySlug(expoMapSlug).then(b => { if (!cancelled) { setPublicExpoMapBazaar(b); setExpoMapLoading(false); } });
+    return () => { cancelled = true; };
   }, [view, expoMapSlug, metaBazaars]);
 
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
@@ -1335,25 +1332,26 @@ const App: React.FC = () => {
   if (view === 'expo-map') {
     const expo = publicExpoMapBazaar?.expo;
     const shopBaseUrl = `${window.location.origin}${window.location.pathname}`;
-    if (publicExpoMapBazaar && publicExpoMapBazaar.isActive !== false && expo && expo.enabled) {
-      const mapTitle = (lang === 'fa' ? expo.title?.fa : expo.title?.en) || publicExpoMapBazaar.name;
+    const ready = !!(publicExpoMapBazaar && publicExpoMapBazaar.isActive !== false && expo && expo.enabled);
+    const loading = !ready && (expoMapLoading || !!expoMapSlug);
+    const mapTitle = ready
+      ? ((lang === 'fa' ? expo!.title?.fa : expo!.title?.en) || publicExpoMapBazaar!.name)
+      : (lang === 'fa' ? 'نقشه رزرو' : 'Reservation map');
+    if (loading) return <BazaarPassageLoader lang={lang} title={mapTitle} />;
+    if (!ready) {
       return (
-        <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={mapTitle} />}>
-          <ExpoReserveMapView
-            bazaar={publicExpoMapBazaar}
-            lang={lang}
-            shopBaseUrl={shopBaseUrl}
-            onExit={() => setView('landing')}
-          />
-        </React.Suspense>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+          <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'نقشه رزرو یافت نشد' : 'Reservation map not found'}</p><p className="text-sm">{lang === 'fa' ? 'این نمایشگاه وجود ندارد یا غیرفعال است.' : 'This exhibition does not exist or is inactive.'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>
+        </div>
       );
     }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
-        {expoMapLoading || (metaBazaars.length === 0 && expoMapSlug)
-          ? <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin" />
-          : <div className="text-center text-gray-400"><p className="text-lg font-semibold text-gray-600 mb-1">{lang === 'fa' ? 'نقشه رزرو یافت نشد' : 'Reservation map not found'}</p><p className="text-sm">{lang === 'fa' ? 'این نمایشگاه وجود ندارد یا غیرفعال است.' : 'This exhibition does not exist or is inactive.'}</p><button onClick={() => setView('landing')} className="mt-4 text-sm text-indigo-600 hover:underline">{lang === 'fa' ? 'بازگشت به خانه' : 'Back home'}</button></div>}
-      </div>
+      <ExpoReserveMapView
+        bazaar={publicExpoMapBazaar!}
+        lang={lang}
+        shopBaseUrl={shopBaseUrl}
+        onExit={() => setView('landing')}
+      />
     );
   }
 
