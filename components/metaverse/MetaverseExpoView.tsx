@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
@@ -20,7 +20,7 @@ import { EnvironmentCollisionProvider } from './EnvironmentCollisionContext';
 import { VrEnvironmentCollision } from './VrEnvironmentCollision';
 import { VrWalkLocomotion, VrFlyLocomotion, VrFlyJumpLocomotion, VrFlyModeToggle } from './VrExpoLocomotion';
 import { ExpoFlyControls } from './ExpoFlyControls';
-import { EnvironmentEditToolbar } from './EnvironmentEditMode';
+import { EnvironmentEditToolbar, type EnvEditSelection, type EnvEditTransform } from './EnvironmentEditMode';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
@@ -205,7 +205,8 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const [flyMode, setFlyMode] = useState(environmentEditMode);
   const [seated, setSeated] = useState(false);
   const [envMedia, setEnvMedia] = useState<ExpoEnvironmentMedia[]>(expo.environmentMedia || []);
-  const [selectedEnvMediaId, setSelectedEnvMediaId] = useState<string | null>(null);
+  const [editDecorations, setEditDecorations] = useState<ExpoDecoration[]>(expo.decorations || []);
+  const [editSelection, setEditSelection] = useState<EnvEditSelection>(null);
   const [envSaving, setEnvSaving] = useState(false);
   const controlsPaused = registrationOpen || !!reserveBooth || !!active;
 
@@ -214,6 +215,22 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const updEnvMediaItem = useCallback((id: string, patch: Partial<ExpoEnvironmentMedia>) => {
     setEnvMedia(prev => prev.map(m => m.id === id ? { ...m, ...patch } : m));
   }, []);
+
+  const updDecorationItem = useCallback((id: string, patch: Partial<ExpoDecoration>) => {
+    setEditDecorations(prev => prev.map(d => d.id === id ? { ...d, ...patch } : d));
+  }, []);
+
+  const onUpdateEditTransform = useCallback((patch: Partial<EnvEditTransform>) => {
+    if (!editSelection) return;
+    if (editSelection.kind === 'media') updEnvMediaItem(editSelection.id, patch);
+    else updDecorationItem(editSelection.id, patch);
+  }, [editSelection, updEnvMediaItem, updDecorationItem]);
+
+  const onPatchSelected = useCallback((patch: Partial<ExpoEnvironmentMedia> | Partial<ExpoDecoration>) => {
+    if (!editSelection) return;
+    if (editSelection.kind === 'media') updEnvMediaItem(editSelection.id, patch as Partial<ExpoEnvironmentMedia>);
+    else updDecorationItem(editSelection.id, patch as Partial<ExpoDecoration>);
+  }, [editSelection, updEnvMediaItem, updDecorationItem]);
 
   const addEnvMedia = useCallback((kind: ExpoEnvironmentMediaKind) => {
     const item: ExpoEnvironmentMedia = {
@@ -229,7 +246,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       ...(kind === 'button' ? { action: 'whatsapp', icon: '💬' } : {}),
     };
     setEnvMedia(prev => [...prev, item]);
-    setSelectedEnvMediaId(item.id);
+    setEditSelection({ kind: 'media', id: item.id });
   }, []);
 
   const addEnvMediaAt = useCallback((kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => {
@@ -246,27 +263,38 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       ...(kind === 'button' ? { action: 'whatsapp', icon: '💬' } : {}),
     };
     setEnvMedia(prev => [...prev, item]);
-    setSelectedEnvMediaId(item.id);
+    setEditSelection({ kind: 'media', id: item.id });
   }, []);
 
-  const deleteSelectedEnvMedia = useCallback(() => {
-    if (!selectedEnvMediaId) return;
-    setEnvMedia(prev => prev.filter(m => m.id !== selectedEnvMediaId));
-    setSelectedEnvMediaId(null);
-  }, [selectedEnvMediaId]);
+  const deleteSelectedEdit = useCallback(() => {
+    if (!editSelection) return;
+    if (editSelection.kind === 'media') {
+      setEnvMedia(prev => prev.filter(m => m.id !== editSelection.id));
+    } else {
+      setEditDecorations(prev => prev.filter(d => d.id !== editSelection.id));
+    }
+    setEditSelection(null);
+  }, [editSelection]);
+
+  useEffect(() => {
+    if (!environmentEditMode) return;
+    const onDeleteKey = () => deleteSelectedEdit();
+    window.addEventListener('expo-env-edit-delete', onDeleteKey);
+    return () => window.removeEventListener('expo-env-edit-delete', onDeleteKey);
+  }, [environmentEditMode, deleteSelectedEdit]);
 
   const saveEnvMedia = useCallback(async () => {
     if (!onSaveExpo) return;
     setEnvSaving(true);
     try {
-      await onSaveExpo({ ...expo, environmentMedia: envMedia });
+      await onSaveExpo({ ...expo, environmentMedia: envMedia, decorations: editDecorations });
       alert(isRtlExpoLang(lang, expoLangs) ? 'محیط ذخیره شد.' : 'Environment saved.');
     } catch {
       alert(isRtlExpoLang(lang, expoLangs) ? 'خطا در ذخیره' : 'Save failed.');
     } finally {
       setEnvSaving(false);
     }
-  }, [onSaveExpo, expo, envMedia, lang, expoLangs]);
+  }, [onSaveExpo, expo, envMedia, editDecorations, lang, expoLangs]);
 
   const exitEnvEdit = useCallback(() => {
     try { sessionStorage.removeItem('expo_env_edit_bazaar'); } catch {}
@@ -453,9 +481,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onReserveBooth={setReserveBooth}
               environmentEditMode={environmentEditMode}
               environmentMedia={envMedia}
-              selectedEnvMediaId={selectedEnvMediaId}
-              onSelectEnvMedia={setSelectedEnvMediaId}
-              onUpdateEnvMedia={updEnvMediaItem}
+              editDecorations={editDecorations}
+              editSelection={editSelection}
+              onSelectEditMedia={id => setEditSelection({ kind: 'media', id })}
+              onSelectEditDecoration={id => setEditSelection({ kind: 'decoration', id })}
+              onDeselectEdit={() => setEditSelection(null)}
+              onUpdateEditTransform={onUpdateEditTransform}
               onAddEnvMedia={addEnvMediaAt}
             />
           </Suspense>
@@ -522,13 +553,16 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         <EnvironmentEditToolbar
           langFa={T}
           mediaCount={envMedia.length}
-          selected={envMedia.find(m => m.id === selectedEnvMediaId) || null}
+          decorationCount={editDecorations.length}
+          selection={editSelection}
+          selectedMedia={editSelection?.kind === 'media' ? envMedia.find(m => m.id === editSelection.id) || null : null}
+          selectedDecoration={editSelection?.kind === 'decoration' ? editDecorations.find(d => d.id === editSelection.id) || null : null}
           saving={envSaving}
           onAdd={addEnvMedia}
-          onDelete={deleteSelectedEnvMedia}
+          onDelete={deleteSelectedEdit}
           onSave={saveEnvMedia}
           onExit={exitEnvEdit}
-          onPatchSelected={patch => selectedEnvMediaId && updEnvMediaItem(selectedEnvMediaId, patch)}
+          onPatchSelected={onPatchSelected}
         />
       )}
 

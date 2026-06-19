@@ -11,6 +11,9 @@ import { CanvasLabel } from './CanvasLabel';
 interface Props {
   deco: ExpoDecoration;
   lang: Language;
+  editMode?: boolean;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
   onTrack?: (type: MetaExpoEvent['type'], opts?: Partial<MetaExpoEvent>) => void;
 }
 
@@ -22,7 +25,7 @@ const openLink = (raw?: string) => {
 };
 
 /** A hall-level GLB decoration — optional click → audio or hyperlink. */
-export const ExpoDecorationMesh: React.FC<Props> = ({ deco, lang, onTrack }) => {
+export const ExpoDecorationMesh: React.FC<Props> = ({ deco, lang, editMode, selected, onSelect, onTrack }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useMemo(() => (
     lang === 'fa'
@@ -31,13 +34,19 @@ export const ExpoDecorationMesh: React.FC<Props> = ({ deco, lang, onTrack }) => 
   ).trim(), [deco.audioUrl, deco.audioUrlEn, deco.audioUrlFa, lang]);
 
   const linkUrl = (deco.linkUrl || '').trim();
-  const interactive = !!(audioUrl || linkUrl);
+  const interactive = !editMode && !!(audioUrl || linkUrl);
   const s = deco.scale ?? 1;
   const hitW = Math.max(1.4, 2.2 * s);
   const hitH = Math.max(1.2, 2 * s);
   const hitD = Math.max(1.4, 2.2 * s);
   const badge = audioUrl ? '♪' : '🔗';
   const label = bi(deco.name, lang, '');
+
+  const handleSelect = (e: ThreeEvent<MouseEvent>) => {
+    if (!editMode) return;
+    e.stopPropagation();
+    onSelect?.(deco.id);
+  };
 
   useEffect(() => () => {
     const a = audioRef.current;
@@ -76,13 +85,27 @@ export const ExpoDecorationMesh: React.FC<Props> = ({ deco, lang, onTrack }) => 
     onPointerOut: () => { document.body.style.cursor = 'auto'; },
   };
 
+  const selectionBox = editMode && selected ? (
+    <mesh>
+      <boxGeometry args={[hitW, hitH, hitD]} />
+      <meshBasicMaterial color="#f59e0b" wireframe transparent opacity={0.85} />
+    </mesh>
+  ) : null;
+
   return (
-    <group position={[deco.x, deco.y ?? 0, deco.z]} rotation={[0, deco.ry ?? 0, 0]}>
+    <group position={[deco.x, deco.y ?? 0, deco.z]} rotation={[0, deco.ry ?? 0, 0]} onClick={handleSelect}>
+      {selectionBox}
       <TexBoundary key={deco.modelUrl}>
         <Suspense fallback={null}>
-          <GltfModel url={deco.modelUrl} scale={s} pickable={!interactive} />
+          <GltfModel url={deco.modelUrl} scale={s} pickable={!editMode && !interactive} />
         </Suspense>
       </TexBoundary>
+      {editMode && (
+        <mesh position={[0, hitH / 2, 0]} onClick={handleSelect}>
+          <boxGeometry args={[hitW, hitH, hitD]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
       {interactive && (
         <>
           <mesh position={[0, hitH / 2, 0]} onClick={handleClick} {...pointer}>

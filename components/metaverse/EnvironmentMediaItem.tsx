@@ -181,11 +181,19 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
     </mesh>
   ) : null;
 
+  const editHitBox = editMode ? (
+    <mesh position={[0, 0, 0]} onClick={handleSelect}>
+      <boxGeometry args={[Math.max(w, 0.6), Math.max(h, 0.6), Math.max(0.4, w * 0.15)]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  ) : null;
+
   if (item.kind === 'button') {
     const glyph = item.icon || BUTTON_GLYPH[item.action || 'url'] || '🔘';
     return (
       <group position={[item.x, item.y, item.z]} rotation={[0, ry, 0]} onClick={handleSelect}>
         {selectionBox}
+        {editHitBox}
         <Billboard>
           <mesh
             onClick={(e) => { e.stopPropagation(); editMode ? onSelect?.(item.id) : runButton(); }}
@@ -208,9 +216,10 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
     return (
       <group position={[item.x, item.y, item.z]} rotation={[0, ry, 0]} onClick={handleSelect}>
         {selectionBox}
+        {editHitBox}
         <TexBoundary key={item.url}>
           <Suspense fallback={null}>
-            <GltfModel url={item.url} scale={sc} />
+            <GltfModel url={item.url} scale={sc} pickable={!editMode} />
           </Suspense>
         </TexBoundary>
         {label && <CanvasLabel text={label} width={1.2} height={0.14} position={[0, h * 0.6, 0]} color="#e2e8f0" />}
@@ -222,6 +231,7 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
     return (
       <group position={[item.x, item.y, item.z]} onClick={handleSelect}>
         {selectionBox}
+        {editHitBox}
         <AudioOrb url={item.url} w={w} label={label} onClick={() => onTrack?.('decoration_click', { targetId: item.id, targetName: label, targetType: 'env_audio' })} />
       </group>
     );
@@ -235,6 +245,7 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
   return (
     <group position={[item.x, item.y, item.z]} rotation={[0, ry, 0]} onClick={handleSelect}>
       {selectionBox}
+      {editHitBox}
       {framePad > 0 && (
         <>
           <mesh position={[0, 0, 0]}>

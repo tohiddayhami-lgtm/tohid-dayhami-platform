@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Environment, Sky, Grid, RoundedBox, useTexture } from '@react-three/drei';
 import { TeleportTarget } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEntranceAd, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { ExpoEntranceAd, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import type { BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
@@ -16,7 +16,7 @@ import { WallAd, PresentationScreen } from './WallMedia';
 import { bi, expoPhrase } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
 import { EnvironmentMediaItem } from './EnvironmentMediaItem';
-import { EnvironmentEditGizmos } from './EnvironmentEditMode';
+import { EnvironmentEditGizmos, type EnvEditSelection, type EnvEditTransform } from './EnvironmentEditMode';
 
 interface Props {
   expo: MetaverseExpo;
@@ -32,9 +32,12 @@ interface Props {
   onReserveBooth?: (b: MetaverseBooth) => void;
   environmentEditMode?: boolean;
   environmentMedia?: ExpoEnvironmentMedia[];
-  selectedEnvMediaId?: string | null;
-  onSelectEnvMedia?: (id: string | null) => void;
-  onUpdateEnvMedia?: (id: string, patch: Partial<ExpoEnvironmentMedia>) => void;
+  editDecorations?: ExpoDecoration[];
+  editSelection?: EnvEditSelection;
+  onSelectEditMedia?: (id: string) => void;
+  onSelectEditDecoration?: (id: string) => void;
+  onDeselectEdit?: () => void;
+  onUpdateEditTransform?: (patch: Partial<EnvEditTransform>) => void;
   onAddEnvMedia?: (kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => void;
 }
 
@@ -354,7 +357,8 @@ const SupermarketDirectory: React.FC<{ categories: ExpoRetailCategory[]; width: 
 export const ExpoScene: React.FC<Props> = ({
   expo, shops = [], lang, onSelectHotspot, onSelectBooth, onFloorTeleport, onVrTeleport, onTrack,
   onRegistrationKioskClick, boothSummaries = {}, onReserveBooth,
-  environmentEditMode, environmentMedia, selectedEnvMediaId, onSelectEnvMedia, onUpdateEnvMedia, onAddEnvMedia,
+  environmentEditMode, environmentMedia, editDecorations, editSelection,
+  onSelectEditMedia, onSelectEditDecoration, onDeselectEdit, onUpdateEditTransform, onAddEnvMedia,
 }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
@@ -577,28 +581,45 @@ export const ExpoScene: React.FC<Props> = ({
           item={item}
           lang={lang}
           editMode={environmentEditMode}
-          selected={item.id === selectedEnvMediaId}
-          onSelect={id => onSelectEnvMedia?.(id)}
+          selected={editSelection?.kind === 'media' && item.id === editSelection.id}
+          onSelect={id => onSelectEditMedia?.(id)}
           onSelectHotspot={onSelectHotspot}
           onTrack={onTrack}
         />
       ))}
 
-      {environmentEditMode && onUpdateEnvMedia && onAddEnvMedia && (
+      {environmentEditMode && onUpdateEditTransform && (
         <EnvironmentEditGizmos
           hallWidth={width}
           hallDepth={depth}
-          media={environmentMedia || expo.environmentMedia || []}
-          selectedId={selectedEnvMediaId ?? null}
-          onSelect={onSelectEnvMedia || (() => {})}
-          onUpdate={onUpdateEnvMedia}
+          selected={(() => {
+            if (!editSelection) return null;
+            if (editSelection.kind === 'media') {
+              const m = (environmentMedia || expo.environmentMedia || []).find(x => x.id === editSelection.id);
+              if (!m) return null;
+              return { id: m.id, x: m.x, y: m.y, z: m.z, ry: m.ry, scale: m.scale };
+            }
+            const d = (editDecorations || expo.decorations || []).find(x => x.id === editSelection.id);
+            if (!d) return null;
+            return { id: d.id, x: d.x, y: d.y ?? 0, z: d.z, ry: d.ry, scale: d.scale };
+          })()}
+          onDeselect={() => onDeselectEdit?.()}
+          onUpdate={onUpdateEditTransform}
           onAdd={onAddEnvMedia}
         />
       )}
 
       {/* Free-placed hall decorations (GLB props) */}
-      {(expo.decorations || []).map(d => (
-        <ExpoDecorationMesh key={d.id} deco={d} lang={lang} onTrack={onTrack} />
+      {(environmentEditMode ? (editDecorations || expo.decorations || []) : (expo.decorations || [])).map(d => (
+        <ExpoDecorationMesh
+          key={d.id}
+          deco={d}
+          lang={lang}
+          editMode={environmentEditMode}
+          selected={editSelection?.kind === 'decoration' && d.id === editSelection.id}
+          onSelect={id => onSelectEditDecoration?.(id)}
+          onTrack={onTrack}
+        />
       ))}
 
       {/* Environmental advertising banners — auto-distributed along each wall, height auto-fit. */}

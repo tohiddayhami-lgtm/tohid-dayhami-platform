@@ -2,59 +2,68 @@ import React, { useEffect, useRef } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { useXR, useXRStore } from '@react-three/xr';
 import * as THREE from 'three';
-import type { ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
+import type { ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { getXrController, readVrStick, readXrThumbstick, resolveVrGamepads } from './expoLocomotion';
 
 export const ENV_EDIT_SESSION_KEY = 'expo_env_edit_bazaar';
 
+export type EnvEditTransform = {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  ry?: number;
+  scale?: number;
+};
+
+export type EnvEditSelection =
+  | { kind: 'media'; id: string }
+  | { kind: 'decoration'; id: string }
+  | null;
+
 interface Props {
   hallWidth: number;
   hallDepth: number;
-  media: ExpoEnvironmentMedia[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  onUpdate: (id: string, patch: Partial<ExpoEnvironmentMedia>) => void;
-  onAdd: (kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => void;
+  selected: EnvEditTransform | null;
+  onDeselect: () => void;
+  onUpdate: (patch: Partial<EnvEditTransform>) => void;
+  onAdd?: (kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => void;
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
-/** In-scene helpers for placing & transforming environment media (desktop + VR). */
+/** In-scene helpers for placing & transforming hall objects (desktop + VR). */
 export const EnvironmentEditGizmos: React.FC<Props> = ({
-  hallWidth, hallDepth, media, selectedId, onSelect, onUpdate, onAdd,
+  hallWidth, hallDepth, selected, onDeselect, onUpdate, onAdd,
 }) => {
   const inXR = useXR((s) => !!s.session);
   const xrStore = useXRStore();
-  const dragRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
-  const rotateRef = useRef<{ id: string } | null>(null);
-
-  const selected = media.find(m => m.id === selectedId);
+  const dragRef = useRef<{ offset: THREE.Vector3 } | null>(null);
+  const rotateRef = useRef(false);
 
   const onFloorClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     if (dragRef.current || rotateRef.current) return;
-    if (!selectedId) {
+    if (!selected && onAdd) {
       onAdd('image', { x: e.point.x, y: 1.5, z: e.point.z });
       return;
     }
-    onSelect(null);
+    onDeselect();
   };
 
-  const beginDrag = (e: ThreeEvent<PointerEvent>, id: string) => {
+  const beginDrag = (e: ThreeEvent<PointerEvent>) => {
+    if (!selected) return;
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
-    const item = media.find(m => m.id === id);
-    if (!item) return;
-    onSelect(id);
-    const offset = new THREE.Vector3(item.x - e.point.x, 0, item.z - e.point.z);
-    dragRef.current = { id, offset };
+    const offset = new THREE.Vector3(selected.x - e.point.x, 0, selected.z - e.point.z);
+    dragRef.current = { offset };
   };
 
   const onDragMove = (e: ThreeEvent<PointerEvent>) => {
     const d = dragRef.current;
     if (!d) return;
     e.stopPropagation();
-    onUpdate(d.id, {
+    onUpdate({
       x: clamp(e.point.x + d.offset.x, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
       z: clamp(e.point.z + d.offset.z, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
     });
@@ -62,29 +71,26 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
 
   const endDrag = () => { dragRef.current = null; };
 
-  const beginRotate = (e: ThreeEvent<PointerEvent>, id: string) => {
+  const beginRotate = (e: ThreeEvent<PointerEvent>) => {
+    if (!selected) return;
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
-    onSelect(id);
-    rotateRef.current = { id };
+    rotateRef.current = true;
   };
 
   const onRotateMove = (e: ThreeEvent<PointerEvent>) => {
-    const r = rotateRef.current;
-    if (!r) return;
-    const item = media.find(m => m.id === r.id);
-    if (!item) return;
+    if (!rotateRef.current || !selected) return;
     e.stopPropagation();
-    const dx = e.point.x - item.x;
-    const dz = e.point.z - item.z;
-    onUpdate(r.id, { ry: Math.atan2(dx, dz) });
+    const dx = e.point.x - selected.x;
+    const dz = e.point.z - selected.z;
+    onUpdate({ ry: Math.atan2(dx, dz) });
   };
 
-  const endRotate = () => { rotateRef.current = null; };
+  const endRotate = () => { rotateRef.current = false; };
 
   // VR: left stick = move, right stick X = rotate selected item
   useFrame((_, dt) => {
-    if (!inXR || !selectedId || !selected) return;
+    if (!inXR || !selected) return;
     const { inputSourceStates } = xrStore.getState();
     const leftCtrl = getXrController(inputSourceStates as any, 'left');
     const rightCtrl = getXrController(inputSourceStates as any, 'right');
@@ -93,7 +99,7 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
 
     if (leftStick && (leftStick.x || leftStick.y)) {
       const speed = 2.5 * dt;
-      onUpdate(selectedId, {
+      onUpdate({
         x: clamp(selected.x + leftStick.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
         z: clamp(selected.z - leftStick.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
       });
@@ -105,7 +111,7 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
           const s = readVrStick(left);
           if (s.x || s.y) {
             const speed = 2.5 * dt;
-            onUpdate(selectedId, {
+            onUpdate({
               x: clamp(selected.x + s.x * speed, -hallWidth / 2 + 0.5, hallWidth / 2 - 0.5),
               z: clamp(selected.z - s.y * speed, -hallDepth / 2 + 0.5, hallDepth / 2 - 0.5),
             });
@@ -115,30 +121,34 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
     }
 
     if (rightStick && Math.abs(rightStick.x) > 0.2) {
-      onUpdate(selectedId, { ry: (selected.ry ?? 0) + rightStick.x * dt * 2.2 });
+      onUpdate({ ry: (selected.ry ?? 0) + rightStick.x * dt * 2.2 });
     }
   });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!selectedId || !selected) return;
+      if (!selected) return;
       if (e.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       const step = e.shiftKey ? 0.5 : 0.15;
       const scStep = e.shiftKey ? 0.15 : 0.05;
-      if (e.code === 'ArrowLeft') { e.preventDefault(); onUpdate(selectedId, { x: selected.x - step }); }
-      if (e.code === 'ArrowRight') { e.preventDefault(); onUpdate(selectedId, { x: selected.x + step }); }
-      if (e.code === 'ArrowUp') { e.preventDefault(); onUpdate(selectedId, { z: selected.z - step }); }
-      if (e.code === 'ArrowDown') { e.preventDefault(); onUpdate(selectedId, { z: selected.z + step }); }
-      if (e.code === 'KeyQ') { e.preventDefault(); onUpdate(selectedId, { y: (selected.y ?? 1.5) + step }); }
-      if (e.code === 'KeyE') { e.preventDefault(); onUpdate(selectedId, { y: Math.max(0.2, (selected.y ?? 1.5) - step) }); }
-      if (e.code === 'Equal' || e.code === 'NumpadAdd') { e.preventDefault(); onUpdate(selectedId, { scale: clamp((selected.scale ?? 1) + scStep, 0.2, 8) }); }
-      if (e.code === 'Minus' || e.code === 'NumpadSubtract') { e.preventDefault(); onUpdate(selectedId, { scale: clamp((selected.scale ?? 1) - scStep, 0.2, 8) }); }
-      if (e.code === 'BracketLeft') { e.preventDefault(); onUpdate(selectedId, { ry: (selected.ry ?? 0) - 0.1 }); }
-      if (e.code === 'BracketRight') { e.preventDefault(); onUpdate(selectedId, { ry: (selected.ry ?? 0) + 0.1 }); }
+      if (e.code === 'ArrowLeft') { e.preventDefault(); onUpdate({ x: selected.x - step }); }
+      if (e.code === 'ArrowRight') { e.preventDefault(); onUpdate({ x: selected.x + step }); }
+      if (e.code === 'ArrowUp') { e.preventDefault(); onUpdate({ z: selected.z - step }); }
+      if (e.code === 'ArrowDown') { e.preventDefault(); onUpdate({ z: selected.z + step }); }
+      if (e.code === 'KeyQ') { e.preventDefault(); onUpdate({ y: (selected.y ?? 1.5) + step }); }
+      if (e.code === 'KeyE') { e.preventDefault(); onUpdate({ y: Math.max(0.2, (selected.y ?? 1.5) - step) }); }
+      if (e.code === 'Equal' || e.code === 'NumpadAdd') { e.preventDefault(); onUpdate({ scale: clamp((selected.scale ?? 1) + scStep, 0.05, 20) }); }
+      if (e.code === 'Minus' || e.code === 'NumpadSubtract') { e.preventDefault(); onUpdate({ scale: clamp((selected.scale ?? 1) - scStep, 0.05, 20) }); }
+      if (e.code === 'BracketLeft') { e.preventDefault(); onUpdate({ ry: (selected.ry ?? 0) - 0.1 }); }
+      if (e.code === 'BracketRight') { e.preventDefault(); onUpdate({ ry: (selected.ry ?? 0) + 0.1 }); }
+      if (e.code === 'Delete' || e.code === 'Backspace') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('expo-env-edit-delete'));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, selected, onUpdate]);
+  }, [selected, onUpdate]);
 
   const halfW = hallWidth / 2;
   const halfD = hallDepth / 2;
@@ -184,18 +194,18 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
             </mesh>
             <mesh
               position={[0, 0, 0]}
-              onPointerDown={(e) => beginDrag(e, selected.id)}
+              onPointerDown={beginDrag}
               onPointerMove={onDragMove}
               onPointerUp={endDrag}
             >
               <sphereGeometry args={[0.18, 16, 16]} />
               <meshBasicMaterial color="#f59e0b" transparent opacity={0.85} />
             </mesh>
-            <mesh position={[0, 0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: (selected.y ?? 1.5) + 0.25 }); }}>
+            <mesh position={[0, 0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate({ y: (selected.y ?? 1.5) + 0.25 }); }}>
               <coneGeometry args={[0.12, 0.2, 12]} />
               <meshBasicMaterial color="#38bdf8" />
             </mesh>
-            <mesh position={[0, -0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate(selected.id, { y: Math.max(0.2, (selected.y ?? 1.5) - 0.25) }); }}>
+            <mesh position={[0, -0.35, 0]} onClick={(e) => { e.stopPropagation(); onUpdate({ y: Math.max(0.2, (selected.y ?? 1.5) - 0.25) }); }}>
               <coneGeometry args={[0.12, 0.2, 12]} rotation={[Math.PI, 0, 0]} />
               <meshBasicMaterial color="#38bdf8" />
             </mesh>
@@ -206,7 +216,7 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
             </mesh>
             <mesh
               position={[rotX, 0.15, rotZ]}
-              onPointerDown={(e) => beginRotate(e, selected.id)}
+              onPointerDown={beginRotate}
               onPointerMove={onRotateMove}
               onPointerUp={endRotate}
             >
@@ -224,14 +234,17 @@ export const EnvironmentEditGizmos: React.FC<Props> = ({
 export const EnvironmentEditToolbar: React.FC<{
   langFa: boolean;
   mediaCount: number;
-  selected: ExpoEnvironmentMedia | null;
+  decorationCount: number;
+  selection: EnvEditSelection;
+  selectedMedia: ExpoEnvironmentMedia | null;
+  selectedDecoration: ExpoDecoration | null;
   saving: boolean;
   onAdd: (kind: ExpoEnvironmentMediaKind) => void;
   onDelete: () => void;
   onSave: () => void;
   onExit: () => void;
-  onPatchSelected: (patch: Partial<ExpoEnvironmentMedia>) => void;
-}> = ({ langFa: T, mediaCount, selected, saving, onAdd, onDelete, onSave, onExit, onPatchSelected }) => {
+  onPatchSelected: (patch: Partial<ExpoEnvironmentMedia> | Partial<ExpoDecoration>) => void;
+}> = ({ langFa: T, mediaCount, decorationCount, selection, selectedMedia, selectedDecoration, saving, onAdd, onDelete, onSave, onExit, onPatchSelected }) => {
   const t = {
     title: T ? 'حالت ادیت محیط' : 'Environment edit',
     addImg: T ? '+ تصویر' : '+ Image',
@@ -241,8 +254,8 @@ export const EnvironmentEditToolbar: React.FC<{
     save: T ? 'ذخیره' : 'Save',
     exit: T ? 'خروج' : 'Exit',
     del: T ? 'حذف' : 'Delete',
-    hint: T ? 'کلیک زمین = افزودن · انتخاب آیتم · فلش‌ها جابه‌جایی · Q/E ارتفاع · ↺↻ چرخش · حلقه بنفش = چرخش با ماوس' : 'Click floor = add · select item · arrows move · Q/E height · ↺↻ rotate · violet ring = drag-rotate',
-    count: T ? `${mediaCount} آیتم` : `${mediaCount} items`,
+    hint: T ? 'کلیک روی آبجکت = انتخاب · کلیک زمین = افزودن رسانه · فلش‌ها جابه‌جایی · Q/E ارتفاع · +/- مقیاس · Delete حذف' : 'Click object = select · click floor = add media · arrows move · Q/E height · +/- scale · Delete removes',
+    count: T ? `${mediaCount} رسانه · ${decorationCount} دکور` : `${mediaCount} media · ${decorationCount} decor`,
     w: T ? 'عرض' : 'Width',
     h: T ? 'ارتفاع' : 'Height',
     scale: T ? 'مقیاس' : 'Scale',
@@ -252,15 +265,20 @@ export const EnvironmentEditToolbar: React.FC<{
     frame: T ? 'حاشیه' : 'Border',
     pdfFit: T ? 'نمایش PDF' : 'PDF fit',
     action: T ? 'عمل دکمه' : 'Button action',
+    selMedia: T ? 'رسانه' : 'Media',
+    selDeco: T ? 'دکور' : 'Decor',
   };
 
-  const isPdfish = selected && (selected.kind === 'pdf' || (selected.url && /\.pdf(\?.*)?$/i.test(selected.url)));
+  const selected = selectedMedia || selectedDecoration;
+  const isMedia = selection?.kind === 'media' && !!selectedMedia;
+  const isDeco = selection?.kind === 'decoration' && !!selectedDecoration;
+
+  const isPdfish = isMedia && selectedMedia && (selectedMedia.kind === 'pdf' || (selectedMedia.url && /\.pdf(\?.*)?$/i.test(selectedMedia.url)));
 
   const rotDeg = Math.round(((selected?.ry ?? 0) * 180) / Math.PI);
   const nudgeRot = (deltaDeg: number) => {
     if (!selected) return;
-    const next = (selected.ry ?? 0) + (deltaDeg * Math.PI) / 180;
-    onPatchSelected({ ry: next });
+    onPatchSelected({ ry: (selected.ry ?? 0) + (deltaDeg * Math.PI) / 180 });
   };
 
   return (
@@ -278,15 +296,22 @@ export const EnvironmentEditToolbar: React.FC<{
           <button type="button" onClick={() => onAdd('glb')} className="text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500">{t.addGlb}</button>
           {selected && (
             <>
+              <span className="text-[10px] px-2 py-1 rounded bg-slate-800 border border-slate-600 text-amber-200">
+                {isMedia ? t.selMedia : t.selDeco}
+              </span>
               <button type="button" onClick={onDelete} className="text-[11px] px-2.5 py-1.5 rounded-lg bg-red-700 hover:bg-red-600">{t.del}</button>
-              <label className="text-[10px] flex items-center gap-1">{t.w}
-                <input type="number" min={0.3} max={12} step={0.1} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.w ?? 2} onChange={e => onPatchSelected({ w: +e.target.value })} />
-              </label>
-              <label className="text-[10px] flex items-center gap-1">{t.h}
-                <input type="number" min={0.3} max={8} step={0.1} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.h ?? 1.2} onChange={e => onPatchSelected({ h: +e.target.value })} />
-              </label>
+              {isMedia && selectedMedia && (
+                <>
+                  <label className="text-[10px] flex items-center gap-1">{t.w}
+                    <input type="number" min={0.3} max={12} step={0.1} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selectedMedia.w ?? 2} onChange={e => onPatchSelected({ w: +e.target.value })} />
+                  </label>
+                  <label className="text-[10px] flex items-center gap-1">{t.h}
+                    <input type="number" min={0.3} max={8} step={0.1} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selectedMedia.h ?? 1.2} onChange={e => onPatchSelected({ h: +e.target.value })} />
+                  </label>
+                </>
+              )}
               <label className="text-[10px] flex items-center gap-1">{t.scale}
-                <input type="number" min={0.2} max={8} step={0.05} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.scale ?? 1} onChange={e => onPatchSelected({ scale: +e.target.value })} />
+                <input type="number" min={0.05} max={20} step={0.05} className="w-14 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.scale ?? 1} onChange={e => onPatchSelected({ scale: +e.target.value })} />
               </label>
               <span className="text-[10px] flex items-center gap-0.5 text-slate-300">{t.rot}</span>
               <button type="button" title={t.rotLeft} onClick={() => nudgeRot(-15)} className="text-[11px] px-2 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600">↺</button>
@@ -303,21 +328,21 @@ export const EnvironmentEditToolbar: React.FC<{
                 />
                 <span>°</span>
               </label>
-              {isPdfish && (
+              {isPdfish && selectedMedia && (
                 <>
                   <label className="text-[10px] flex items-center gap-1" title={t.frame}>
                     {t.frame}
-                    <input type="number" min={0} max={1} step={0.01} className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.framePad ?? 0} onChange={e => onPatchSelected({ framePad: +e.target.value })} />
+                    <input type="number" min={0} max={1} step={0.01} className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selectedMedia.framePad ?? 0} onChange={e => onPatchSelected({ framePad: +e.target.value })} />
                   </label>
-                  <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selected.pdfFit || 'contain'} onChange={e => onPatchSelected({ pdfFit: e.target.value as 'contain' | 'cover' | 'fill' })} title={t.pdfFit}>
+                  <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selectedMedia.pdfFit || 'contain'} onChange={e => onPatchSelected({ pdfFit: e.target.value as 'contain' | 'cover' | 'fill' })} title={t.pdfFit}>
                     <option value="contain">{T ? 'جا شدن' : 'Fit'}</option>
                     <option value="cover">{T ? 'پر کردن' : 'Cover'}</option>
                     <option value="fill">{T ? 'کشیده' : 'Stretch'}</option>
                   </select>
                 </>
               )}
-              {selected.kind === 'button' && (
-                <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selected.action || 'url'} onChange={e => onPatchSelected({ action: e.target.value as any })}>
+              {isMedia && selectedMedia?.kind === 'button' && (
+                <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selectedMedia.action || 'url'} onChange={e => onPatchSelected({ action: e.target.value as any })}>
                   <option value="url">URL</option>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="phone">{T ? 'تماس' : 'Phone'}</option>
