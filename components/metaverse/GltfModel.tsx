@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { collectMeshes, prepareGltfScene } from './prepareGltfScene';
 
 // Loads a GLB/GLTF and renders a clone so the same URL can be reused by several booths.
 // Suspends while loading — always render inside a <Suspense> boundary.
@@ -11,30 +12,20 @@ export const GltfModel: React.FC<{
   autoFit?: number;
   /** When false, mesh raycasts are disabled (use an external collider for clicks). */
   pickable?: boolean;
-}> = ({ url, scale = 1, autoFit, pickable = true }) => {
+  /** Registers mesh colliders for custom-environment walking (walls / stairs). */
+  onCollisionMeshes?: (meshes: THREE.Mesh[]) => void;
+}> = ({ url, scale = 1, autoFit, pickable = true, onCollisionMeshes }) => {
   const { scene } = useGLTF(url);
-  const prepared = useMemo(() => {
-    const c = scene.clone(true);
-    c.traverse((o: any) => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        o.receiveShadow = true;
-        if (!pickable) o.raycast = () => null;
-      }
-    });
-    if (autoFit && autoFit > 0) {
-      const box = new THREE.Box3().setFromObject(c);
-      const center = new THREE.Vector3();
-      const size = new THREE.Vector3();
-      box.getCenter(center);
-      box.getSize(size);
-      c.position.sub(center);
-      const footprint = Math.max(size.x, size.z, 0.0001);
-      c.scale.setScalar(autoFit / footprint);
-      const grounded = new THREE.Box3().setFromObject(c);
-      c.position.y -= grounded.min.y;
-    }
-    return c;
-  }, [scene, autoFit, pickable]);
+  const prepared = useMemo(
+    () => prepareGltfScene(scene, { autoFit, pickable }),
+    [scene, autoFit, pickable],
+  );
+
+  useEffect(() => {
+    if (!onCollisionMeshes) return;
+    onCollisionMeshes(collectMeshes(prepared));
+    return () => onCollisionMeshes([]);
+  }, [prepared, onCollisionMeshes]);
+
   return <primitive object={prepared} scale={scale} />;
 };

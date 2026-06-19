@@ -10,6 +10,8 @@ import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoo
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
+import { useEnvironmentCollision } from './EnvironmentCollisionContext';
+import { environmentCollisionEnabled } from './expoEnvironmentCollision';
 import { WallAd, PresentationScreen } from './WallMedia';
 import { bi, expoPhrase } from './expoUtils';
 import { CanvasLabel } from './CanvasLabel';
@@ -347,6 +349,14 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
   const useCustomHall = !!expo.environmentUrl && expo.environmentReplacesHall !== false;
   const envAutoFit = expo.environmentAutoFit !== false ? Math.max(width, depth) : undefined;
+  const envCollision = useEnvironmentCollision();
+  const registerEnvCollision = environmentCollisionEnabled(expo)
+    ? (meshes: THREE.Mesh[]) => {
+        if (!envCollision) return;
+        envCollision.meshesRef.current = meshes;
+        envCollision.ready.current = meshes.length > 0;
+      }
+    : undefined;
   const t = 0.2; // wall thickness
   const visualStyle = expo.visualStyle || 'exhibition';
   const boothVisualStyle = visualStyle === 'business_center' ? 'storefront' : visualStyle;
@@ -514,8 +524,17 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       {expo.environmentUrl && (
         <TexBoundary key={`${expo.environmentUrl}-${envAutoFit ?? 0}-${expo.environmentScale ?? 1}`}>
           <Suspense fallback={null}>
-            <group position={[expo.environmentX ?? 0, expo.environmentY ?? 0, expo.environmentZ ?? 0]} rotation={[0, expo.environmentRy ?? 0, 0]}>
-              <GltfModel url={expo.environmentUrl} scale={expo.environmentScale ?? 1} autoFit={envAutoFit} />
+            <group
+              ref={envCollision?.rootRef}
+              position={[expo.environmentX ?? 0, expo.environmentY ?? 0, expo.environmentZ ?? 0]}
+              rotation={[0, expo.environmentRy ?? 0, 0]}
+            >
+              <GltfModel
+                url={expo.environmentUrl}
+                scale={expo.environmentScale ?? 1}
+                autoFit={envAutoFit}
+                onCollisionMeshes={registerEnvCollision}
+              />
             </group>
           </Suspense>
         </TexBoundary>

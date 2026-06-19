@@ -16,6 +16,8 @@ import { HotspotModal } from './HotspotModal';
 import { EntranceRegistrationModal } from './EntranceRegistrationModal';
 import { BoothReservationModal } from './BoothReservationModal';
 import { VrRig, VRButton } from './XRControls';
+import { EnvironmentCollisionProvider } from './EnvironmentCollisionContext';
+import { VrEnvironmentCollision } from './VrEnvironmentCollision';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
@@ -346,6 +348,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         gl={{ antialias: true, powerPreference: 'high-performance' }}
       >
         <XR store={store}>
+          <EnvironmentCollisionProvider>
           <Suspense fallback={null}>
             <ExpoScene
               expo={expo}
@@ -365,7 +368,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <Player expo={expo} mode={mode} pointerLock={pointerLock} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
           <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
+          <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
+          </EnvironmentCollisionProvider>
         </XR>
       </Canvas>
 

@@ -246,6 +246,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envRot: T ? 'چرخش محیط (درجه)' : 'Environment rotation (°)',
     envPos: T ? 'جابه‌جایی محیط (متر)' : 'Environment offset (m)',
     envHint: T ? 'مدل GLB مرکز سالن قرار می‌گیرد؛ غرفه‌ها روی همان مختصات نقشه کف داخل این محیط نمایش داده می‌شوند. ابعاد سالن را با مدل هماهنگ کنید.' : 'The GLB is centered in the hall; booths use the same floor-plan coordinates inside this environment. Match hall width/depth to your model.',
+    envCollision: T ? 'برخورد فیزیکی (دیوار و پله)' : 'Physical collision (walls & stairs)',
+    envCollisionHint: T ? 'از عبور از دیوارها جلوگیری می‌کند و روی پله‌ها و طبقات بالا می‌رود.' : 'Blocks walking through walls and lets you climb stairs to upper floors.',
     tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
       product: T ? 'محصول' : 'Product', company: T ? 'پروفایل شرکت' : 'Company', video: T ? 'ویدئو' : 'Video', pdf: T ? 'کاتالوگ PDF' : 'PDF', image: T ? 'تصویر' : 'Image',
@@ -874,9 +876,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                 ...(u ? {
                   environmentReplacesHall: e.environmentReplacesHall ?? true,
                   environmentAutoFit: e.environmentAutoFit ?? true,
+                  environmentCollision: e.environmentCollision ?? true,
                 } : {
                   environmentReplacesHall: undefined,
                   environmentAutoFit: undefined,
+                  environmentCollision: undefined,
                   environmentScale: undefined,
                   environmentRy: undefined,
                   environmentX: undefined,
@@ -899,7 +903,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                       <input type="checkbox" className="w-4 h-4 accent-violet-600" disabled={readonly} checked={e.environmentAutoFit !== false} onChange={ev => patch({ environmentAutoFit: ev.target.checked })} />
                       {t.envAutoFit}
                     </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-violet-900" title={t.envCollisionHint}>
+                      <input type="checkbox" className="w-4 h-4 accent-violet-600" disabled={readonly} checked={e.environmentCollision !== false} onChange={ev => patch({ environmentCollision: ev.target.checked })} />
+                      {t.envCollision}
+                    </label>
                   </div>
+                  <p className="text-[10px] text-violet-600/80">{t.envCollisionHint}</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     <div><label className={lbl}>{t.envScale}</label><input type="number" min={0.05} max={20} step={0.05} className={fld} value={e.environmentScale ?? 1} disabled={readonly} onChange={ev => patch({ environmentScale: +ev.target.value || 1 })} /></div>
                     <div><label className={lbl}>{t.envRot}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.environmentRy || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ environmentRy: (+ev.target.value) * Math.PI / 180 })} /></div>

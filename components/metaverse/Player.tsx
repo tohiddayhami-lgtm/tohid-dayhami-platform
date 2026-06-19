@@ -6,6 +6,13 @@ import * as THREE from 'three';
 import type { MetaverseExpo } from '../../types';
 import { hallDims, EXPO_DEFAULTS } from './expoUtils';
 import { isTypingElement, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
+import { useEnvironmentCollision } from './EnvironmentCollisionContext';
+import {
+  environmentCollisionEnabled,
+  resolveEnvPosition,
+  resolveEnvTeleport,
+  syncCollisionMatrices,
+} from './expoEnvironmentCollision';
 
 interface Props {
   expo: MetaverseExpo;
@@ -25,13 +32,18 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPaused = false, controlRef, poseRef, teleportRef }) => {
   const { camera, gl } = useThree();
   const inXR = useXR((s) => !!s.session);
+  const envCollision = useEnvironmentCollision();
+  const useEnvCollision = environmentCollisionEnabled(expo);
   const { width, depth } = hallDims(expo);
   const eye = EXPO_DEFAULTS.eyeHeight;
-  const startZ = expo.entranceEnabled ? depth / 2 + 6.2 : (expo.spawn?.z ?? Math.min(depth / 2 - 2, 8));
-  const startRy = expo.entranceEnabled ? 0 : (expo.spawn?.ry ?? Math.PI);
+  const startZ = expo.entranceEnabled && !expo.environmentUrl ? depth / 2 + 6.2 : (expo.spawn?.z ?? Math.min(depth / 2 - 2, 8));
+  const startRy = expo.entranceEnabled && !expo.environmentUrl ? 0 : (expo.spawn?.ry ?? Math.PI);
   const posRef = useRef(new THREE.Vector3(expo.spawn?.x ?? 0, eye, startZ));
   const yawRef = useRef(startRy);
   const pitchRef = useRef(0);
+
+  const collisionMeshes = () => envCollision?.meshesRef.current ?? [];
+  const collisionReady = () => !!(useEnvCollision && envCollision?.ready.current && collisionMeshes().length);
 
   // Initial camera placement + expose teleport to the outside world (floor double-click).
   useEffect(() => {
@@ -39,15 +51,20 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPause
     camera.position.copy(posRef.current);
     camera.rotation.set(0, yawRef.current, 0);
     teleportRef.current = (x: number, z: number) => {
+      if (collisionReady()) {
+        syncCollisionMatrices(envCollision!.rootRef.current);
+        const next = resolveEnvTeleport(collisionMeshes(), x, z, eye, eye);
+        posRef.current.copy(next);
+        return;
+      }
       const m = 1.2;
       const maxZ = depth / 2 - m + (expo.entranceEnabled ? 8 : 0);
       const nx = clamp(x, -width / 2 + m, width / 2 - m);
       const nz = clamp(z, -depth / 2 + m, maxZ);
-      const ny = eye;
-      posRef.current.set(nx, ny, nz);
+      posRef.current.set(nx, eye, nz);
     };
     return () => { teleportRef.current = null; };
-  }, [camera, teleportRef, width, depth, eye, expo.entranceEnabled]);
+  }, [camera, teleportRef, width, depth, eye, expo.entranceEnabled, useEnvCollision, envCollision]);
 
   useEffect(() => {
     if (controlsPaused) resetControlState(controlRef.current);
@@ -133,13 +150,30 @@ export const Player: React.FC<Props> = ({ expo, mode, pointerLock, controlsPause
     const ms = (c.keys.right ? 1 : 0) - (c.keys.left ? 1 : 0) + c.joy.x;
     if (mf || ms) {
       const speed = (c.run ? 6 : 3.2) * dt;
-      posRef.current.addScaledVector(dir, mf * speed);
-      posRef.current.addScaledVector(right, ms * speed);
-      const m = 1.2;
-      posRef.current.x = clamp(posRef.current.x, -width / 2 + m, width / 2 - m);
-      posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m + (expo.entranceEnabled ? 8 : 0));
+      const dx = (dir.x * mf + right.x * ms) * speed;
+      const dz = (dir.z * mf + right.z * ms) * speed;
+
+      if (collisionReady()) {
+        syncCollisionMatrices(envCollision!.rootRef.current);
+        const next = resolveEnvPosition(collisionMeshes(), posRef.current, eye, dx, dz);
+        posRef.current.copy(next);
+      } else {
+        posRef.current.addScaledVector(dir, mf * speed);
+        posRef.current.addScaledVector(right, ms * speed);
+        const m = 1.2;
+        posRef.current.x = clamp(posRef.current.x, -width / 2 + m, width / 2 - m);
+        posRef.current.z = clamp(posRef.current.z, -depth / 2 + m, depth / 2 - m + (expo.entranceEnabled ? 8 : 0));
+        posRef.current.y = eye;
+      }
+    } else if (collisionReady()) {
+      // Snap to stairs / floor even when standing still (e.g. after scene load).
+      syncCollisionMatrices(envCollision!.rootRef.current);
+      const grounded = resolveEnvPosition(collisionMeshes(), posRef.current, eye, 0, 0);
+      if (Math.abs(grounded.y - posRef.current.y) > 0.001) posRef.current.copy(grounded);
+    } else {
+      posRef.current.y = eye;
     }
-    posRef.current.y = eye;
+
     camera.position.copy(posRef.current);
     poseRef.current = {
       x: posRef.current.x,

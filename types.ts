@@ -814,6 +814,7 @@ export interface MetaverseExpo {
   environmentZ?: number;
   environmentAutoFit?: boolean; // fit GLB footprint to max(width, depth) — default true when URL set
   environmentReplacesHall?: boolean; // hide procedural walls/floor/ceiling — default true when URL set
+  environmentCollision?: boolean; // block walking through walls; follow stairs/floors — default true when URL set
   skyboxUrl?: string;           // optional HDR / equirectangular image
   preset?: EnvPreset;           // drei Environment preset when no custom HDR
   groundColor?: string;
