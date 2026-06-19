@@ -18,6 +18,8 @@ import { BoothReservationModal } from './BoothReservationModal';
 import { VrRig, VRButton } from './XRControls';
 import { EnvironmentCollisionProvider } from './EnvironmentCollisionContext';
 import { VrEnvironmentCollision } from './VrEnvironmentCollision';
+import { VrWalkLocomotion, VrFlyJumpLocomotion } from './VrExpoLocomotion';
+import { ExpoFlyControls } from './ExpoFlyControls';
 import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
@@ -198,6 +200,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   const controlsPaused = registrationOpen || !!reserveBooth || !!active;
   const [help, setHelp] = useState(true);
   const [muted, setMuted] = useState(true);
+  const [flyMode, setFlyMode] = useState(false);
   const [seated, setSeated] = useState(false); // VR: raise the origin so a seated visitor gets a standing viewpoint
 
   // ── "Mall doors opening" reveal: keep the doors shut until scene assets finish loading,
@@ -269,6 +272,16 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   }, [controlsPaused]);
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyF' || controlsPaused || mode !== 'fp') return;
+      if (e.target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      setFlyMode(f => !f);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [controlsPaused, mode]);
+
+  useEffect(() => {
     return subscribeMetaExpoBoothReservations(bazaar.id, (list) => {
       setBoothSummaries(summarizeBoothReservations(list));
     });
@@ -336,6 +349,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     helpDesktop: expoUi(lang, 'helpDesktop'),
     helpTouch: expoUi(lang, 'helpTouch'),
     gotIt: expoUi(lang, 'gotIt'),
+    fly: expoUi(lang, 'fly'),
+    flyOn: expoUi(lang, 'flyOn'),
+    flyOff: expoUi(lang, 'flyOff'),
   };
 
   const chip = 'px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 shadow transition-colors';
@@ -365,10 +381,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             />
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
-          <Player expo={expo} mode={mode} pointerLock={pointerLock} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
+          <Player expo={expo} mode={mode} pointerLock={pointerLock} flyMode={flyMode} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
           {avatarsEnabled && <RemoteAvatars visitors={visitors} selfId={visitor.id} />}
           <VrPoseSync originRef={originRef} poseRef={poseRef} xrActiveRef={xrActiveRef} />
-          <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />
+          <VrWalkLocomotion originRef={originRef} enabled={!flyMode} />
+          <VrFlyJumpLocomotion expo={expo} originRef={originRef} flyMode={flyMode} eyeOffsetY={seated ? 0.55 : 0} />
+          {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
           </EnvironmentCollisionProvider>
         </XR>
@@ -397,6 +415,15 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
             ))}
           </select>
           <button onClick={() => setMode(m => m === 'fp' ? 'orbit' : 'fp')} className={chip + ' bg-white/90 text-gray-900 hover:bg-white'}>{mode === 'fp' ? '🛰 ' + ui.orbit : '🚶 ' + ui.fp}</button>
+          {mode === 'fp' && (
+            <button
+              onClick={() => setFlyMode(f => !f)}
+              title={flyMode ? ui.flyOff : ui.flyOn}
+              className={chip + (flyMode ? ' bg-sky-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}
+            >
+              {flyMode ? '🪶 ' + ui.fly : '✈️ ' + ui.fly}
+            </button>
+          )}
           {caps.finePointer && mode === 'fp' && (
             <button onClick={() => setPointerLock(p => !p)} className={chip + (pointerLock ? ' bg-indigo-600 text-white' : ' bg-white/90 text-gray-900 hover:bg-white')}>🔒 {ui.lock}</button>
           )}
@@ -414,8 +441,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       <Minimap expo={expo} poseRef={poseRef} />
 
       {/* Mobile joysticks — left = move, right = look/turn */}
-      {!controlsPaused && caps.touch && <MobileControls controlRef={controlRef} kind="move" />}
-      {!controlsPaused && caps.touch && <MobileControls controlRef={controlRef} kind="look" />}
+      {!controlsPaused && caps.touch && mode === 'fp' && <MobileControls controlRef={controlRef} kind="move" />}
+      {!controlsPaused && caps.touch && mode === 'fp' && <MobileControls controlRef={controlRef} kind="look" />}
+      {!controlsPaused && caps.touch && mode === 'fp' && <ExpoFlyControls controlRef={controlRef} flyMode={flyMode} langFa={T} />}
 
       {/* Help hint */}
       {help && (
