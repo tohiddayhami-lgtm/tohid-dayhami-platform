@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { IconShield, IconUsers } from './Icons';
+
+const STAFF_REMEMBER_KEY = 'crm_staff_remember';
 
 interface Props {
   onLogin: (username: string, password: string) => Promise<boolean>;
@@ -10,6 +12,7 @@ interface Props {
 export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack }) => {
   const [staffUser, setStaffUser] = useState('');
   const [staffPass, setStaffPass] = useState('');
+  const [rememberStaff, setRememberStaff] = useState(false);
   const [staffError, setStaffError] = useState('');
   const [staffLoading, setStaffLoading] = useState(false);
 
@@ -17,6 +20,17 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
   const [custPass, setCustPass] = useState('');
   const [custError, setCustError] = useState('');
   const [custLoading, setCustLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STAFF_REMEMBER_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { username?: string; password?: string };
+      if (saved.username) setStaffUser(saved.username);
+      if (saved.password) setStaffPass(saved.password);
+      setRememberStaff(true);
+    } catch {}
+  }, []);
 
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 transition-colors dir-ltr text-left";
 
@@ -26,7 +40,17 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
     setStaffLoading(true);
     try {
       const ok = await onLogin(staffUser, staffPass);
-      if (!ok) setStaffError('نام کاربری یا رمز عبور اشتباه است.');
+      if (!ok) {
+        setStaffError('نام کاربری یا رمز عبور اشتباه است.');
+      } else {
+        try {
+          if (rememberStaff) {
+            localStorage.setItem(STAFF_REMEMBER_KEY, JSON.stringify({ username: staffUser, password: staffPass }));
+          } else {
+            localStorage.removeItem(STAFF_REMEMBER_KEY);
+          }
+        } catch {}
+      }
     } catch { setStaffError('خطا در برقراری ارتباط.'); }
     finally { setStaffLoading(false); }
   };
@@ -71,6 +95,21 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
               <label className="block text-xs font-medium text-gray-500 mb-1">رمز عبور</label>
               <input type="password" required className={inputClass} placeholder="••••••••" value={staffPass} onChange={e => setStaffPass(e.target.value)} />
             </div>
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-gray-900 rounded"
+                checked={rememberStaff}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setRememberStaff(checked);
+                  if (!checked) {
+                    try { localStorage.removeItem(STAFF_REMEMBER_KEY); } catch {}
+                  }
+                }}
+              />
+              ذخیره رمز عبور برای ورود بعدی
+            </label>
             {staffError && <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-center">{staffError}</p>}
             <button type="submit" disabled={staffLoading}
               className="w-full bg-gray-900 text-white py-2.5 rounded-full text-sm font-medium hover:bg-black transition-colors flex justify-center items-center gap-2">
