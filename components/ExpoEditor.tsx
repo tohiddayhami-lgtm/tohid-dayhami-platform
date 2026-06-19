@@ -262,6 +262,12 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envEdit3dHint: T ? 'ذخیره و باز کردن نمایشگاه در حالت ادیت — جابه‌جایی، اندازه و دکمه‌ها با ماوس یا کنترلر VR' : 'Save and open expo in edit mode — move, resize and buttons with mouse or VR controller',
     envKind: T ? 'نوع' : 'Kind',
     envAction: T ? 'عمل دکمه' : 'Button action',
+    framePad: T ? 'حاشیه مشکی (متر)' : 'Black border (m)',
+    framePadHint: T ? '۰ = بدون حاشیه' : '0 = no border',
+    pdfFit: T ? 'نحوه نمایش PDF' : 'PDF display',
+    pdfFitContain: T ? 'جا شدن (حفظ نسبت)' : 'Fit (keep ratio)',
+    pdfFitCover: T ? 'پر کردن (برش)' : 'Cover (crop)',
+    pdfFitFill: T ? 'کشیده (کل صفحه)' : 'Stretch (full frame)',
     spawnDir: T ? 'جهت نگاه ورود (درجه)' : 'Entry facing (°)',
     tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
@@ -1133,6 +1139,18 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 <div><label className={lbl}>{t.height}</label><input type="number" min={0.3} max={8} step={0.1} className={fld} value={m.h ?? 1.2} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { h: +ev.target.value })} /></div>
                                 <div><label className={lbl}>{t.scale}</label><input type="number" min={0.2} max={8} step={0.05} className={fld} value={m.scale ?? 1} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { scale: +ev.target.value })} /></div>
                                 <div><label className={lbl}>{t.rot}</label><input type="number" step={5} className={fld} value={Math.round((m.ry || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { ry: (+ev.target.value) * Math.PI / 180 })} /></div>
+                                {(m.kind === 'pdf' || (m.url && /\.pdf(\?.*)?$/i.test(m.url))) && (
+                                  <>
+                                    <div><label className={lbl}>{t.framePad}</label><input type="number" min={0} max={1} step={0.01} className={fld} value={m.framePad ?? 0} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { framePad: +ev.target.value })} title={t.framePadHint} /></div>
+                                    <div><label className={lbl}>{t.pdfFit}</label>
+                                      <select className={fld + ' bg-white'} value={m.pdfFit || 'contain'} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { pdfFit: ev.target.value as 'contain' | 'cover' | 'fill' })}>
+                                        <option value="contain">{t.pdfFitContain}</option>
+                                        <option value="cover">{t.pdfFitCover}</option>
+                                        <option value="fill">{t.pdfFitFill}</option>
+                                      </select>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1461,6 +1479,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                 <div className="grid grid-cols-2 gap-2">
                   <div><label className={lbl}>{t.adW}</label><input type="number" step="0.5" className={fld} value={e.presentation?.w ?? 7} onChange={ev => setPres({ w: +ev.target.value })} /></div>
                   <div><label className={lbl}>{t.adH}</label><input type="number" step="0.5" className={fld} value={e.presentation?.h ?? 4} onChange={ev => setPres({ h: +ev.target.value })} /></div>
+                </div>
+                <div><label className={lbl}>{t.framePad}</label><input type="number" min={0} max={1} step={0.01} className={fld} value={e.presentation?.framePad ?? 0.08} disabled={readonly} onChange={ev => setPres({ framePad: +ev.target.value })} title={t.framePadHint} /></div>
+                <div><label className={lbl}>{t.pdfFit}</label>
+                  <select className={fld + ' bg-white'} value={e.presentation?.pdfFit || 'contain'} disabled={readonly} onChange={ev => setPres({ pdfFit: ev.target.value as 'contain' | 'cover' | 'fill' })}>
+                    <option value="contain">{t.pdfFitContain}</option>
+                    <option value="cover">{t.pdfFitCover}</option>
+                    <option value="fill">{t.pdfFitFill}</option>
+                  </select>
                 </div>
               </div>
             )}

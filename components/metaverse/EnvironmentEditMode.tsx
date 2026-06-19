@@ -235,8 +235,12 @@ export const EnvironmentEditToolbar: React.FC<{
     rot: T ? 'چرخش' : 'Rotation',
     rotLeft: T ? 'چرخش چپ' : 'Rotate left',
     rotRight: T ? 'چرخش راست' : 'Rotate right',
+    frame: T ? 'حاشیه' : 'Border',
+    pdfFit: T ? 'نمایش PDF' : 'PDF fit',
     action: T ? 'عمل دکمه' : 'Button action',
   };
+
+  const isPdfish = selected && (selected.kind === 'pdf' || (selected.url && /\.pdf(\?.*)?$/i.test(selected.url)));
 
   const rotDeg = Math.round(((selected?.ry ?? 0) * 180) / Math.PI);
   const nudgeRot = (deltaDeg: number) => {
@@ -285,6 +289,19 @@ export const EnvironmentEditToolbar: React.FC<{
                 />
                 <span>°</span>
               </label>
+              {isPdfish && (
+                <>
+                  <label className="text-[10px] flex items-center gap-1" title={t.frame}>
+                    {t.frame}
+                    <input type="number" min={0} max={1} step={0.01} className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-600 text-xs" value={selected.framePad ?? 0} onChange={e => onPatchSelected({ framePad: +e.target.value })} />
+                  </label>
+                  <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selected.pdfFit || 'contain'} onChange={e => onPatchSelected({ pdfFit: e.target.value as 'contain' | 'cover' | 'fill' })} title={t.pdfFit}>
+                    <option value="contain">{T ? 'جا شدن' : 'Fit'}</option>
+                    <option value="cover">{T ? 'پر کردن' : 'Cover'}</option>
+                    <option value="fill">{T ? 'کشیده' : 'Stretch'}</option>
+                  </select>
+                </>
+              )}
               {selected.kind === 'button' && (
                 <select className="text-[10px] px-1.5 py-1 rounded bg-slate-800 border border-slate-600" value={selected.action || 'url'} onChange={e => onPatchSelected({ action: e.target.value as any })}>
                   <option value="url">URL</option>

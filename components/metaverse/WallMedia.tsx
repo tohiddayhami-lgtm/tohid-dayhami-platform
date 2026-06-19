@@ -131,7 +131,10 @@ const ArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color:
 export const PresentationScreen: React.FC<{
   url: string; w: number; h: number; accent?: string;
   position: [number, number, number]; rotation: [number, number, number];
-}> = ({ url, w, h, accent = '#1f6f43', position, rotation }) => {
+  framePad?: number;
+  fit?: 'contain' | 'cover' | 'fill';
+  compact?: boolean;
+}> = ({ url, w, h, accent = '#1f6f43', position, rotation, framePad = 0, fit = 'contain', compact = false }) => {
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
   const [dims, setDims] = useState({ w: 0, h: 0 }); // rendered page pixel size (for aspect)
@@ -196,32 +199,48 @@ export const PresentationScreen: React.FC<{
   const prev = () => setPage(p => Math.max(1, p - 1));
   const next = () => setPage(p => Math.min(count || 1, p + 1));
 
-  // Fit the page within w×h keeping its aspect ratio.
+  const ctrlH = compact ? 0.28 : 0.45;
+  const viewH = h - ctrlH;
+  const viewY = compact ? ctrlH / 2 : 0.25;
+
+  // Fit the page within w×viewH.
   const ready = dims.w > 0;
-  const aspect = ready ? dims.h / dims.w : h / w;
-  let pw = w, ph = w * aspect;
-  if (ph > h) { ph = h; pw = h / aspect; }
+  const pageAspect = ready ? dims.h / dims.w : viewH / w;
+  let pw = w, ph = w * pageAspect;
+  if (fit === 'fill') {
+    pw = w; ph = viewH;
+  } else if (fit === 'cover') {
+    const boxAspect = viewH / w;
+    if (pageAspect > boxAspect) { ph = viewH; pw = viewH / pageAspect; }
+    else { pw = w; ph = w * pageAspect; }
+  } else {
+    if (ph > viewH) { ph = viewH; pw = viewH / pageAspect; }
+  }
+
+  const pad = Math.max(0, framePad);
+  const ctrlY = compact ? -h / 2 + ctrlH / 2 : -h / 2 - 0.1;
 
   return (
     <group position={position} rotation={rotation}>
-      {/* backboard */}
-      <mesh position={[0, 0, -0.06]}>
-        <planeGeometry args={[w + 0.4, h + 0.9]} />
-        <meshStandardMaterial color="#0b0e14" metalness={0.4} roughness={0.5} />
-      </mesh>
+      {pad > 0 && (
+        <mesh position={[0, viewY, -0.06]}>
+          <planeGeometry args={[w + pad * 2, viewH + pad * 2 + (compact ? ctrlH : 0.5)]} />
+          <meshStandardMaterial color="#0b0e14" metalness={0.4} roughness={0.5} />
+        </mesh>
+      )}
       {ready ? (
-        <mesh position={[0, 0.25, 0]}>
+        <mesh position={[0, viewY, 0]}>
           <planeGeometry args={[pw, ph]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
       ) : (
-        <CanvasLabel text="PDF…" width={Math.min(w * 0.5, 3)} height={0.7} position={[0, 0.25, 0]} color="#ffffff" />
+        <CanvasLabel text="PDF…" width={Math.min(w * 0.5, 3)} height={0.7} position={[0, viewY, 0]} color="#ffffff" />
       )}
-      {/* page controls below the slide */}
-      <group position={[0, -h / 2 - 0.1, 0.02]}>
-        <ArrowBtn x={-1.1} glyph="◀" onClick={prev} color={accent} />
-        <CanvasLabel text={count ? `${page} / ${count}` : '…'} width={1.3} height={0.45} position={[0, 0, 0]} color="#ffffff" />
-        <ArrowBtn x={1.1} glyph="▶" onClick={next} color={accent} />
+      {/* page controls */}
+      <group position={[0, ctrlY, 0.02]}>
+        <ArrowBtn x={compact ? -0.75 : -1.1} glyph="◀" onClick={prev} color={accent} />
+        <CanvasLabel text={count ? `${page} / ${count}` : '…'} width={compact ? 1 : 1.3} height={0.45} position={[0, 0, 0]} color="#ffffff" />
+        <ArrowBtn x={compact ? 0.75 : 1.1} glyph="▶" onClick={next} color={accent} />
       </group>
     </group>
   );

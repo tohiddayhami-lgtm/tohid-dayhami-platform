@@ -113,8 +113,8 @@ const ScreenGif: React.FC<{ url: string; w: number; h: number; onClick?: () => v
   );
 };
 
-const ScreenPlane: React.FC<{ url: string; w: number; h: number; onClick?: () => void }> = ({ url, w, h, onClick }) => {
-  if (isPdfFile(url)) return <PresentationScreen url={url} w={w} h={h} position={[0, 0, 0.04]} rotation={[0, 0, 0]} />;
+const ScreenPlane: React.FC<{ url: string; w: number; h: number; framePad?: number; pdfFit?: 'contain' | 'cover' | 'fill'; onClick?: () => void }> = ({ url, w, h, framePad, pdfFit, onClick }) => {
+  if (isPdfFile(url)) return <PresentationScreen url={url} w={w} h={h} position={[0, 0, 0.04]} rotation={[0, 0, 0]} framePad={framePad ?? 0} fit={pdfFit} compact />;
   if (isVideoFile(url)) return <ScreenVideo url={url} w={w} h={h} onClick={onClick} />;
   if (isGif(url)) return <ScreenGif url={url} w={w} h={h} onClick={onClick} />;
   return <ScreenImage url={url} w={w} h={h} onClick={onClick} />;
@@ -229,18 +229,26 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
 
   const mediaUrl = item.url || '';
   const hasMedia = !!mediaUrl;
+  const isPdf = item.kind === 'pdf' || isPdfFile(mediaUrl);
+  const framePad = item.framePad ?? (isPdf ? 0 : 0.05);
 
   return (
     <group position={[item.x, item.y, item.z]} rotation={[0, ry, 0]} onClick={handleSelect}>
       {selectionBox}
-      <mesh position={[0, 0, 0]}>
-        <planeGeometry args={[w + 0.1, h + 0.1]} />
-        <meshStandardMaterial color="#1e293b" />
-      </mesh>
-      <mesh position={[0, 0, 0.01]}>
-        <planeGeometry args={[w, h]} />
-        <meshStandardMaterial color="#0f172a" emissive="#0a1626" emissiveIntensity={0.4} />
-      </mesh>
+      {framePad > 0 && (
+        <>
+          <mesh position={[0, 0, 0]}>
+            <planeGeometry args={[w + framePad * 2, h + framePad * 2]} />
+            <meshStandardMaterial color="#1e293b" />
+          </mesh>
+          {!isPdf && (
+            <mesh position={[0, 0, 0.01]}>
+              <planeGeometry args={[w, h]} />
+              <meshStandardMaterial color="#0f172a" emissive="#0a1626" emissiveIntensity={0.4} />
+            </mesh>
+          )}
+        </>
+      )}
       {!hasMedia && (
         <CanvasLabel text={label || (item.kind === 'video' ? '▶' : '🖼')} width={w * 0.6} height={h * 0.3} position={[0, 0, 0.02]} color="#94a3b8" />
       )}
@@ -250,7 +258,7 @@ export const EnvironmentMediaItem: React.FC<Props> = ({
             {item.kind === 'html' ? (
               <CanvasLabel text={label || 'HTML'} width={w * 0.7} height={h * 0.25} position={[0, 0, 0.04]} color="#fff" onClick={editMode ? undefined : () => openLink(mediaUrl)} />
             ) : (
-              <ScreenPlane url={mediaUrl} w={w} h={h} onClick={editMode ? undefined : () => {
+              <ScreenPlane url={mediaUrl} w={w} h={h} framePad={item.framePad} pdfFit={item.pdfFit} onClick={editMode ? undefined : () => {
                 onTrack?.('hotspot_click', { targetId: item.id, targetName: label, targetType: 'env_media', side: item.kind });
                 if (item.kind === 'video' || item.kind === 'image' || item.kind === 'pdf') {
                   if (onSelectHotspot) onSelectHotspot({ id: item.id, type: item.kind as any, x: item.x, y: item.y, z: item.z, url: mediaUrl, title: item.title });

@@ -643,7 +643,7 @@ export const ExpoScene: React.FC<Props> = ({
       {expo.presentation?.enabled && expo.presentation.pdfUrl && (() => {
         const p = expo.presentation;
         const { position, rotation } = wallTransform(p.wall || 'back', p.u ?? 0.5, p.v ?? 0.55, { width, depth, height });
-        return <PresentationScreen url={p.pdfUrl!} w={p.w || Math.min(width * 0.5, 7)} h={p.h || Math.min(height * 0.6, 4)} position={position} rotation={rotation} />;
+        return <PresentationScreen url={p.pdfUrl!} w={p.w || Math.min(width * 0.5, 7)} h={p.h || Math.min(height * 0.6, 4)} position={position} rotation={rotation} framePad={p.framePad ?? 0.08} fit={p.pdfFit} />;
       })()}
 
       {/* Supermarket / mall department zones */}

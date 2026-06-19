@@ -764,6 +764,8 @@ export interface ExpoPresentation {
   v?: number;            // 0..1 vertical center
   w?: number;            // width (meters)
   h?: number;            // height (meters)
+  framePad?: number;     // dark border padding in meters (0 = none)
+  pdfFit?: 'contain' | 'cover' | 'fill';
 }
 
 export interface ExpoMeetWall {
@@ -824,6 +826,8 @@ export interface ExpoEnvironmentMedia {
   meetUrl?: string;
   icon?: string;                // emoji glyph for buttons
   color?: string;               // accent color
+  framePad?: number;            // dark border padding in meters (0 = none)
+  pdfFit?: 'contain' | 'cover' | 'fill'; // how PDF fills the screen (default contain)
 }
 
 export interface MetaverseExpo {

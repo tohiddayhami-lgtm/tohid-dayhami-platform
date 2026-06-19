@@ -165,26 +165,25 @@ const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation
   useEffect(() => () => tex.dispose(), [tex]);
 
   const ready = dims.w > 0;
-  const aspect = ready ? dims.h / dims.w : height / width;
-  let pw = width, ph = width * aspect;
-  if (ph > height) { ph = height; pw = height / aspect; }
+  const ctrlH = 0.22;
+  const viewH = height - ctrlH;
+  const pageAspect = ready ? dims.h / dims.w : viewH / width;
+  let pw = width, ph = width * pageAspect;
+  if (ph > viewH) { ph = viewH; pw = viewH / pageAspect; }
   const prev = () => setPage(p => Math.max(1, p - 1));
   const next = () => setPage(p => Math.min(count || 1, p + 1));
 
   return (
     <group position={position} rotation={rotation}>
-      <RoundedBox args={[width + 0.16, height + 0.42, 0.1]} radius={0.05} smoothness={3} position={[0, -0.08, -0.06]} castShadow>
-        <meshStandardMaterial color="#0b0e14" metalness={0.45} roughness={0.45} />
-      </RoundedBox>
       {ready ? (
-        <mesh position={[0, 0.08, 0.01]} onClick={onClick}>
+        <mesh position={[0, ctrlH / 2, 0.01]} onClick={onClick}>
           <planeGeometry args={[pw, ph]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
       ) : (
-        <CanvasLabel text="PDF..." width={Math.min(width * 0.55, 1.6)} height={0.32} position={[0, 0.08, 0.02]} color="#ffffff" />
+        <CanvasLabel text="PDF..." width={Math.min(width * 0.55, 1.6)} height={0.32} position={[0, ctrlH / 2, 0.02]} color="#ffffff" />
       )}
-      <group position={[0, -height / 2 - 0.11, 0.03]}>
+      <group position={[0, -height / 2 + ctrlH / 2, 0.03]}>
         <PdfArrowBtn x={-0.48} glyph="‹" onClick={prev} color="#1f2937" />
         <CanvasLabel text={count ? `${page}/${count}` : "..."} width={0.55} height={0.2} position={[0, 0, 0]} bg="rgba(15,23,42,.92)" color="#ffffff" />
         <PdfArrowBtn x={0.48} glyph="›" onClick={next} color="#1f2937" />
