@@ -345,6 +345,8 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
   const wall = expo.wallColor || EXPO_DEFAULTS.wallColor;
+  const useCustomHall = !!expo.environmentUrl && expo.environmentReplacesHall !== false;
+  const envAutoFit = expo.environmentAutoFit !== false ? Math.max(width, depth) : undefined;
   const t = 0.2; // wall thickness
   const visualStyle = expo.visualStyle || 'exhibition';
   const boothVisualStyle = visualStyle === 'business_center' ? 'storefront' : visualStyle;
@@ -437,12 +439,12 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
           onDoubleClick={(e) => { e.stopPropagation(); onFloorTeleport(e.point.x, e.point.z); }}
         >
           <planeGeometry args={[width, depth]} />
-          <meshStandardMaterial color={ground} />
+          <meshStandardMaterial color={ground} transparent={useCustomHall} opacity={useCustomHall ? 0 : 1} depthWrite={!useCustomHall} />
         </mesh>
       </TeleportTarget>
-      <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />
+      {!useCustomHall && <Grid args={[width, depth]} cellSize={1} cellThickness={0.5} sectionSize={5} sectionThickness={1} sectionColor="#9aa3b2" cellColor="#c2c8d2" fadeDistance={Math.max(width, depth) * 1.2} position={[0, 0.01, 0]} infiniteGrid={false} />}
 
-      {layoutCarpetRects(normalizeBoothLayout(expo.boothLayout), width, depth)
+      {!useCustomHall && layoutCarpetRects(normalizeBoothLayout(expo.boothLayout), width, depth)
         .filter(c => !(c.entrance && c.z > depth / 2 + 0.5 && expo.entranceEnabled))
         .map((c, i) => (
         <group key={`hall-carpet-${i}`}>
@@ -461,9 +463,10 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
         </group>
       ))}
 
-      {expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} onRegistrationKioskClick={onRegistrationKioskClick} />}
+      {!useCustomHall && expo.entranceEnabled && <ExpoEntrance expo={expo} lang={lang} width={width} depth={depth} onTrack={onTrack} onRegistrationKioskClick={onRegistrationKioskClick} />}
 
       {/* Perimeter walls */}
+      {!useCustomHall && (
       <>
       <Wall args={[width, height, t]} position={[0, height / 2, -depth / 2]} color={wall} />
       {expo.entranceEnabled ? (() => {
@@ -506,11 +509,14 @@ export const ExpoScene: React.FC<Props> = ({ expo, shops = [], lang, onSelectHot
       <pointLight position={[width * 0.25, height - 0.4, depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
       <pointLight position={[-width * 0.25, height - 0.4, -depth * 0.25]} intensity={0.5} distance={Math.max(width, depth)} color="#fff3df" />
       </>
+      )}
 
       {expo.environmentUrl && (
-        <TexBoundary key={expo.environmentUrl}>
+        <TexBoundary key={`${expo.environmentUrl}-${envAutoFit ?? 0}-${expo.environmentScale ?? 1}`}>
           <Suspense fallback={null}>
-            <GltfModel url={expo.environmentUrl} />
+            <group position={[expo.environmentX ?? 0, expo.environmentY ?? 0, expo.environmentZ ?? 0]} rotation={[0, expo.environmentRy ?? 0, 0]}>
+              <GltfModel url={expo.environmentUrl} scale={expo.environmentScale ?? 1} autoFit={envAutoFit} />
+            </group>
           </Suspense>
         </TexBoundary>
       )}

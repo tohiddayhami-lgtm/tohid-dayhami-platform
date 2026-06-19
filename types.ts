@@ -807,6 +807,13 @@ export interface MetaverseExpo {
   subtitle?: MetaShopDirCat;
   // environment
   environmentUrl?: string;      // optional hall/environment GLB (Storage documents/)
+  environmentScale?: number;    // extra scale multiplier after auto-fit (default 1)
+  environmentRy?: number;     // Y rotation (radians)
+  environmentX?: number;        // position offset (meters)
+  environmentY?: number;
+  environmentZ?: number;
+  environmentAutoFit?: boolean; // fit GLB footprint to max(width, depth) — default true when URL set
+  environmentReplacesHall?: boolean; // hide procedural walls/floor/ceiling — default true when URL set
   skyboxUrl?: string;           // optional HDR / equirectangular image
   preset?: EnvPreset;           // drei Environment preset when no custom HDR
   groundColor?: string;

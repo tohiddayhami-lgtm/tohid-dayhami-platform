@@ -7,6 +7,12 @@ service firebase.storage {
         && request.resource.size < 50 * 1024 * 1024;
     }
 
+    // GLB/GLTF, video, PDF and other large assets in documents/
+    function isDocumentFile() {
+      return request.resource != null
+        && request.resource.size < 100 * 1024 * 1024;
+    }
+
     match /tohid-dayhami-platform/uploads/{allPaths=**} {
       allow read: if true;
       allow write: if isAllowedFile();
@@ -21,7 +27,7 @@ service firebase.storage {
 
     match /tohid-dayhami-platform/documents/{allPaths=**} {
       allow read: if true;
-      allow write: if isAllowedFile();
+      allow write: if isDocumentFile();
     }
 
     match /tohid-dayhami-platform/temp/{allPaths=**} {

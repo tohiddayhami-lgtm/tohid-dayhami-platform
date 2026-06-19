@@ -38,7 +38,7 @@ const ENTRANCE_AD_POSITIONS: { key: ExpoEntranceAdPosition; fa: string; en: stri
 ];
 
 const MANAGER_SLOTS = [0, 1, 2, 3, 4] as const;
-const GLB_MAX_BYTES = 70 * 1024 * 1024;
+const GLB_MAX_BYTES = 100 * 1024 * 1024;
 
 const blankExpo = (): MetaverseExpo => ({
   enabled: true, visualStyle: 'exhibition', preset: 'warehouse', width: 30, depth: 30, height: 9,
@@ -238,7 +238,14 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     hUrl: T ? 'لینک (ویدئو/PDF/تصویر/سایت)' : 'URL (video/pdf/image/site)', hProduct: T ? 'محصول' : 'Product', hPhone: T ? 'تلفن' : 'Phone', hWa: T ? 'واتس‌اپ' : 'WhatsApp', hEmail: T ? 'ایمیل' : 'Email',
     hPos: T ? 'موقعیت نسبت به غرفه (X/Y/Z)' : 'Position vs booth (X/Y/Z)',
     edit: T ? 'ویرایش غرفه' : 'Edit booth', glbErr: T ? 'فقط فایل GLB/GLTF مجاز است.' : 'Only GLB/GLTF files allowed.',
-    glbTooBig: T ? 'حجم فایل GLB بیش از ۷۰ مگابایت است.' : 'GLB file exceeds 70MB.',
+    glbTooBig: T ? 'حجم فایل GLB بیش از ۱۰۰ مگابایت است.' : 'GLB file exceeds 100MB.',
+    envGlbSettings: T ? 'تنظیمات مدل محیط' : 'Environment model settings',
+    envReplacesHall: T ? 'جایگزین سالن پیش‌فرض (دیوار/کف/سقف)' : 'Replace default hall (walls/floor/ceiling)',
+    envAutoFit: T ? 'هم‌تراز با ابعاد سالن (عرض/عمق)' : 'Fit to hall dimensions (width/depth)',
+    envScale: T ? 'مقیاس اضافه' : 'Extra scale',
+    envRot: T ? 'چرخش محیط (درجه)' : 'Environment rotation (°)',
+    envPos: T ? 'جابه‌جایی محیط (متر)' : 'Environment offset (m)',
+    envHint: T ? 'مدل GLB مرکز سالن قرار می‌گیرد؛ غرفه‌ها روی همان مختصات نقشه کف داخل این محیط نمایش داده می‌شوند. ابعاد سالن را با مدل هماهنگ کنید.' : 'The GLB is centered in the hall; booths use the same floor-plan coordinates inside this environment. Match hall width/depth to your model.',
     tooBig: T ? 'حجم فایل بیش از ۳۰ مگابایت است.' : 'File exceeds 30MB.',
     typeLabels: {
       product: T ? 'محصول' : 'Product', company: T ? 'پروفایل شرکت' : 'Company', video: T ? 'ویدئو' : 'Video', pdf: T ? 'کاتالوگ PDF' : 'PDF', image: T ? 'تصویر' : 'Image',
@@ -862,7 +869,46 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
               </div>
               <div><label className={lbl}>{t.ground}</label><div className="flex gap-2"><input type="color" value={e.groundColor || '#cfd4dc'} onChange={ev => patch({ groundColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.groundColor || ''} onChange={ev => patch({ groundColor: ev.target.value })} /></div></div>
               <div><label className={lbl}>{t.wall}</label><div className="flex gap-2"><input type="color" value={e.wallColor || '#e9edf3'} onChange={ev => patch({ wallColor: ev.target.value })} className="w-10 h-9 rounded border border-gray-300" /><input className={fld + ' dir-ltr'} value={e.wallColor || ''} onChange={ev => patch({ wallColor: ev.target.value })} /></div></div>
-              <GlbUpload id="env-glb" value={e.environmentUrl} onUrl={u => patch({ environmentUrl: u || undefined })} label={t.envGlb} />
+              <GlbUpload id="env-glb" value={e.environmentUrl} onUrl={u => patch({
+                environmentUrl: u || undefined,
+                ...(u ? {
+                  environmentReplacesHall: e.environmentReplacesHall ?? true,
+                  environmentAutoFit: e.environmentAutoFit ?? true,
+                } : {
+                  environmentReplacesHall: undefined,
+                  environmentAutoFit: undefined,
+                  environmentScale: undefined,
+                  environmentRy: undefined,
+                  environmentX: undefined,
+                  environmentY: undefined,
+                  environmentZ: undefined,
+                }),
+              })} label={t.envGlb} />
+              {e.environmentUrl && (
+                <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3 space-y-3">
+                  <div>
+                    <h6 className="text-xs font-bold text-violet-900">{t.envGlbSettings}</h6>
+                    <p className="text-[10px] text-violet-700/80 mt-1 leading-relaxed">{t.envHint}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-xs font-bold text-violet-900">
+                      <input type="checkbox" className="w-4 h-4 accent-violet-600" disabled={readonly} checked={e.environmentReplacesHall !== false} onChange={ev => patch({ environmentReplacesHall: ev.target.checked })} />
+                      {t.envReplacesHall}
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-bold text-violet-900">
+                      <input type="checkbox" className="w-4 h-4 accent-violet-600" disabled={readonly} checked={e.environmentAutoFit !== false} onChange={ev => patch({ environmentAutoFit: ev.target.checked })} />
+                      {t.envAutoFit}
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    <div><label className={lbl}>{t.envScale}</label><input type="number" min={0.05} max={20} step={0.05} className={fld} value={e.environmentScale ?? 1} disabled={readonly} onChange={ev => patch({ environmentScale: +ev.target.value || 1 })} /></div>
+                    <div><label className={lbl}>{t.envRot}</label><input type="number" min={-360} max={360} step={1} className={fld} value={Math.round((e.environmentRy || 0) * 180 / Math.PI)} disabled={readonly} onChange={ev => patch({ environmentRy: (+ev.target.value) * Math.PI / 180 })} /></div>
+                    <div><label className={lbl}>{t.envPos} X</label><input type="number" step={0.1} className={fld} value={e.environmentX ?? 0} disabled={readonly} onChange={ev => patch({ environmentX: +ev.target.value })} /></div>
+                    <div><label className={lbl}>Y</label><input type="number" step={0.1} className={fld} value={e.environmentY ?? 0} disabled={readonly} onChange={ev => patch({ environmentY: +ev.target.value })} /></div>
+                    <div><label className={lbl}>Z</label><input type="number" step={0.1} className={fld} value={e.environmentZ ?? 0} disabled={readonly} onChange={ev => patch({ environmentZ: +ev.target.value })} /></div>
+                  </div>
+                </div>
+              )}
               <div><label className={lbl}>{t.skybox}</label><input className={fld + ' dir-ltr'} value={e.skyboxUrl || ''} onChange={ev => patch({ skyboxUrl: ev.target.value || undefined })} placeholder="https://…/sky.hdr" /></div>
               <div><label className={lbl}>{t.music}</label><input className={fld + ' dir-ltr'} value={e.music || ''} onChange={ev => patch({ music: ev.target.value || undefined })} placeholder="https://…/ambient.mp3" /></div>
             </div>
