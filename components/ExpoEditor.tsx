@@ -253,7 +253,8 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     envCollisionHint: T ? 'از عبور از دیوارها جلوگیری می‌کند و روی پله‌ها و طبقات بالا می‌رود.' : 'Blocks walking through walls and lets you climb stairs to upper floors.',
     envMap: T ? 'نقشه محیط ۲D' : '2D environment map',
     envMediaT: T ? 'رسانه و دکمه‌های محیط سفارشی' : 'Custom environment media & buttons',
-    envMediaHint: T ? 'تصویر، ویدئو، PDF، مدل GLB و دکمه تماس/واتساپ را در محیط GLB قرار دهید. روی نقشه جابه‌جا کنید یا از «ادیت ۳D» با لپ‌تاپ یا عینک متاورس تنظیم کنید.' : 'Place images, videos, PDFs, GLB models and call/WhatsApp buttons in the GLB hall. Drag on the map or use «3D edit» on laptop or Meta Quest.',
+    envMediaHint: T ? 'تصویر، ویدئو، PDF، مدل GLB و دکمه تماس/واتساپ را در محیط GLB قرار دهید. فایل آپلود کنید یا لینک بگذارید. روی نقشه جابه‌جا کنید یا از «ادیت ۳D» تنظیم کنید.' : 'Place images, videos, PDFs, GLB models and call/WhatsApp buttons in the GLB hall. Upload files or paste a URL. Drag on the map or use «3D edit».',
+    envMediaFile: T ? 'فایل / لینک' : 'File / URL',
     addEnvMedia: T ? 'افزودن رسانه' : 'Add media',
     addEnvBtn: T ? 'افزودن دکمه' : 'Add button',
     noEnvMedia: T ? 'هنوز رسانه‌ای در محیط قرار نداده‌اید.' : 'No environment media yet.',
@@ -713,6 +714,84 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     );
   };
 
+  /** Environment media — upload file or paste URL (per kind). */
+  const EnvMediaField: React.FC<{ id: string; kind: ExpoEnvironmentMediaKind; value?: string; onUrl: (u: string) => void }> = ({ id, kind, value, onUrl }) => {
+    const imgRef = useRef<HTMLInputElement>(null);
+    const vidRef = useRef<HTMLInputElement>(null);
+    const pdfRef = useRef<HTMLInputElement>(null);
+    const htmlRef = useRef<HTMLInputElement>(null);
+
+    if (kind === 'glb') {
+      return (
+        <div className="md:col-span-2 lg:col-span-3 space-y-2">
+          <GlbUpload id={id} value={value} onUrl={onUrl} label={t.envMediaFile} />
+          <div>
+            <label className={lbl}>{T ? 'یا لینک مستقیم GLB' : 'Or direct GLB URL'}</label>
+            <input className={fld + ' dir-ltr'} value={value || ''} disabled={readonly} onChange={ev => onUrl(ev.target.value)} placeholder="https://…/model.glb" />
+          </div>
+        </div>
+      );
+    }
+    if (kind === 'audio') {
+      return (
+        <div className="md:col-span-2 lg:col-span-3 space-y-2">
+          <AudioUpload id={id} value={value} onUrl={onUrl} label={t.envMediaFile} />
+          <div>
+            <label className={lbl}>{T ? 'یا لینک فایل صوتی' : 'Or audio URL'}</label>
+            <input className={fld + ' dir-ltr'} value={value || ''} disabled={readonly} onChange={ev => onUrl(ev.target.value)} placeholder="https://…/audio.mp3" />
+          </div>
+        </div>
+      );
+    }
+
+    const showImg = kind === 'image';
+    const showVid = kind === 'video';
+    const showPdf = kind === 'pdf';
+    const showHtml = kind === 'html';
+    const isImage = !!value && /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(value);
+    const isPdf = !!value && /\.pdf(\?.*)?$/i.test(value);
+    const isVideo = !!value && (/\.(mp4|webm|ogg)(\?.*)?$/i.test(value) || /youtube|vimeo/i.test(value));
+
+    return (
+      <div className="md:col-span-2 lg:col-span-3">
+        <label className={lbl}>{t.envMediaFile}</label>
+        <div className="flex gap-1.5 flex-wrap items-center">
+          {isImage && <img src={value} alt="" className="w-9 h-9 rounded object-cover border border-gray-200" />}
+          {isPdf && <span className="text-[11px] px-2 py-1 rounded bg-amber-50 text-amber-700 font-bold">PDF</span>}
+          {isVideo && <span className="text-[11px] px-2 py-1 rounded bg-rose-50 text-rose-700 font-bold">VIDEO</span>}
+          {showHtml && value && <span className="text-[11px] px-2 py-1 rounded bg-sky-50 text-sky-700 font-bold">HTML</span>}
+          <input
+            className={fld + ' dir-ltr flex-1 min-w-[10rem]'}
+            value={value || ''}
+            disabled={readonly}
+            onChange={ev => onUrl(ev.target.value)}
+            placeholder={T ? 'لینک یا از دکمه‌ها آپلود کنید' : 'URL or upload via buttons'}
+          />
+          {!readonly && showImg && (
+            <button type="button" title={t.uploadImg} onClick={() => imgRef.current?.click()} className="shrink-0 text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              <IconUpload className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!readonly && showVid && (
+            <button type="button" title={t.uploadVid} onClick={() => vidRef.current?.click()} className="shrink-0 text-[13px] px-1.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50">🎬</button>
+          )}
+          {!readonly && showPdf && (
+            <button type="button" title={t.uploadPdf} onClick={() => pdfRef.current?.click()} className="shrink-0 text-[12px] px-1.5 py-1.5 rounded-lg border border-amber-200 text-amber-600 hover:bg-amber-50">PDF</button>
+          )}
+          {!readonly && showHtml && (
+            <button type="button" title={t.uploadHtml} onClick={() => htmlRef.current?.click()} className="shrink-0 text-[12px] px-1.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50">🌐</button>
+          )}
+          {value && !readonly && <button type="button" onClick={() => onUrl('')} className="text-xs text-red-400 hover:text-red-600">{t.clear}</button>}
+        </div>
+        {uploading === id && <span className="text-[10px] text-gray-400">{t.uploading} {uploadPct > 0 ? `${uploadPct}%` : ''}</span>}
+        <input type="file" ref={imgRef} className="hidden" accept="image/*" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadImage(id, f, onUrl); ev.target.value = ''; }} />
+        <input type="file" ref={vidRef} className="hidden" accept="video/mp4,video/webm,video/ogg,.mp4,.webm,.ogg" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadVideo(id, f, onUrl); ev.target.value = ''; }} />
+        <input type="file" ref={pdfRef} className="hidden" accept="application/pdf,.pdf" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadPdf(id, f, onUrl); ev.target.value = ''; }} />
+        <input type="file" ref={htmlRef} className="hidden" accept="text/html,.html,.htm" onChange={ev => { const f = ev.target.files?.[0]; if (f) uploadHtml(id, f, onUrl); ev.target.value = ''; }} />
+      </div>
+    );
+  };
+
   const previewUrl = `${shopBaseUrl}?expo=${encodeURIComponent(bazaarSlug)}`;
   const shopProducts = (slug?: string) => (slug ? (shops.find(s => s.slug === slug)?.products || []) : []);
   const downloadExpoMultilingualSample = () => {
@@ -1027,7 +1106,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                                 </div>
                                 <DirCatInputs langs={expoLangs} value={m.title} onChange={(code, val) => setEnvMediaTitle(m, code as 'fa' | 'en', val)} fld={fld} lbl={T ? 'عنوان' : 'Title'} />
                                 {m.kind !== 'button' && (
-                                  <div className="md:col-span-2"><label className={lbl}>{t.hUrl}</label><input className={fld + ' dir-ltr'} value={m.url || ''} disabled={readonly} onChange={ev => updEnvMediaItem(m.id, { url: ev.target.value })} /></div>
+                                  <EnvMediaField id={`env-media-${m.id}`} kind={m.kind} value={m.url} onUrl={u => updEnvMediaItem(m.id, { url: u || undefined })} />
                                 )}
                                 {m.kind === 'button' && (
                                   <>
