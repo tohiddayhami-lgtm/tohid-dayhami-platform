@@ -18,6 +18,7 @@ interface Props {
   onPreview?: () => void | Promise<void>;  // saves the bazaar, then opens the 3D preview
   onEnvironmentEdit?: () => void | Promise<void>;  // saves, then opens 3D environment edit mode
   readonly?: boolean;
+  canDeleteBooths?: boolean;
 }
 
 const PRESETS: EnvPreset[] = ['warehouse', 'city', 'sunset', 'dawn', 'night', 'forest', 'apartment', 'studio', 'park', 'lobby'];
@@ -73,7 +74,7 @@ const DirCatInputs: React.FC<{
 
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`;
 
-export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, onEnvironmentEdit, readonly = false }) => {
+export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, shopBaseUrl, onChange, onPreview, onEnvironmentEdit, readonly = false, canDeleteBooths = false }) => {
   const T = lang === 'fa';
   const e: MetaverseExpo = expo || { ...blankExpo(), enabled: false };
   const expoLangs = resolveExpoLanguages(e);
@@ -1559,7 +1560,7 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                         {b.shopSlug && <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{b.shopSlug}</span>}
                         <span className="text-[10px] text-gray-400">{(b.hotspots || []).length} ⭐</span>
                         <button onClick={() => setOpenBooth(open ? null : b.id)} className="text-xs px-2 py-1 rounded-lg text-indigo-500 hover:bg-indigo-50 flex items-center gap-1"><IconEdit className="w-3.5 h-3.5" />{t.edit}</button>
-                        {!readonly && <button onClick={() => delBooth(b.id)} className="text-xs px-2 py-1 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
+                        {!readonly && canDeleteBooths && <button onClick={() => delBooth(b.id)} className="text-xs px-2 py-1 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                       </div>
 
                       {open && (

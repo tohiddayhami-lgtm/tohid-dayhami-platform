@@ -146,7 +146,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
 
   const [formData, setFormData] = useState({
     fullName: '', roles: [] as string[], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
-    canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false
+    canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
+    canManageMetaShop: false, canDeleteMetaShop: false
   });
 
   const [newDocTitle, setNewDocTitle] = useState('');
@@ -248,6 +249,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           permTariffs: 'مشاهده تعرفه‌ها',
           permInvoice: 'صدور و ویرایش فاکتور خود',
           permAllInvoices: 'مشاهده همه فاکتورها',
+          permMetaShop: 'مدیریت متاشاپ و نمایشگاه',
+          permMetaShopDelete: 'حذف فروشگاه/بازارچه (بدون حذف غرفه)',
           docs: 'پرونده پرسنلی و مدارک',
           docTitle: 'عنوان مدرک',
           docFile: 'فایل',
@@ -302,6 +305,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
           permTariffs: 'View Tariffs',
           permInvoice: 'Issue & edit own invoices',
           permAllInvoices: 'View all invoices',
+          permMetaShop: 'Manage Meta Shop & exhibitions',
+          permMetaShopDelete: 'Delete shops/bazaars (not booths)',
           docs: 'Personnel Documents',
           docTitle: 'Document Title',
           docFile: 'File',
@@ -330,14 +335,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
         canAssign: person.permissions?.canAssign || false, canViewCustomers: person.permissions?.canViewCustomers || false,
         canViewTariffs: person.permissions?.canViewTariffs || false, canViewAllTickets: person.permissions?.canViewAllTickets || false,
         canIssueInvoices: person.permissions?.canIssueInvoices || false,
-        canViewAllInvoices: person.permissions?.canViewAllInvoices || false
+        canViewAllInvoices: person.permissions?.canViewAllInvoices || false,
+        canManageMetaShop: person.permissions?.canManageMetaShop || false,
+        canDeleteMetaShop: person.permissions?.canDeleteMetaShop || false
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false });
+      setFormData({ fullName: '', roles: [], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -375,7 +382,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.roles.length === 0 || formData.documents.some(d => d.file.status === 'uploading') || isProcessingImage) return;
-    const permissions = { canAssign: formData.canAssign, canViewCustomers: formData.canViewCustomers, canViewTariffs: formData.canViewTariffs, canViewAllTickets: formData.canViewAllTickets, canIssueInvoices: formData.canIssueInvoices, canViewAllInvoices: formData.canViewAllInvoices };
+    const permissions = { canAssign: formData.canAssign, canViewCustomers: formData.canViewCustomers, canViewTariffs: formData.canViewTariffs, canViewAllTickets: formData.canViewAllTickets, canIssueInvoices: formData.canIssueInvoices, canViewAllInvoices: formData.canViewAllInvoices, canManageMetaShop: formData.canManageMetaShop, canDeleteMetaShop: formData.canDeleteMetaShop && formData.canManageMetaShop };
     if (editingId) {
         onUpdate(personnel.map(p => p.id === editingId ? { ...p, ...formData, permissions } : p));
     } else {
@@ -626,7 +633,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                  </div>
              </div>
           </div>
-          <div className="border-t border-gray-100 pt-4"><label className="block text-sm font-bold text-gray-700 mb-3">{t.permissions}</label><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"><label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-3 rounded-lg border border-blue-100"><input type="checkbox" className="w-4 h-4" checked={formData.canAssign} onChange={e => setFormData({...formData, canAssign: e.target.checked})}/><span className="text-xs font-bold text-blue-800">{t.permAssign}</span></label><label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-3 rounded-lg border border-purple-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllTickets} onChange={e => setFormData({...formData, canViewAllTickets: e.target.checked})}/><span className="text-xs font-bold text-purple-800">{t.permAllTickets}</span></label><label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 py-3 rounded-lg border border-green-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewCustomers} onChange={e => setFormData({...formData, canViewCustomers: e.target.checked})}/><span className="text-xs font-bold text-green-800">{t.permCustomers}</span></label><label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-3 py-3 rounded-lg border border-amber-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewTariffs} onChange={e => setFormData({...formData, canViewTariffs: e.target.checked})}/><span className="text-xs font-bold text-amber-800">{t.permTariffs}</span></label><label className="flex items-center gap-2 cursor-pointer bg-rose-50 px-3 py-3 rounded-lg border border-rose-100"><input type="checkbox" className="w-4 h-4" checked={formData.canIssueInvoices} onChange={e => setFormData({...formData, canIssueInvoices: e.target.checked})}/><span className="text-xs font-bold text-rose-800">{t.permInvoice}</span></label><label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-3 rounded-lg border border-slate-200"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllInvoices} onChange={e => setFormData({...formData, canViewAllInvoices: e.target.checked})}/><span className="text-xs font-bold text-slate-800">{t.permAllInvoices}</span></label></div></div>
+          <div className="border-t border-gray-100 pt-4"><label className="block text-sm font-bold text-gray-700 mb-3">{t.permissions}</label><div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"><label className="flex items-center gap-2 cursor-pointer bg-blue-50 px-3 py-3 rounded-lg border border-blue-100"><input type="checkbox" className="w-4 h-4" checked={formData.canAssign} onChange={e => setFormData({...formData, canAssign: e.target.checked})}/><span className="text-xs font-bold text-blue-800">{t.permAssign}</span></label><label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-3 rounded-lg border border-purple-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllTickets} onChange={e => setFormData({...formData, canViewAllTickets: e.target.checked})}/><span className="text-xs font-bold text-purple-800">{t.permAllTickets}</span></label><label className="flex items-center gap-2 cursor-pointer bg-green-50 px-3 py-3 rounded-lg border border-green-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewCustomers} onChange={e => setFormData({...formData, canViewCustomers: e.target.checked})}/><span className="text-xs font-bold text-green-800">{t.permCustomers}</span></label><label className="flex items-center gap-2 cursor-pointer bg-amber-50 px-3 py-3 rounded-lg border border-amber-100"><input type="checkbox" className="w-4 h-4" checked={formData.canViewTariffs} onChange={e => setFormData({...formData, canViewTariffs: e.target.checked})}/><span className="text-xs font-bold text-amber-800">{t.permTariffs}</span></label><label className="flex items-center gap-2 cursor-pointer bg-rose-50 px-3 py-3 rounded-lg border border-rose-100"><input type="checkbox" className="w-4 h-4" checked={formData.canIssueInvoices} onChange={e => setFormData({...formData, canIssueInvoices: e.target.checked})}/><span className="text-xs font-bold text-rose-800">{t.permInvoice}</span></label><label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-3 rounded-lg border border-slate-200"><input type="checkbox" className="w-4 h-4" checked={formData.canViewAllInvoices} onChange={e => setFormData({...formData, canViewAllInvoices: e.target.checked})}/><span className="text-xs font-bold text-slate-800">{t.permAllInvoices}</span></label><label className="flex items-center gap-2 cursor-pointer bg-cyan-50 px-3 py-3 rounded-lg border border-cyan-100"><input type="checkbox" className="w-4 h-4" checked={formData.canManageMetaShop} onChange={e => setFormData({...formData, canManageMetaShop: e.target.checked, ...(e.target.checked ? {} : { canDeleteMetaShop: false })})}/><span className="text-xs font-bold text-cyan-800">{t.permMetaShop}</span></label><label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canManageMetaShop ? 'cursor-pointer bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}><input type="checkbox" className="w-4 h-4" disabled={!formData.canManageMetaShop} checked={formData.canDeleteMetaShop} onChange={e => setFormData({...formData, canDeleteMetaShop: e.target.checked})}/><span className="text-xs font-bold text-red-800">{t.permMetaShopDelete}</span></label></div></div>
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
             <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
               <IconPaperclip className="w-4 h-4 text-indigo-500" />

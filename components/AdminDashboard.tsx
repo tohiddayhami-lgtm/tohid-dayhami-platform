@@ -14,6 +14,7 @@ import { InvoiceModal } from './InvoiceModal';
 import { InvoiceManager } from './InvoiceManager';
 import { getStaffCode } from '../services/staffId';
 import { MetaShopManager } from './MetaShopManager';
+import { canAccessMetaShop, canEditMetaShop, canDeleteMetaShopRecords, canDeleteBooths } from '../utils/metaShopAccess';
 import { TaskManager } from './TaskManager';
 import { MeetingCalendar } from './MeetingCalendar';
 import { PerformanceReports } from './PerformanceReports';
@@ -127,6 +128,10 @@ export const AdminDashboard: React.FC<Props> = ({
   const hasCustomerAccess = isAdmin || isMaster || currentUser?.permissions?.canViewCustomers;
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
+  const hasMetaShopAccess = canAccessMetaShop(currentUser);
+  const canEditMetaShopPanel = canEditMetaShop(currentUser);
+  const canDeleteMetaShopPanel = canDeleteMetaShopRecords(currentUser);
+  const canDeleteBoothsInMetaShop = canDeleteBooths(currentUser);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
@@ -1834,7 +1839,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'overview' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconActivity className="w-4 h-4 shrink-0" /><span>{t.overview}</span></button>
                 {hasCustomerAccess && <button onClick={() => setActiveTab('customer_bank')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_bank' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'بانک مشتریان' : 'Customer Bank'}</span></button>}
                 {canManageInvoices && <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'invoices' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconInvoice className="w-4 h-4 shrink-0" /><span>Invoices</span></button>}
-                {(isAdmin || isMaster) && <button onClick={() => setActiveTab('metashop')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'metashop' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTag className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'متاشاپ' : 'Meta Shop'}</span></button>}
+                {hasMetaShopAccess && <button onClick={() => setActiveTab('metashop')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'metashop' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTag className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'متاشاپ' : 'Meta Shop'}</span></button>}
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'tasks' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconList className="w-4 h-4 shrink-0" /><span>{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
                 <button onClick={() => setActiveTab('staff_reports')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'staff_reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.staff_reports}</span></button>
                 <button onClick={() => setActiveTab('meetings')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'meetings' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconCalendarClock className="w-4 h-4 shrink-0" /><span>{t.meetings}</span></button>
@@ -1859,8 +1864,8 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'invoices' && canManageInvoices && onSaveInvoice && onDeleteInvoice && (
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
-        {activeTab === 'metashop' && (isAdmin || isMaster) && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={metaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!(isAdmin || isMaster)} />
+        {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
+          <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={metaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />

@@ -23,6 +23,8 @@ interface Props {
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
   readonly?: boolean;
+  canDelete?: boolean;
+  canDeleteBooths?: boolean;
 }
 
 const DEFAULT_THEME = { primary: '#2d4a1a', cover: '#2d4a1a', coverText: '#fdfbf6', bg: '#fdfbf6', heading: '#1f2a18', text: '#2d3a24' };
@@ -125,7 +127,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos'>('shops');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
@@ -528,7 +530,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     return (
       <div className="space-y-4 animate-fade-in">
         {sectionToggle}
-        <MetaExpoManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
+        <MetaExpoManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} canDelete={canDelete} canDeleteBooths={canDeleteBooths} />
       </div>
     );
   }
@@ -538,7 +540,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     return (
       <div className="space-y-4 animate-fade-in">
         {sectionToggle}
-        <MetaBazaarManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} />
+        <MetaBazaarManager bazaars={metaBazaars} shops={metaShops} lang={lang} shopBaseUrl={shopBaseUrl} onSave={onSaveMetaBazaar} onDelete={onDeleteMetaBazaar} readonly={readonly} canDelete={canDelete} canDeleteBooths={canDeleteBooths} />
       </div>
     );
   }
@@ -591,7 +593,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
                       {!readonly && <button onClick={() => startEdit(s)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
-                      {!readonly && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaShop(s.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
+                      {!readonly && canDelete && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaShop(s.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
                 </div>

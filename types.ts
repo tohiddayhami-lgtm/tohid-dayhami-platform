@@ -60,6 +60,8 @@ export interface PersonnelPermissions {
   canViewAllTickets: boolean;
   canIssueInvoices: boolean;      // create & edit own invoices
   canViewAllInvoices?: boolean;   // view all invoices in archive (master/admin always)
+  canManageMetaShop?: boolean;    // access Meta Shop panel; edit shops, bazaars, expos, booth layout
+  canDeleteMetaShop?: boolean;    // delete whole shops/bazaars (booth delete stays admin-only)
 }
 
 export interface PersonnelDocument {

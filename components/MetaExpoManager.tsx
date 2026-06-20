@@ -28,6 +28,8 @@ interface Props {
   onSave: (b: MetaBazaar) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   readonly?: boolean;
+  canDelete?: boolean;
+  canDeleteBooths?: boolean;
 }
 
 export const MetaExpoManager: React.FC<Props> = ({
@@ -38,6 +40,8 @@ export const MetaExpoManager: React.FC<Props> = ({
   onSave,
   onDelete,
   readonly = false,
+  canDelete = false,
+  canDeleteBooths = false,
 }) => {
   const T = lang === 'fa';
   const [category, setCategory] = useState<ExpoCatalogFilter>('all');
@@ -254,6 +258,8 @@ export const MetaExpoManager: React.FC<Props> = ({
         onSave={onSave}
         onDelete={onDelete}
         readonly={readonly}
+        canDelete={canDelete}
+        canDeleteBooths={canDeleteBooths}
         embeddedDraft={draft}
         onEmbeddedClose={() => setDraft(null)}
       />
@@ -563,7 +569,7 @@ export const MetaExpoManager: React.FC<Props> = ({
                         <IconEdit className="w-3.5 h-3.5" />{t.edit}
                       </button>
                     )}
-                    {!readonly && (
+                    {!readonly && canDelete && (
                       <button
                         type="button"
                         onClick={() => { if (confirm(t.deleteConfirm)) onDelete(b.id); }}

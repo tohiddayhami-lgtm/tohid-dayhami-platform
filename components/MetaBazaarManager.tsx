@@ -15,6 +15,8 @@ interface Props {
   onSave: (b: MetaBazaar) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   readonly?: boolean;
+  canDelete?: boolean;
+  canDeleteBooths?: boolean;
   /** When set, open directly in bazaar/expo editor (from MetaExpoManager). */
   embeddedDraft?: MetaBazaar | null;
   onEmbeddedClose?: () => void;
@@ -49,7 +51,7 @@ const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
   };
 };
 
-export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopBaseUrl, onSave, onDelete, readonly = false, embeddedDraft, onEmbeddedClose }) => {
+export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopBaseUrl, onSave, onDelete, readonly = false, canDelete = false, canDeleteBooths = false, embeddedDraft, onEmbeddedClose }) => {
   const [draft, setDraft] = useState<MetaBazaar | null>(embeddedDraft ?? null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -247,7 +249,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           <input className="px-2 py-1.5 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500 flex-1 min-w-[110px] dir-ltr" value={node.label?.en || ''} onChange={e => setNodeLabel(node.id, 'en', e.target.value)} placeholder={t.nodeEn} />
           <button onClick={() => { setShopPanelFor(open ? null : node.id); setShopSearch(''); }} className={`text-xs px-2.5 py-1.5 rounded-lg border flex items-center gap-1 ${open ? 'bg-indigo-600 text-white border-indigo-600' : count ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>🛍 {t.shopsBtn}{count > 0 ? ` (${count})` : ''}</button>
           <button onClick={() => addChild(node.id)} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addChild}</button>
-          <button onClick={() => { if (confirm(T ? 'این گره و همه زیرمجموعه‌هایش حذف شود؟' : 'Delete this node and its children?')) delNode(node.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-4 h-4" /></button>
+          {canDeleteBooths && <button onClick={() => { if (confirm(T ? 'این گره و همه زیرمجموعه‌هایش حذف شود؟' : 'Delete this node and its children?')) delNode(node.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-4 h-4" /></button>}
         </div>
 
         {open && (
@@ -351,6 +353,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           onPreview={previewExpo}
           onEnvironmentEdit={environmentEditExpo}
           readonly={readonly}
+          canDeleteBooths={canDeleteBooths}
         />
         <input type="file" ref={updFileRef} className="hidden" accept=".json,application/json" onChange={handleUpdFile} />
       </div>
@@ -520,7 +523,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                   {!readonly && <button onClick={() => { setUpdTarget(b); updFileRef.current?.click(); }} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒</button>}
                   {!readonly && <button onClick={() => duplicateBazaar(b)} disabled={saving} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50" title={t.duplicate}><IconCopy className="w-3.5 h-3.5" /></button>}
                   {!readonly && <button onClick={() => setDraft(JSON.parse(JSON.stringify(b)))} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
-                  {!readonly && <button onClick={() => { if (confirm(t.deleteConfirm)) onDelete(b.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
+                  {!readonly && canDelete && <button onClick={() => { if (confirm(t.deleteConfirm)) onDelete(b.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                 </div>
               </div>
             </div>
