@@ -62,6 +62,7 @@ export interface PersonnelPermissions {
   canViewAllInvoices?: boolean;   // view all invoices in archive (master/admin always)
   canManageMetaShop?: boolean;    // access Meta Shop panel; edit shops, bazaars, expos, booth layout
   canDeleteMetaShop?: boolean;    // delete whole shops/bazaars (booth delete stays admin-only)
+  allowedMetaShopIds?: string[];  // if set, staff only sees/edits these shop ids in the panel
 }
 
 export interface PersonnelDocument {
@@ -1081,6 +1082,8 @@ export interface MetaShop {
   assignType?: 'personnel' | 'department';
   assignedPersonnelIds?: string[];
   assignedDepartmentId?: string;
+  /** Personnel who may view/edit this shop in the admin panel (empty = all with canManageMetaShop). */
+  editorPersonnelIds?: string[];
   // labels
   cartButtonText?: string;
   orderThankYouText?: string;

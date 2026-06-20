@@ -234,6 +234,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     thanksTxt: T ? 'متن تشکر پس از سفارش' : 'Order thank-you text', cartBtn: T ? 'متن دکمه سفارش' : 'Order button text',
     routeHint: T ? 'سفارش‌های این فروشگاه به کارتابل چه کسانی برود؟' : 'Whose cartable should orders go to?',
     routePersonnel: T ? 'پرسنل مشخص' : 'Specific personnel', routeDept: T ? 'یک دپارتمان' : 'A department', routeNone: T ? 'پیش‌فرض (مستر)' : 'Default (master)',
+    editorAccess: T ? 'دسترسی ویرایش در پنل' : 'Panel edit access',
+    editorAccessHint: T ? 'پرسنلی که می‌تواند این فروشگاه را در پنل متاشاپ ببیند و ویرایش کند. خالی = همه پرسنل دارای مجوز متاشاپ.' : 'Staff who can view/edit this shop in the Meta Shop panel. Empty = all staff with Meta Shop permission.',
     addProduct: T ? 'افزودن مورد' : 'Add item', noProducts: T ? 'موردی اضافه نشده است.' : 'No items added.',
     pName: T ? 'نام' : 'Name', pSku: T ? 'کد (SKU)' : 'SKU', pGroup: T ? 'دسته' : 'Category', pSubcat: T ? 'زیردسته' : 'Subcategory', pPrice: T ? 'قیمت' : 'Price', pPack: T ? 'قیمت بسته' : 'Pack price',
     pCurrency: T ? 'ارز محصول' : 'Currency', optCur: T ? 'ارز' : 'Cur',
@@ -951,6 +953,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </select>
         )}
       </div>
+
+      {/* Panel edit access */}
+      {!readonly && (
+        <div className={card}>
+          <h4 className="font-bold text-gray-700 mb-1 flex items-center gap-2"><IconUsers className="w-4 h-4 text-cyan-500" />{t.editorAccess}</h4>
+          <p className="text-xs text-gray-500 mb-4">{t.editorAccessHint}</p>
+          <div className="flex flex-wrap gap-2">
+            {personnel.filter(p => p.status !== 'inactive').map(p => {
+              const on = (draft.editorPersonnelIds || []).includes(p.id);
+              return (
+                <button key={p.id} type="button" onClick={() => upd({ editorPersonnelIds: on ? (draft.editorPersonnelIds || []).filter(id => id !== p.id) : [...(draft.editorPersonnelIds || []), p.id] })} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${on ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-white text-gray-600 border-gray-200'}`}>{p.fullName}</button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Default checkout fees */}
       <div className={card}>

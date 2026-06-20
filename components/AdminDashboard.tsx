@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaBazaar } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
@@ -14,7 +14,7 @@ import { InvoiceModal } from './InvoiceModal';
 import { InvoiceManager } from './InvoiceManager';
 import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
 import { MetaShopManager } from './MetaShopManager';
-import { canAccessMetaShop, canEditMetaShop, canDeleteMetaShopRecords, canDeleteBooths } from '../utils/metaShopAccess';
+import { canAccessMetaShop, canEditMetaShop, canDeleteMetaShopRecords, canDeleteBooths, filterMetaShopsForUser, filterMetaBazaarsForUser } from '../utils/metaShopAccess';
 import { TaskManager } from './TaskManager';
 import { MeetingCalendar } from './MeetingCalendar';
 import { PerformanceReports } from './PerformanceReports';
@@ -132,6 +132,12 @@ export const AdminDashboard: React.FC<Props> = ({
   const canEditMetaShopPanel = canEditMetaShop(currentUser);
   const canDeleteMetaShopPanel = canDeleteMetaShopRecords(currentUser);
   const canDeleteBoothsInMetaShop = canDeleteBooths(currentUser);
+  const visibleMetaShops = useMemo(() => filterMetaShopsForUser(currentUser, metaShops), [currentUser, metaShops]);
+  const visibleMetaBazaars = useMemo(() => filterMetaBazaarsForUser(currentUser, metaBazaars, visibleMetaShops), [currentUser, metaBazaars, visibleMetaShops]);
+  const visibleMetaShopOrders = useMemo(() => {
+    const ids = new Set(visibleMetaShops.map(s => s.id));
+    return metaShopOrders.filter(o => ids.has(o.shopId));
+  }, [visibleMetaShops, metaShopOrders]);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
@@ -1866,7 +1872,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={metaShops} metaShopOrders={metaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={metaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
+          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />
@@ -2216,7 +2222,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'tasks' && <TaskManager currentUser={currentUser} personnel={personnel} tasks={tasks} lang={lang} />}
         {activeTab === 'meetings' && <MeetingCalendar meetings={meetings} currentUser={currentUser} personnel={personnel} lang={lang} notificationConfig={config.notificationConfig} />}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} config={config} />}
-        {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
+        {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} metaShops={metaShops} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'notifications' && isMaster && <NotificationCenter config={config} personnel={personnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}

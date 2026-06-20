@@ -830,10 +830,22 @@ export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSect
 
 // ── Meta Shops (online catalogs/shops) ──
 export const saveMetaShopToCloud = async (shop: MetaShop) => {
-    await setDoc(doc(db, "metaShops", shop.id), sanitizeData(shop));
+    const proxy = await checkProxyMode();
+    if (proxy) {
+        await proxyWrite('metaShops', shop.id, sanitizeData(shop));
+    } else {
+        await setDoc(doc(db, "metaShops", shop.id), sanitizeData(shop));
+    }
     logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shop.name} ذخیره شد`, 'Master', shop.id);
 };
 export const deleteMetaShopFromCloud = async (id: string) => {
+    const proxy = await checkProxyMode();
+    if (proxy) {
+        const existing = await proxyGet<MetaShop>('metaShops', { doc: id });
+        await fetch(`${_fb}?col=${encodeURIComponent('metaShops')}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
+        logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, existing, 'metaShops');
+        return;
+    }
     const ref = doc(db, "metaShops", id);
     const snap = await getDoc(ref);
     const data = snap.exists() ? snap.data() : null;
@@ -841,16 +853,36 @@ export const deleteMetaShopFromCloud = async (id: string) => {
     logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
 };
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) => {
-    const q = query(collection(db, "metaShops"));
-    return onSnapshot(q, (snapshot) => {
-        const shops = snapshot.docs.map(d => d.data() as MetaShop);
+    let inner: (() => void) | null = null;
+    let gone = false;
+
+    const deliver = (shops: MetaShop[]) => {
         shops.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         callback(shops);
-    }, (e) => {});
+    };
+
+    checkProxyMode().then(proxy => {
+        if (gone) return;
+        if (proxy) {
+            inner = proxyPoll<MetaShop>('metaShops', deliver);
+        } else {
+            const q = query(collection(db, "metaShops"));
+            inner = onSnapshot(q, (snapshot) => {
+                deliver(snapshot.docs.map(d => d.data() as MetaShop));
+            }, () => {});
+        }
+    });
+
+    return () => { gone = true; inner?.(); };
 };
 // Fetch a single shop directly (public view, before the subscription warms up)
 export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> => {
     try {
+        const proxy = await checkProxyMode();
+        if (proxy) {
+            const all = await proxyGet<MetaShop[]>('metaShops');
+            return (all || []).find(s => s.slug === slug) || null;
+        }
         const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
         const snap = await getDocs(q);
         if (snap.empty) return null;
@@ -904,15 +936,35 @@ export const deleteMetaBazaarFromCloud = async (id: string) => {
     logSystemAction('DELETE', 'MetaBazaar', `بازارچه حذف شد`, 'Master', id, data, 'metaBazaars');
 };
 export const subscribeToMetaBazaars = (callback: (bazaars: MetaBazaar[]) => void) => {
-    const q = query(collection(db, "metaBazaars"));
-    return onSnapshot(q, (snapshot) => {
-        const bazaars = snapshot.docs.map(d => d.data() as MetaBazaar);
+    let inner: (() => void) | null = null;
+    let gone = false;
+
+    const deliver = (bazaars: MetaBazaar[]) => {
         bazaars.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         callback(bazaars);
-    }, (e) => {});
+    };
+
+    checkProxyMode().then(proxy => {
+        if (gone) return;
+        if (proxy) {
+            inner = proxyPoll<MetaBazaar>('metaBazaars', deliver);
+        } else {
+            const q = query(collection(db, "metaBazaars"));
+            inner = onSnapshot(q, (snapshot) => {
+                deliver(snapshot.docs.map(d => d.data() as MetaBazaar));
+            }, () => {});
+        }
+    });
+
+    return () => { gone = true; inner?.(); };
 };
 export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | null> => {
     try {
+        const proxy = await checkProxyMode();
+        if (proxy) {
+            const all = await proxyGet<MetaBazaar[]>('metaBazaars');
+            return (all || []).find(b => b.slug === slug) || null;
+        }
         const q = query(collection(db, "metaBazaars"), where("slug", "==", slug), limit(1));
         const snap = await getDocs(q);
         if (snap.empty) return null;
