@@ -144,10 +144,38 @@ export const AdminDashboard: React.FC<Props> = ({
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
   const faviconInputRef = useRef<HTMLInputElement>(null);
-  // Optimistic flag state so the star toggles instantly (independent of the Firestore round-trip)
+  // Per-user flags — personnel and master each have their own starred cases
   const [flagOverride, setFlagOverride] = useState<Record<string, boolean>>({});
-  const isFlaggedOf = (tk: Ticket) => flagOverride[tk.id] !== undefined ? flagOverride[tk.id] : !!tk.isFlagged;
-  const toggleFlag = (tk: Ticket) => { const next = !isFlaggedOf(tk); setFlagOverride(o => ({ ...o, [tk.id]: next })); onUpdateTicket(tk.id, { isFlagged: next }, currentUser.fullName || currentUser.username); };
+  const isLegacyFlagViewer = currentUser.username === 'master' || (currentUser.roles || []).includes('مدیر');
+  const isFlaggedOf = (tk: Ticket) => {
+    if (flagOverride[tk.id] !== undefined) return flagOverride[tk.id];
+    if (tk.flaggedBy?.length) return tk.flaggedBy.includes(currentUser.id);
+    if (tk.isFlagged) return isLegacyFlagViewer;
+    return false;
+  };
+  const toggleFlag = (tk: Ticket) => {
+    const next = !isFlaggedOf(tk);
+    setFlagOverride(o => ({ ...o, [tk.id]: next }));
+
+    let flaggedBy = [...(tk.flaggedBy || [])];
+    // Migrate old global isFlagged → per-user list
+    if (tk.isFlagged && !tk.flaggedBy?.length) {
+      if (!next && isLegacyFlagViewer) {
+        onUpdateTicket(tk.id, { flaggedBy: [], isFlagged: false }, currentUser.fullName || currentUser.username);
+        return;
+      }
+      flaggedBy = next ? [currentUser.id] : [];
+      onUpdateTicket(tk.id, { flaggedBy, isFlagged: false }, currentUser.fullName || currentUser.username);
+      return;
+    }
+
+    if (next) {
+      if (!flaggedBy.includes(currentUser.id)) flaggedBy.push(currentUser.id);
+    } else {
+      flaggedBy = flaggedBy.filter(id => id !== currentUser.id);
+    }
+    onUpdateTicket(tk.id, { flaggedBy, ...(flaggedBy.length === 0 ? { isFlagged: false } : {}) }, currentUser.fullName || currentUser.username);
+  };
   const [heroBgUploading, setHeroBgUploading] = useState(false);
   const [heroBgProgress, setHeroBgProgress] = useState(0);
   const heroBgInputRef = useRef<HTMLInputElement>(null);

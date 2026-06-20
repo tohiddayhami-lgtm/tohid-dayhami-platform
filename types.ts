@@ -324,7 +324,9 @@ export interface Ticket {
   projectData?: ProjectDetails;
   discountApplied?: boolean;
   customerUploadWindow?: CustomerUploadWindow;
-  isFlagged?: boolean;
+  isFlagged?: boolean; // legacy global flag — prefer flaggedBy
+  /** Personnel ids who flagged this case in their own cartable. */
+  flaggedBy?: string[];
   labelIds?: string[];
 }
 
