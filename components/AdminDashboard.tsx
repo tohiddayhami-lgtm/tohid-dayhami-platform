@@ -1639,10 +1639,11 @@ export const AdminDashboard: React.FC<Props> = ({
     try { return JSON.parse(str); } catch { return { summary: { fa: str, en: '' } }; }
   };
   const jdView = parseJDForView(currentUser.jobDescription);
+  const hasJobProfile = !!(currentUser.jobDescription || currentUser.staffNote?.trim());
 
   return (
     <div className="flex flex-col md:flex-row gap-5 min-h-[calc(100vh-100px)]">
-      {showJobDescModal && jdView && (
+      {showJobDescModal && hasJobProfile && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={() => setShowJobDescModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-4 animate-fade-in" dir="rtl" onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
@@ -1653,7 +1654,7 @@ export const AdminDashboard: React.FC<Props> = ({
               <button onClick={() => setShowJobDescModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
             </div>
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              {jdView.position?.fa && (
+              {jdView && jdView.position?.fa && (
                 <div className="flex items-center gap-3 bg-indigo-50 rounded-xl p-3 border border-indigo-100">
                   <div>
                     <p className="text-xs text-indigo-500 font-semibold">{lang === 'fa' ? 'سمت / عنوان شغلی' : 'Position'}</p>
@@ -1661,19 +1662,19 @@ export const AdminDashboard: React.FC<Props> = ({
                   </div>
                 </div>
               )}
-              {jdView.department?.fa && (
+              {jdView?.department?.fa && (
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'واحد سازمانی' : 'Department'}</p>
                   <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.department.fa : (jdView.department.en || jdView.department.fa)}</p>
                 </div>
               )}
-              {jdView.summary?.fa && (
+              {jdView?.summary?.fa && (
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <p className="text-xs text-gray-400 font-semibold mb-1">{lang === 'fa' ? 'خلاصه شغل' : 'Summary'}</p>
                   <p className="text-sm text-gray-700 leading-relaxed">{lang === 'fa' ? jdView.summary.fa : (jdView.summary.en || jdView.summary.fa)}</p>
                 </div>
               )}
-              {jdView.responsibilities?.length > 0 && (
+              {jdView?.responsibilities?.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-400 font-semibold mb-2">{lang === 'fa' ? 'مسئولیت‌های اصلی' : 'Responsibilities'}</p>
                   <ul className="space-y-1.5">
@@ -1686,7 +1687,7 @@ export const AdminDashboard: React.FC<Props> = ({
                   </ul>
                 </div>
               )}
-              {jdView.kpis?.length > 0 && (
+              {jdView?.kpis?.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-400 font-semibold mb-2">{lang === 'fa' ? 'شاخص‌های عملکرد (KPIs)' : 'KPIs'}</p>
                   <ul className="space-y-1.5">
@@ -1699,16 +1700,22 @@ export const AdminDashboard: React.FC<Props> = ({
                   </ul>
                 </div>
               )}
-              {jdView.compensation?.model?.fa && (
+              {jdView?.compensation?.model?.fa && (
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'مدل جبران خدمات' : 'Compensation'}</p>
                   <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.compensation.model.fa : (jdView.compensation.model.en || jdView.compensation.model.fa)}</p>
                 </div>
               )}
-              {jdView.workingHours?.fa && (
+              {jdView?.workingHours?.fa && (
                 <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <p className="text-xs text-gray-400 font-semibold mb-0.5">{lang === 'fa' ? 'ساعات کاری' : 'Working Hours'}</p>
                   <p className="text-sm text-gray-800">{lang === 'fa' ? jdView.workingHours.fa : (jdView.workingHours.en || jdView.workingHours.fa)}</p>
+                </div>
+              )}
+              {currentUser.staffNote?.trim() && (
+                <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                  <p className="text-xs text-amber-700 font-semibold mb-1">{lang === 'fa' ? 'یادداشت' : 'Note'}</p>
+                  <p className="text-sm text-amber-950 leading-relaxed whitespace-pre-wrap">{currentUser.staffNote.trim()}</p>
                 </div>
               )}
             </div>
@@ -1836,7 +1843,7 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="relative w-12 h-12 mb-3"><div className="w-full h-full rounded-full overflow-hidden border border-gray-200">{currentUser.avatar ? (<img src={currentUser.avatar} alt={currentUser.fullName} className="w-full h-full object-cover" />) : (<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-500 text-base font-semibold">{currentUser.fullName.charAt(0)}</div>)}</div><div className="absolute bottom-0 right-0 bg-emerald-500 w-2.5 h-2.5 rounded-full border-2 border-white"></div></div>
             <h3 className="font-semibold text-gray-900 text-sm leading-tight">{currentUser.fullName}</h3>
             <div className="flex flex-wrap justify-center gap-1 mt-1 mb-1">{(currentUser.roles || []).map((r, i) => (<span key={i} className="text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{r}</span>))}</div>
-            {currentUser.jobDescription && (
+            {hasJobProfile && (
               <button onClick={() => setShowJobDescModal(true)} className="text-[10px] text-gray-400 hover:text-gray-600 underline underline-offset-2 mb-1">
                 {lang === 'fa' ? 'شرح شغل من' : 'My Job Description'}
               </button>

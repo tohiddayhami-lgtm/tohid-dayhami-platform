@@ -84,7 +84,9 @@ export interface Personnel {
   id: string;
   fullName: string;
   roles: string[];
-  jobDescription?: string; 
+  jobDescription?: string;
+  /** Manager note visible to this person in their dashboard (under job description). */
+  staffNote?: string;
   reportsTo?: string;
   email: string;
   username: string;

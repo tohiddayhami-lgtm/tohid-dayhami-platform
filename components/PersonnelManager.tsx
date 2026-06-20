@@ -146,7 +146,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
 
   const [formData, setFormData] = useState({
-    fullName: '', roles: [] as string[], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
+    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
     canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[]
   });
@@ -243,6 +243,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           roles: 'سمت‌های سازمانی',
           manager: 'مدیر مستقیم / گزارش‌دهی به',
           jobDesc: 'شرح شغل',
+          staffNote: 'یادداشت برای پرسنل',
+          staffNoteHint: 'این متن در داشبورد پرسنل، زیر شرح شغل نمایش داده می‌شود.',
           permissions: 'دسترسی‌ها و مجوزها',
           permAssign: 'مجوز ارجاع کار',
           permAllTickets: 'مشاهده کل درخواست‌ها',
@@ -302,6 +304,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           roles: 'Organizational Roles',
           manager: 'Direct Manager / Reports To',
           jobDesc: 'Job Description',
+          staffNote: 'Note for staff',
+          staffNoteHint: 'Shown in the employee dashboard under their job description.',
           permissions: 'Permissions',
           permAssign: 'Can Assign Tasks',
           permAllTickets: 'View All Requests',
@@ -337,7 +341,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const handleEdit = (person: Personnel) => {
     setEditingId(person.id);
     setFormData({
-        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', reportsTo: person.reportsTo || '',
+        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', reportsTo: person.reportsTo || '',
         email: person.email, username: person.username, password: person.password || '', avatar: person.avatar || '', documents: person.documents || [],
         canAssign: person.permissions?.canAssign || false, canViewCustomers: person.permissions?.canViewCustomers || false,
         canViewTariffs: person.permissions?.canViewTariffs || false, canViewAllTickets: person.permissions?.canViewAllTickets || false,
@@ -352,7 +356,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -644,6 +648,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
                        + کلیک کنید تا شرح شغل تعریف کنید
                      </button>
                    )}
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">{t.staffNote}</label>
+                   <p className="text-xs text-gray-400 mb-2">{t.staffNoteHint}</p>
+                   <textarea
+                     className="w-full px-4 py-2.5 rounded-lg border border-gray-300 outline-none focus:ring-1 focus:ring-indigo-300 min-h-[88px] text-sm resize-y"
+                     value={formData.staffNote}
+                     onChange={e => setFormData({ ...formData, staffNote: e.target.value })}
+                     placeholder={lang === 'fa' ? 'یادداشت یا توضیح اضافه برای این پرسنل…' : 'Additional note for this staff member…'}
+                   />
                  </div>
              </div>
           </div>
