@@ -4,6 +4,7 @@ import { Task, Personnel, TaskComment, InternalMessage, TaskChecklistItem } from
 import { IconCheckSquare, IconPlus, IconList, IconUsers, IconMessageSquare, IconTrash, IconClock, IconSend, IconEdit, IconCheck, IconSearch, IconHistory, IconArrowRight } from './Icons';
 import { saveTaskToCloud, updateTaskInCloud, deleteTaskFromCloud, sendInternalMessage } from '../services/firebaseService';
 import { StaffIdPicker } from './StaffIdPicker';
+import { getStaffCode } from '../services/staffId';
 import { Language } from '../App';
 
 interface Props {
@@ -454,7 +455,12 @@ export const TaskManager: React.FC<Props> = ({ currentUser, personnel, tasks, la
                                     ) : (
                                         selectedTask.assigneeIds.map(uid => {
                                             const p = personnel.find(per => per.id === uid);
-                                            return <span key={uid} className="px-3 py-1.5 rounded-xl text-[10px] font-black bg-white border border-gray-100 text-gray-700 shadow-sm">{p?.fullName}</span>;
+                                            return (
+                                              <span key={uid} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black bg-white border border-gray-100 text-gray-700 shadow-sm">
+                                                <span>{p?.fullName || uid}</span>
+                                                {p && <span className="font-mono text-[9px] text-indigo-600 opacity-80" dir="ltr">{getStaffCode(p)}</span>}
+                                              </span>
+                                            );
                                         })
                                     )}
                                 </div>

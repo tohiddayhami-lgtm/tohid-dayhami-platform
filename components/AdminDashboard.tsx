@@ -12,7 +12,7 @@ import { IconNewspaper, IconGlobe, IconImage, IconPort, IconBarChart2 as IconAna
 import { InternalMessenger } from './InternalMessenger';
 import { InvoiceModal } from './InvoiceModal';
 import { InvoiceManager } from './InvoiceManager';
-import { getStaffCode } from '../services/staffId';
+import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
 import { MetaShopManager } from './MetaShopManager';
 import { canAccessMetaShop, canEditMetaShop, canDeleteMetaShopRecords, canDeleteBooths } from '../utils/metaShopAccess';
 import { TaskManager } from './TaskManager';
@@ -706,7 +706,8 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const getAssigneeName = (id?: string) => {
       if (!id) return null;
-      return personnel.find(p => p.id === id)?.fullName || null;
+      const p = personnel.find(pp => pp.id === id);
+      return p ? formatPersonnelLabel(p) : null;
   };
 
   const getSubServiceTitle = (serviceId: string, subId: string) => {
@@ -1347,7 +1348,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                     <div className="flex gap-2">
                                         <select className="flex-grow p-2 rounded-lg border border-gray-200 text-sm outline-none bg-white" value={tempAssignedTo} onChange={(e) => setTempAssignedTo(e.target.value)} disabled={!canAssign}>
                                             <option value="">{t.notAssigned}</option>
-                                            {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName} - {p.roles[0]}</option>)}
+                                            {personnel.map(p => <option key={p.id} value={p.id}>{formatPersonnelLabel(p, { withRole: true })}</option>)}
                                         </select>
                                         <button onClick={handleAssignTicket} disabled={!canAssign || tempAssignedTo === selectedTicket.assignedTo} className="bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:bg-gray-300">{t.assign}</button>
                                     </div>
@@ -1439,8 +1440,8 @@ export const AdminDashboard: React.FC<Props> = ({
                                 </div>
                                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                                     <h4 className="font-bold text-gray-800 border-b border-gray-100 pb-2 mb-4">{t.team}</h4>
-                                    <div className="space-y-3 mb-4">{projectForm.teamMembers?.map((m, i) => { const p = personnel.find(per => per.id === m.userId); return (<div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">{p?.fullName.charAt(0) || '?'}</div><div><div className="text-sm font-bold text-gray-800 flex items-center gap-1.5"><span className="font-mono text-indigo-700">{p ? getStaffCode(p) : (lang === 'fa' ? 'حذف‌شده' : 'removed')}</span><span className="text-gray-400 font-normal text-xs">{p?.fullName}</span></div><div className="text-xs text-gray-500">{m.role}</div></div></div><button onClick={() => handleRemoveTeamMember(m.userId)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button></div>); })}</div>
-                                    <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200"><select className="w-full border rounded p-2 text-sm" value={newTeamMemberId} onChange={e => setNewTeamMemberId(e.target.value)}><option value="">{lang === 'fa' ? 'انتخاب پرسنل (با آی‌دی)' : 'Select personnel (by ID)'}</option>{personnel.filter(p => !projectForm.teamMemberIds.includes(p.id)).map(p => <option key={p.id} value={p.id}>{getStaffCode(p)} — {p.fullName}</option>)}</select><input className="w-full border rounded p-2 text-sm" placeholder={t.role} value={newTeamMemberRole} onChange={e => setNewTeamMemberRole(e.target.value)} /><input className="w-full border rounded p-2 text-sm" placeholder={t.responsibility} value={newTeamMemberResp} onChange={e => setNewTeamMemberResp(e.target.value)} /><button onClick={handleAddTeamMember} className="bg-indigo-600 text-white p-2 rounded text-sm font-bold hover:bg-indigo-700">{t.addMember}</button></div>
+                                    <div className="space-y-3 mb-4">{projectForm.teamMembers?.map((m, i) => { const p = personnel.find(per => per.id === m.userId); return (<div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">{p?.fullName.charAt(0) || '?'}</div><div><div className="text-sm font-bold text-gray-800">{p?.fullName || (lang === 'fa' ? 'حذف‌شده' : 'removed')}</div><div className="text-[10px] text-indigo-700 font-mono" dir="ltr">{p ? getStaffCode(p) : m.userId}</div><div className="text-xs text-gray-500">{m.role}</div></div></div><button onClick={() => handleRemoveTeamMember(m.userId)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button></div>); })}</div>
+                                    <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200"><select className="w-full border rounded p-2 text-sm" value={newTeamMemberId} onChange={e => setNewTeamMemberId(e.target.value)}><option value="">{lang === 'fa' ? 'انتخاب پرسنل' : 'Select personnel'}</option>{personnel.filter(p => !projectForm.teamMemberIds.includes(p.id)).map(p => <option key={p.id} value={p.id}>{formatPersonnelLabel(p, { withRole: true })}</option>)}</select><input className="w-full border rounded p-2 text-sm" placeholder={t.role} value={newTeamMemberRole} onChange={e => setNewTeamMemberRole(e.target.value)} /><input className="w-full border rounded p-2 text-sm" placeholder={t.responsibility} value={newTeamMemberResp} onChange={e => setNewTeamMemberResp(e.target.value)} /><button onClick={handleAddTeamMember} className="bg-indigo-600 text-white p-2 rounded text-sm font-bold hover:bg-indigo-700">{t.addMember}</button></div>
                                 </div>
                             </div>
                             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
@@ -1991,7 +1992,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                  <select value={bulkAssignValue} onChange={(e) => { const v = e.target.value; if (!v) return; setBulkAssignValue(v); handleBulkAssign(v === '__unassign__' ? '' : v); }} className="bg-white text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg border border-indigo-200 outline-none focus:border-indigo-400">
                                      <option value="">{t.bulkAssignPh}</option>
                                      <option value="__unassign__">{t.notAssigned}</option>
-                                     {personnel.map(p => <option key={p.id} value={p.id}>{p.fullName}{p.roles[0] ? ` - ${p.roles[0]}` : ''}</option>)}
+                                     {personnel.map(p => <option key={p.id} value={p.id}>{formatPersonnelLabel(p, { withRole: true })}</option>)}
                                  </select>
                              )}
                              <button onClick={clearSelection} className="text-sm text-gray-500 hover:text-gray-700 mr-auto flex items-center gap-1"><span className="text-base leading-none">✕</span>{t.bulkClear}</button>

@@ -4,6 +4,7 @@ import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Perso
 import { IconSettings, IconPlus, IconTrash, IconEdit, IconCheck, IconLayout, IconInvoice, IconUpload, IconDatabase, IconShield, IconBulb, IconMagic, IconClipboard, IconFolder, IconBriefcase, IconStar, IconLink, IconCopy, IconUsers } from './Icons';
 import { compressImage, backupSystemData, clearSystemData, saveCustomFormToCloud, deleteCustomFormFromCloud, subscribeToCustomForms, updateCustomFormInCloud, firebaseConfig, subscribeToSettings } from '../services/firebaseService';
 import { generateFormFields } from '../services/geminiService';
+import { formatPersonnelLabel } from '../services/staffId';
 
 interface Props {
   config: AppConfig;
@@ -495,7 +496,7 @@ function onFormSubmit(e) {
                                             >
                                                 <option value="">-- انتخاب شخص --</option>
                                                 {personnel.filter(person => (person.status || 'active') === 'active').map(person => (
-                                                    <option key={person.id} value={person.id}>{person.fullName} ({(person.roles || []).join(', ')})</option>
+                                                    <option key={person.id} value={person.id}>{formatPersonnelLabel(person, { withRole: true })}</option>
                                                 ))}
                                             </select>
                                           ) : (

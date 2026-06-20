@@ -3,7 +3,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Personnel, AppConfig, PersonnelDocument, AttachedFile, Department } from '../types';
 import { IconPlus, IconTrash, IconShield, IconEdit, IconCheck, IconSettings, IconUsers, IconMoney, IconBriefcase, IconUpload, IconFile, IconPaperclip, IconLayout, IconInvoice } from './Icons';
 import { uploadFileWithProgress } from '../services/firebaseService';
-import { getStaffCode } from '../services/staffId';
+import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
 import { Language } from '../App';
 
 // ── Job Description — bilingual structured format ──
@@ -610,7 +610,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, config, onUpdate,
                      })}
                    </div>
                  </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.manager}</label><select className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none bg-white" value={formData.reportsTo} onChange={e => setFormData({...formData, reportsTo: e.target.value})}><option value="">-</option>{personnel.filter(p => p.id !== editingId).map(p => (<option key={p.id} value={p.id}>{p.fullName} ({p.roles.join(', ')})</option>))}</select></div></div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.manager}</label><select className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none bg-white" value={formData.reportsTo} onChange={e => setFormData({...formData, reportsTo: e.target.value})}><option value="">-</option>{personnel.filter(p => p.id !== editingId).map(p => (<option key={p.id} value={p.id}>{formatPersonnelLabel(p, { withRole: true })}</option>))}</select></div></div>
                  <div>
                    <input type="file" ref={jobDescImportRef} className="hidden" accept=".json,application/json" onChange={handleJDImport} />
                    <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">

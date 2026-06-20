@@ -3,7 +3,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
 import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
-import { getStaffCode, findPersonnelByCode } from '../services/staffId';
+import { getStaffCode, formatPersonnelLabel, formatPersonnelIds } from '../services/staffId';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 
@@ -24,8 +24,6 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
-  const [recipientCode, setRecipientCode] = useState(''); // staff ID typed to add a recipient
-  const [recipientError, setRecipientError] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -58,11 +56,11 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       compose: 'پیام جدید', search: 'جستجو...',
       subject: 'موضوع', body: 'متن پیام',
       recipients: 'گیرندگان', send: 'ارسال',
-      recipientIdPlaceholder: 'آی دی پرسنلی گیرنده را وارد کنید',
+      recipientIdPlaceholder: 'نام یا آی‌دی پرسنلی گیرنده',
       addRecipient: 'افزودن',
       recipientNotFound: 'پرسنلی با این آی دی یافت نشد.',
       recipientSelf: 'نمی‌توانید برای خودتان ارسال کنید.',
-      yourId: 'آی دی پرسنلی شما:',
+      yourId: 'آی‌دی شما:',
       staffIdLabel: 'آی دی:',
       reply: 'پاسخ', delete: 'حذف',
       files: 'پیوست‌ها', cancel: 'انصراف',
@@ -96,7 +94,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       compose: 'New Message', search: 'Search...',
       subject: 'Subject', body: 'Message',
       recipients: 'To', send: 'Send',
-      recipientIdPlaceholder: 'Enter the recipient personnel ID',
+      recipientIdPlaceholder: 'Recipient name or personnel ID',
       addRecipient: 'Add',
       recipientNotFound: 'No personnel found with this ID.',
       recipientSelf: 'You cannot message yourself.',
@@ -148,6 +146,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
         m.subject.toLowerCase().includes(term) ||
         m.body.toLowerCase().includes(term) ||
         m.senderName.toLowerCase().includes(term) ||
+        formatPersonnelIds(personnel, [m.senderId, ...m.recipientIds]).toLowerCase().includes(term) ||
         (m.contactTrackingCode || '').toLowerCase().includes(term) ||
         (m.contactPhone || '').includes(term) ||
         (m.contactDepartmentName || '').toLowerCase().includes(term)
@@ -185,7 +184,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
       await sendInternalMessage(newMessage);
       onAfterSend?.(finalRecipientIds, currentUser.fullName, subject);
       setIsComposeOpen(false);
-      setRecipientIds([]); setRecipientCode(''); setRecipientError(''); setSubject(''); setBody(''); setAttachments([]);
+      setRecipientIds([]); setSubject(''); setBody(''); setAttachments([]);
       setActiveTab('sent');
       if (!isMobile) setSelectedMsgId(newMessage.id);
     } catch { alert('خطا در ارسال'); } finally { setIsSending(false); }
@@ -208,13 +207,17 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     setSelectedMsgId(null);
   };
 
-  // Add a recipient by typing their personnel ID (no full company list is shown)
-  const addRecipientByCode = () => {
-    const person = findPersonnelByCode(personnel, recipientCode);
-    if (!person) { setRecipientError(t.recipientNotFound); return; }
-    if (person.id === currentUser.id) { setRecipientError(t.recipientSelf); return; }
-    if (!recipientIds.includes(person.id)) setRecipientIds(prev => [...prev, person.id]);
-    setRecipientCode(''); setRecipientError('');
+  const participantLine = (id: string, fallbackName: string) => {
+    const p = personnel.find(pp => pp.id === id);
+    return p ? formatPersonnelLabel(p) : fallbackName;
+  };
+
+  const referralTargetLine = (r: MessageReferral) => {
+    if (r.departmentName) return r.departmentName;
+    return r.toNames.map(name => {
+      const p = personnel.find(pp => pp.fullName === name);
+      return p ? formatPersonnelLabel(p) : name;
+    }).join('، ');
   };
 
   const handleContactReply = async () => {
@@ -402,7 +405,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-2 mb-0.5">
                         <span className={`text-xs truncate ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-600'}`}>
-                          {activeTab === 'sent' ? msg.recipientNames.join('، ') : msg.senderName}
+                          {activeTab === 'sent'
+                            ? formatPersonnelIds(personnel, msg.recipientIds)
+                            : participantLine(msg.senderId, msg.senderName)}
                         </span>
                         <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{formatDate(msg.createdAt)}</span>
                       </div>
@@ -452,9 +457,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                     {getInitial(selectedMessage.senderName)}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-gray-900">{selectedMessage.senderName}</div>
+                    <div className="text-xs font-medium text-gray-900">{participantLine(selectedMessage.senderId, selectedMessage.senderName)}</div>
                     <div className="text-[11px] text-gray-400 truncate">
-                      {t.to} {selectedMessage.recipientNames.join('، ')}
+                      {t.to} {formatPersonnelIds(personnel, selectedMessage.recipientIds)}
                     </div>
                   </div>
                 </div>
@@ -508,7 +513,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                       <div key={r.id} className="bg-blue-50/60 border border-blue-100 rounded-xl px-3 py-2">
                         <div className="flex items-baseline justify-between gap-2 mb-0.5">
                           <span className="text-[11px] text-blue-800">
-                            <b>{r.byName}</b> {t.referredTo}: {r.departmentName ? <b>{r.departmentName}</b> : r.toNames.join('، ')}
+                            <b>{participantLine(r.byId, r.byName)}</b> {t.referredTo}: {referralTargetLine(r)}
                           </span>
                           <span className="text-[10px] text-gray-400" dir="ltr">{formatFullDate(r.createdAt)}</span>
                         </div>
@@ -697,52 +702,23 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {/* To — by personnel ID (no full company list shown) */}
+              {/* To — name or personnel ID + roster dropdown */}
               <div className="px-5 py-3 border-b border-gray-100">
                 <div className="flex items-start gap-3">
                   <span className="text-xs text-gray-400 pt-2 shrink-0 w-12 text-left">{t.recipients}</span>
                   <div className="flex-1 min-w-0">
-                    {/* Added recipients as chips */}
-                    {recipientIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {recipientIds.map(id => {
-                          const p = personnel.find(pp => pp.id === id);
-                          if (!p) return null;
-                          return (
-                            <span key={id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
-                              {p.fullName}
-                              <span className="font-mono text-[10px] opacity-80" dir="ltr">{getStaffCode(p)}</span>
-                              <button onClick={() => setRecipientIds(prev => prev.filter(rid => rid !== id))} className="hover:text-white/70">✕</button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {/* ID input */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={recipientCode}
-                        onChange={e => { setRecipientCode(e.target.value); setRecipientError(''); }}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRecipientByCode(); } }}
-                        placeholder={t.recipientIdPlaceholder}
-                        dir="ltr"
-                        className="flex-1 min-w-0 text-sm text-gray-800 placeholder-gray-300 border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400"
-                      />
-                      <button type="button" onClick={addRecipientByCode}
-                        className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors shrink-0">
-                        {t.addRecipient}
-                      </button>
-                    </div>
-                    {/* Live resolved-name hint */}
-                    {recipientCode.trim() && !recipientError && (() => {
-                      const match = findPersonnelByCode(personnel, recipientCode);
-                      return match
-                        ? <p className="text-[11px] text-emerald-600 mt-1.5">✓ {match.fullName}</p>
-                        : <p className="text-[11px] text-gray-400 mt-1.5">{t.recipientNotFound}</p>;
-                    })()}
-                    {recipientError && <p className="text-[11px] text-red-500 mt-1.5">{recipientError}</p>}
-                    {/* Your own ID, for sharing with colleagues */}
-                    <p className="text-[10px] text-gray-400 mt-2">{t.yourId} <span className="font-mono text-gray-600" dir="ltr">{getStaffCode(currentUser)}</span></p>
+                    <StaffIdPicker
+                      personnel={personnel}
+                      selectedIds={recipientIds}
+                      onChange={setRecipientIds}
+                      lang={lang}
+                      currentUserId={currentUser.id}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-2">
+                      {t.yourId}{' '}
+                      <span className="font-medium text-gray-700">{currentUser.fullName}</span>{' '}
+                      <span className="font-mono text-gray-600" dir="ltr">{getStaffCode(currentUser)}</span>
+                    </p>
                   </div>
                 </div>
               </div>

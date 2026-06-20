@@ -3,6 +3,7 @@ import { CustomerAccount, Ticket, Personnel, AttachedFile } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { IconPaperclip, IconFile, IconTrash, IconUsers } from './Icons';
+import { personnelLabelById } from '../services/staffId';
 
 interface Props {
   customerUser: CustomerAccount;
@@ -133,7 +134,7 @@ export const CustomerDashboard: React.FC<Props> = ({
                   <div className="text-xs text-gray-400 space-y-1 shrink-0">
                     <div>تاریخ ثبت: {new Date(selectedTicket.createdAt).toLocaleDateString('fa-IR')}</div>
                     {selectedTicket.assignedTo && (
-                      <div>کارشناس: {personnel.find(p => p.id === selectedTicket.assignedTo)?.fullName || '—'}</div>
+                      <div>کارشناس: {personnelLabelById(personnel, selectedTicket.assignedTo) || '—'}</div>
                     )}
                   </div>
                 </div>
