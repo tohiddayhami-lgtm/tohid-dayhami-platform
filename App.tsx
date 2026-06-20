@@ -27,6 +27,7 @@ import {
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
+import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { MetaShopView } from './components/MetaShopView';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
@@ -391,29 +392,54 @@ const App: React.FC = () => {
   }, [lang]);
 
   useEffect(() => {
-    const title = appConfig.seoTitle || appConfig.appTitle;
-    document.title = title;
-    const setMeta = (name: string, content: string) => {
-      let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
-      if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el); }
-      el.content = content;
-    };
-    const setOg = (prop: string, content: string) => {
-      let el = document.querySelector(`meta[property="${prop}"]`) as HTMLMetaElement | null;
-      if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
-      el.content = content;
-    };
-    if (appConfig.seoDescription) setMeta('description', appConfig.seoDescription);
-    if (appConfig.seoKeywords) setMeta('keywords', appConfig.seoKeywords);
-    if (appConfig.ogTitle) setOg('og:title', appConfig.ogTitle);
-    if (appConfig.ogDescription) setOg('og:description', appConfig.ogDescription);
-    if (appConfig.ogImage) setOg('og:image', appConfig.ogImage);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const siteMeta = defaultSiteMeta(appConfig, origin);
+
+    if (view === 'metashop' && publicShop) {
+      applyPageMeta({ ...metaFromMetaShop(publicShop, origin), url: window.location.href }, siteMeta);
+      return;
+    }
+    if (view === 'custom-form' && customFormId) {
+      const form = customForms.find(f => f.id === customFormId);
+      if (form) applyPageMeta({ ...metaFromForm(form), url: window.location.href }, siteMeta);
+      else applyPageMeta(siteMeta);
+      return;
+    }
+    if (view === 'news') {
+      const articleId = new URLSearchParams(window.location.search).get('id');
+      if (articleId) {
+        const article = news.find(a => a.id === articleId);
+        if (article) applyPageMeta({ ...metaFromNews(article, lang === 'fa' ? 'fa' : 'en'), url: window.location.href }, siteMeta);
+        else applyPageMeta(siteMeta);
+      } else applyPageMeta(siteMeta);
+      return;
+    }
+    if (view === 'bazaar' && publicBazaar) {
+      applyPageMeta({ ...metaFromBazaar(publicBazaar, origin), url: window.location.href }, siteMeta);
+      return;
+    }
+    if (view === 'expo' && publicExpoBazaar) {
+      applyPageMeta({ ...metaFromBazaar(publicExpoBazaar, origin), url: window.location.href }, siteMeta);
+      return;
+    }
+    if (view === 'expo-map' && publicExpoMapBazaar) {
+      applyPageMeta({ ...metaFromBazaar(publicExpoMapBazaar, origin), url: window.location.href }, siteMeta);
+      return;
+    }
+
+    if (appConfig.seoKeywords) {
+      let el = document.querySelector('meta[name="keywords"]') as HTMLMetaElement | null;
+      if (!el) { el = document.createElement('meta'); el.name = 'keywords'; document.head.appendChild(el); }
+      el.content = appConfig.seoKeywords;
+    }
+
+    applyPageMeta(siteMeta);
     if (appConfig.favicon) {
       let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
       if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
       link.href = appConfig.favicon;
     }
-  }, [appConfig]);
+  }, [appConfig, view, publicShop, publicBazaar, publicExpoBazaar, publicExpoMapBazaar, customFormId, customForms, news, lang]);
 
   useEffect(() => {
     // Determine view from current URL (query params take priority over hash)

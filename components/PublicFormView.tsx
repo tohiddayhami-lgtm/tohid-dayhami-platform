@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { CustomForm, Ticket, TicketStatus, AttachedFile } from '../types';
 import { Language } from '../App';
 import { getCustomFormById, uploadFileWithProgress } from '../services/firebaseService';
+import { applyPageMeta, metaFromForm } from '../utils/pageMeta';
 import { IconCheck, IconClipboard, IconCopy, IconSearch, IconFile, IconTrash, IconUpload } from './Icons';
 
 interface Props {
@@ -82,6 +83,7 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
           setNotFound(true);
         } else {
           setForm(f);
+          applyPageMeta({ ...metaFromForm(f), url: window.location.href });
         }
       } catch {
         // exception = network/Firebase error → retry with backoff

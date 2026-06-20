@@ -15,6 +15,17 @@
   "rewrites": [
     { "source": "/sitemap.xml",           "destination": "/sitemap.xml" },
     { "source": "/robots.txt",            "destination": "/robots.txt"  },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|facebot|ia_archiver).*"
+        }
+      ],
+      "destination": "/api/og-meta"
+    },
     { "source": "/((?!api/).*)",          "destination": "/index.html"  }
   ],
   "crons": [
