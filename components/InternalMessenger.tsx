@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
-import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress } from '../services/firebaseService';
+import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress, markMessageAsRead } from '../services/firebaseService';
 import { getStaffCode, formatPersonnelLabel, formatPersonnelIds } from '../services/staffId';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
@@ -14,9 +14,10 @@ interface Props {
   lang: Language;
   departments?: Department[];
   onAfterSend?: (recipientIds: string[], senderName: string, subject: string) => void;
+  onMessageRead?: (messageId: string, userId: string) => void;
 }
 
-export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend }) => {
+export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend, onMessageRead }) => {
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'contacts' | 'archive'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -129,6 +130,17 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   }[lang];
 
   const isArchived = (m: InternalMessage) => (m.archivedBy || []).includes(currentUser.id);
+  const messageReadBy = (m: InternalMessage) => m.readBy || [];
+  const isUnreadForUser = (m: InternalMessage) =>
+    (m.recipientIds || []).includes(currentUser.id) && !messageReadBy(m).includes(currentUser.id);
+
+  const markReadIfNeeded = React.useCallback((msg: InternalMessage) => {
+    if (activeTab !== 'inbox') return;
+    if (!(msg.recipientIds || []).includes(currentUser.id)) return;
+    if (messageReadBy(msg).includes(currentUser.id)) return;
+    onMessageRead?.(msg.id, currentUser.id);
+    markMessageAsRead(msg.id, currentUser.id).catch(() => {});
+  }, [activeTab, currentUser.id, onMessageRead]);
 
   const filteredMessages = useMemo(() => {
     let list = activeTab === 'archive'
@@ -160,7 +172,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   , [messages, selectedMsgId]);
 
   const unreadCount = useMemo(() =>
-    messages.filter(m => m.recipientIds.includes(currentUser.id) && !m.readBy.includes(currentUser.id)).length
+    messages.filter(m => isUnreadForUser(m)).length
   , [messages, currentUser.id]);
 
   const handleSendMessage = async () => {
@@ -192,10 +204,12 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
 
   const handleSelectMessage = (msg: InternalMessage) => {
     setSelectedMsgId(msg.id);
-    if (activeTab === 'inbox' && !msg.readBy.includes(currentUser.id)) {
-      updateMessageInCloud(msg.id, { readBy: [...msg.readBy, currentUser.id] });
-    }
+    markReadIfNeeded(msg);
   };
+
+  useEffect(() => {
+    if (selectedMessage) markReadIfNeeded(selectedMessage);
+  }, [selectedMessage, markReadIfNeeded]);
 
   // Archive / unarchive a message for the current user only (keeps inbox/sent tidy)
   const handleToggleArchive = (msg: InternalMessage) => {
@@ -389,7 +403,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
           ) : (
             <div>
               {filteredMessages.map(msg => {
-                const isUnread = activeTab === 'inbox' && !msg.readBy.includes(currentUser.id);
+                const isUnread = activeTab === 'inbox' && isUnreadForUser(msg);
                 const isSelected = selectedMsgId === msg.id;
                 return (
                   <div

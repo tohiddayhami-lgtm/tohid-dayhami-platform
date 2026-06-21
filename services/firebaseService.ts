@@ -1,7 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -800,6 +800,30 @@ export const sendInternalMessage = async (message: InternalMessage) => {
   }
 };
 
+function normalizeInternalMessage(m: InternalMessage): InternalMessage {
+  return {
+    ...m,
+    recipientIds: Array.isArray(m.recipientIds) ? m.recipientIds : [],
+    recipientNames: Array.isArray(m.recipientNames) ? m.recipientNames : [],
+    readBy: Array.isArray(m.readBy) ? m.readBy : [],
+    archivedBy: Array.isArray(m.archivedBy) ? m.archivedBy : [],
+  };
+}
+
+export const markMessageAsRead = async (id: string, userId: string): Promise<void> => {
+  if (!id || !userId) return;
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    const existing = await proxyGet<InternalMessage>('messages', { doc: id });
+    if (!existing) return;
+    const readBy = Array.isArray(existing.readBy) ? existing.readBy : [];
+    if (readBy.includes(userId)) return;
+    await proxyWrite('messages', id, sanitizeData({ ...existing, readBy: [...readBy, userId] }));
+  } else {
+    await updateDoc(doc(db, 'messages', id), { readBy: arrayUnion(userId) });
+  }
+};
+
 export const updateMessageInCloud = async (id: string, updates: Partial<InternalMessage>) => {
   await updateDocCloud('messages', id, updates as Record<string, unknown>);
 };
@@ -819,7 +843,9 @@ export const deleteMessageFromCloud = async (id: string) => {
 };
 
 export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void) =>
-  subscribeCollection<InternalMessage>('messages', callback, {
+  subscribeCollection<InternalMessage>('messages', list => {
+    callback(list.map(normalizeInternalMessage));
+  }, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     intervalMs: 6_000,
   });

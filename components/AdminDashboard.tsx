@@ -75,6 +75,7 @@ interface Props {
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
+  onMessageRead?: (messageId: string, userId: string) => void;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -120,6 +121,7 @@ export const AdminDashboard: React.FC<Props> = ({
   metaBazaars = [],
   onSaveMetaBazaar,
   onDeleteMetaBazaar,
+  onMessageRead,
 }) => {
   const safeRoles = currentUser?.roles || [];
   const isAdmin = safeRoles.includes('مدیر');
@@ -679,7 +681,9 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const selectedTicket = selectedTicketId ? tickets.find(t => t.id === selectedTicketId) || null : null;
   const directManager = currentUser?.reportsTo ? personnel.find(p => p.id === currentUser.reportsTo) : null;
-  const unreadMessagesCount = messages.filter(m => m.recipientIds.includes(currentUser.id) && !m.readBy.includes(currentUser.id)).length;
+  const unreadMessagesCount = messages.filter(m =>
+    (m.recipientIds || []).includes(currentUser.id) && !(m.readBy || []).includes(currentUser.id)
+  ).length;
   const myPendingTasks = tasks.filter(t => t.assigneeIds.includes(currentUser.id) && !t.isCompleted);
   const pendingTasksCount = myPendingTasks.length;
 
@@ -2239,6 +2243,7 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'messages' && <InternalMessenger
             currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} departments={config.departments || []}
+            onMessageRead={onMessageRead}
             onAfterSend={async (recipientIds, senderName, subject) => {
               const nc = config.notificationConfig;
               if (!nc?.enabled || !nc.onNewMessage) return;

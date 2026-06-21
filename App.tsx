@@ -1087,6 +1087,14 @@ const App: React.FC = () => {
   const handleUpdateServices = async (newServices: ServiceOption[]) => { await saveServicesToCloud(newServices); };
   const handleUpdatePersonnel = async (newPersonnel: Personnel[]) => { await savePersonnelToCloud(newPersonnel); };
   const handleUpdateConfig = async (newConfig: AppConfig) => { await saveAppConfigToCloud(newConfig); };
+  const handleMessageRead = useCallback((messageId: string, userId: string) => {
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m;
+      const readBy = m.readBy || [];
+      if (readBy.includes(userId)) return m;
+      return { ...m, readBy: [...readBy, userId] };
+    }));
+  }, []);
 
   const handleLogin = async (u: string, p: string): Promise<boolean> => {
     const user = personnel.find(person => person.username === u && person.password === p);
@@ -1950,6 +1958,7 @@ const App: React.FC = () => {
                     metaBazaars={metaBazaars}
                     onSaveMetaBazaar={async (b) => { await saveMetaBazaarToCloud(b); }}
                     onDeleteMetaBazaar={async (id) => { await deleteMetaBazaarFromCloud(id); }}
+                    onMessageRead={handleMessageRead}
                   />
                 )}
               </>
