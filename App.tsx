@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicFormView } from './components/PublicFormView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, CustomForm } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, CustomForm, TeamBrainstormPost } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -18,6 +18,7 @@ import {
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings, subscribeToCustomForms,
   subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
+  subscribeToTeamBrainstorm,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
@@ -311,6 +312,7 @@ const App: React.FC = () => {
   const [personnel, setPersonnel] = useState<Personnel[]>(DEFAULT_PERSONNEL);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [messages, setMessages] = useState<InternalMessage[]>([]);
+  const [teamBrainstormPosts, setTeamBrainstormPosts] = useState<TeamBrainstormPost[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
@@ -533,6 +535,7 @@ const App: React.FC = () => {
     const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
     const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
     const unsubMessages = subscribeToMessages((data) => setMessages(data));
+    const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
     const unsubMeetings = subscribeToMeetings((data) => setMeetings(data));
     const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
@@ -595,7 +598,7 @@ const App: React.FC = () => {
     const unsubMetaShops = subscribeToMetaShops(setMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
-    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
+    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1912,6 +1915,7 @@ const App: React.FC = () => {
                     personnel={personnel}
                     customers={customers}
                     messages={messages}
+                    teamBrainstormPosts={teamBrainstormPosts}
                     tasks={tasks}
                     meetings={meetings}
                     kpis={kpis}

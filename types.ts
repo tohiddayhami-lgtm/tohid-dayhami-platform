@@ -374,6 +374,35 @@ export interface InternalMessage {
   archivedBy?: string[];            // personnel ids who archived this message (per-user archive, keeps inbox/sent tidy)
 }
 
+/** Sticky-note color for team brainstorm board. */
+export type TeamBrainstormColor = 'yellow' | 'pink' | 'mint' | 'sky' | 'lavender' | 'peach';
+
+export interface TeamBrainstormComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  files?: AttachedFile[];
+  likedBy?: string[];
+  parentId?: string;
+  createdAt: string;
+}
+
+export interface TeamBrainstormPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string;
+  title: string;
+  body: string;
+  color: TeamBrainstormColor;
+  files?: AttachedFile[];
+  likedBy?: string[];
+  comments?: TeamBrainstormComment[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface TaskComment {
   id: string;
   authorId: string;

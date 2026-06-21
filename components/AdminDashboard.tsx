@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaBazaar } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaBazaar, TeamBrainstormPost } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -10,6 +10,7 @@ import { NewsManager } from './NewsManager';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { IconNewspaper, IconGlobe, IconImage, IconPort, IconBarChart2 as IconAnalytics } from './Icons';
 import { InternalMessenger } from './InternalMessenger';
+import { TeamBrainstormPanel } from './TeamBrainstormPanel';
 import { InvoiceModal } from './InvoiceModal';
 import { InvoiceManager } from './InvoiceManager';
 import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
@@ -38,6 +39,7 @@ interface Props {
   personnel: Personnel[];
   customers: Customer[];
   messages: InternalMessage[];
+  teamBrainstormPosts?: TeamBrainstormPost[];
   tasks: Task[];
   meetings: Meeting[];
   kpis?: KPI[];
@@ -82,6 +84,7 @@ export const AdminDashboard: React.FC<Props> = ({
   personnel,
   customers,
   messages,
+  teamBrainstormPosts = [],
   tasks,
   meetings,
   kpis = [],
@@ -139,7 +142,7 @@ export const AdminDashboard: React.FC<Props> = ({
     return metaShopOrders.filter(o => ids.has(o.shopId));
   }, [visibleMetaShops, metaShopOrders]);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [faviconProgress, setFaviconProgress] = useState(0);
@@ -1886,6 +1889,7 @@ export const AdminDashboard: React.FC<Props> = ({
                 <button onClick={() => setActiveTab('staff_reports')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'staff_reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.staff_reports}</span></button>
                 <button onClick={() => setActiveTab('meetings')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'meetings' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconCalendarClock className="w-4 h-4 shrink-0" /><span>{t.meetings}</span></button>
                 <button onClick={() => setActiveTab('messages')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'messages' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMail className="w-4 h-4 shrink-0" /><span>{t.messages}</span>{unreadMessagesCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{unreadMessagesCount}</span>}</button>
+                <button onClick={() => setActiveTab('team_brainstorm')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'team_brainstorm' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMegaphone className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'هم‌فکری تیمی' : 'Team Ideas'}</span></button>
                 <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'projects' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconProject className="w-4 h-4 shrink-0" /><span>{t.projects}</span></button>
                 <button onClick={() => setActiveTab('forms')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'forms' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconClipboard className="w-4 h-4 shrink-0" /><span>{t.forms}</span></button>
                 <button onClick={() => setActiveTab('processes')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'processes' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconMindMap className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'مایند مپ' : 'Mind Map'}</span></button>
@@ -2230,6 +2234,9 @@ export const AdminDashboard: React.FC<Props> = ({
             />
         )}
         {activeTab === 'sales' && <SalesDashboard currentUser={currentUser} personnel={personnel} services={services} onUpdatePersonnel={onUpdatePersonnel} onUpdateServices={onUpdateServices} lang={lang} />}
+        {activeTab === 'team_brainstorm' && (
+          <TeamBrainstormPanel currentUser={currentUser} posts={teamBrainstormPosts} lang={lang} />
+        )}
         {activeTab === 'messages' && <InternalMessenger
             currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} departments={config.departments || []}
             onAfterSend={async (recipientIds, senderName, subject) => {

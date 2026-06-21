@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
@@ -755,6 +755,37 @@ export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void)
         msgs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         callback(msgs);
     }, (e) => {});
+};
+
+// ── Team brainstorm (sticky-note ideas board) ──
+export const saveTeamBrainstormPost = async (post: TeamBrainstormPost) => {
+    const payload = { ...post, files: cleanFilesForDB(post.files) };
+    await setDoc(doc(db, "team_brainstorm", post.id), sanitizeData(payload));
+};
+
+export const updateTeamBrainstormPostInCloud = async (id: string, updates: Partial<TeamBrainstormPost>) => {
+    const payload = { ...updates };
+    if (updates.files) payload.files = cleanFilesForDB(updates.files);
+    if (updates.comments) {
+        payload.comments = updates.comments.map(c => ({
+            ...c,
+            files: cleanFilesForDB(c.files),
+        }));
+    }
+    await updateDoc(doc(db, "team_brainstorm", id), sanitizeData(payload));
+};
+
+export const deleteTeamBrainstormPostFromCloud = async (id: string) => {
+    await deleteDoc(doc(db, "team_brainstorm", id));
+};
+
+export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]) => void) => {
+    const q = query(collection(db, "team_brainstorm"));
+    return onSnapshot(q, (snapshot) => {
+        const posts = snapshot.docs.map(d => d.data() as TeamBrainstormPost);
+        posts.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+        callback(posts);
+    }, () => {});
 };
 
 // ── Standalone Invoices (Invoices archive) ──
