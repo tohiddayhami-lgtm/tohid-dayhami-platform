@@ -40,9 +40,14 @@ function toDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + (m || 0);
+function normalizeTime(t?: string | null, fallback = '09:00'): string {
+  if (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) return t;
+  return fallback;
+}
+
+function timeToMinutes(t?: string | null): number {
+  const [h, m] = normalizeTime(t).split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
 }
 
 function addMinutes(t: string, mins: number): string {
@@ -50,8 +55,26 @@ function addMinutes(t: string, mins: number): string {
   return `${Math.floor(total / 60).toString().padStart(2, '0')}:${(total % 60).toString().padStart(2, '0')}`;
 }
 
+function normalizeMeeting(m: Meeting): Meeting {
+  const startTime = normalizeTime(m.startTime, '09:00');
+  const endTime = normalizeTime(m.endTime, addMinutes(startTime, 60));
+  return {
+    ...m,
+    id: m.id || `meet-${Date.now()}`,
+    title: m.title || '',
+    date: m.date || toDateStr(new Date()),
+    startTime,
+    endTime: timeToMinutes(endTime) > timeToMinutes(startTime) ? endTime : addMinutes(startTime, 60),
+    location: m.location || '',
+    attendeeIds: Array.isArray(m.attendeeIds) ? m.attendeeIds : [],
+    organizerId: m.organizerId || '',
+    organizerName: m.organizerName || '',
+  };
+}
+
 function getMeetingColor(m: Meeting): string {
-  const h = m.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const id = m.id || '';
+  const h = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return MEETING_COLORS[h % MEETING_COLORS.length];
 }
 
@@ -114,8 +137,17 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   };
 
   const handleOpenEdit = (m: Meeting) => {
-    setEditingMeetingId(m.id);
-    setFormData({ title: m.title, date: m.date, startTime: m.startTime, endTime: m.endTime, location: m.location, attendeeIds: m.attendeeIds, description: m.description || '' });
+    const meeting = normalizeMeeting(m);
+    setEditingMeetingId(meeting.id);
+    setFormData({
+      title: meeting.title,
+      date: meeting.date,
+      startTime: meeting.startTime,
+      endTime: meeting.endTime,
+      location: meeting.location,
+      attendeeIds: meeting.attendeeIds,
+      description: meeting.description || '',
+    });
     setShowModal(true);
   };
 
@@ -312,7 +344,9 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           {weekDays.map(day => {
             const ds = toDateStr(day);
             const isToday = ds === todayStr;
-            const dayMeetings = meetings.filter(m => m.date === ds);
+            const dayMeetings = meetings
+              .map(normalizeMeeting)
+              .filter(m => m.date === ds && m.title);
 
             return (
               <div key={ds}
@@ -343,7 +377,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                   const top    = (startMin / 60) * HOUR_HEIGHT;
                   const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 18);
                   const colorClass = getMeetingColor(meeting);
-                  const canEdit = meeting.organizerId === currentUser.id || currentUser.roles.includes('مدیر');
+                  const canEdit = meeting.organizerId === currentUser.id || (currentUser.roles || []).includes('مدیر');
 
                   return (
                     <div key={meeting.id}
