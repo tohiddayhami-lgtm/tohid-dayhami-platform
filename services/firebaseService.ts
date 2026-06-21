@@ -38,7 +38,7 @@ const storageApp = initializeApp(centralStorageConfig, "centralStorage");
 // if blocked we route public read/write through /api/fb (Vercel serverless).
 
 const _PROXY_LS_KEY = '_iran_proxy_v2';
-const _PROXY_TTL_MS = 10 * 60 * 1000; // 10 minutes — persist across page reloads
+const _PROXY_TTL_MS = 3 * 60 * 1000; // 3 minutes — re-check often so phone/laptop stay in sync
 
 let _proxyMode: boolean | null = (() => {
   try {
@@ -142,6 +142,100 @@ const proxyPoll = <T>(
   run();
   return () => { stopped = true; clearTimeout(timer); };
 };
+
+const forceProxyMode = () => {
+  _proxyMode = true;
+  try { localStorage.setItem(_PROXY_LS_KEY, JSON.stringify({ v: '1', ts: Date.now() })); } catch {}
+};
+
+/** Unified collection listener — direct Firestore or /api/fb polling when Google is blocked in Iran. */
+function subscribeCollection<T>(
+  col: string,
+  callback: (items: T[]) => void,
+  opts?: {
+    sort?: (a: T, b: T) => number;
+    orderField?: string;
+    dir?: 'asc' | 'desc';
+    intervalMs?: number;
+    mergeDocId?: boolean;
+  },
+): () => void {
+  let inner: (() => void) | null = null;
+  let gone = false;
+
+  const deliver = (items: T[]) => {
+    const list = Array.isArray(items) ? [...items] : [];
+    if (opts?.sort) list.sort(opts.sort);
+    callback(list);
+  };
+
+  const startProxy = () => {
+    inner?.();
+    inner = proxyPoll<T>(col, deliver, {
+      orderField: opts?.orderField,
+      dir: opts?.dir,
+      intervalMs: opts?.intervalMs ?? 8_000,
+    });
+  };
+
+  const startDirect = () => {
+    inner?.();
+    const q = opts?.orderField
+      ? query(collection(db, col), orderBy(opts.orderField, opts?.dir === 'asc' ? 'asc' : 'desc'))
+      : query(collection(db, col));
+    inner = onSnapshot(q, snap => {
+      deliver(snap.docs.map(d => {
+        const data = d.data() as T;
+        if (opts?.mergeDocId) {
+          const withId = data as T & { id?: string };
+          return { ...data, id: withId.id || d.id } as T;
+        }
+        return data;
+      }));
+    }, () => {
+      if (gone) return;
+      forceProxyMode();
+      startProxy();
+    });
+  };
+
+  checkProxyMode().then(proxy => {
+    if (gone) return;
+    if (proxy) startProxy();
+    else startDirect();
+  });
+
+  return () => { gone = true; inner?.(); };
+};
+
+async function setDocCloud(col: string, id: string, data: unknown) {
+  const proxy = await checkProxyMode();
+  const payload = sanitizeData(data);
+  if (proxy) await proxyWrite(col, id, payload);
+  else await setDoc(doc(db, col, id), payload);
+}
+
+async function updateDocCloud(col: string, id: string, updates: Record<string, unknown>) {
+  const proxy = await checkProxyMode();
+  const payload = sanitizeData(updates);
+  if (proxy) {
+    const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
+    await proxyWrite(col, id, { ...existing, ...payload, id });
+  } else {
+    await updateDoc(doc(db, col, id), payload);
+  }
+}
+
+async function deleteDocCloud(col: string, id: string) {
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`Proxy delete ${r.status}`);
+  } else {
+    await deleteDoc(doc(db, col, id));
+  }
+}
+
 // ── End Iran Proxy ──────────────────────────────────────────────────────────
 const CENTRAL_STORAGE_BUCKET = "calculator-55611.firebasestorage.app";
 const CENTRAL_STORAGE_PROJECT_ID = "calculator-55611";
@@ -606,15 +700,9 @@ export const subscribeToSalesRecords = (callback: (sales: SalesRecord[]) => void
 
 export const saveTicketToCloud = async (ticket: Ticket) => {
   try {
-    // Guard: ensure ticket always has a valid ID before saving
     const safeId = ticket.id || `TKT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     const ticketToSave = { ...ticket, id: safeId, files: cleanFilesForDB(ticket.files) };
-    const proxy = await checkProxyMode();
-    if (proxy) {
-      await proxyWrite('tickets', safeId, sanitizeData(ticketToSave));
-    } else {
-      await setDoc(doc(db, "tickets", safeId), sanitizeData(ticketToSave));
-    }
+    await setDocCloud('tickets', safeId, ticketToSave);
     logSystemAction('CREATE', 'Ticket', `تیکت جدید با عنوان ${ticket.serviceId} برای ${ticket.customerName} ایجاد شد`, 'سیستم/مشتری', safeId);
     return safeId;
   } catch (e) {
@@ -625,7 +713,6 @@ export const saveTicketToCloud = async (ticket: Ticket) => {
 
 export const updateTicketInCloud = async (id: string, updates: Partial<Ticket>) => {
   try {
-    const ticketRef = doc(db, "tickets", id);
     const finalUpdates = { ...updates };
     if (updates.projectData && updates.projectData.projectFiles) {
         finalUpdates.projectData.projectFiles = cleanFilesForDB(updates.projectData.projectFiles);
@@ -633,67 +720,51 @@ export const updateTicketInCloud = async (id: string, updates: Partial<Ticket>) 
     if (updates.files) {
         finalUpdates.files = cleanFilesForDB(updates.files);
     }
-    await updateDoc(ticketRef, sanitizeData(finalUpdates));
+    await updateDocCloud('tickets', id, finalUpdates as Record<string, unknown>);
   } catch (e) {
     throw e;
   }
 };
 
 export const deleteTicketFromCloud = async (id: string) => {
-  const ref = doc(db, "tickets", id);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : null;
-  await deleteDoc(ref);
+  const proxy = await checkProxyMode();
+  let data: unknown = null;
+  if (proxy) {
+    data = await proxyGet('tickets', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'tickets', id));
+    data = snap.exists() ? snap.data() : null;
+  }
+  await deleteDocCloud('tickets', id);
   logSystemAction('DELETE', 'Ticket', `تیکت با شناسه ${id} حذف شد`, 'Master', id, data, 'tickets');
 };
 
-export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) => {
-  let inner: (() => void) | null = null;
-  let gone = false;
-
-  checkProxyMode().then(proxy => {
-    if (gone) return;
-    if (proxy) {
-      inner = proxyPoll<Ticket>('tickets', list => {
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(list);
-      });
-    } else {
-      const q = query(collection(db, "tickets"));
-      inner = onSnapshot(q, snap => {
-        const tickets = snap.docs.map(d => {
-          const data = d.data() as Ticket;
-          // Ensure id is always populated — fall back to Firestore doc.id
-          return { ...data, id: data.id || d.id };
-        });
-        tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(tickets);
-      }, () => {});
-    }
+export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) =>
+  subscribeCollection<Ticket>('tickets', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    intervalMs: 8_000,
+    mergeDocId: true,
   });
 
-  return () => { gone = true; inner?.(); };
-};
-
 export const saveCustomerToCloud = async (customer: Customer) => {
-  const proxy = await checkProxyMode();
-  if (proxy) {
-    await proxyWrite('customers', customer.id, sanitizeData(customer));
-  } else {
-    await setDoc(doc(db, "customers", customer.id), sanitizeData(customer));
-  }
+  await setDocCloud('customers', customer.id, customer);
 };
 
 export const updateCustomerInCloud = async (id: string, updates: Partial<Customer>) => {
-  await updateDoc(doc(db, "customers", id), sanitizeData(updates));
+  await updateDocCloud('customers', id, updates as Record<string, unknown>);
   logSystemAction('UPDATE', 'Customer', `اطلاعات مشتری بروزرسانی شد`, 'کاربر سیستم', id);
 };
 
 export const deleteCustomerFromCloud = async (id: string) => {
-  const ref = doc(db, "customers", id);
-  const snap = await getDoc(ref);
-  const data = snap.exists() ? snap.data() : null;
-  await deleteDoc(ref);
+  const proxy = await checkProxyMode();
+  let data: unknown = null;
+  if (proxy) {
+    data = await proxyGet('customers', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'customers', id));
+    data = snap.exists() ? snap.data() : null;
+  }
+  await deleteDocCloud('customers', id);
   logSystemAction('DELETE', 'Customer', `مشتری حذف شد`, 'Master', id, data, 'customers');
 };
 
@@ -701,17 +772,13 @@ export const saveCustomersBulkToCloud = async (customers: Customer[]) => {
     const batchSize = 400;
     for (let i = 0; i < customers.length; i += batchSize) {
         const chunk = customers.slice(i, i + batchSize);
-        await Promise.all(chunk.map(c => setDoc(doc(db, "customers", c.id), sanitizeData(c))));
+        await Promise.all(chunk.map(c => setDocCloud('customers', c.id, c)));
     }
     logSystemAction('CREATE', 'Customer', `${customers.length} مشتری به صورت گروهی ایمپورت شدند`, 'سیستم');
 };
 
-export const subscribeToCustomers = (callback: (customers: Customer[]) => void) => {
-  return onSnapshot(collection(db, "customers"), (snap) => {
-    const list = snap.docs.map(doc => doc.data() as Customer);
-    callback(list);
-  }, (error) => {});
-};
+export const subscribeToCustomers = (callback: (customers: Customer[]) => void) =>
+  subscribeCollection<Customer>('customers', callback, { intervalMs: 10_000 });
 
 export const findCustomerByLoyaltyCode = async (code: string): Promise<Customer | null> => {
     if (!code) return null;
@@ -725,75 +792,77 @@ export const findCustomerByLoyaltyCode = async (code: string): Promise<Customer 
 
 export const sendInternalMessage = async (message: InternalMessage) => {
   try {
-      const msgToSave = { 
-          ...message, 
-          files: cleanFilesForDB(message.files)
-      };
-      await setDoc(doc(db, "messages", message.id), sanitizeData(msgToSave));
-      logSystemAction('CREATE', 'Message', `پیام جدید از ${message.senderName} ارسال شد`, message.senderName, message.id);
-  } catch(e) {
-      throw e;
+    const msgToSave = { ...message, files: cleanFilesForDB(message.files) };
+    await setDocCloud('messages', message.id, msgToSave);
+    logSystemAction('CREATE', 'Message', `پیام جدید از ${message.senderName} ارسال شد`, message.senderName, message.id);
+  } catch (e) {
+    throw e;
   }
 };
 
 export const updateMessageInCloud = async (id: string, updates: Partial<InternalMessage>) => {
-    await updateDoc(doc(db, "messages", id), sanitizeData(updates));
+  await updateDocCloud('messages', id, updates as Record<string, unknown>);
 };
 
 export const deleteMessageFromCloud = async (id: string) => {
-    const ref = doc(db, "messages", id);
+  const proxy = await checkProxyMode();
+  let data: InternalMessage | null = null;
+  if (proxy) {
+    data = await proxyGet<InternalMessage>('messages', { doc: id });
+  } else {
+    const ref = doc(db, 'messages', id);
     const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
-    logSystemAction('DELETE', 'Message', `پیام حذف شد`, 'Master', id, data, 'messages');
+    data = snap.exists() ? (snap.data() as InternalMessage) : null;
+  }
+  await deleteDocCloud('messages', id);
+  logSystemAction('DELETE', 'Message', `پیام حذف شد`, 'Master', id, data, 'messages');
 };
 
-export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void) => {
-    const q = query(collection(db, "messages"));
-    return onSnapshot(q, (snapshot) => {
-        const msgs = snapshot.docs.map(d => d.data() as InternalMessage);
-        msgs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(msgs);
-    }, (e) => {});
-};
+export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void) =>
+  subscribeCollection<InternalMessage>('messages', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    intervalMs: 6_000,
+  });
 
 // ── Team brainstorm (sticky-note ideas board) ──
 export const saveTeamBrainstormPost = async (post: TeamBrainstormPost) => {
-    const payload = { ...post, files: cleanFilesForDB(post.files) };
-    await setDoc(doc(db, "team_brainstorm", post.id), sanitizeData(payload));
+  const payload = { ...post, files: cleanFilesForDB(post.files) };
+  await setDocCloud('team_brainstorm', post.id, payload);
 };
 
 export const updateTeamBrainstormPostInCloud = async (id: string, updates: Partial<TeamBrainstormPost>) => {
-    const payload = { ...updates };
-    if (updates.files) payload.files = cleanFilesForDB(updates.files);
-    if (updates.comments) {
-        payload.comments = updates.comments.map(c => ({
-            ...c,
-            files: cleanFilesForDB(c.files),
-        }));
-    }
-    await updateDoc(doc(db, "team_brainstorm", id), sanitizeData(payload));
+  const payload: Record<string, unknown> = { ...updates };
+  if (updates.files) payload.files = cleanFilesForDB(updates.files);
+  if (updates.comments) {
+    payload.comments = updates.comments.map(c => ({
+      ...c,
+      files: cleanFilesForDB(c.files),
+    }));
+  }
+  await updateDocCloud('team_brainstorm', id, payload);
 };
 
 export const deleteTeamBrainstormPostFromCloud = async (id: string) => {
-    await deleteDoc(doc(db, "team_brainstorm", id));
+  await deleteDocCloud('team_brainstorm', id);
 };
 
-export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]) => void) => {
-    const q = query(collection(db, "team_brainstorm"));
-    return onSnapshot(q, (snapshot) => {
-        const posts = snapshot.docs.map(d => d.data() as TeamBrainstormPost);
-        posts.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-        callback(posts);
-    }, () => {});
-};
+export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]) => void) =>
+  subscribeCollection<TeamBrainstormPost>('team_brainstorm', callback, {
+    sort: (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
+    intervalMs: 8_000,
+  });
 
 // ── Standalone Invoices (Invoices archive) ──
 export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) => {
-    const ref = doc(db, "invoices", invoice.id);
-    const snap = await getDoc(ref);
-    const prev = snap.exists() ? (snap.data() as Invoice) : null;
-    await setDoc(ref, sanitizeData(invoice));
+    const proxy = await checkProxyMode();
+    let prev: Invoice | null = null;
+    if (proxy) {
+        prev = await proxyGet<Invoice>('invoices', { doc: invoice.id });
+    } else {
+        const snap = await getDoc(doc(db, 'invoices', invoice.id));
+        prev = snap.exists() ? (snap.data() as Invoice) : null;
+    }
+    await setDocCloud('invoices', invoice.id, invoice);
     const details = summarizeInvoiceChanges(prev, invoice);
     const actorName = actor?.fullName || invoice.issuedBy || 'System';
     const actorId = actor?.id;
@@ -810,10 +879,15 @@ export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) =>
 };
 
 export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
-    const ref = doc(db, "invoices", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
+    if (proxy) {
+        data = await proxyGet('invoices', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'invoices', id));
+        data = snap.exists() ? snap.data() : null;
+    }
+    await deleteDocCloud('invoices', id);
     const inv = data as Invoice | null;
     await logSystemAction(
         'DELETE',
@@ -827,85 +901,59 @@ export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
     );
 };
 
-export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) => {
-    const q = query(collection(db, "invoices"));
-    return onSnapshot(q, (snapshot) => {
-        const invoices = snapshot.docs.map(d => d.data() as Invoice);
-        invoices.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-        callback(invoices);
-    }, (e) => {});
-};
+export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) =>
+  subscribeCollection<Invoice>('invoices', callback, {
+    sort: (a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime(),
+    intervalMs: 10_000,
+  });
 
 // ── Invoice section presets (named saves per section) ──
 export const saveInvoiceSectionPresetToCloud = async (preset: InvoiceSectionPreset) => {
-    await setDoc(doc(db, "invoice_presets", preset.id), sanitizeData(preset));
+    await setDocCloud('invoice_presets', preset.id, preset);
     logSystemAction('CREATE', 'InvoicePreset', `Preset "${preset.name}" (${preset.section}) saved`, preset.createdBy, preset.id);
 };
 
 export const deleteInvoiceSectionPresetFromCloud = async (id: string) => {
-    const ref = doc(db, "invoice_presets", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
+    if (proxy) {
+        data = await proxyGet('invoice_presets', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'invoice_presets', id));
+        data = snap.exists() ? snap.data() : null;
+    }
+    await deleteDocCloud('invoice_presets', id);
     logSystemAction('DELETE', 'InvoicePreset', `Invoice preset deleted`, 'Master', id, data, 'invoice_presets');
 };
 
-export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSectionPreset[]) => void) => {
-    const q = query(collection(db, "invoice_presets"));
-    return onSnapshot(q, (snapshot) => {
-        const presets = snapshot.docs.map(d => d.data() as InvoiceSectionPreset);
-        presets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(presets);
-    }, (e) => {});
-};
+export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSectionPreset[]) => void) =>
+  subscribeCollection<InvoiceSectionPreset>('invoice_presets', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    intervalMs: 15_000,
+  });
 
 // ── Meta Shops (online catalogs/shops) ──
 export const saveMetaShopToCloud = async (shop: MetaShop) => {
-    const proxy = await checkProxyMode();
-    if (proxy) {
-        await proxyWrite('metaShops', shop.id, sanitizeData(shop));
-    } else {
-        await setDoc(doc(db, "metaShops", shop.id), sanitizeData(shop));
-    }
+    await setDocCloud('metaShops', shop.id, shop);
     logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shop.name} ذخیره شد`, 'Master', shop.id);
 };
 export const deleteMetaShopFromCloud = async (id: string) => {
     const proxy = await checkProxyMode();
+    let data: unknown = null;
     if (proxy) {
-        const existing = await proxyGet<MetaShop>('metaShops', { doc: id });
-        await fetch(`${_fb}?col=${encodeURIComponent('metaShops')}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
-        logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, existing, 'metaShops');
-        return;
+        data = await proxyGet('metaShops', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'metaShops', id));
+        data = snap.exists() ? snap.data() : null;
     }
-    const ref = doc(db, "metaShops", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    await deleteDocCloud('metaShops', id);
     logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
 };
-export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) => {
-    let inner: (() => void) | null = null;
-    let gone = false;
-
-    const deliver = (shops: MetaShop[]) => {
-        shops.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        callback(shops);
-    };
-
-    checkProxyMode().then(proxy => {
-        if (gone) return;
-        if (proxy) {
-            inner = proxyPoll<MetaShop>('metaShops', deliver);
-        } else {
-            const q = query(collection(db, "metaShops"));
-            inner = onSnapshot(q, (snapshot) => {
-                deliver(snapshot.docs.map(d => d.data() as MetaShop));
-            }, () => {});
-        }
-    });
-
-    return () => { gone = true; inner?.(); };
-};
+export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
+  subscribeCollection<MetaShop>('metaShops', callback, {
+    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    intervalMs: 8_000,
+  });
 // Fetch a single shop directly (public view, before the subscription warms up)
 export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> => {
     try {
@@ -923,20 +971,17 @@ export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> 
 
 // ── Meta Shop Orders ──
 export const saveMetaShopOrderToCloud = async (order: MetaShopOrder) => {
-    await setDoc(doc(db, "metaShopOrders", order.id), sanitizeData(order));
+    await setDocCloud('metaShopOrders', order.id, order);
     logSystemAction('CREATE', 'MetaShopOrder', `سفارش جدید از ${order.customerName} (${order.shopName})`, order.customerName, order.id);
 };
 export const updateMetaShopOrderInCloud = async (id: string, updates: Partial<MetaShopOrder>) => {
-    await updateDoc(doc(db, "metaShopOrders", id), sanitizeData(updates));
+    await updateDocCloud('metaShopOrders', id, updates as Record<string, unknown>);
 };
-export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) => {
-    const q = query(collection(db, "metaShopOrders"));
-    return onSnapshot(q, (snapshot) => {
-        const orders = snapshot.docs.map(d => d.data() as MetaShopOrder);
-        orders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        callback(orders);
-    }, (e) => {});
-};
+export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) =>
+  subscribeCollection<MetaShopOrder>('metaShopOrders', callback, {
+    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    intervalMs: 8_000,
+  });
 // Customer order lookup by phone (public, no auth)
 export const lookupMetaShopOrders = async (phone: string): Promise<MetaShopOrder[]> => {
     try {
@@ -956,39 +1001,26 @@ export const lookupMetaShopOrdersByTracking = async (trackingCode: string): Prom
 
 // ── Meta Bazaars (curated multi-level shop directories) ──
 export const saveMetaBazaarToCloud = async (bazaar: MetaBazaar) => {
-    await setDoc(doc(db, "metaBazaars", bazaar.id), sanitizeData(bazaar));
+    await setDocCloud('metaBazaars', bazaar.id, bazaar);
     logSystemAction('UPDATE', 'MetaBazaar', `بازارچه ${bazaar.name} ذخیره شد`, 'Master', bazaar.id);
 };
 export const deleteMetaBazaarFromCloud = async (id: string) => {
-    const ref = doc(db, "metaBazaars", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
+    if (proxy) {
+        data = await proxyGet('metaBazaars', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'metaBazaars', id));
+        data = snap.exists() ? snap.data() : null;
+    }
+    await deleteDocCloud('metaBazaars', id);
     logSystemAction('DELETE', 'MetaBazaar', `بازارچه حذف شد`, 'Master', id, data, 'metaBazaars');
 };
-export const subscribeToMetaBazaars = (callback: (bazaars: MetaBazaar[]) => void) => {
-    let inner: (() => void) | null = null;
-    let gone = false;
-
-    const deliver = (bazaars: MetaBazaar[]) => {
-        bazaars.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-        callback(bazaars);
-    };
-
-    checkProxyMode().then(proxy => {
-        if (gone) return;
-        if (proxy) {
-            inner = proxyPoll<MetaBazaar>('metaBazaars', deliver);
-        } else {
-            const q = query(collection(db, "metaBazaars"));
-            inner = onSnapshot(q, (snapshot) => {
-                deliver(snapshot.docs.map(d => d.data() as MetaBazaar));
-            }, () => {});
-        }
-    });
-
-    return () => { gone = true; inner?.(); };
-};
+export const subscribeToMetaBazaars = (callback: (bazaars: MetaBazaar[]) => void) =>
+  subscribeCollection<MetaBazaar>('metaBazaars', callback, {
+    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    intervalMs: 8_000,
+  });
 export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | null> => {
     try {
         const proxy = await checkProxyMode();
@@ -1004,104 +1036,94 @@ export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | nu
 };
 
 export const saveTaskToCloud = async (task: Task) => {
-    await setDoc(doc(db, "tasks", task.id), sanitizeData(task));
+    await setDocCloud('tasks', task.id, task);
     logSystemAction('CREATE', 'Task', `وظیفه جدید "${task.title}" ایجاد شد`, task.creatorName, task.id);
 };
 
 export const updateTaskInCloud = async (id: string, updates: Partial<Task>) => {
-    await updateDoc(doc(db, "tasks", id), sanitizeData(updates));
+    await updateDocCloud('tasks', id, updates as Record<string, unknown>);
 };
 
 export const deleteTaskFromCloud = async (id: string) => {
-    const ref = doc(db, "tasks", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
+    if (proxy) {
+        data = await proxyGet('tasks', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'tasks', id));
+        data = snap.exists() ? snap.data() : null;
+    }
+    await deleteDocCloud('tasks', id);
     logSystemAction('DELETE', 'Task', `وظیفه حذف شد`, 'کاربر', id, data, 'tasks');
 };
 
-export const subscribeToTasks = (callback: (tasks: Task[]) => void) => {
-    const q = query(collection(db, "tasks"));
-    return onSnapshot(q, (snapshot) => {
-        const tasks = snapshot.docs.map(d => d.data() as Task);
-        tasks.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(tasks);
-    }, (e) => {});
-};
+export const subscribeToTasks = (callback: (tasks: Task[]) => void) =>
+  subscribeCollection<Task>('tasks', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    intervalMs: 8_000,
+  });
 
 export const saveMeetingToCloud = async (meeting: Meeting) => {
-    await setDoc(doc(db, "meetings", meeting.id), sanitizeData(meeting));
+    await setDocCloud('meetings', meeting.id, meeting);
     logSystemAction('CREATE', 'Meeting', `جلسه "${meeting.title}" تنظیم شد`, meeting.organizerName, meeting.id);
 };
 
 export const updateMeetingInCloud = async (id: string, updates: Partial<Meeting>, actorName: string) => {
-    await updateDoc(doc(db, "meetings", id), sanitizeData(updates));
+    await updateDocCloud('meetings', id, updates as Record<string, unknown>);
     logSystemAction('UPDATE', 'Meeting', `جلسه بروزرسانی شد`, actorName, id);
 };
 
 export const deleteMeetingFromCloud = async (id: string) => {
-    const ref = doc(db, "meetings", id);
-    const snap = await getDoc(ref);
-    const data = snap.exists() ? snap.data() : null;
-    await deleteDoc(ref);
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
+    if (proxy) {
+        data = await proxyGet('meetings', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'meetings', id));
+        data = snap.exists() ? snap.data() : null;
+    }
+    await deleteDocCloud('meetings', id);
     logSystemAction('DELETE', 'Meeting', `جلسه لغو/حذف شد`, 'کاربر', id, data, 'meetings');
 };
 
-export const subscribeToMeetings = (callback: (meetings: Meeting[]) => void) => {
-    const q = query(collection(db, "meetings"));
-    return onSnapshot(q, (snapshot) => {
-        const meetings = snapshot.docs.map(d => d.data() as Meeting);
-        callback(meetings);
-    }, (e) => {});
-};
+export const subscribeToMeetings = (callback: (meetings: Meeting[]) => void) =>
+  subscribeCollection<Meeting>('meetings', callback, { intervalMs: 10_000 });
 
 export const saveKPIToCloud = async (kpi: KPI) => {
-    await setDoc(doc(db, "kpis", kpi.id), sanitizeData(kpi));
+    await setDocCloud('kpis', kpi.id, kpi);
     logSystemAction('CREATE', 'KPI', `شاخص عملکرد "${kpi.title}" ایجاد شد`, 'Master', kpi.id);
 };
 
 export const updateKPIInCloud = async (id: string, updates: Partial<KPI>) => {
-    await updateDoc(doc(db, "kpis", id), sanitizeData(updates));
+    await updateDocCloud('kpis', id, updates as Record<string, unknown>);
     logSystemAction('UPDATE', 'KPI', `شاخص عملکرد بروزرسانی شد`, 'System', id);
 };
 
 export const deleteKPIFromCloud = async (id: string) => {
-    const ref = doc(db, "kpis", id);
-    await deleteDoc(ref);
+    await deleteDocCloud('kpis', id);
     logSystemAction('DELETE', 'KPI', `شاخص عملکرد حذف شد`, 'Master', id);
 };
 
-export const subscribeToKPIs = (callback: (kpis: KPI[]) => void) => {
-    const q = query(collection(db, "kpis"));
-    return onSnapshot(q, (snapshot) => {
-        const kpis = snapshot.docs.map(d => d.data() as KPI);
-        callback(kpis);
-    }, (e) => {});
-};
+export const subscribeToKPIs = (callback: (kpis: KPI[]) => void) =>
+  subscribeCollection<KPI>('kpis', callback, { intervalMs: 10_000 });
 
 export const saveCustomFormToCloud = async (form: CustomForm, actorName: string) => {
-    await setDoc(doc(db, "custom_forms", form.id), sanitizeData(form));
+    await setDocCloud('custom_forms', form.id, form);
     logSystemAction('CREATE', 'CustomForm', `فرم "${form.title}" ایجاد شد`, actorName, form.id);
 };
 
 export const updateCustomFormInCloud = async (id: string, updates: Partial<CustomForm>, actorName: string) => {
-    await updateDoc(doc(db, "custom_forms", id), sanitizeData(updates));
+    await updateDocCloud('custom_forms', id, updates as Record<string, unknown>);
     logSystemAction('UPDATE', 'CustomForm', `فرم بروزرسانی شد`, actorName, id);
 };
 
 export const deleteCustomFormFromCloud = async (id: string, actorName: string) => {
-    const ref = doc(db, "custom_forms", id);
-    await deleteDoc(ref);
+    await deleteDocCloud('custom_forms', id);
     logSystemAction('DELETE', 'CustomForm', `فرم حذف شد`, actorName, id);
 };
 
-export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) => {
-    const q = query(collection(db, "custom_forms"));
-    return onSnapshot(q, (snapshot) => {
-        const forms = snapshot.docs.map(d => d.data() as CustomForm);
-        callback(forms);
-    }, (e) => {});
-};
+export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) =>
+  subscribeCollection<CustomForm>('custom_forms', callback, { intervalMs: 10_000 });
 
 export const getTicketById = async (id: string): Promise<Ticket | null> => {
   const proxy = await checkProxyMode();
@@ -1136,12 +1158,12 @@ export const getCustomFormById = async (id: string): Promise<CustomForm | null> 
 };
 
 export const saveAppConfigToCloud = async (config: AppConfig) => {
-    await setDoc(doc(db, "settings", "appConfig"), sanitizeData(config));
+    await setDocCloud('settings', 'appConfig', config);
     logSystemAction('UPDATE', 'System', `تنظیمات سیستم تغییر کرد`, 'Admin');
 };
 
 export const saveServicesToCloud = async (services: ServiceOption[]) => {
-    await setDoc(doc(db, "settings", "services"), { list: sanitizeData(services) });
+    await setDocCloud('settings', 'services', { list: services });
     logSystemAction('UPDATE', 'System', `لیست خدمات/تعرفه‌ها بروز شد`, 'Admin');
 };
 
@@ -1153,7 +1175,7 @@ export const savePersonnelToCloud = async (personnel: Personnel[]) => {
         }).filter(d => d !== null);
         return { ...p, documents: cleanDocs };
     });
-    await setDoc(doc(db, "settings", "personnel"), { list: sanitizeData(cleanList) });
+    await setDocCloud('settings', 'personnel', { list: cleanList });
     logSystemAction('UPDATE', 'Personnel', `لیست پرسنل بروزرسانی شد`, 'Admin');
 };
 
@@ -1165,24 +1187,31 @@ export const subscribeToSettings = (
   let inner: (() => void) | null = null;
   let gone = false;
 
+  const deliver = (docs: Array<{ id?: string; list?: unknown } & AppConfig>) => {
+    docs.forEach((d) => {
+      if (d.id === 'appConfig') onConfig(d as AppConfig);
+      if (d.id === 'services' && (d as { list?: ServiceOption[] }).list) onServices((d as { list: ServiceOption[] }).list);
+      if (d.id === 'personnel' && (d as { list?: Personnel[] }).list) onPersonnel((d as { list: Personnel[] }).list);
+    });
+  };
+
+  const startProxy = () => {
+    inner?.();
+    inner = proxyPoll('settings', deliver, { intervalMs: 8_000 });
+  };
+
   checkProxyMode().then(proxy => {
     if (gone) return;
     if (proxy) {
-      inner = proxyPoll<any>('settings', docs => {
-        docs.forEach((d: any) => {
-          if (d.id === 'appConfig') onConfig(d as AppConfig);
-          if (d.id === 'services' && d.list) onServices(d.list as ServiceOption[]);
-          if (d.id === 'personnel' && d.list) onPersonnel(d.list as Personnel[]);
-        });
-      });
+      startProxy();
     } else {
       inner = onSnapshot(collection(db, "settings"), snap => {
-        snap.docs.forEach(d => {
-          if (d.id === 'appConfig') onConfig(d.data() as AppConfig);
-          if (d.id === 'services') onServices(d.data().list);
-          if (d.id === 'personnel') onPersonnel(d.data().list);
-        });
-      }, () => {});
+        deliver(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, () => {
+        if (gone) return;
+        forceProxyMode();
+        startProxy();
+      });
     }
   });
 
@@ -1190,37 +1219,22 @@ export const subscribeToSettings = (
 };
 
 export const saveNewsArticleToCloud = async (article: NewsArticle): Promise<void> => {
-    await setDoc(doc(db, 'news', article.id), sanitizeData(article));
+    await setDocCloud('news', article.id, article);
     logSystemAction('UPDATE', 'News', `مقاله "${article.title}" ذخیره شد`, 'Admin');
 };
 
 export const deleteNewsArticleFromCloud = async (id: string): Promise<void> => {
-    await deleteDoc(doc(db, 'news', id));
+    await deleteDocCloud('news', id);
     logSystemAction('DELETE', 'News', `مقاله حذف شد`, 'Admin');
 };
 
-export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) => {
-  let inner: (() => void) | null = null;
-  let gone = false;
-
-  checkProxyMode().then(proxy => {
-    if (gone) return;
-    if (proxy) {
-      inner = proxyPoll<NewsArticle>('news', list => {
-        list.sort((a, b) => new Date((b as any).publishedAt).getTime() - new Date((a as any).publishedAt).getTime());
-        callback(list);
-      }, { orderField: 'publishedAt', dir: 'desc' });
-    } else {
-      inner = onSnapshot(
-        query(collection(db, 'news'), orderBy('publishedAt', 'desc')),
-        snap => callback(snap.docs.map(d => d.data() as NewsArticle)),
-        () => {}
-      );
-    }
+export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) =>
+  subscribeCollection<NewsArticle>('news', callback, {
+    sort: (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    orderField: 'publishedAt',
+    dir: 'desc',
+    intervalMs: 12_000,
   });
-
-  return () => { gone = true; inner?.(); };
-};
 
 // ── Analytics ──────────────────────────────────────────────────────────────
 
@@ -1279,13 +1293,13 @@ export const logPageView = async (view: string, articleSlug?: string) => {
     } catch {}
 };
 
-export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => void) => {
-    return onSnapshot(
-        query(collection(db, 'analytics'), orderBy('timestamp', 'desc'), limit(5000)),
-        (snap) => callback(snap.docs.map(d => d.data() as AnalyticsEvent)),
-        () => {}
-    );
-};
+export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => void) =>
+  subscribeCollection<AnalyticsEvent>('analytics', list => callback(list.slice(0, 5000)), {
+    sort: (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    orderField: 'timestamp',
+    dir: 'desc',
+    intervalMs: 15_000,
+  });
 
 // ── Meta Shop visitor analytics ────────────────────────────────────────────
 // Public, fire-and-forget. Records a visit / product-click / add-to-cart event for one shop.
@@ -1498,7 +1512,12 @@ export const subscribeMetaExpoBoothReservations = (
             inner = onSnapshot(
                 query(collection(db, 'metaExpoBoothReservations'), where('bazaarId', '==', bazaarId), limit(2000)),
                 snap => normalize(snap.docs.map(d => d.data() as MetaExpoBoothReservation)),
-                () => {},
+                () => {
+                    if (gone) return;
+                    forceProxyMode();
+                    inner?.();
+                    inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 4000 });
+                },
             );
         }
     });
@@ -1541,7 +1560,12 @@ export const subscribeMetaExpoPresence = (
             inner = onSnapshot(
                 query(collection(db, 'metaExpoPresence'), where('roomId', '==', roomId), limit(80)),
                 snap => normalize(snap.docs.map(d => d.data() as MetaExpoPresence)),
-                () => {}
+                () => {
+                    if (gone) return;
+                    forceProxyMode();
+                    inner?.();
+                    inner = proxyPoll<MetaExpoPresence>('metaExpoPresence', normalize, { intervalMs: 3000 });
+                },
             );
         }
     });
@@ -1553,46 +1577,49 @@ export const subscribeMetaExpoPresence = (
 export const saveNotificationLog = async (log: Omit<NotificationLog, 'id'>): Promise<void> => {
     try {
         const id = `nl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        await setDoc(doc(db, 'notification_logs', id), sanitizeData({ ...log, id }));
+        await setDocCloud('notification_logs', id, { ...log, id });
     } catch {}
 };
 
-export const subscribeToNotificationLogs = (callback: (logs: NotificationLog[]) => void) => {
-    const q = query(collection(db, 'notification_logs'), orderBy('createdAt', 'desc'), limit(100));
-    return onSnapshot(q, (snap) => {
-        callback(snap.docs.map(d => d.data() as NotificationLog));
-    }, () => {});
-};
+export const subscribeToNotificationLogs = (callback: (logs: NotificationLog[]) => void) =>
+  subscribeCollection<NotificationLog>('notification_logs', list => callback(list.slice(0, 100)), {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    orderField: 'createdAt',
+    dir: 'desc',
+    intervalMs: 12_000,
+  });
 
 // ── Customer Accounts ──────────────────────────────────────────────────────
 export const saveCustomerAccount = async (account: CustomerAccount) => {
-  await setDoc(doc(db, 'customerAccounts', account.id), sanitizeData(account));
+  await setDocCloud('customerAccounts', account.id, account);
 };
 
 export const deleteCustomerAccount = async (id: string) => {
-  await deleteDoc(doc(db, 'customerAccounts', id));
+  await deleteDocCloud('customerAccounts', id);
 };
 
-export const subscribeToCustomerAccounts = (callback: (accounts: CustomerAccount[]) => void) => {
-  const q = query(collection(db, 'customerAccounts'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(d => d.data() as CustomerAccount));
+export const subscribeToCustomerAccounts = (callback: (accounts: CustomerAccount[]) => void) =>
+  subscribeCollection<CustomerAccount>('customerAccounts', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    orderField: 'createdAt',
+    dir: 'desc',
+    intervalMs: 10_000,
   });
-};
 
 // --- Company Processes ---
 
-export const subscribeToProcesses = (callback: (processes: CompanyProcess[]) => void) => {
-  const q = query(collection(db, 'processes'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, snapshot => {
-    callback(snapshot.docs.map(d => d.data() as CompanyProcess));
-  }, () => {});
-};
+export const subscribeToProcesses = (callback: (processes: CompanyProcess[]) => void) =>
+  subscribeCollection<CompanyProcess>('processes', callback, {
+    sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    orderField: 'createdAt',
+    dir: 'desc',
+    intervalMs: 12_000,
+  });
 
 export const saveProcess = async (process: CompanyProcess): Promise<void> => {
-  await setDoc(doc(db, 'processes', process.id), sanitizeData(process));
+  await setDocCloud('processes', process.id, process);
 };
 
 export const deleteProcess = async (id: string): Promise<void> => {
-  await deleteDoc(doc(db, 'processes', id));
+  await deleteDocCloud('processes', id);
 };
