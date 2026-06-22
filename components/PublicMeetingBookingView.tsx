@@ -3,11 +3,14 @@ import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { IconCalendarClock, IconCopy } from './Icons';
 import { MeetingBookingModal } from './MeetingBookingModal';
+import { ConsultantAvatar } from './ConsultantAvatar';
 import {
   MEETING_STATUS_STYLE,
   SESSION_TYPE_LABEL,
   canPublicBookMeeting,
+  countConsultantOpenSlots,
   filterPublicBookableMeetings,
+  findConsultant,
   getBookableConsultants,
   getMeetingDisplayStatus,
   meetingPrices,
@@ -179,7 +182,22 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     bookNow: fa ? 'رزرو فوری' : 'Book now',
     full: fa ? 'پر شده' : 'Full',
     hot: fa ? 'پرطرفدار' : 'Popular',
+    consultantsTitle: fa ? 'مشاوران ما' : 'Our consultants',
+    resume: fa ? 'رزومه' : 'Resume',
+    openSlots: (n: number) => fa ? `${n} زمان باز` : `${n} open slot${n === 1 ? '' : 's'}`,
+    selectConsultant: fa ? 'انتخاب مشاور' : 'Select consultant',
+    roles: fa ? 'سمت' : 'Role',
   };
+
+  const selectedConsultant = useMemo(
+    () => findConsultant(personnel, consultantId),
+    [personnel, consultantId],
+  );
+
+  const displayConsultants = useMemo(() => {
+    if (consultantId && selectedConsultant) return [selectedConsultant];
+    return consultants;
+  }, [consultantId, selectedConsultant, consultants]);
 
   const jumpToMeetingWeek = (m: Meeting) => {
     setWeekStart(getWeekStart(parseDateLocal(m.date)));
@@ -256,6 +274,65 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* ── Consultant profiles ── */}
+        {displayConsultants.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-bold text-gray-800 px-1">{t.consultantsTitle}</h2>
+            {consultantId && selectedConsultant ? (
+              <div className="bg-white rounded-2xl border border-violet-100 shadow-md overflow-hidden">
+                <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5">
+                  <ConsultantAvatar person={selectedConsultant} size="xl" ring className="mx-auto sm:mx-0" />
+                  <div className="flex-1 min-w-0 text-center sm:text-right">
+                    <h3 className="text-lg font-black text-gray-900">{selectedConsultant.fullName}</h3>
+                    {(selectedConsultant.roles || []).length > 0 && (
+                      <p className="text-xs text-violet-600 font-semibold mt-0.5">
+                        {(selectedConsultant.roles || []).join(' · ')}
+                      </p>
+                    )}
+                    <p className="text-xs font-bold text-emerald-600 mt-2">
+                      {t.openSlots(countConsultantOpenSlots(upcomingSlots, selectedConsultant.id))}
+                    </p>
+                    {selectedConsultant.consultantBio ? (
+                      <div className="mt-3 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right">
+                        {selectedConsultant.consultantBio}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400 italic">{fa ? 'رزومه به‌زودی تکمیل می‌شود' : 'Bio coming soon'}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-1 snap-x" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {displayConsultants.map(c => {
+                  const openCount = countConsultantOpenSlots(upcomingSlots, c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => onConsultantChange?.(c.id)}
+                      className="snap-start shrink-0 w-[220px] sm:w-[260px] text-right bg-white rounded-xl border border-gray-100 shadow-sm hover:border-violet-300 hover:shadow-md transition-all p-3 flex flex-col gap-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <ConsultantAvatar person={c} size="lg" ring />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-gray-900 text-sm truncate">{c.fullName}</div>
+                          <div className="text-[10px] text-violet-600 font-medium truncate">{(c.roles || []).slice(0, 2).join(' · ')}</div>
+                          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">{t.openSlots(openCount)}</div>
+                        </div>
+                      </div>
+                      {c.consultantBio ? (
+                        <p className="text-[11px] text-gray-500 line-clamp-3 leading-relaxed">{c.consultantBio}</p>
+                      ) : null}
+                      <span className="text-[10px] font-bold text-violet-600 mt-auto">{t.selectConsultant} →</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Stats + urgency banner ── */}
         {slotStats.total > 0 && (
           <div className="space-y-3">
@@ -313,6 +390,8 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                   const style = MEETING_STATUS_STYLE[status];
                   const isHot = status === 'pending' && guestCount >= 2;
 
+                  const consultant = findConsultant(personnel, meeting.consultantId);
+
                   return (
                     <button
                       key={meeting.id}
@@ -329,7 +408,8 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                           : 'border-red-300 bg-red-50/60'
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {consultant && <ConsultantAvatar person={consultant} size="xs" />}
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-white ${style.bg}`}>
                           {fa ? style.labelFa : style.labelEn}
                         </span>
@@ -477,6 +557,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
       <MeetingBookingModal
         open={!!bookingMeeting}
         meeting={bookingMeeting}
+        consultant={bookingMeeting ? findConsultant(personnel, bookingMeeting.consultantId) : undefined}
         lang={lang}
         onClose={() => setBookingMeeting(null)}
         onBooked={() => setBookingMeeting(null)}

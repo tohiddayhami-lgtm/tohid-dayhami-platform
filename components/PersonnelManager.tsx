@@ -146,7 +146,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
 
   const [formData, setFormData] = useState({
-    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
+    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
     canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[]
   });
@@ -245,6 +245,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           jobDesc: 'شرح شغل',
           staffNote: 'یادداشت برای پرسنل',
           staffNoteHint: 'این متن در داشبورد پرسنل، زیر شرح شغل نمایش داده می‌شود.',
+          consultantBio: 'رزومه مشاور (صفحه رزرو عمومی)',
+          consultantBioHint: 'معرفی و سوابق مشاور — در صفحه رزرو جلسه برای مشتریان نمایش داده می‌شود. عکس بالا همان عکس مشاور است.',
+          avatarBookingHint: 'عکس پروفایل — در صفحه رزرو مشاوره نمایش داده می‌شود',
           permissions: 'دسترسی‌ها و مجوزها',
           permAssign: 'مجوز ارجاع کار',
           permAllTickets: 'مشاهده کل درخواست‌ها',
@@ -306,6 +309,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           jobDesc: 'Job Description',
           staffNote: 'Note for staff',
           staffNoteHint: 'Shown in the employee dashboard under their job description.',
+          consultantBio: 'Consultant resume (public booking)',
+          consultantBioHint: 'Bio shown to customers on the public booking page. The photo above is used as the consultant photo.',
+          avatarBookingHint: 'Profile photo — shown on the public booking page',
           permissions: 'Permissions',
           permAssign: 'Can Assign Tasks',
           permAllTickets: 'View All Requests',
@@ -341,7 +347,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const handleEdit = (person: Personnel) => {
     setEditingId(person.id);
     setFormData({
-        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', reportsTo: person.reportsTo || '',
+        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', consultantBio: person.consultantBio || '', reportsTo: person.reportsTo || '',
         email: person.email, username: person.username, password: person.password || '', avatar: person.avatar || '', documents: person.documents || [],
         canAssign: person.permissions?.canAssign || false, canViewCustomers: person.permissions?.canViewCustomers || false,
         canViewTariffs: person.permissions?.canViewTariffs || false, canViewAllTickets: person.permissions?.canViewAllTickets || false,
@@ -356,7 +362,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -607,7 +613,11 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-colors" style={editingId ? { borderColor: '#8b5cf6', borderWidth: '2px' } : {}}><div className="flex items-center gap-3 mb-6"><div className={`p-2 rounded-lg ${editingId ? 'bg-indigo-100 text-indigo-600' : 'bg-purple-100 text-purple-600'}`}>{editingId ? <IconEdit className="w-5 h-5" /> : <IconPlus className="w-5 h-5" />}</div><h3 className="text-lg font-bold text-gray-800">{editingId ? t.editUser : t.newUser}</h3></div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-             <div className="md:col-span-3 flex flex-col items-center gap-4"><div onClick={() => !isProcessingImage && avatarInputRef.current?.click()} className={`w-32 h-32 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden relative group transition-all ${isProcessingImage ? 'opacity-50 cursor-wait' : ''}`}>{formData.avatar ? (<img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />) : (<div className="text-center text-gray-400"><IconUsers className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">{isProcessingImage ? t.uploading : t.uploadPhoto}</span></div>)}</div><input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} /></div>
+             <div className="md:col-span-3 flex flex-col items-center gap-2">
+               <div onClick={() => !isProcessingImage && avatarInputRef.current?.click()} className={`w-32 h-32 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 hover:bg-gray-100 cursor-pointer overflow-hidden relative group transition-all ${isProcessingImage ? 'opacity-50 cursor-wait' : ''}`}>{formData.avatar ? (<img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />) : (<div className="text-center text-gray-400"><IconUsers className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">{isProcessingImage ? t.uploading : t.uploadPhoto}</span></div>)}</div>
+               <p className="text-[10px] text-violet-600 text-center px-2 leading-relaxed">{t.avatarBookingHint}</p>
+               <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleAvatarSelect} />
+             </div>
              <div className="md:col-span-9 space-y-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.name}</label><input type="text" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})}/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">{t.email}</label><input type="email" required className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/></div></div>
                  <div><label className="block text-sm font-medium text-gray-700 mb-2">{t.roles}</label>
@@ -648,6 +658,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
                        + کلیک کنید تا شرح شغل تعریف کنید
                      </button>
                    )}
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">{t.consultantBio}</label>
+                   <p className="text-xs text-gray-400 mb-2">{t.consultantBioHint}</p>
+                   <textarea
+                     className="w-full px-4 py-2.5 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 min-h-[120px] text-sm resize-y"
+                     value={formData.consultantBio}
+                     onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
+                     placeholder={lang === 'fa' ? 'سوابق، تخصص‌ها، تجربه کاری، مدارک و…' : 'Experience, expertise, credentials…'}
+                   />
                  </div>
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.staffNote}</label>

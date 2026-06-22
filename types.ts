@@ -92,8 +92,10 @@ export interface Personnel {
   username: string;
   staffCode?: string; // dedicated personnel/messaging ID — colleagues use it to message this person
   password?: string;
-  avatar?: string; 
-  documents?: PersonnelDocument[]; 
+  avatar?: string;
+  /** رزومه / معرفی عمومی برای صفحه رزرو مشاوره */
+  consultantBio?: string;
+  documents?: PersonnelDocument[];
   status: 'active' | 'inactive';
   permissions?: PersonnelPermissions;
   customCommissions?: Record<string, number>;

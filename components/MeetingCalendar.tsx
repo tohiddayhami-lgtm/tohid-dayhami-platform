@@ -8,6 +8,7 @@ import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
 import { MEETING_STATUS_STYLE, SESSION_TYPE_LABEL, getMeetingDisplayStatus, isBookableMeeting } from '../utils/meetingBookingUtils';
+import { ConsultantAvatar } from './ConsultantAvatar';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -605,6 +606,24 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                         <option key={p.id} value={p.id}>{p.fullName}</option>
                       ))}
                     </select>
+                    {formData.consultantId && (() => {
+                      const c = activePersonnel.find(p => p.id === formData.consultantId);
+                      if (!c) return null;
+                      return (
+                        <div className="mt-2 flex gap-3 p-2.5 rounded-lg bg-violet-50 border border-violet-100">
+                          <ConsultantAvatar person={c} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-gray-800">{c.fullName}</p>
+                            {c.consultantBio ? (
+                              <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.consultantBio}</p>
+                            ) : (
+                              <p className="text-[10px] text-amber-600 mt-0.5">{fa ? 'رزومه در بخش پرسنل تکمیل نشده' : 'Add bio in Personnel'}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <p className="text-[10px] text-gray-400 mt-1">{fa ? 'عکس و رزومه از بخش مدیریت پرسنل تنظیم می‌شود' : 'Photo & bio are set in Personnel management'}</p>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'هزینه (چند ارزی)' : 'Fee (multi-currency)'}</label>

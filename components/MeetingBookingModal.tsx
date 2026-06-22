@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import type { Meeting } from '../types';
+import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { tryBookMeeting } from '../services/firebaseService';
 import { meetingPrices, SESSION_TYPE_LABEL } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
+import { ConsultantAvatar } from './ConsultantAvatar';
 
 interface Props {
   open: boolean;
   meeting: Meeting | null;
+  consultant?: Personnel;
   lang: Language;
   onClose: () => void;
   onBooked: () => void;
 }
 
-export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, lang, onClose, onBooked }) => {
+export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant, lang, onClose, onBooked }) => {
   const fa = lang === 'fa';
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -54,6 +56,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, lang, onCl
     hint: fa
       ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ مستر یکی را قطعی می‌کند.'
       : 'Multiple people can book temporarily; master confirms one winner.',
+    resume: fa ? 'رزومه مشاور' : 'Consultant bio',
   };
 
   const reset = () => {
@@ -98,6 +101,21 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, lang, onCl
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-5 space-y-3">
+            {(consultant || meeting.consultantName) && (
+              <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3 flex gap-3">
+                <ConsultantAvatar person={consultant} name={meeting.consultantName} size="md" ring />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-gray-900">{consultant?.fullName || meeting.consultantName}</div>
+                  {consultant?.roles?.length ? (
+                    <div className="text-[10px] text-violet-600 font-medium">{(consultant.roles || []).join(' · ')}</div>
+                  ) : null}
+                  {consultant?.consultantBio && (
+                    <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed line-clamp-4 whitespace-pre-wrap">{consultant.consultantBio}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm space-y-1.5">
               <div><span className="text-gray-500">{t.session}: </span><strong>{sessionLabel}</strong></div>
               {meeting.consultantName && (

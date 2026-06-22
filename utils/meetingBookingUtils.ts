@@ -56,6 +56,12 @@ export const getBookableConsultants = (
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fa'));
 };
 
+export const findConsultant = (personnel: Personnel[], id?: string | null): Personnel | undefined =>
+  id ? personnel.find(p => p.id === id) : undefined;
+
+export const countConsultantOpenSlots = (meetings: Meeting[], consultantId: string): number =>
+  meetings.filter(m => m.consultantId === consultantId && getMeetingDisplayStatus(m) === 'open').length;
+
 export const buildBookingPublicUrl = (baseUrl: string, consultantId?: string | null) => {
   const url = new URL(baseUrl, typeof window !== 'undefined' ? window.location.origin : 'https://localhost');
   url.search = '';
