@@ -1,4 +1,4 @@
-import type { Currency, Meeting, Personnel, Price } from '../types';
+import type { Currency, Meeting, Personnel, Price, ConsultantCategory } from '../types';
 import { resolvePrices } from './servicePriceList';
 
 export const MAX_MEETING_PENDING_GUESTS = 100;
@@ -138,4 +138,54 @@ export const buildBookingPublicUrl = (baseUrl: string, consultantId?: string | n
 export const canPublicBookMeeting = (m: Meeting): boolean => {
   const status = getMeetingDisplayStatus(m);
   return status === 'open' || status === 'pending';
+};
+
+export const filterPublicBookableMeetingsByCategory = (
+  meetings: Meeting[],
+  categoryId?: string | null,
+  consultantId?: string | null,
+): Meeting[] => {
+  let list = filterPublicBookableMeetings(meetings, consultantId);
+  if (categoryId) list = list.filter(m => m.consultantCategoryId === categoryId);
+  return list;
+};
+
+export const getCategoryForMeeting = (
+  meeting: Meeting,
+  categories: ConsultantCategory[],
+): ConsultantCategory | undefined =>
+  categories.find(c => c.id === meeting.consultantCategoryId);
+
+export const groupMeetingsByCategory = (
+  meetings: Meeting[],
+  categories: ConsultantCategory[],
+): { category: ConsultantCategory | null; meetings: Meeting[] }[] => {
+  const sorted = [...meetings].sort((a, b) => {
+    const dc = a.date.localeCompare(b.date);
+    if (dc !== 0) return dc;
+    return (a.startTime || '').localeCompare(b.startTime || '');
+  });
+  const catOrder = categories.map(c => c.id);
+  const buckets = new Map<string | '__none__', Meeting[]>();
+  for (const m of sorted) {
+    const key = m.consultantCategoryId || '__none__';
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(m);
+  }
+  const result: { category: ConsultantCategory | null; meetings: Meeting[] }[] = [];
+  for (const id of catOrder) {
+    const ms = buckets.get(id);
+    if (ms?.length) {
+      result.push({ category: categories.find(c => c.id === id) || null, meetings: ms });
+      buckets.delete(id);
+    }
+  }
+  const uncategorized = buckets.get('__none__');
+  if (uncategorized?.length) result.push({ category: null, meetings: uncategorized });
+  for (const [key, ms] of buckets) {
+    if (key !== '__none__' && ms.length) {
+      result.push({ category: categories.find(c => c.id === key) || null, meetings: ms });
+    }
+  }
+  return result;
 };

@@ -5,6 +5,7 @@ import { tryBookMeeting } from '../services/firebaseService';
 import { meetingPrices, getMeetingSessionLabel, getMeetingConsultantBio, getMeetingConsultantName, getMeetingConsultantPhoto } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { ConsultantAvatar } from './ConsultantAvatar';
+import { IconCopy } from './Icons';
 
 interface Props {
   open: boolean;
@@ -13,9 +14,10 @@ interface Props {
   lang: Language;
   onClose: () => void;
   onBooked: () => void;
+  onOpenTracking?: (code?: string) => void;
 }
 
-export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant, lang, onClose, onBooked }) => {
+export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant, lang, onClose, onBooked, onOpenTracking }) => {
   const fa = lang === 'fa';
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -24,7 +26,9 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [trackingCode, setTrackingCode] = useState('');
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   if (!open || !meeting) return null;
 
@@ -50,8 +54,12 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
     close: fa ? 'بستن' : 'Close',
     saving: fa ? 'در حال ثبت…' : 'Saving…',
     success: fa
-      ? 'رزرو موقت شما ثبت شد. پس از تأیید مستر، رزرو قطعی می‌شود و به رنگ قرمز نمایش داده می‌شود.'
-      : 'Your temporary booking was submitted. After master confirmation it will show as confirmed (red).',
+      ? 'رزرو موقت شما ثبت شد. کد پیگیری را ذخیره کنید — پس از جلسه پیشنهادات مشاور از همین کد قابل مشاهده است.'
+      : 'Booking submitted. Save your tracking code — consultant recommendations appear here after the session.',
+    trackingLabel: fa ? 'کد پیگیری' : 'Tracking code',
+    copyCode: fa ? 'کپی کد' : 'Copy code',
+    copied: fa ? 'کپی شد ✓' : 'Copied ✓',
+    trackPage: fa ? 'صفحه پیگیری' : 'Tracking page',
     taken: fa ? 'این زمان قبلاً رزرو قطعی شده است.' : 'This slot is already confirmed.',
     full: fa ? 'ظرفیت رزرو موقت این زمان پر شده است.' : 'Temporary booking limit reached for this slot.',
     required: fa ? 'نام و شماره تماس الزامی است.' : 'Name and phone are required.',
@@ -59,22 +67,30 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
     hint: fa
       ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ مستر یکی را قطعی می‌کند.'
       : 'Multiple people can book temporarily; master confirms one winner.',
-    resume: fa ? 'رزومه مشاور' : 'Consultant bio',
   };
 
   const reset = () => {
     setName(''); setPhone(''); setEmail(''); setCompany(''); setNote('');
-    setDone(false); setError('');
+    setDone(false); setError(''); setTrackingCode(''); setCopied(false);
   };
 
   const handleClose = () => { reset(); onClose(); };
+
+  const copyTracking = async () => {
+    if (!trackingCode) return;
+    try {
+      await navigator.clipboard.writeText(trackingCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) { setError(t.required); return; }
     setSaving(true);
     setError('');
-    const result = await tryBookMeeting(meeting.id, {
+    const { result, trackingCode: code } = await tryBookMeeting(meeting.id, {
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim() || undefined,
@@ -82,7 +98,12 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
       note: note.trim() || undefined,
     });
     setSaving(false);
-    if (result === 'ok') { setDone(true); onBooked(); return; }
+    if (result === 'ok' && code) {
+      setTrackingCode(code);
+      setDone(true);
+      onBooked();
+      return;
+    }
     if (result === 'taken') setError(t.taken);
     else if (result === 'full') setError(t.full);
     else setError(t.fail);
@@ -100,20 +121,31 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
           <div className="p-6 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto text-2xl">✓</div>
             <p className="text-sm text-gray-700 leading-relaxed">{t.success}</p>
-            <button type="button" onClick={handleClose} className="px-5 py-2 rounded-lg bg-violet-600 text-white text-sm font-bold">{t.close}</button>
+            <div className="rounded-xl border-2 border-dashed border-violet-300 bg-violet-50 p-4">
+              <p className="text-xs text-gray-500 mb-1">{t.trackingLabel}</p>
+              <p className="text-lg font-black text-violet-800 tracking-wider dir-ltr" dir="ltr">{trackingCode}</p>
+              <div className="flex gap-2 justify-center mt-3">
+                <button type="button" onClick={copyTracking} className="px-3 py-1.5 rounded-lg bg-white border border-violet-200 text-violet-700 text-xs font-bold flex items-center gap-1">
+                  <IconCopy className="w-3.5 h-3.5" />{copied ? t.copied : t.copyCode}
+                </button>
+                {onOpenTracking && (
+                  <button type="button" onClick={() => { onOpenTracking(trackingCode); handleClose(); }} className="px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold">
+                    {t.trackPage}
+                  </button>
+                )}
+              </div>
+            </div>
+            <button type="button" onClick={handleClose} className="px-5 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold">{t.close}</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-5 space-y-3">
-            {(consultantName) && (
+            {consultantName && (
               <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3 flex gap-3">
                 <ConsultantAvatar name={consultantName} avatarUrl={consultantPhoto} person={consultant} size="md" ring />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-bold text-gray-900">{consultantName}</div>
-                  {consultant?.roles?.length ? (
-                    <div className="text-[10px] text-violet-600 font-medium">{(consultant.roles || []).join(' · ')}</div>
-                  ) : null}
                   {consultantBio && (
-                    <div className="mt-1.5 max-h-72 overflow-y-auto text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap pr-1">{consultantBio}</div>
+                    <div className="mt-1 max-h-32 overflow-y-auto text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap">{consultantBio}</div>
                   )}
                 </div>
               </div>
@@ -121,9 +153,6 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
 
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm space-y-1.5">
               <div><span className="text-gray-500">{t.session}: </span><strong>{sessionLabel}</strong></div>
-              {meeting.consultantName && (
-                <div><span className="text-gray-500">{t.consultant}: </span><strong>{consultantName}</strong></div>
-              )}
               <div dir="ltr" className="text-left"><span className="text-gray-500">{t.date}: </span><strong>{meeting.date}</strong> — {meeting.startTime}–{meeting.endTime}</div>
               {prices.length > 0 && (
                 <div>

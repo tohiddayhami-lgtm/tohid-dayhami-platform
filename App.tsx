@@ -8,7 +8,8 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, CustomForm, TeamBrainstormPost } from './types';
+import { ConsultationTrackingView } from './components/ConsultationTrackingView';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, CustomForm, TeamBrainstormPost, ConsultantCategory } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -17,7 +18,7 @@ import {
   saveServicesToCloud,
   savePersonnelToCloud,
   subscribeToTickets, subscribeToCustomers, subscribeToSettings, subscribeToCustomForms,
-  subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToKPIs, sanitizeData, logSystemAction,
+  subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToConsultantCategories, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToTeamBrainstorm,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
@@ -269,6 +270,14 @@ const extractBookingConsultantId = (): string | null => {
   return null;
 };
 
+const extractConsultationTrackCode = (): string => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('page') === 'consultation-track') return p.get('code') || '';
+  } catch {}
+  return '';
+};
+
 // Parses current URL into a ViewState, checking query params first (social-media-safe),
 // then hash fragments (internal navigation). Query params survive Instagram/WhatsApp/Telegram.
 const parseUrl = (search: string, hash: string): ViewState | null => {
@@ -279,6 +288,7 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
     if (page === 'booking') return 'booking';
+    if (page === 'consultation-track') return 'consultation-track';
     if (p.get('form'))       return 'custom-form';
     if (p.get('expo-map')) return 'expo-map';
     if (p.get('page') === 'expo-map') return 'expo-map';
@@ -349,7 +359,9 @@ const App: React.FC = () => {
   const [expoLoading, setExpoLoading] = useState(false);
   const [expoMapResolved, setExpoMapResolved] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [consultantCategories, setConsultantCategories] = useState<ConsultantCategory[]>([]);
   const [bookingConsultantId, setBookingConsultantId] = useState<string | null>(extractBookingConsultantId);
+  const [consultationTrackCode, setConsultationTrackCode] = useState(extractConsultationTrackCode);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
@@ -366,7 +378,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=', booking: '?page=booking',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=', booking: '?page=booking', 'consultation-track': '?page=consultation-track',
   };
 
   // Public "ثبت درخواست" entry point. If an external URL is configured (e.g. a Google
@@ -471,7 +483,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map' || initialView === 'booking';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map' || initialView === 'booking' || initialView === 'consultation-track';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -571,6 +583,7 @@ const App: React.FC = () => {
     const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
     const unsubMeetings = subscribeToMeetings((data) => setMeetings(data));
+    const unsubConsultantCategories = subscribeToConsultantCategories((data) => setConsultantCategories(data));
     const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
     const unsubSettings = subscribeToSettings(
       (cfg) => {
@@ -632,7 +645,7 @@ const App: React.FC = () => {
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
     const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
-    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaBazaars(); };
+    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaBazaars(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1498,13 +1511,37 @@ const App: React.FC = () => {
       const url = id ? `${base}?page=booking&consultant=${encodeURIComponent(id)}` : `${base}?page=booking`;
       history.replaceState(null, '', url);
     };
+    const openTracking = (code?: string) => {
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const url = code ? `${base}?page=consultation-track&code=${encodeURIComponent(code)}` : `${base}?page=consultation-track`;
+      history.pushState(null, '', url);
+      setConsultationTrackCode(code || '');
+      setViewState('consultation-track');
+    };
     return (
       <PublicMeetingBookingView
         meetings={meetings}
         personnel={personnel}
+        categories={consultantCategories}
         lang={lang}
         consultantId={bookingConsultantId}
         onConsultantChange={onConsultantChange}
+        onOpenTracking={openTracking}
+        onExit={() => setView('landing')}
+      />
+    );
+  }
+
+  // ── Consultation booking tracking (code lookup + post-session follow-up) ──
+  if (view === 'consultation-track') {
+    return (
+      <ConsultationTrackingView
+        meetings={meetings}
+        personnel={personnel}
+        categories={consultantCategories}
+        lang={lang}
+        initialCode={consultationTrackCode}
+        onBook={() => setView('booking')}
         onExit={() => setView('landing')}
       />
     );
@@ -2035,6 +2072,7 @@ const App: React.FC = () => {
                     teamBrainstormPosts={teamBrainstormPosts}
                     tasks={tasks}
                     meetings={meetings}
+                    consultantCategories={consultantCategories}
                     kpis={kpis}
                     news={news}
                     analyticsEvents={analyticsEvents}

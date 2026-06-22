@@ -447,6 +447,31 @@ export interface MeetingBookingGuest {
   company?: string;
   note?: string;
   bookedAt: string;
+  /** کد پیگیری رزرو — برای مشتری و صفحه پیگیری */
+  trackingCode?: string;
+}
+
+export interface ConsultationFollowUpAttachment {
+  id: string;
+  name: string;
+  url: string;
+  uploadedAt: string;
+}
+
+export interface ConsultationFollowUp {
+  recommendations?: string;
+  attachments?: ConsultationFollowUpAttachment[];
+  publishedAt?: string;
+  publishedBy?: string;
+}
+
+/** دسته‌بندی موضوعی مشاوران (کسب‌وکار، املاک، …) */
+export interface ConsultantCategory {
+  id: string;
+  nameFa: string;
+  nameEn: string;
+  sortOrder?: number;
+  icon?: string;
 }
 
 export interface Meeting {
@@ -466,6 +491,8 @@ export interface Meeting {
   sessionType?: MeetingSessionType;
   consultantId?: string;
   consultantName?: string;
+  /** دسته موضوعی مشاوره */
+  consultantCategoryId?: string;
   /** رزومه اختصاصی این جلسه (مشاور قراردادی یا بازنویسی) */
   consultantBio?: string;
   /** عکس اختصاصی این جلسه */
@@ -474,6 +501,9 @@ export interface Meeting {
   prices?: Price[];
   guests?: MeetingBookingGuest[];
   confirmedGuestId?: string;
+  /** پیشنهادات و فایل‌های پس از جلسه (برای مهمان قطعی‌شده) */
+  followUp?: ConsultationFollowUp;
+  sessionCompletedAt?: string;
 }
 
 export interface KPI {
@@ -640,7 +670,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking' | 'consultation-track';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services' | 'realestate';

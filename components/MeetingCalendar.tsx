@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking, uploadFileWithProgress } from '../services/firebaseService';
@@ -127,6 +127,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   }, []);
 
   const fa = lang === 'fa';
+  const internalMeetings = useMemo(() => meetings.filter(m => !isBookableMeeting(m)), [meetings]);
   const todayStr = toDateStr(new Date());
   const weekDays = getWeekDays(weekStart);
 
@@ -300,7 +301,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   const buildMeetingPayload = (id: string): Meeting => {
     const consultant = activePersonnel.find(p => p.id === formData.consultantId);
     const { prices, price } = pricesFromForm();
-    const isBookable = formData.kind === 'bookable';
+    const isBookable = false;
     const sessionLabel = formData.sessionType.trim();
     const consultantName = formData.consultantName.trim() || consultant?.fullName || '';
     return {
@@ -314,7 +315,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       organizerName: currentUser.fullName,
       attendeeIds: isBookable ? [] : formData.attendeeIds,
       description: formData.description,
-      kind: formData.kind,
+      kind: 'internal',
       sessionType: isBookable ? sessionLabel : undefined,
       consultantId: isBookable && formData.consultantId ? formData.consultantId : undefined,
       consultantName: isBookable ? consultantName : undefined,
@@ -330,9 +331,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title && formData.kind === 'internal') return;
-    if (formData.kind === 'bookable' && !formData.sessionType.trim()) return;
-    if (formData.kind === 'bookable' && !formData.consultantName.trim() && !formData.consultantId) return;
+    if (!formData.title.trim()) return;
     if (editingMeetingId) {
       const oldM = meetings.find(m => m.id === editingMeetingId);
       const payload = buildMeetingPayload(editingMeetingId);
@@ -441,18 +440,11 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           <IconPlus className="w-3.5 h-3.5" />
           {fa ? 'جلسه جدید' : 'New Meeting'}
         </button>
-        <button type="button" onClick={copyPublicLink} className="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 shadow-sm transition-colors text-[11px]">
-          <IconLink className="w-3.5 h-3.5" />
-          {copiedLink ? (fa ? 'کپی شد ✓' : 'Copied ✓') : (fa ? 'لینک رزرو عمومی' : 'Public booking link')}
-        </button>
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 px-4 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />{fa ? 'باز' : 'Open'}</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500" />{fa ? 'رزرو موقت' : 'Temporary'}</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-600" />{fa ? 'رزرو قطعی' : 'Confirmed'}</span>
-        <span className="text-gray-400">{fa ? 'جلسات پرسنل در لینک عمومی نمایش داده نمی‌شوند' : 'Internal staff meetings are hidden from public link'}</span>
+        <span className="text-gray-500">{fa ? 'جلسات پرسنل — مشاوره عمومی در تب «مشاوره عمومی»' : 'Staff meetings — public consultations are in the Consultations tab'}</span>
       </div>
 
       {/* ── Day header ── */}
@@ -461,7 +453,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
         {weekDays.map(day => {
           const ds = toDateStr(day);
           const isToday = ds === todayStr;
-          const count = meetings.filter(m => m.date === ds).length;
+          const count = internalMeetings.filter(m => m.date === ds).length;
           return (
             <div key={ds} className="flex-1 text-center py-1.5 border-l border-gray-200 first:border-l-0">
               <div className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -503,7 +495,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           {weekDays.map(day => {
             const ds = toDateStr(day);
             const isToday = ds === todayStr;
-            const dayMeetings = meetings
+            const dayMeetings = internalMeetings
               .map(normalizeMeeting)
               .filter(m => m.date === ds && m.title);
 
@@ -612,125 +604,11 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
             </div>
 
             <form onSubmit={handleSubmit} className="p-5 space-y-3 max-h-[82vh] overflow-y-auto">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع ثبت' : 'Type'}</label>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setFormData(p => ({ ...p, kind: 'internal' }))}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold border ${formData.kind === 'internal' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600'}`}>
-                    {fa ? 'جلسه پرسنل' : 'Staff meeting'}
-                  </button>
-                  <button type="button" onClick={() => setFormData(p => ({ ...p, kind: 'bookable' }))}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold border ${formData.kind === 'bookable' ? 'bg-violet-600 text-white border-violet-600' : 'border-gray-200 text-gray-600'}`}>
-                    {fa ? 'قابل رزرو عمومی' : 'Public bookable'}
-                  </button>
-                </div>
-              </div>
-
-              {formData.kind === 'bookable' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع جلسه' : 'Session type'} *</label>
-                    <input
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                      value={formData.sessionType}
-                      onChange={e => setFormData({ ...formData, sessionType: e.target.value })}
-                      placeholder={fa ? 'مثلاً مشاوره صادرات، ورکشاپ بسته‌بندی، جلسه آنلاین…' : 'e.g. export consultation, packaging workshop…'}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نام مشاور' : 'Consultant name'} *</label>
-                    <input
-                      required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                      value={formData.consultantName}
-                      onChange={e => setFormData({ ...formData, consultantName: e.target.value })}
-                      placeholder={fa ? 'نام مشاور قراردادی یا پرسنل' : 'Contract or staff consultant name'}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'انتخاب از پرسنل (اختیاری)' : 'Pick from staff (optional)'}</label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                      value={formData.consultantId}
-                      onChange={e => {
-                        const id = e.target.value;
-                        if (id) applyConsultantFromPersonnel(id, true);
-                        else setFormData(prev => ({ ...prev, consultantId: '' }));
-                      }}
-                    >
-                      <option value="">{fa ? '— مشاور قراردادی / دستی —' : '— Contract / manual —'}</option>
-                      {activePersonnel.map(p => (
-                        <option key={p.id} value={p.id}>{p.fullName}</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-gray-400 mt-1">{fa ? 'با انتخاب پرسنل، نام و رزومه پر می‌شود؛ قابل ویرایش است' : 'Selecting staff fills name & bio; you can still edit'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'عکس مشاور' : 'Consultant photo'}</label>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => !uploadingPhoto && photoInputRef.current?.click()}
-                        className={`w-16 h-16 rounded-full border-2 border-dashed border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50 hover:bg-gray-100 shrink-0 ${uploadingPhoto ? 'opacity-50' : ''}`}
-                      >
-                        {formData.consultantPhoto ? (
-                          <img src={formData.consultantPhoto} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-[10px] text-gray-400 px-1 text-center">{fa ? 'آپلود' : 'Upload'}</span>
-                        )}
-                      </button>
-                      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handleConsultantPhotoSelect} />
-                      {formData.consultantPhoto && (
-                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, consultantPhoto: '' }))} className="text-[10px] text-red-500 font-medium">{fa ? 'حذف عکس' : 'Remove'}</button>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'رزومه مشاور' : 'Consultant resume'}</label>
-                    <textarea
-                      rows={10}
-                      className="w-full px-3 py-2 border border-violet-200 bg-violet-50/30 rounded-lg text-sm resize-y min-h-[200px] outline-none focus:ring-2 focus:ring-violet-400"
-                      value={formData.consultantBio}
-                      onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
-                      placeholder={fa ? 'سوابق، تخصص، قرارداد، مدارک… (متن طولانی مجاز است)' : 'Experience, contract details, credentials… (long text OK)'}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'هزینه مشاوره' : 'Consultation fee'}</label>
-                    <p className="text-[10px] text-gray-400 mb-2">{fa ? 'مبالغ با جداکننده هزارگان — ارزهای مورد نیاز را پر کنید' : 'Amounts with thousand separators — fill needed currencies'}</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {formData.priceInputs.map((p, idx) => (
-                        <div key={p.currency} className="flex items-center gap-2 rounded-lg border border-gray-200 px-2 py-1.5 bg-gray-50/50">
-                          <span className="text-[10px] text-gray-600 w-14 shrink-0 font-semibold">{CUR_LABEL[p.currency][fa ? 'fa' : 'en']}</span>
-                          <InvoiceAmountInput
-                            value={p.amount}
-                            maxDecimals={0}
-                            className="flex-1 px-2 py-1 border border-gray-200 rounded-md text-xs dir-ltr text-left bg-white outline-none focus:ring-1 focus:ring-violet-400"
-                            placeholder="0"
-                            onChange={n => {
-                              const next = [...formData.priceInputs];
-                              next[idx] = { ...next[idx], amount: n };
-                              setFormData({ ...formData, priceInputs: next });
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    {formData.priceInputs.some(p => p.amount > 0) && (
-                      <p className="text-[10px] text-emerald-700 mt-1.5 font-medium" dir="ltr">
-                        {formData.priceInputs.filter(p => p.amount > 0).map(p =>
-                          `${CUR_LABEL[p.currency][fa ? 'fa' : 'en']}: ${formatInvoiceAmount(p.amount, 0)}`
-                        ).join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
+              <p className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{fa ? 'جلسات پرسنل — برای مشاوره عمومی به تب «مشاوره عمومی» بروید' : 'Staff meetings — use the Consultations tab for public booking'}</p>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'موضوع جلسه' : 'Title'}{formData.kind === 'bookable' ? ` (${fa ? 'اختیاری' : 'optional'})` : ''}</label>
-                <input autoFocus required={formData.kind === 'internal'}
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'موضوع جلسه' : 'Title'} *</label>
+                <input autoFocus required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
               </div>
@@ -764,44 +642,14 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}{formData.kind === 'bookable' ? ` (${fa ? 'فقط پرسنل' : 'staff only'})` : ''}</label>
-                {formData.kind === 'internal' ? (
-                  <StaffIdPicker
-                    personnel={personnel}
-                    selectedIds={formData.attendeeIds}
-                    onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
-                    lang={lang}
-                  />
-                ) : (
-                  <p className="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">{fa ? 'مشتریان از لینک عمومی رزرو می‌کنند' : 'Customers book via the public link'}</p>
-                )}
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}</label>
+                <StaffIdPicker
+                  personnel={personnel}
+                  selectedIds={formData.attendeeIds}
+                  onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
+                  lang={lang}
+                />
               </div>
-
-              {editingMeetingId && (meetings.find(m => m.id === editingMeetingId)?.guests?.length || 0) > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'درخواست‌های رزرو' : 'Booking requests'}</label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {(meetings.find(m => m.id === editingMeetingId)?.guests || []).map(g => {
-                      const confirmed = meetings.find(m => m.id === editingMeetingId)?.confirmedGuestId === g.id;
-                      return (
-                        <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${confirmed ? 'border-red-200 bg-red-50' : 'border-orange-200 bg-orange-50'}`}>
-                          <div className="font-bold text-gray-800">{g.name}</div>
-                          <div dir="ltr" className="text-gray-600">{g.phone}{g.email ? ` · ${g.email}` : ''}</div>
-                          {g.company && <div className="text-gray-500">{g.company}</div>}
-                          {g.note && <div className="text-gray-500 italic">{g.note}</div>}
-                          {isMasterOrAdmin && !confirmed && getMeetingDisplayStatus(meetings.find(m => m.id === editingMeetingId)!) !== 'confirmed' && (
-                            <button type="button" onClick={() => handleConfirmGuest(editingMeetingId, g.id)}
-                              className="mt-1.5 px-2 py-1 rounded bg-red-600 text-white text-[10px] font-bold">
-                              {fa ? 'قطعی کردن' : 'Confirm'}
-                            </button>
-                          )}
-                          {confirmed && <span className="text-red-600 font-bold text-[10px]">{fa ? 'رزرو قطعی ✓' : 'Confirmed ✓'}</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'توضیحات' : 'Notes'}</label>

@@ -3,7 +3,9 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { generateConsultationTrackingCode } from '../utils/consultationTracking';
+import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
@@ -1213,10 +1215,10 @@ const MAX_MEETING_PENDING_GUESTS = 100;
 
 export const tryBookMeeting = async (
     meetingId: string,
-    guest: Omit<MeetingBookingGuest, 'id' | 'bookedAt'>,
-): Promise<'ok' | 'taken' | 'full' | 'error' | 'not_found'> => {
+    guest: Omit<MeetingBookingGuest, 'id' | 'bookedAt' | 'trackingCode'>,
+): Promise<BookMeetingResponse> => {
     try {
-        if (!meetingId) return 'error';
+        if (!meetingId) return { result: 'error' };
         const proxy = await checkProxyMode();
         let meeting: Meeting | null = null;
         if (proxy) {
@@ -1225,22 +1227,24 @@ export const tryBookMeeting = async (
             const snap = await getDoc(doc(db, 'meetings', meetingId));
             if (snap.exists()) meeting = snap.data() as Meeting;
         }
-        if (!meeting || meeting.kind !== 'bookable') return 'not_found';
-        if (meeting.bookingStatus === 'confirmed' || meeting.confirmedGuestId) return 'taken';
+        if (!meeting || meeting.kind !== 'bookable') return { result: 'not_found' };
+        if (meeting.bookingStatus === 'confirmed' || meeting.confirmedGuestId) return { result: 'taken' };
         const guests = meeting.guests || [];
-        if (guests.length >= MAX_MEETING_PENDING_GUESTS) return 'full';
+        if (guests.length >= MAX_MEETING_PENDING_GUESTS) return { result: 'full' };
 
+        const trackingCode = generateConsultationTrackingCode(guest.phone);
         const newGuest: MeetingBookingGuest = {
             ...guest,
             id: `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             bookedAt: new Date().toISOString(),
+            trackingCode,
         };
         await updateDocCloud('meetings', meetingId, {
             guests: [...guests, newGuest],
             bookingStatus: 'pending',
         });
-        return 'ok';
-    } catch { return 'error'; }
+        return { result: 'ok', trackingCode };
+    } catch { return { result: 'error' }; }
 };
 
 export const confirmMeetingBooking = async (
@@ -1267,6 +1271,31 @@ export const confirmMeetingBooking = async (
         }, actorName);
     } catch {}
 };
+
+export const updateConsultationFollowUp = async (
+    meetingId: string,
+    followUp: ConsultationFollowUp,
+    actorName: string,
+    markCompleted?: boolean,
+): Promise<void> => {
+    const updates: Partial<Meeting> = { followUp };
+    if (markCompleted) updates.sessionCompletedAt = new Date().toISOString();
+    await updateMeetingInCloud(meetingId, updates, actorName);
+};
+
+export const saveConsultantCategoryToCloud = async (cat: ConsultantCategory) => {
+    await setDocCloud('consultantCategories', cat.id, cat);
+};
+
+export const deleteConsultantCategoryFromCloud = async (id: string) => {
+    await deleteDocCloud('consultantCategories', id);
+};
+
+export const subscribeToConsultantCategories = (callback: (cats: ConsultantCategory[]) => void) =>
+    subscribeCollection<ConsultantCategory>('consultantCategories', callback, {
+        sort: (a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999),
+        intervalMs: 15_000,
+    });
 
 export const saveKPIToCloud = async (kpi: KPI) => {
     await setDocCloud('kpis', kpi.id, kpi);
