@@ -3,19 +3,32 @@ import type { ConsultantCategory, Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { IconCalendarClock, IconCopy, IconSearch } from './Icons';
 import { MeetingBookingModal } from './MeetingBookingModal';
-import { ConsultantPublicCard } from './ConsultantPublicCard';
+import { ConsultantAvatar } from './ConsultantAvatar';
 import {
+  MEETING_STATUS_STYLE,
   canPublicBookMeeting,
   collectMeetingConsultantProfiles,
   countOpenSlotsForProfile,
   filterPublicBookableMeetingsByCategory,
   findConsultant,
+  getMeetingConsultantName,
+  getMeetingConsultantPhoto,
   getMeetingDisplayStatus,
-  getMeetingSessionAgenda,
   getMeetingSessionLabel,
+  groupMeetingsByCategory,
+  meetingPrices,
 } from '../utils/meetingBookingUtils';
+import { formatPriceAmount } from '../utils/servicePriceList';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
-import { formatMeetingDateShamsi, formatMeetingTimeRange, toPersianDigits } from '../utils/persianDate';
+import { getDayName, parseDateLocal } from '../utils/weekCalendar';
+
+function formatSlotDate(ds: string, fa: boolean): string {
+  const d = parseDateLocal(ds);
+  const mon = fa
+    ? ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر']
+    : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${getDayName(d, fa)} ${d.getDate()} ${mon[d.getMonth()]}`;
+}
 
 interface Props {
   meetings: Meeting[];
@@ -45,39 +58,18 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     [meetings, categoryFilter, consultantId, todayStr],
   );
 
-  const bookableMeetings = useMemo(
-    () => meetings.filter(m => m.kind === 'bookable'),
-    [meetings],
+  const grouped = useMemo(
+    () => groupMeetingsByCategory(visibleMeetings, sortedCategories),
+    [visibleMeetings, sortedCategories],
   );
 
   const consultantProfiles = useMemo(
     () => collectMeetingConsultantProfiles(
       filterPublicBookableMeetingsByCategory(meetings, categoryFilter),
       personnel,
-      meetings,
     ),
     [meetings, categoryFilter, personnel],
   );
-
-  const profilesWithSlots = useMemo(
-    () => consultantProfiles.map(p => ({
-      ...p,
-      openSlots: countOpenSlotsForProfile(bookableMeetings, p, todayStr),
-    })),
-    [consultantProfiles, bookableMeetings, todayStr],
-  );
-
-  const selectedProfile = useMemo(
-    () => profilesWithSlots.find(p => p.id === consultantId) || null,
-    [profilesWithSlots, consultantId],
-  );
-
-  const consultantSessions = useMemo(() => {
-    if (!consultantId) return [];
-    return filterPublicBookableMeetingsByCategory(meetings, categoryFilter, consultantId)
-      .filter(m => m.date >= todayStr)
-      .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
-  }, [meetings, categoryFilter, consultantId, todayStr]);
 
   const slotStats = useMemo(() => {
     let open = 0, pending = 0, confirmed = 0, totalRequests = 0;
@@ -92,7 +84,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const t = {
     title: fa ? 'رزرو جلسه مشاوره' : 'Book a consultation',
-    subtitle: fa ? 'مشاور خود را انتخاب کنید و زمان رزرو را ببینید' : 'Pick a consultant and view available slots',
+    subtitle: fa ? 'زمان‌های باز را انتخاب کنید — لیست خطی بر اساس موضوع' : 'Pick an open slot — linear list by topic',
     consultant: fa ? 'مشاور' : 'Consultant',
     allConsultants: fa ? 'همه مشاوران' : 'All consultants',
     allCategories: fa ? 'همه موضوعات' : 'All topics',
@@ -108,10 +100,11 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     bookNow: fa ? 'رزرو' : 'Book',
     full: fa ? 'پر شده' : 'Full',
     consultantsTitle: fa ? 'مشاوران' : 'Consultants',
-    pickConsultant: fa ? 'روی کارت مشاور کلیک کنید' : 'Click a consultant card',
-    openSlots: (n: number) => fa ? `${toPersianDigits(n)} زمان باز` : `${n} open`,
-    sessionAgendaTitle: fa ? 'سرفصل جلسات' : 'Session topics',
-    sessionAgendaLabel: fa ? 'سرفصل' : 'Agenda',
+    openSlots: (n: number) => fa ? `${n} زمان باز` : `${n} open`,
+    uncategorized: fa ? 'سایر مشاوره‌ها' : 'Other consultations',
+    sessionsTitle: fa ? 'جلسات قابل رزرو' : 'Available sessions',
+    pendingCount: (n: number) => fa ? `${n.toLocaleString('fa-IR')} رزرو موقت` : `${n} temporary booking${n === 1 ? '' : 's'}`,
+    selectConsultant: fa ? 'انتخاب' : 'Select',
   };
 
   const copyPageLink = async () => {
@@ -123,6 +116,70 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {}
+  };
+
+  const renderSessionRow = (meeting: Meeting) => {
+    const status = getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed';
+    const style = MEETING_STATUS_STYLE[status];
+    const bookable = canPublicBookMeeting(meeting);
+    const guestCount = meeting.guests?.length || 0;
+    const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
+    const consultantPerson = findConsultant(personnel, meeting.consultantId);
+    const consultantName = getMeetingConsultantName(meeting, consultantPerson);
+    const consultantPhoto = getMeetingConsultantPhoto(meeting, consultantPerson);
+    const prices = meetingPrices(meeting);
+
+    return (
+      <div
+        key={meeting.id}
+        className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border-2 transition-shadow ${
+          status === 'open' ? 'border-emerald-200 bg-emerald-50/40'
+            : status === 'pending' ? 'border-orange-200 bg-orange-50/40'
+            : 'border-red-200 bg-red-50/30'
+        }`}
+      >
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <ConsultantAvatar name={consultantName} avatarUrl={consultantPhoto} size="md" ring />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full text-white ${style.bg}`}>
+                {fa ? style.labelFa : style.labelEn}
+              </span>
+              {guestCount > 0 && status !== 'confirmed' && (
+                <span className="text-[11px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
+                  👥 {t.pendingCount(guestCount)}
+                </span>
+              )}
+            </div>
+            <h3 className="font-bold text-gray-900 text-sm">{sessionLabel}</h3>
+            {consultantName && <p className="text-xs text-gray-600 mt-0.5">{consultantName}</p>}
+            <p className="text-xs text-gray-500 mt-1">
+              {formatSlotDate(meeting.date, fa)}
+              <span className="mx-1">·</span>
+              <span dir="ltr">{meeting.startTime} – {meeting.endTime}</span>
+            </p>
+            {prices.length > 0 && (
+              <p className="text-xs text-emerald-700 font-semibold mt-1">
+                {prices.map(p => formatPriceAmount(p.amount, p.currency, lang)).join(' · ')}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0 sm:w-28">
+          {bookable ? (
+            <button
+              type="button"
+              onClick={() => setBookingMeeting(meeting)}
+              className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold shadow-md"
+            >
+              {t.bookNow}
+            </button>
+          ) : (
+            <div className="w-full py-2.5 rounded-xl bg-gray-100 text-red-600 text-sm font-bold text-center">{t.full}</div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -189,96 +246,48 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
             ))}
           </select>
           <div className="flex flex-wrap gap-2 mr-auto text-[11px]">
-            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold">{t.statsOpen}: {fa ? toPersianDigits(slotStats.open) : slotStats.open}</span>
-            <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-800 font-bold">{t.statsPending}: {fa ? toPersianDigits(slotStats.pending) : slotStats.pending}</span>
-            <span className="px-2 py-1 rounded-lg bg-red-100 text-red-800 font-bold">{t.statsConfirmed}: {fa ? toPersianDigits(slotStats.confirmed) : slotStats.confirmed}</span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold">{t.statsOpen}: {slotStats.open}</span>
+            <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-800 font-bold">{t.statsPending}: {slotStats.pending}</span>
+            <span className="px-2 py-1 rounded-lg bg-red-100 text-red-800 font-bold">{t.statsConfirmed}: {slotStats.confirmed}</span>
           </div>
         </div>
 
-        {/* Consultant detail + session agendas */}
-        {consultantId && selectedProfile && (
-          <div className="bg-white rounded-2xl border border-violet-100 shadow-md overflow-hidden">
-            <div className="p-4 sm:p-5 border-b border-violet-50 space-y-3">
-              <ConsultantPublicCard
-                profile={selectedProfile}
-                fa={fa}
-                selected
-                openSlots={selectedProfile.openSlots || 0}
-                className="pointer-events-none shadow-none"
-              />
-              {selectedProfile.bio && (
-                <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right max-h-48 overflow-y-auto">
-                  {selectedProfile.bio}
+        {consultantProfiles.length > 0 && !consultantId && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {consultantProfiles.slice(0, 8).map(c => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => c.id && onConsultantChange?.(c.id)}
+                className="shrink-0 flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-violet-300"
+              >
+                <ConsultantAvatar name={c.name} avatarUrl={c.photo} size="sm" />
+                <div className="text-right">
+                  <div className="text-xs font-bold text-gray-800">{c.name}</div>
+                  <div className="text-[10px] text-emerald-600">{t.openSlots(countOpenSlotsForProfile(meetings.filter(m => m.kind === 'bookable'), c, todayStr))}</div>
                 </div>
-              )}
-            </div>
-            {consultantSessions.length > 0 ? (
-              <div className="p-4 sm:p-5 bg-violet-50/40">
-                <h4 className="text-sm font-black text-violet-900 mb-3">{t.sessionAgendaTitle}</h4>
-                <div className="space-y-3">
-                  {consultantSessions.map(m => {
-                    const agenda = getMeetingSessionAgenda(m);
-                    const label = getMeetingSessionLabel(m, fa ? 'fa' : 'en');
-                    const st = getMeetingDisplayStatus(m);
-                    const bookable = canPublicBookMeeting(m);
-                    return (
-                      <div key={m.id} className="bg-white rounded-xl border border-violet-100 p-3 shadow-sm">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-bold text-gray-900 text-sm">{label}</p>
-                            <p className="text-xs text-gray-700 mt-1">{formatMeetingDateShamsi(m.date, fa)}</p>
-                            <p className="text-xs text-violet-800 font-semibold">{formatMeetingTimeRange(m.startTime, m.endTime, fa)}</p>
-                            {agenda ? (
-                              <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap leading-relaxed">
-                                <span className="font-bold text-violet-700">{t.sessionAgendaLabel}: </span>
-                                {agenda}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-gray-400 mt-2 italic">{fa ? 'سرفصل ثبت نشده' : 'No agenda yet'}</p>
-                            )}
-                          </div>
-                          {bookable && st !== 'confirmed' && (
-                            <button
-                              type="button"
-                              onClick={() => setBookingMeeting(m)}
-                              className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-bold hover:bg-violet-700"
-                            >
-                              {t.bookNow}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-6">
+          <h2 className="text-sm font-bold text-gray-800">{t.sessionsTitle}</h2>
+          {grouped.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-8">{t.noSlots}</p>
+          ) : (
+            grouped.map(({ category, meetings: groupMeetings }) => (
+              <div key={category?.id || 'none'} className="space-y-3">
+                <h3 className="text-xs font-black text-violet-700 uppercase tracking-wide px-1">
+                  {category ? categoryLabel(category, fa) : t.uncategorized}
+                </h3>
+                <div className="space-y-2">
+                  {groupMeetings.map(renderSessionRow)}
                 </div>
               </div>
-            ) : (
-              <p className="p-4 sm:p-5 text-sm text-gray-400 text-center">{t.noSlots}</p>
-            )}
-          </div>
-        )}
-
-        {profilesWithSlots.length > 0 && !consultantId && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-black text-gray-800">{t.consultantsTitle}</h2>
-            <p className="text-xs text-gray-500">{t.pickConsultant}</p>
-            <div className="space-y-2">
-              {profilesWithSlots.map(c => (
-                <ConsultantPublicCard
-                  key={c.key}
-                  profile={c}
-                  fa={fa}
-                  openSlots={c.openSlots || 0}
-                  onClick={() => c.id && onConsultantChange?.(c.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!consultantId && profilesWithSlots.length === 0 && (
-          <p className="text-center text-sm text-gray-400 py-8">{t.noSlots}</p>
-        )}
+            ))
+          )}
+        </div>
       </div>
 
       <MeetingBookingModal

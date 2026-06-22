@@ -95,12 +95,6 @@ export interface Personnel {
   avatar?: string;
   /** رزومه / معرفی عمومی برای صفحه رزرو مشاوره */
   consultantBio?: string;
-  /** تخصص کوتاه — مثلاً «متخصص صادرات» (نمایش در کارت عمومی) */
-  consultantSpecialty?: string;
-  /** تعداد پروژه‌های مشاوره (نمایش در کارت عمومی) */
-  consultantClientsServed?: number;
-  /** سابقه تخصصی به سال — مثلاً «بیش از ۱۰ سال تجربه تخصصی» */
-  consultantExperienceYears?: number;
   documents?: PersonnelDocument[];
   status: 'active' | 'inactive';
   permissions?: PersonnelPermissions;
@@ -497,8 +491,6 @@ export interface Meeting {
   kind?: MeetingKind;
   bookingStatus?: MeetingBookingStatus;
   sessionType?: MeetingSessionType;
-  /** سرفصل / موضوعات جلسه — نمایش در لینک عمومی */
-  sessionAgenda?: string;
   consultantId?: string;
   consultantName?: string;
   /** دسته موضوعی مشاوره */
@@ -507,10 +499,6 @@ export interface Meeting {
   consultantBio?: string;
   /** عکس اختصاصی این جلسه */
   consultantPhoto?: string;
-  consultantSpecialty?: string;
-  /** بازنویسی آمار کارت مشاور برای این جلسه */
-  consultantClientsServed?: number;
-  consultantExperienceYears?: number;
   price?: Price;
   prices?: Price[];
   guests?: MeetingBookingGuest[];
