@@ -663,10 +663,10 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.consultantBio}</label>
                    <p className="text-xs text-gray-400 mb-2">{t.consultantBioHint}</p>
                    <textarea
-                     className="w-full px-4 py-2.5 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 min-h-[120px] text-sm resize-y"
+                     className="w-full px-4 py-2.5 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 min-h-[200px] text-sm resize-y"
                      value={formData.consultantBio}
                      onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
-                     placeholder={lang === 'fa' ? 'سوابق، تخصص‌ها، تجربه کاری، مدارک و…' : 'Experience, expertise, credentials…'}
+                     placeholder={lang === 'fa' ? 'سوابق، تخصص‌ها، تجربه کاری، مدارک و… (متن طولانی مجاز است)' : 'Experience, expertise, credentials… (long text OK)'}
                    />
                  </div>
                  <div>

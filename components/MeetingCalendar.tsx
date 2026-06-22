@@ -689,11 +689,11 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'رزومه مشاور' : 'Consultant resume'}</label>
                     <textarea
-                      rows={4}
-                      className="w-full px-3 py-2 border border-violet-200 bg-violet-50/30 rounded-lg text-sm resize-y outline-none focus:ring-2 focus:ring-violet-400"
+                      rows={10}
+                      className="w-full px-3 py-2 border border-violet-200 bg-violet-50/30 rounded-lg text-sm resize-y min-h-[200px] outline-none focus:ring-2 focus:ring-violet-400"
                       value={formData.consultantBio}
                       onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
-                      placeholder={fa ? 'سوابق، تخصص، قرارداد، مدارک… (برای مشاور قراردادی اینجا بنویسید)' : 'Experience, contract details, credentials…'}
+                      placeholder={fa ? 'سوابق، تخصص، قرارداد، مدارک… (متن طولانی مجاز است)' : 'Experience, contract details, credentials… (long text OK)'}
                     />
                   </div>
                   <div>

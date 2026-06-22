@@ -298,7 +298,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                       {t.openSlots(countOpenSlotsForProfile(allBookableMeetings, selectedProfile, todayStr))}
                     </p>
                     {selectedProfile.bio ? (
-                      <div className="mt-3 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right">
+                      <div className="mt-3 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right max-h-[min(70vh,520px)] overflow-y-auto">
                         {selectedProfile.bio}
                       </div>
                     ) : (
@@ -326,7 +326,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                         </div>
                       </div>
                       {c.bio ? (
-                        <p className="text-[11px] text-gray-500 line-clamp-3 leading-relaxed whitespace-pre-wrap">{c.bio}</p>
+                        <div className="text-[11px] text-gray-500 leading-relaxed whitespace-pre-wrap max-h-28 overflow-y-auto">{c.bio}</div>
                       ) : null}
                       {c.id && (
                         <span className="text-[10px] font-bold text-violet-600 mt-auto">{t.selectConsultant} →</span>

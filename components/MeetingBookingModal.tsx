@@ -113,7 +113,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
                     <div className="text-[10px] text-violet-600 font-medium">{(consultant.roles || []).join(' · ')}</div>
                   ) : null}
                   {consultantBio && (
-                    <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed line-clamp-6 whitespace-pre-wrap">{consultantBio}</p>
+                    <div className="mt-1.5 max-h-72 overflow-y-auto text-[11px] text-gray-600 leading-relaxed whitespace-pre-wrap pr-1">{consultantBio}</div>
                   )}
                 </div>
               </div>
