@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency } from '../types';
+import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency, ConsultantCategory } from '../types';
+import { ConsultationAdminManager } from './ConsultationAdminManager';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking, uploadFileWithProgress } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
@@ -89,6 +90,8 @@ function getMeetingColor(m: Meeting): string {
   return MEETING_COLORS[h % MEETING_COLORS.length];
 }
 
+type CalendarSubTab = 'staff' | 'public';
+
 interface Props {
   meetings: Meeting[];
   currentUser: Personnel;
@@ -96,10 +99,20 @@ interface Props {
   lang: Language;
   notificationConfig?: NotificationConfig;
   shopBaseUrl?: string;
+  consultantCategories?: ConsultantCategory[];
+  initialSubTab?: CalendarSubTab;
 }
 
-export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang, notificationConfig, shopBaseUrl }) => {
+export const MeetingCalendar: React.FC<Props> = ({
+  meetings, currentUser, personnel, lang, notificationConfig, shopBaseUrl,
+  consultantCategories = [], initialSubTab = 'staff',
+}) => {
+  const [calendarSubTab, setCalendarSubTab] = useState<CalendarSubTab>(initialSubTab);
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+
+  useEffect(() => {
+    setCalendarSubTab(initialSubTab);
+  }, [initialSubTab]);
   const [showModal, setShowModal] = useState(false);
   const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -416,9 +429,57 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   const now = new Date();
   const nowTop = ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT;
 
+  if (calendarSubTab === 'public') {
+    return (
+      <div className="flex flex-col animate-fade-in" style={{ minHeight: 'calc(100vh - 130px)' }}>
+        <div className="flex gap-1 p-1 mb-3 bg-gray-100 rounded-xl border border-gray-200">
+          <button
+            type="button"
+            onClick={() => setCalendarSubTab('staff')}
+            className="flex-1 py-2.5 rounded-lg text-sm font-bold text-gray-600 hover:bg-white transition-colors"
+          >
+            {fa ? 'جلسات پرسنل' : 'Staff meetings'}
+          </button>
+          <button
+            type="button"
+            className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-violet-600 text-white shadow-md"
+          >
+            {fa ? 'مشاوره عمومی' : 'Public consultations'}
+          </button>
+        </div>
+        <ConsultationAdminManager
+          meetings={meetings}
+          personnel={personnel}
+          categories={consultantCategories}
+          currentUser={currentUser}
+          lang={lang}
+          shopBaseUrl={shopBaseUrl}
+          embedded
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden animate-fade-in"
       style={{ height: 'calc(100vh - 130px)', minHeight: '600px' }}>
+
+      {/* ── Sub-tabs ── */}
+      <div className="flex gap-1 p-1 mx-3 mt-3 bg-gray-100 rounded-xl border border-gray-200 flex-shrink-0">
+        <button
+          type="button"
+          className="flex-1 py-2.5 rounded-lg text-sm font-bold bg-blue-600 text-white shadow-md"
+        >
+          {fa ? 'جلسات پرسنل' : 'Staff meetings'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCalendarSubTab('public')}
+          className="flex-1 py-2.5 rounded-lg text-sm font-bold text-violet-700 hover:bg-violet-50 transition-colors"
+        >
+          {fa ? 'مشاوره عمومی' : 'Public consultations'}
+        </button>
+      </div>
 
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-white flex-shrink-0 gap-2 flex-wrap">
@@ -426,7 +487,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           <div className="bg-blue-100 text-blue-600 p-1.5 rounded-lg">
             <IconCalendarClock className="w-4 h-4" />
           </div>
-          <span className="text-sm font-bold text-gray-800">{fa ? 'تقویم جلسات' : 'Meeting Calendar'}</span>
+          <span className="text-sm font-bold text-gray-800">{fa ? 'تقویم جلسات پرسنل' : 'Staff meeting calendar'}</span>
         </div>
 
         <div className="flex items-center gap-1" dir="ltr">
@@ -440,11 +501,6 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           <IconPlus className="w-3.5 h-3.5" />
           {fa ? 'جلسه جدید' : 'New Meeting'}
         </button>
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 px-4 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
-        <span className="text-gray-500">{fa ? 'جلسات پرسنل — مشاوره عمومی در تب «مشاوره عمومی»' : 'Staff meetings — public consultations are in the Consultations tab'}</span>
       </div>
 
       {/* ── Day header ── */}

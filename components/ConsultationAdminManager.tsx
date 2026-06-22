@@ -22,10 +22,12 @@ interface Props {
   currentUser: Personnel;
   lang: Language;
   shopBaseUrl?: string;
+  /** داخل تقویم جلسات — بدون کادر بیرونی تکراری */
+  embedded?: boolean;
 }
 
 export const ConsultationAdminManager: React.FC<Props> = ({
-  meetings, personnel, categories, currentUser, lang, shopBaseUrl,
+  meetings, personnel, categories, currentUser, lang, shopBaseUrl, embedded = false,
 }) => {
   const fa = lang === 'fa';
   const isMasterOrAdmin = currentUser.username === 'master' || (currentUser.roles || []).includes('مدیر');
@@ -188,7 +190,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
   [bookableMeetings]);
 
   return (
-    <div className="flex flex-col bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden animate-fade-in">
+    <div className={`flex flex-col overflow-hidden animate-fade-in flex-1 ${embedded ? 'bg-white rounded-2xl border border-gray-200 shadow-xl' : 'bg-white rounded-2xl border border-gray-200 shadow-xl'}`} style={embedded ? { minHeight: 'calc(100vh - 200px)' } : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-violet-50">
         <div className="flex items-center gap-2">
           <IconCalendarClock className="w-5 h-5 text-violet-600" />
