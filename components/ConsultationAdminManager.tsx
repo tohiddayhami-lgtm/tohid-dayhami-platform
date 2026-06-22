@@ -47,7 +47,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
 
   const emptyPrices = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: 0 }));
   const [form, setForm] = useState({
-    sessionType: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
+    sessionType: '', sessionAgenda: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
     consultantCategoryId: '', date: toDateStr(new Date()), startTime: '09:00', endTime: '10:00',
     location: '', description: '', priceInputs: emptyPrices(),
   });
@@ -94,7 +94,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
   const openCreate = () => {
     setEditingId(null);
     setForm({
-      sessionType: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
+      sessionType: '', sessionAgenda: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
       consultantCategoryId: sortedCats[0]?.id || '', date: toDateStr(new Date()),
       startTime: '09:00', endTime: '10:00', location: '', description: '', priceInputs: emptyPrices(),
     });
@@ -108,6 +108,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     const prices = m.prices?.length ? m.prices : m.price ? [m.price] : [];
     setForm({
       sessionType: m.sessionType || '',
+      sessionAgenda: m.sessionAgenda || m.description || '',
       consultantId: m.consultantId || '',
       consultantName: m.consultantName || '',
       consultantBio: m.consultantBio || '',
@@ -148,6 +149,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
       description: form.description,
       kind: 'bookable' as MeetingKind,
       sessionType: form.sessionType.trim(),
+      sessionAgenda: form.sessionAgenda.trim() || undefined,
       consultantId: form.consultantId || undefined,
       consultantName: form.consultantName.trim(),
       consultantBio: form.consultantBio.trim() || undefined,
@@ -261,6 +263,16 @@ export const ConsultationAdminManager: React.FC<Props> = ({
               <div>
                 <label className="text-xs font-semibold text-gray-600">{fa ? 'نوع جلسه' : 'Session'} *</label>
                 <input required className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" value={form.sessionType} onChange={e => setForm(p => ({ ...p, sessionType: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">{fa ? 'سرفصل جلسه' : 'Session agenda'}</label>
+                <textarea
+                  rows={4}
+                  className="w-full mt-1 px-3 py-2 border border-violet-200 rounded-lg text-sm resize-y min-h-[80px]"
+                  placeholder={fa ? 'موضوعات و سرفصل‌هایی که در این جلسه مطرح می‌شود…' : 'Topics covered in this session…'}
+                  value={form.sessionAgenda}
+                  onChange={e => setForm(p => ({ ...p, sessionAgenda: e.target.value }))}
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600">{t.category}</label>

@@ -31,6 +31,9 @@ export const getMeetingSessionLabel = (m: Meeting, lang: 'fa' | 'en' = 'fa'): st
   return m.title?.trim() || (lang === 'fa' ? 'جلسه' : 'Session');
 };
 
+export const getMeetingSessionAgenda = (m: Meeting): string =>
+  m.sessionAgenda?.trim() || m.description?.trim() || '';
+
 export const isBookableMeeting = (m: Meeting) => m.kind === 'bookable';
 
 export const isInternalMeeting = (m: Meeting) => !m.kind || m.kind === 'internal';
@@ -82,18 +85,79 @@ export const getMeetingConsultantBio = (m: Meeting, person?: Personnel): string 
 export const getMeetingConsultantPhoto = (m: Meeting, person?: Personnel): string | undefined =>
   m.consultantPhoto || person?.avatar || undefined;
 
+export const getMeetingConsultantClientsServed = (m: Meeting, person?: Personnel): number | undefined => {
+  const v = m.consultantClientsServed ?? person?.consultantClientsServed;
+  return v != null && v > 0 ? v : undefined;
+};
+
+export const getMeetingConsultantExperienceYears = (m: Meeting, person?: Personnel): number | undefined => {
+  const v = m.consultantExperienceYears ?? person?.consultantExperienceYears;
+  return v != null && v > 0 ? v : undefined;
+};
+
+export const countConsultantClientsFromMeetings = (
+  meetings: Meeting[],
+  profile: Pick<MeetingConsultantProfile, 'id' | 'name'>,
+): number => {
+  let count = 0;
+  for (const m of meetings.filter(isBookableMeeting)) {
+    if (profile.id) {
+      if (m.consultantId !== profile.id) continue;
+    } else if (getMeetingConsultantName(m) !== profile.name) continue;
+    if (m.confirmedGuestId) count += 1;
+    else if (m.sessionCompletedAt && (m.guests?.length || 0) > 0) count += 1;
+  }
+  return count;
+};
+
 export interface MeetingConsultantProfile {
   key: string;
   id?: string;
   name: string;
   bio: string;
   photo?: string;
+  clientsServed?: number;
+  experienceYears?: number;
+  openSlots?: number;
 }
+
+const resolveConsultantProfileStats = (
+  consultantId: string | undefined,
+  name: string,
+  meetings: Meeting[],
+  personnel: Personnel[],
+): Pick<MeetingConsultantProfile, 'clientsServed' | 'experienceYears'> => {
+  const person = findConsultant(personnel, consultantId);
+  let clientsServed = person?.consultantClientsServed;
+  let experienceYears = person?.consultantExperienceYears;
+
+  for (const m of meetings.filter(isBookableMeeting)) {
+    if (consultantId ? m.consultantId !== consultantId : getMeetingConsultantName(m) !== name) continue;
+    if (m.consultantClientsServed != null && m.consultantClientsServed > 0) {
+      clientsServed = Math.max(clientsServed || 0, m.consultantClientsServed);
+    }
+    if (m.consultantExperienceYears != null && m.consultantExperienceYears > 0) {
+      experienceYears = Math.max(experienceYears || 0, m.consultantExperienceYears);
+    }
+  }
+
+  if (!clientsServed) {
+    const computed = countConsultantClientsFromMeetings(meetings, { id: consultantId, name });
+    if (computed > 0) clientsServed = computed;
+  }
+
+  return {
+    clientsServed: clientsServed && clientsServed > 0 ? clientsServed : undefined,
+    experienceYears: experienceYears && experienceYears > 0 ? experienceYears : undefined,
+  };
+};
 
 export const collectMeetingConsultantProfiles = (
   meetings: Meeting[],
   personnel: Personnel[],
+  statsMeetings?: Meeting[],
 ): MeetingConsultantProfile[] => {
+  const statsSource = statsMeetings || meetings;
   const seen = new Set<string>();
   const list: MeetingConsultantProfile[] = [];
   for (const m of meetings.filter(isBookableMeeting)) {
@@ -103,12 +167,14 @@ export const collectMeetingConsultantProfiles = (
     const key = m.consultantId || `name:${name}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    const stats = resolveConsultantProfileStats(m.consultantId, name, statsSource, personnel);
     list.push({
       key,
       id: m.consultantId,
       name,
       bio: getMeetingConsultantBio(m, person),
       photo: getMeetingConsultantPhoto(m, person),
+      ...stats,
     });
   }
   return list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));

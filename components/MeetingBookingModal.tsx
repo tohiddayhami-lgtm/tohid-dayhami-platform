@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { tryBookMeeting } from '../services/firebaseService';
-import { meetingPrices, getMeetingSessionLabel, getMeetingConsultantBio, getMeetingConsultantName, getMeetingConsultantPhoto } from '../utils/meetingBookingUtils';
+import { meetingPrices, getMeetingSessionLabel, getMeetingConsultantBio, getMeetingConsultantName, getMeetingConsultantPhoto, getMeetingSessionAgenda } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
+import { formatMeetingDateShamsi, formatMeetingTimeRange } from '../utils/persianDate';
 import { ConsultantAvatar } from './ConsultantAvatar';
 import { IconCopy } from './Icons';
 
@@ -37,6 +38,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
   const consultantName = getMeetingConsultantName(meeting, consultant);
   const consultantBio = getMeetingConsultantBio(meeting, consultant);
   const consultantPhoto = getMeetingConsultantPhoto(meeting, consultant);
+  const sessionAgenda = getMeetingSessionAgenda(meeting);
 
   const t = {
     title: fa ? 'رزرو جلسه' : 'Book session',
@@ -64,6 +66,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
     full: fa ? 'ظرفیت رزرو موقت این زمان پر شده است.' : 'Temporary booking limit reached for this slot.',
     required: fa ? 'نام و شماره تماس الزامی است.' : 'Name and phone are required.',
     fail: fa ? 'خطا در ثبت. دوباره تلاش کنید.' : 'Save failed. Please try again.',
+    sessionAgenda: fa ? 'سرفصل جلسه' : 'Session agenda',
     hint: fa
       ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ مستر یکی را قطعی می‌کند.'
       : 'Multiple people can book temporarily; master confirms one winner.',
@@ -153,7 +156,20 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
 
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm space-y-1.5">
               <div><span className="text-gray-500">{t.session}: </span><strong>{sessionLabel}</strong></div>
-              <div dir="ltr" className="text-left"><span className="text-gray-500">{t.date}: </span><strong>{meeting.date}</strong> — {meeting.startTime}–{meeting.endTime}</div>
+              <div>
+                <span className="text-gray-500">{t.date}: </span>
+                <strong>{formatMeetingDateShamsi(meeting.date, fa)}</strong>
+              </div>
+              <div>
+                <span className="text-gray-500">{t.time}: </span>
+                <strong>{formatMeetingTimeRange(meeting.startTime, meeting.endTime, fa)}</strong>
+              </div>
+              {sessionAgenda && (
+                <div className="text-xs text-gray-700 bg-white rounded-lg px-2.5 py-2 border border-violet-100 whitespace-pre-wrap">
+                  <span className="font-bold text-violet-700">{t.sessionAgenda}: </span>
+                  {sessionAgenda}
+                </div>
+              )}
               {prices.length > 0 && (
                 <div>
                   <span className="text-gray-500">{t.price}: </span>

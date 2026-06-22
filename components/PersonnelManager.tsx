@@ -146,7 +146,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
 
   const [formData, setFormData] = useState({
-    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
+    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', consultantClientsServed: '' as string | number, consultantExperienceYears: '' as string | number, reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
     canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[]
   });
@@ -247,6 +247,10 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           staffNoteHint: 'این متن در داشبورد پرسنل، زیر شرح شغل نمایش داده می‌شود.',
           consultantBio: 'رزومه مشاور (صفحه رزرو عمومی)',
           consultantBioHint: 'معرفی و سوابق مشاور — در صفحه رزرو جلسه برای مشتریان نمایش داده می‌شود. عکس بالا همان عکس مشاور است.',
+          consultantClientsServed: 'متقاضی راهنمایی‌شده (کارت عمومی)',
+          consultantClientsServedHint: 'مثلاً ۱۵۰ — در کارت مشاور به صورت +۱۵۰ نمایش داده می‌شود.',
+          consultantExperienceYears: 'سابقه کاری (سال)',
+          consultantExperienceYearsHint: 'مثلاً ۱۲ — در کارت به صورت +۱۲ سال نمایش داده می‌شود.',
           avatarBookingHint: 'عکس پروفایل — در صفحه رزرو مشاوره نمایش داده می‌شود',
           permissions: 'دسترسی‌ها و مجوزها',
           permAssign: 'مجوز ارجاع کار',
@@ -311,6 +315,10 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           staffNoteHint: 'Shown in the employee dashboard under their job description.',
           consultantBio: 'Consultant resume (public booking)',
           consultantBioHint: 'Bio shown to customers on the public booking page. The photo above is used as the consultant photo.',
+          consultantClientsServed: 'Clients advised (public card)',
+          consultantClientsServedHint: 'e.g. 150 — shown as +150 on the consultant card.',
+          consultantExperienceYears: 'Years of experience',
+          consultantExperienceYearsHint: 'e.g. 12 — shown as +12 years on the card.',
           avatarBookingHint: 'Profile photo — shown on the public booking page',
           permissions: 'Permissions',
           permAssign: 'Can Assign Tasks',
@@ -347,7 +355,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const handleEdit = (person: Personnel) => {
     setEditingId(person.id);
     setFormData({
-        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', consultantBio: person.consultantBio || '', reportsTo: person.reportsTo || '',
+        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', consultantBio: person.consultantBio || '', consultantClientsServed: person.consultantClientsServed ?? '', consultantExperienceYears: person.consultantExperienceYears ?? '', reportsTo: person.reportsTo || '',
         email: person.email, username: person.username, password: person.password || '', avatar: person.avatar || '', documents: person.documents || [],
         canAssign: person.permissions?.canAssign || false, canViewCustomers: person.permissions?.canViewCustomers || false,
         canViewTariffs: person.permissions?.canViewTariffs || false, canViewAllTickets: person.permissions?.canViewAllTickets || false,
@@ -362,7 +370,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', consultantClientsServed: '', consultantExperienceYears: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -407,10 +415,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
       canDeleteMetaShop: formData.canDeleteMetaShop && formData.canManageMetaShop,
       allowedMetaShopIds: formData.canManageMetaShop && formData.allowedMetaShopIds.length ? formData.allowedMetaShopIds : undefined,
     };
+    const { consultantClientsServed, consultantExperienceYears, ...rest } = formData;
+    const personFields = {
+      ...rest,
+      consultantClientsServed: consultantClientsServed === '' ? undefined : (Math.max(0, Number(consultantClientsServed) || 0) || undefined),
+      consultantExperienceYears: consultantExperienceYears === '' ? undefined : (Math.max(0, Number(consultantExperienceYears) || 0) || undefined),
+    };
     if (editingId) {
-        onUpdate(personnel.map(p => p.id === editingId ? { ...p, ...formData, permissions } : p));
+        onUpdate(personnel.map(p => p.id === editingId ? { ...p, ...personFields, permissions } : p));
     } else {
-        const newPerson: Personnel = { id: `p-${Date.now()}`, ...formData, status: 'active', permissions };
+        const newPerson: Personnel = { id: `p-${Date.now()}`, ...personFields, status: 'active', permissions };
         onUpdate([...personnel, newPerson]);
     }
     handleCancelEdit();
@@ -668,6 +682,34 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
                      onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
                      placeholder={lang === 'fa' ? 'سوابق، تخصص‌ها، تجربه کاری، مدارک و… (متن طولانی مجاز است)' : 'Experience, expertise, credentials… (long text OK)'}
                    />
+                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.consultantClientsServed}</label>
+                     <p className="text-xs text-gray-400 mb-2">{t.consultantClientsServedHint}</p>
+                     <input
+                       type="number"
+                       min={0}
+                       dir="ltr"
+                       className="w-full px-4 py-2 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 text-sm"
+                       value={formData.consultantClientsServed}
+                       onChange={e => setFormData({ ...formData, consultantClientsServed: e.target.value })}
+                       placeholder={lang === 'fa' ? 'مثلاً ۱۵۰' : 'e.g. 150'}
+                     />
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">{t.consultantExperienceYears}</label>
+                     <p className="text-xs text-gray-400 mb-2">{t.consultantExperienceYearsHint}</p>
+                     <input
+                       type="number"
+                       min={0}
+                       dir="ltr"
+                       className="w-full px-4 py-2 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 text-sm"
+                       value={formData.consultantExperienceYears}
+                       onChange={e => setFormData({ ...formData, consultantExperienceYears: e.target.value })}
+                       placeholder={lang === 'fa' ? 'مثلاً ۱۲' : 'e.g. 12'}
+                     />
+                   </div>
                  </div>
                  <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">{t.staffNote}</label>

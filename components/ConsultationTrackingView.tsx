@@ -18,7 +18,7 @@ import {
 } from '../utils/consultationTracking';
 import type { ConsultantCategory } from '../types';
 import { findConsultant } from '../utils/meetingBookingUtils';
-import { getDayName, parseDateLocal } from '../utils/weekCalendar';
+import { formatMeetingDateShamsi, formatMeetingTimeRange } from '../utils/persianDate';
 
 interface Props {
   meetings: Meeting[];
@@ -74,10 +74,7 @@ export const ConsultationTrackingView: React.FC<Props> = ({
     setSearched(true);
   };
 
-  const formatDate = (ds: string) => {
-    const d = parseDateLocal(ds);
-    return `${getDayName(d, fa)} ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-  };
+  const formatDate = (ds: string) => formatMeetingDateShamsi(ds, fa);
 
   const renderResult = () => {
     if (!lookup) return <p className="text-center text-sm text-red-500 py-6">{t.notFound}</p>;
@@ -106,7 +103,7 @@ export const ConsultationTrackingView: React.FC<Props> = ({
             <div><span className="text-gray-500">{t.session}: </span><strong>{getMeetingSessionLabel(meeting, fa ? 'fa' : 'en')}</strong></div>
             <div><span className="text-gray-500">{t.consultant}: </span><strong>{getMeetingConsultantName(meeting, consultant)}</strong></div>
             {cat && <div><span className="text-gray-500">{t.category}: </span><strong>{categoryLabel(cat, fa)}</strong></div>}
-            <div dir="ltr" className="text-right"><span className="text-gray-500">{t.date}: </span><strong>{formatDate(meeting.date)} — {meeting.startTime}–{meeting.endTime}</strong></div>
+            <div><span className="text-gray-500">{t.date}: </span><strong>{formatDate(meeting.date)} · {formatMeetingTimeRange(meeting.startTime, meeting.endTime, fa)}</strong></div>
             <div><span className="text-gray-500">{t.guest}: </span><strong>{guest.name}</strong> <span dir="ltr" className="text-gray-600">({guest.phone})</span></div>
           </div>
           {!isConfirmed && st === 'pending' && (
