@@ -146,7 +146,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const copyStaffId = (code: string) => { navigator.clipboard?.writeText(code).then(() => { setCopiedStaffId(code); setTimeout(() => setCopiedStaffId(null), 2000); }).catch(() => {}); };
 
   const [formData, setFormData] = useState({
-    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', consultantClientsServed: '' as string | number, consultantExperienceYears: '' as string | number, reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
+    fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', consultantSpecialty: '', consultantClientsServed: '' as string | number, consultantExperienceYears: '' as string | number, reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
     canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[]
   });
@@ -246,11 +246,13 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           staffNote: 'یادداشت برای پرسنل',
           staffNoteHint: 'این متن در داشبورد پرسنل، زیر شرح شغل نمایش داده می‌شود.',
           consultantBio: 'رزومه مشاور (صفحه رزرو عمومی)',
-          consultantBioHint: 'معرفی و سوابق مشاور — در صفحه رزرو جلسه برای مشتریان نمایش داده می‌شود. عکس بالا همان عکس مشاور است.',
-          consultantClientsServed: 'متقاضی راهنمایی‌شده (کارت عمومی)',
-          consultantClientsServedHint: 'مثلاً ۱۵۰ — در کارت مشاور به صورت +۱۵۰ نمایش داده می‌شود.',
-          consultantExperienceYears: 'سابقه کاری (سال)',
-          consultantExperienceYearsHint: 'مثلاً ۱۲ — در کارت به صورت +۱۲ سال نمایش داده می‌شود.',
+          consultantBioHint: 'معرفی کامل — پس از کلیک روی کارت مشاور نمایش داده می‌شود.',
+          consultantSpecialty: 'تخصص (کارت عمومی)',
+          consultantSpecialtyHint: 'مثلاً: متخصص صادرات',
+          consultantClientsServed: 'تعداد پروژه‌های مشاوره',
+          consultantClientsServedHint: 'مثلاً ۱۲۴۵ — در کارت: «تعداد پروژه‌های مشاوره ۱۲۴۵ مورد»',
+          consultantExperienceYears: 'سابقه تخصصی (سال)',
+          consultantExperienceYearsHint: 'مثلاً ۱۰ — در کارت: «بیش از ۱۰ سال تجربه تخصصی»',
           avatarBookingHint: 'عکس پروفایل — در صفحه رزرو مشاوره نمایش داده می‌شود',
           permissions: 'دسترسی‌ها و مجوزها',
           permAssign: 'مجوز ارجاع کار',
@@ -314,11 +316,13 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           staffNote: 'Note for staff',
           staffNoteHint: 'Shown in the employee dashboard under their job description.',
           consultantBio: 'Consultant resume (public booking)',
-          consultantBioHint: 'Bio shown to customers on the public booking page. The photo above is used as the consultant photo.',
-          consultantClientsServed: 'Clients advised (public card)',
-          consultantClientsServedHint: 'e.g. 150 — shown as +150 on the consultant card.',
-          consultantExperienceYears: 'Years of experience',
-          consultantExperienceYearsHint: 'e.g. 12 — shown as +12 years on the card.',
+          consultantBioHint: 'Full bio — shown after clicking the consultant card.',
+          consultantSpecialty: 'Specialty (public card)',
+          consultantSpecialtyHint: 'e.g. Export specialist',
+          consultantClientsServed: 'Consultation projects count',
+          consultantClientsServedHint: 'e.g. 1245 — shown as "1245 consultation projects" on the card.',
+          consultantExperienceYears: 'Years of specialized experience',
+          consultantExperienceYearsHint: 'e.g. 10 — shown as "Over 10 years of specialized experience".',
           avatarBookingHint: 'Profile photo — shown on the public booking page',
           permissions: 'Permissions',
           permAssign: 'Can Assign Tasks',
@@ -355,7 +359,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const handleEdit = (person: Personnel) => {
     setEditingId(person.id);
     setFormData({
-        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', consultantBio: person.consultantBio || '', consultantClientsServed: person.consultantClientsServed ?? '', consultantExperienceYears: person.consultantExperienceYears ?? '', reportsTo: person.reportsTo || '',
+        fullName: person.fullName, roles: person.roles || [], jobDescription: person.jobDescription || '', staffNote: person.staffNote || '', consultantBio: person.consultantBio || '', consultantSpecialty: person.consultantSpecialty || '', consultantClientsServed: person.consultantClientsServed ?? '', consultantExperienceYears: person.consultantExperienceYears ?? '', reportsTo: person.reportsTo || '',
         email: person.email, username: person.username, password: person.password || '', avatar: person.avatar || '', documents: person.documents || [],
         canAssign: person.permissions?.canAssign || false, canViewCustomers: person.permissions?.canViewCustomers || false,
         canViewTariffs: person.permissions?.canViewTariffs || false, canViewAllTickets: person.permissions?.canViewAllTickets || false,
@@ -370,7 +374,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', consultantClientsServed: '', consultantExperienceYears: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', consultantSpecialty: '', consultantClientsServed: '', consultantExperienceYears: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -418,6 +422,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
     const { consultantClientsServed, consultantExperienceYears, ...rest } = formData;
     const personFields = {
       ...rest,
+      consultantSpecialty: formData.consultantSpecialty.trim() || undefined,
       consultantClientsServed: consultantClientsServed === '' ? undefined : (Math.max(0, Number(consultantClientsServed) || 0) || undefined),
       consultantExperienceYears: consultantExperienceYears === '' ? undefined : (Math.max(0, Number(consultantExperienceYears) || 0) || undefined),
     };
@@ -681,6 +686,16 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
                      value={formData.consultantBio}
                      onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
                      placeholder={lang === 'fa' ? 'سوابق، تخصص‌ها، تجربه کاری، مدارک و… (متن طولانی مجاز است)' : 'Experience, expertise, credentials… (long text OK)'}
+                   />
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">{t.consultantSpecialty}</label>
+                   <p className="text-xs text-gray-400 mb-2">{t.consultantSpecialtyHint}</p>
+                   <input
+                     className="w-full px-4 py-2 rounded-lg border border-violet-200 bg-violet-50/30 outline-none focus:ring-1 focus:ring-violet-300 text-sm"
+                     value={formData.consultantSpecialty}
+                     onChange={e => setFormData({ ...formData, consultantSpecialty: e.target.value })}
+                     placeholder={lang === 'fa' ? 'مثلاً متخصص صادرات' : 'e.g. Export specialist'}
                    />
                  </div>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

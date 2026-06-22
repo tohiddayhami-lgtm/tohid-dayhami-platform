@@ -85,6 +85,9 @@ export const getMeetingConsultantBio = (m: Meeting, person?: Personnel): string 
 export const getMeetingConsultantPhoto = (m: Meeting, person?: Personnel): string | undefined =>
   m.consultantPhoto || person?.avatar || undefined;
 
+export const getMeetingConsultantSpecialty = (m: Meeting, person?: Personnel): string =>
+  m.consultantSpecialty?.trim() || person?.consultantSpecialty?.trim() || '';
+
 export const getMeetingConsultantClientsServed = (m: Meeting, person?: Personnel): number | undefined => {
   const v = m.consultantClientsServed ?? person?.consultantClientsServed;
   return v != null && v > 0 ? v : undefined;
@@ -116,6 +119,7 @@ export interface MeetingConsultantProfile {
   name: string;
   bio: string;
   photo?: string;
+  specialty?: string;
   clientsServed?: number;
   experienceYears?: number;
   openSlots?: number;
@@ -126,13 +130,15 @@ const resolveConsultantProfileStats = (
   name: string,
   meetings: Meeting[],
   personnel: Personnel[],
-): Pick<MeetingConsultantProfile, 'clientsServed' | 'experienceYears'> => {
+): Pick<MeetingConsultantProfile, 'specialty' | 'clientsServed' | 'experienceYears'> => {
   const person = findConsultant(personnel, consultantId);
+  let specialty = person?.consultantSpecialty?.trim() || '';
   let clientsServed = person?.consultantClientsServed;
   let experienceYears = person?.consultantExperienceYears;
 
   for (const m of meetings.filter(isBookableMeeting)) {
     if (consultantId ? m.consultantId !== consultantId : getMeetingConsultantName(m) !== name) continue;
+    if (!specialty && m.consultantSpecialty?.trim()) specialty = m.consultantSpecialty.trim();
     if (m.consultantClientsServed != null && m.consultantClientsServed > 0) {
       clientsServed = Math.max(clientsServed || 0, m.consultantClientsServed);
     }
@@ -147,6 +153,7 @@ const resolveConsultantProfileStats = (
   }
 
   return {
+    specialty: specialty || undefined,
     clientsServed: clientsServed && clientsServed > 0 ? clientsServed : undefined,
     experienceYears: experienceYears && experienceYears > 0 ? experienceYears : undefined,
   };

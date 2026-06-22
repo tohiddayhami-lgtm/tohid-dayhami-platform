@@ -14,65 +14,69 @@ interface Props {
 export const ConsultantPublicCard: React.FC<Props> = ({
   profile, fa, selected = false, openSlots = 0, onClick, className = '',
 }) => {
-  const labels = {
-    clientsServed: fa ? 'متقاضی راهنمایی‌شده' : 'Clients advised',
-    experience: fa ? 'سابقه کاری' : 'Experience',
-    openSlots: fa ? 'زمان باز' : 'Open slots',
-    year: fa ? 'سال' : 'yr',
-  };
-
-  const fmtPlus = (n: number) => (fa ? `+${toPersianDigits(n)}` : `+${n}`);
-  const fmtExperience = (years: number) =>
-    fa ? `+${toPersianDigits(years)} ${labels.year}` : `+${years} ${labels.year}`;
-
   const initial = profile.name?.charAt(0) || '?';
+
+  const experienceLine = profile.experienceYears
+    ? fa
+      ? `بیش از ${toPersianDigits(profile.experienceYears)} سال تجربه تخصصی`
+      : `Over ${profile.experienceYears} years of specialized experience`
+    : null;
+
+  const projectsLine = profile.clientsServed
+    ? fa
+      ? `تعداد پروژه‌های مشاوره ${toPersianDigits(profile.clientsServed)} مورد`
+      : `${profile.clientsServed} consultation projects`
+    : null;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group relative w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-2 transition-all duration-200 text-right ${
+      className={`group w-full aspect-[3/4] flex flex-col rounded-2xl overflow-hidden bg-white shadow-md border-2 transition-all duration-200 text-right ${
         selected
           ? 'border-violet-500 ring-4 ring-violet-200 scale-[1.02]'
-          : 'border-white/80 hover:border-violet-300 hover:shadow-xl hover:-translate-y-0.5'
+          : 'border-gray-100 hover:border-violet-300 hover:shadow-xl hover:-translate-y-0.5'
       } ${className}`}
     >
-      {profile.photo ? (
-        <img
-          src={profile.photo}
-          alt={profile.name}
-          className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-200 via-indigo-200 to-purple-300 flex items-center justify-center">
-          <span className="text-5xl font-black text-violet-700/40">{initial}</span>
-        </div>
-      )}
-
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/5" />
-
-      <div className="absolute bottom-0 left-0 right-0 p-3.5 text-white">
-        <h3 className="font-black text-sm sm:text-base leading-snug mb-2.5 drop-shadow-sm">{profile.name}</h3>
-
-        <div className="space-y-1.5">
-          {profile.clientsServed != null && profile.clientsServed > 0 && (
-            <div className="flex items-center justify-between gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-2.5 py-1.5">
-              <span className="text-[10px] font-semibold text-white/85 leading-tight">{labels.clientsServed}</span>
-              <span className="text-xs font-black shrink-0">{fmtPlus(profile.clientsServed)}</span>
-            </div>
-          )}
-          {profile.experienceYears != null && profile.experienceYears > 0 && (
-            <div className="flex items-center justify-between gap-2 rounded-lg bg-white/10 backdrop-blur-sm px-2.5 py-1.5">
-              <span className="text-[10px] font-semibold text-white/85 leading-tight">{labels.experience}</span>
-              <span className="text-xs font-black shrink-0">{fmtExperience(profile.experienceYears)}</span>
-            </div>
-          )}
-        </div>
-
+      {/* عکس — بخش بالایی کارت، نه کل کارت */}
+      <div className="relative flex-[5] min-h-0 bg-gradient-to-br from-violet-50 to-indigo-50 overflow-hidden">
+        {profile.photo ? (
+          <img
+            src={profile.photo}
+            alt={profile.name}
+            className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-5xl font-black text-violet-300">{initial}</span>
+          </div>
+        )}
         {openSlots > 0 && (
-          <span className="mt-2.5 inline-block text-[10px] font-bold bg-emerald-500/90 text-white px-2.5 py-0.5 rounded-full">
-            {fa ? `${toPersianDigits(openSlots)} ${labels.openSlots}` : `${openSlots} ${labels.openSlots}`}
+          <span className="absolute top-2 left-2 text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full shadow-sm">
+            {fa ? `${toPersianDigits(openSlots)} زمان باز` : `${openSlots} open`}
           </span>
+        )}
+      </div>
+
+      {/* اطلاعات اولیه — بخش پایینی کارت */}
+      <div className="flex-[4] min-h-0 flex flex-col justify-center gap-1 px-3 py-2.5 sm:px-3.5 sm:py-3 border-t border-gray-100 bg-white">
+        <h3 className="font-black text-sm sm:text-[15px] text-gray-900 leading-snug line-clamp-2">
+          {profile.name}
+        </h3>
+        {profile.specialty && (
+          <p className="text-xs font-bold text-violet-700 leading-snug line-clamp-1">
+            {profile.specialty}
+          </p>
+        )}
+        {experienceLine && (
+          <p className="text-[11px] text-gray-600 leading-snug line-clamp-2">
+            {experienceLine}
+          </p>
+        )}
+        {projectsLine && (
+          <p className="text-[10px] text-gray-500 leading-snug line-clamp-2 mt-0.5">
+            {projectsLine}
+          </p>
         )}
       </div>
     </button>
