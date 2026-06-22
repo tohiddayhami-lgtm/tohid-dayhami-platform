@@ -167,6 +167,7 @@ export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> 
       'قابل مذاکره؟ کمیسیون؟ → negotiable, commission',
       'تور مجازی / پلان؟ → virtualTourUrl, floorPlanUrl, images[] (حداقل ۳–۸ عکس: نما، پذیرایی، آشپزخانه، خواب، سرویس، پارکینگ، محله)',
       'سوالات رایج مشتری؟ → realEstate.faq[] با q/a فارسی، qEn/aEn انگلیسی، qAr/aAr عربی، یا faq[].i18n.{کد}.{q,a} برای زبان‌های دیگر',
+      'ترجمهٔ مقادیر مشخصات (کاربری، شهر، امکانات…): روش ۱) فیلد فارسی + پسوند En/Ar مثل usageEn، cityAr، amenitiesEn[] — روش ۲) realEstate.i18n.{کد}.{field} — روش ۳) products[].i18n.{کد}.realEstate.{field} برای هر زبان جدید (zh، tr، …)',
       'نکات مهم برای مشتری؟ → description + realEstate.publicHighlights[]',
       'تماس مشاور؟ → realEstate.agentName, agentPhone, agentWhatsapp + shop.phone/email',
     ],

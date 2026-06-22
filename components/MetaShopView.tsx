@@ -3,7 +3,7 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types
 import { shopCodeOf } from './shopCode';
 import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
-import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, formatMoney } from '../utils/metaShopRealEstate';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney } from '../utils/metaShopRealEstate';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 
@@ -815,7 +815,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               {isRealEstate && detail.realEstate && (() => {
                 const rows = realEstateDetailRows(detail, reLang());
                 const re = detail.realEstate;
-                const faq = re.faq || [];
+                const faq = realEstateFaqs(re, reLang(), detail.i18n);
+                const agentName = resolveReText(re, 'agentName', reLang(), detail.i18n);
                 return (
                   <div className="ms-realestate-detail">
                     {rePriceLabel(detail) && !priceHidden(detail) && (
@@ -829,9 +830,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     )}
                     {re.mapUrl && <a className="ms-video-link" href={re.mapUrl} target="_blank" rel="noreferrer">📍 {S('viewMap')}</a>}
                     {re.virtualTourUrl && <a className="ms-video-link" href={re.virtualTourUrl} target="_blank" rel="noreferrer" style={{ marginInlineStart: 12 }}>🎥 {S('virtualTour')}</a>}
-                    {(re.agentName || re.agentPhone) && (
+                    {(agentName || re.agentPhone) && (
                       <div className="ms-meta" style={{ marginTop: 8 }}>
-                        {re.agentName && <span>{re.agentName}</span>}
+                        {agentName && <span>{agentName}</span>}
                         {re.agentPhone && <span dir="ltr">{re.agentPhone}</span>}
                       </div>
                     )}

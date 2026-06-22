@@ -5,6 +5,8 @@ export type { MetaShopLang } from '../types';
 export { DEFAULT_REALESTATE_LANGS, DEFAULT_PRODUCT_LANGS, resolveShopLanguages } from './metaShopLang';
 
 type Tri = { fa: string; en: string; ar: string };
+type ReExt = MetaShopRealEstate & Record<string, unknown>;
+type ProdI18n = Record<string, Record<string, unknown>> | undefined;
 
 /** Built-in fa/ar/en labels; other language codes fall back to English */
 const pick = (t: Tri, lang: string) => {
@@ -14,6 +16,98 @@ const pick = (t: Tri, lang: string) => {
 };
 
 const L3 = (fa: string, en: string, ar: string, lang: string) => pick({ fa, en, ar }, lang);
+
+const langSlice = (re: ReExt, lang: string, productI18n?: ProdI18n): Record<string, unknown> | undefined => {
+  const fromRe = re.i18n?.[lang];
+  if (fromRe && typeof fromRe === 'object') return fromRe as Record<string, unknown>;
+  const fromProd = productI18n?.[lang]?.realEstate;
+  if (fromProd && typeof fromProd === 'object') return fromProd as Record<string, unknown>;
+  return undefined;
+};
+
+const suffixValue = (re: ReExt, field: string, lang: string): unknown => {
+  if (lang === 'ar') {
+    const ar = re[`${field}Ar`];
+    if (ar != null && ar !== '') return ar;
+  }
+  if (lang !== 'fa') {
+    const en = re[`${field}En`];
+    if (en != null && en !== '') return en;
+  }
+  return undefined;
+};
+
+/** Localized text field — fa base, then i18n / *En / *Ar / product.i18n.realEstate */
+export const resolveReText = (
+  re: MetaShopRealEstate | undefined,
+  field: string,
+  lang: string,
+  productI18n?: ProdI18n,
+): string | undefined => {
+  if (!re) return undefined;
+  const ext = re as ReExt;
+  if (lang !== 'fa') {
+    const slice = langSlice(ext, lang, productI18n);
+    const fromSlice = slice?.[field];
+    if (fromSlice != null && fromSlice !== '') return String(fromSlice);
+    const suffixed = suffixValue(ext, field, lang);
+    if (suffixed != null && suffixed !== '') return String(suffixed);
+    const enSlice = langSlice(ext, 'en', productI18n);
+    const fromEn = enSlice?.[field];
+    if (fromEn != null && fromEn !== '') return String(fromEn);
+    const enSuffix = suffixValue(ext, field, 'en');
+    if (enSuffix != null && enSuffix !== '') return String(enSuffix);
+  }
+  const base = ext[field];
+  if (base == null || base === '') return undefined;
+  return typeof base === 'string' ? base : String(base);
+};
+
+/** Localized string array (amenities, nearbyPlaces, …) */
+export const resolveReStringList = (
+  re: MetaShopRealEstate | undefined,
+  field: string,
+  lang: string,
+  productI18n?: ProdI18n,
+): string[] | undefined => {
+  if (!re) return undefined;
+  const ext = re as ReExt;
+  const asStrings = (v: unknown): string[] | undefined => {
+    if (!Array.isArray(v) || !v.length) return undefined;
+    return v.map(x => String(x)).filter(Boolean);
+  };
+  if (lang !== 'fa') {
+    const slice = langSlice(ext, lang, productI18n);
+    const fromSlice = asStrings(slice?.[field]);
+    if (fromSlice) return fromSlice;
+    const suffixed = asStrings(suffixValue(ext, field, lang));
+    if (suffixed) return suffixed;
+    const enSlice = langSlice(ext, 'en', productI18n);
+    const fromEn = asStrings(enSlice?.[field]);
+    if (fromEn) return fromEn;
+    const enList = asStrings(suffixValue(ext, field, 'en'));
+    if (enList) return enList;
+  }
+  return asStrings(ext[field]);
+};
+
+export const realEstateFaqs = (
+  re: MetaShopRealEstate | undefined,
+  lang: string,
+  productI18n?: ProdI18n,
+): MetaShopRealEstateFaq[] => {
+  if (!re) return [];
+  const ext = re as ReExt;
+  if (lang !== 'fa') {
+    const fromSlice = langSlice(ext, lang, productI18n)?.faq;
+    if (Array.isArray(fromSlice) && fromSlice.length) return fromSlice as MetaShopRealEstateFaq[];
+    const fromProd = productI18n?.[lang]?.realEstate as { faq?: MetaShopRealEstateFaq[] } | undefined;
+    if (fromProd?.faq?.length) return fromProd.faq;
+    const fromEn = langSlice(ext, 'en', productI18n)?.faq;
+    if (Array.isArray(fromEn) && fromEn.length) return fromEn as MetaShopRealEstateFaq[];
+  }
+  return re.faq || [];
+};
 
 export const DEAL_TYPE_LABEL: Record<string, Tri> = {
   sale: { fa: 'فروش', en: 'For Sale', ar: 'للبيع' },
@@ -85,7 +179,9 @@ export const realEstateCardSummary = (p: MetaShopProduct, lang: string): string[
   if (re.floor != null) {
     lines.push(lang === 'fa' ? `طبقه ${re.floor}` : lang === 'ar' ? `الطابق ${re.floor}` : `Floor ${re.floor}`);
   }
-  if (re.district || re.city) lines.push([re.district, re.city].filter(Boolean).join(' · '));
+  const district = resolveReText(re, 'district', lang, p.i18n);
+  const city = resolveReText(re, 'city', lang, p.i18n);
+  if (district || city) lines.push([district, city].filter(Boolean).join(' · '));
   return lines;
 };
 
@@ -93,7 +189,9 @@ export const realEstateCardSummary = (p: MetaShopProduct, lang: string): string[
 export const realEstateDetailRows = (p: MetaShopProduct, lang: string): { label: string; value: string }[] => {
   const re = p.realEstate;
   if (!re) return [];
+  const i18n = p.i18n as ProdI18n;
   const L = (fa: string, en: string, ar: string) => L3(fa, en, ar, lang);
+  const T = (field: string) => resolveReText(re, field, lang, i18n);
   const cur = re.rentCurrency || p.currency || 'IRR';
   const rows: { label: string; value: string }[] = [];
 
@@ -105,34 +203,35 @@ export const realEstateDetailRows = (p: MetaShopProduct, lang: string): { label:
 
   push('نوع معامله', 'Deal', 'نوع الصفقة', dealTypeLabel(re.dealType, lang));
   push('نوع ملک', 'Property', 'نوع العقار', propertyTypeLabel(re.propertyType, lang) || re.propertyType);
-  push('کاربری', 'Usage', 'الاستخدام', re.usage);
+  push('کاربری', 'Usage', 'الاستخدام', T('usage'));
   push('متراژ بنا', 'Built area', 'مساحة البناء', re.areaSqm ? `${re.areaSqm} m²` : undefined);
   push('متراژ زمین', 'Land area', 'مساحة الأرض', re.landAreaSqm ? `${re.landAreaSqm} m²` : undefined);
   push('اتاق خواب', 'Bedrooms', 'غرف النوم', re.bedrooms);
   push('حمام', 'Bathrooms', 'الحمامات', re.bathrooms);
   push('طبقه', 'Floor', 'الطابق', re.floor != null ? `${re.floor} / ${re.totalFloors ?? '?'}` : undefined);
   push('سال ساخت', 'Year built', 'سنة البناء', re.yearBuilt);
-  push('نوساز / بازسازی', 'Renovation', 'التجديد', re.renovatedYear || re.renovation);
-  push('جهت', 'Facing', 'الاتجاه', re.facing);
-  push('نما', 'View', 'الإطلالة', re.view);
-  push('نوع سند', 'Title deed', 'نوع السند', re.documentType);
-  push('مالکیت', 'Ownership', 'الملكية', re.ownership);
-  push('وضعیت سکونت', 'Occupancy', 'حالة الإشغال', re.occupancyStatus);
-  push('مبله', 'Furnished', 'مفروش', re.furnished);
-  push('پارکینگ', 'Parking', 'موقف سيارات', re.parkingSpaces != null ? `${re.parkingSpaces} (${re.parkingType || ''})` : undefined);
+  push('نوساز / بازسازی', 'Renovation', 'التجديد', re.renovatedYear != null ? re.renovatedYear : T('renovation'));
+  push('جهت', 'Facing', 'الاتجاه', T('facing'));
+  push('نما', 'View', 'الإطلالة', T('view'));
+  push('نوع سند', 'Title deed', 'نوع السند', T('documentType'));
+  push('مالکیت', 'Ownership', 'الملكية', T('ownership'));
+  push('وضعیت سکونت', 'Occupancy', 'حالة الإشغال', T('occupancyStatus'));
+  push('مبله', 'Furnished', 'مفروش', T('furnished'));
+  const parkingType = T('parkingType');
+  push('پارکینگ', 'Parking', 'موقف سيارات', re.parkingSpaces != null ? `${re.parkingSpaces}${parkingType ? ` (${parkingType})` : ''}` : undefined);
   push('انباری', 'Storage', 'مخزن', re.storage);
   push('بالکن', 'Balcony', 'شرفة', re.balcony);
   push('آسانسور', 'Elevator', 'مصعد', re.elevator);
   push('آسانسور بار', 'Freight elevator', 'مصعد بضائع', re.freightElevator);
-  push('گرمایش', 'Heating', 'تدفئة', re.heating);
-  push('سرمایش', 'Cooling', 'تبريد', re.cooling);
-  push('کف', 'Flooring', 'الأرضيات', re.flooring);
-  push('آشپزخانه', 'Kitchen', 'المطبخ', re.kitchen);
+  push('گرمایش', 'Heating', 'تدفئة', T('heating'));
+  push('سرمایش', 'Cooling', 'تبريد', T('cooling'));
+  push('کف', 'Flooring', 'الأرضيات', T('flooring'));
+  push('آشپزخانه', 'Kitchen', 'المطبخ', T('kitchen'));
 
   if (re.dealType === 'rent' || re.dealType === 'rent-short') {
     push('اجاره ماهانه', 'Monthly rent', 'الإيجار الشهري', re.monthlyRent ? formatMoney(re.monthlyRent, cur, lang) : undefined);
     push('ودیعه / رهن', 'Deposit', 'التأمين', re.deposit ? formatMoney(re.deposit, cur, lang) : undefined);
-    push('دوره اجاره', 'Rent period', 'مدة الإيجار', re.rentPeriod);
+    push('دوره اجاره', 'Rent period', 'مدة الإيجار', T('rentPeriod'));
     push('حداقل مدت اجاره', 'Min lease', 'الحد الأدنى للإيجار', re.minLeaseMonths ? `${re.minLeaseMonths} ${L('ماه', 'months', 'شهر')}` : undefined);
   }
   if (re.dealType === 'sale' || re.dealType === 'pre-sale') {
@@ -140,32 +239,38 @@ export const realEstateDetailRows = (p: MetaShopProduct, lang: string): { label:
   }
   push('شارژ / نگهداری', 'Maintenance', 'رسوم الصيانة', re.maintenanceFee ? formatMoney(re.maintenanceFee, cur, lang) : undefined);
   push('قابل مذاکره', 'Negotiable', 'قابل للتفاوض', re.negotiable);
-  push('کمیسیون', 'Commission', 'العمولة', re.commission);
+  push('کمیسیون', 'Commission', 'العمولة', T('commission'));
 
-  push('استان', 'Province', 'المحافظة', re.province);
-  push('شهر', 'City', 'المدينة', re.city);
-  push('منطقه', 'District', 'المنطقة', re.district);
-  push('محله', 'Neighborhood', 'الحي', re.neighborhood);
-  push('آدرس', 'Address', 'العنوان', re.fullAddress);
-  push('تاریخ تحویل', 'Available from', 'متاح من', re.availableFrom);
-  push('مدت قرارداد', 'Lease term', 'مدة العقد', re.leaseDuration);
-  push('حیوان خانگی', 'Pets', 'الحيوانات الأليفة', re.petsAllowed);
-  push('مجوز کسب', 'Commercial license', 'رخصة تجارية', re.commercialLicense);
+  push('استان', 'Province', 'المحافظة', T('province'));
+  push('شهر', 'City', 'المدينة', T('city'));
+  push('منطقه', 'District', 'المنطقة', T('district'));
+  push('محله', 'Neighborhood', 'الحي', T('neighborhood'));
+  push('آدرس', 'Address', 'العنوان', T('fullAddress'));
+  push('تاریخ تحویل', 'Available from', 'متاح من', T('availableFrom'));
+  push('مدت قرارداد', 'Lease term', 'مدة العقد', T('leaseDuration'));
+  push('حیوان خانگی', 'Pets', 'الحيوانات الأليفة', T('petsAllowed'));
+  push('مجوز کسب', 'Commercial license', 'رخصة تجارية', T('commercialLicense'));
   push('بر ملک (متر)', 'Frontage', 'واجهة (م)', re.frontageMeters);
   push('ارتفاع سقف', 'Ceiling height', 'ارتفاع السقف', re.ceilingHeight ? `${re.ceilingHeight} m` : undefined);
-  push('برق / ظرفیت', 'Power', 'الكهرباء', re.powerCapacity);
+  push('برق / ظرفیت', 'Power', 'الكهرباء', T('powerCapacity'));
   push('رمپ باربری', 'Loading dock', 'رصيف التحميل', re.loadingDock);
-  push('تردد', 'Foot traffic', 'حركة المشاة', re.footTraffic);
-  push('مستأجر فعلی', 'Current tenant', 'المستأجر الحالي', re.currentTenant);
-  push('بازده اجاره', 'Rental yield', 'عائد الإيجار', re.rentalYield);
+  push('تردد', 'Foot traffic', 'حركة المشاة', T('footTraffic'));
+  push('مستأجر فعلی', 'Current tenant', 'المستأجر الحالي', T('currentTenant'));
+  push('بازده اجاره', 'Rental yield', 'عائد الإيجار', T('rentalYield'));
   push('وام‌پذیر', 'Loan eligible', 'مؤهل للقرض', re.loanEligible);
 
-  if (re.utilitiesIncluded?.length) rows.push({ label: L('قبوض شامل', 'Utilities incl.', 'المرافق مشمولة'), value: re.utilitiesIncluded.join(' · ') });
-  if (re.amenities?.length) rows.push({ label: L('امکانات', 'Amenities', 'المرافق'), value: re.amenities.join(' · ') });
-  if (re.buildingFeatures?.length) rows.push({ label: L('ویژگی ساختمان', 'Building', 'ميزات المبنى'), value: re.buildingFeatures.join(' · ') });
-  if (re.nearbyPlaces?.length) rows.push({ label: L('دسترسی نزدیک', 'Nearby', 'بالقرب من'), value: re.nearbyPlaces.join(' · ') });
-  if (re.security?.length) rows.push({ label: L('امنیت', 'Security', 'الأمن'), value: re.security.join(' · ') });
-  if (re.publicHighlights?.length) rows.push({ label: L('نکات برجسته', 'Highlights', 'أبرز المزايا'), value: re.publicHighlights.join(' · ') });
+  const utilList = resolveReStringList(re, 'utilitiesIncluded', lang, i18n);
+  if (utilList?.length) rows.push({ label: L('قبوض شامل', 'Utilities incl.', 'المرافق مشمولة'), value: utilList.join(' · ') });
+  const amenities = resolveReStringList(re, 'amenities', lang, i18n);
+  if (amenities?.length) rows.push({ label: L('امکانات', 'Amenities', 'المرافق'), value: amenities.join(' · ') });
+  const building = resolveReStringList(re, 'buildingFeatures', lang, i18n);
+  if (building?.length) rows.push({ label: L('ویژگی ساختمان', 'Building', 'ميزات المبنى'), value: building.join(' · ') });
+  const nearby = resolveReStringList(re, 'nearbyPlaces', lang, i18n);
+  if (nearby?.length) rows.push({ label: L('دسترسی نزدیک', 'Nearby', 'بالقرب من'), value: nearby.join(' · ') });
+  const security = resolveReStringList(re, 'security', lang, i18n);
+  if (security?.length) rows.push({ label: L('امنیت', 'Security', 'الأمن'), value: security.join(' · ') });
+  const highlights = resolveReStringList(re, 'publicHighlights', lang, i18n);
+  if (highlights?.length) rows.push({ label: L('نکات برجسته', 'Highlights', 'أبرز المزايا'), value: highlights.join(' · ') });
 
   return rows;
 };

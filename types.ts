@@ -1184,6 +1184,10 @@ export interface MetaShopRealEstate {
   agentWhatsapp?: string;
   publicHighlights?: string[];
   faq?: MetaShopRealEstateFaq[];
+  /** Per-language field overrides: { en: { usage, city, amenities: [] }, ar: {…}, zh: {…} } */
+  i18n?: Record<string, Record<string, unknown>>;
+  /** Legacy / import: flat suffixes on the same object (usageEn, cityAr, amenitiesEn, …) */
+  [key: string]: unknown;
 }
 
 export interface MetaShop {
