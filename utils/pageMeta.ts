@@ -1,4 +1,5 @@
 import type { AppConfig, CustomForm, MetaBazaar, MetaShop, NewsArticle } from '../types';
+import { translateField } from './metaShopLang';
 
 export interface PageMeta {
   title: string;
@@ -30,17 +31,33 @@ export const defaultSiteMeta = (config: AppConfig, origin = ''): PageMeta => ({
   type: 'website',
 });
 
-export const metaFromMetaShop = (shop: MetaShop, origin = ''): PageMeta => {
-  const title = shop.title?.trim() || shop.name?.trim() || shop.slug;
-  const description = shop.subtitle?.trim()
-    || shop.collectionText?.trim()
-    || (shop.type === 'services' ? `خدمات ${shop.name}` : shop.type === 'realestate' ? `املاک ${shop.name}` : `فروشگاه ${shop.name}`);
+/** Pick display language for shop OG tags (URL ?lang= → defaultLang → en if available → fa). */
+export const pickShopOgLang = (shop: MetaShop, queryLang?: string | null): string => {
+  const q = queryLang?.trim();
+  if (q && shop.i18n?.[q]) return q;
+  if (shop.defaultLang && shop.languages?.some(l => l.code === shop.defaultLang)) return shop.defaultLang;
+  if (shop.i18n?.en && (shop.i18n.en.title || shop.i18n.en.subtitle || shop.i18n.en.collectionText)) return 'en';
+  if (shop.languages?.some(l => l.code === 'en')) return 'en';
+  return shop.defaultLang || 'fa';
+};
+
+const shopTr = (shop: MetaShop, key: string, legacy: string | undefined, lang: string) =>
+  translateField(shop.i18n, key, legacy || '', lang);
+
+export const metaFromMetaShop = (shop: MetaShop, origin = '', queryLang?: string | null): PageMeta => {
+  const lang = pickShopOgLang(shop, queryLang);
+  const title = shopTr(shop, 'title', shop.title?.trim() || shop.name?.trim(), lang) || shop.slug;
+  const subtitle = shopTr(shop, 'subtitle', shop.subtitle?.trim(), lang);
+  const collection = shopTr(shop, 'collectionText', shop.collectionText?.trim(), lang);
+  const description = collection || subtitle
+    || (shop.type === 'services' ? `Services — ${shop.name}` : shop.type === 'realestate' ? `Real Estate — ${shop.name}` : shop.name);
+  const siteName = shopTr(shop, 'name', shop.name?.trim(), lang) || shop.name;
   return {
     title,
     description: truncate(description, 160),
     image: absUrl(origin, shop.coverImage || shop.logo),
     type: 'website',
-    siteName: shop.name,
+    siteName,
   };
 };
 

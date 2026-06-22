@@ -96,24 +96,64 @@ async function loadSiteDefaults() {
   };
 }
 
-async function resolveMeta(search, origin) {
-  const p = new URLSearchParams(search.startsWith('?') ? search : `?${search}`);
+function translateField(i18n, key, legacy, uiLang) {
+  if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
+  if (uiLang !== 'en' && i18n?.en?.[key]) return i18n.en[key];
+  if (uiLang !== 'fa' && uiLang !== 'en' && i18n?.fa?.[key]) return i18n.fa[key];
+  return legacy || '';
+}
+
+function pickShopOgLang(shop, queryLang) {
+  const q = (queryLang || '').trim();
+  if (q && shop.i18n?.[q]) return q;
+  if (shop.defaultLang && (shop.languages || []).some(l => l.code === shop.defaultLang)) return shop.defaultLang;
+  if (shop.i18n?.en && (shop.i18n.en.title || shop.i18n.en.subtitle || shop.i18n.en.collectionText)) return 'en';
+  if ((shop.languages || []).some(l => l.code === 'en')) return 'en';
+  return shop.defaultLang || 'fa';
+}
+
+function metaFromShopDoc(shop, origin, queryLang) {
+  const lang = pickShopOgLang(shop, queryLang);
+  const title = translateField(shop.i18n, 'title', (shop.title || shop.name || shop.slug || '').trim(), lang);
+  const subtitle = translateField(shop.i18n, 'subtitle', (shop.subtitle || '').trim(), lang);
+  const collection = translateField(shop.i18n, 'collectionText', (shop.collectionText || '').trim(), lang);
+  const description = collection || subtitle
+    || (shop.type === 'services' ? `Services — ${shop.name}` : shop.type === 'realestate' ? `Real Estate — ${shop.name}` : shop.name);
+  const siteName = translateField(shop.i18n, 'name', (shop.name || '').trim(), lang) || shop.name;
+  return {
+    title,
+    description: truncate(description),
+    image: absUrl(origin, shop.coverImage || shop.logo),
+    siteName: siteName || shop.name,
+    type: 'website',
+  };
+}
+
+function searchParamsFromReq(req) {
+  const parsed = new URL(req.url || '/', 'http://localhost');
+  const p = parsed.searchParams;
+  const q = req.query || {};
+  for (const [k, v] of Object.entries(q)) {
+    if (k === 'path' || k === '...') continue;
+    const val = Array.isArray(v) ? v[0] : v;
+    if (val != null && val !== '' && !p.has(k)) p.set(k, String(val));
+  }
+  return p;
+}
+
+async function resolveMeta(searchOrParams, origin) {
+  const p = searchOrParams instanceof URLSearchParams
+    ? searchOrParams
+    : new URLSearchParams(searchOrParams.startsWith('?') ? searchOrParams : `?${searchOrParams}`);
   const defaults = await loadSiteDefaults();
 
   const shopSlug = p.get('shop') || p.get('c');
   if (shopSlug) {
     const shop = await queryByField('metaShops', 'slug', shopSlug);
     if (shop && shop.isActive !== false) {
-      const title = shop.title?.trim() || shop.name?.trim() || shopSlug;
-      const description = shop.subtitle?.trim() || shop.collectionText?.trim()
-        || (shop.type === 'services' ? `خدمات ${shop.name}` : `فروشگاه ${shop.name}`);
-      return {
-        title,
-        description: truncate(description),
-        image: absUrl(origin, shop.coverImage || shop.logo || defaults.image),
-        siteName: shop.name || defaults.siteName,
-        type: 'website',
-      };
+      const meta = metaFromShopDoc(shop, origin, p.get('lang'));
+      if (!meta.image && defaults.image) meta.image = absUrl(origin, defaults.image);
+      return meta;
     }
   }
 
@@ -209,12 +249,12 @@ export default async function handler(req, res) {
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.tohiddayhami.com';
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const origin = `${proto}://${host}`;
-  const parsed = new URL(req.url || '/', 'http://localhost');
-  const qs = parsed.searchParams.toString();
+  const params = searchParamsFromReq(req);
+  const qs = params.toString();
   const canonicalUrl = qs ? `${origin}/?${qs}` : `${origin}/`;
 
   try {
-    const meta = await resolveMeta(parsed.search, origin);
+    const meta = await resolveMeta(params, origin);
     const html = renderHtml(meta, canonicalUrl);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');

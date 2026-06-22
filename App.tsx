@@ -409,7 +409,8 @@ const App: React.FC = () => {
     const siteMeta = defaultSiteMeta(appConfig, origin);
 
     if (view === 'metashop' && publicShop) {
-      applyPageMeta({ ...metaFromMetaShop(publicShop, origin), url: window.location.href }, siteMeta);
+      const shopLang = new URLSearchParams(window.location.search).get('lang');
+      applyPageMeta({ ...metaFromMetaShop(publicShop, origin, shopLang), url: window.location.href }, siteMeta);
       return;
     }
     if (view === 'custom-form' && customFormId) {
