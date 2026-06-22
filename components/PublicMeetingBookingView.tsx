@@ -127,7 +127,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-50 to-white" dir={fa ? 'rtl' : 'ltr'}>
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="p-2.5 bg-violet-100 text-violet-600 rounded-xl">
@@ -198,24 +198,19 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
         {/* Consultant detail + session agendas */}
         {consultantId && selectedProfile && (
           <div className="bg-white rounded-2xl border border-violet-100 shadow-md overflow-hidden">
-            <div className="flex flex-col md:flex-row gap-0 md:gap-5">
-              <div className="md:w-1/3 shrink-0 p-4 md:p-5 md:pr-0 flex justify-center md:block">
-                <ConsultantPublicCard
-                  profile={selectedProfile}
-                  fa={fa}
-                  selected
-                  openSlots={selectedProfile.openSlots || 0}
-                  className="w-full max-w-[280px] md:max-w-none mx-auto pointer-events-none"
-                />
-              </div>
-              <div className="flex-1 min-w-0 p-4 sm:p-5 md:pr-5 border-b md:border-b-0 border-violet-50">
-                <h3 className="text-lg font-black text-gray-900 text-center md:text-right">{selectedProfile.name}</h3>
-                {selectedProfile.bio && (
-                  <div className="mt-3 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right max-h-48 overflow-y-auto">
-                    {selectedProfile.bio}
-                  </div>
-                )}
-              </div>
+            <div className="p-4 sm:p-5 border-b border-violet-50 space-y-3">
+              <ConsultantPublicCard
+                profile={selectedProfile}
+                fa={fa}
+                selected
+                openSlots={selectedProfile.openSlots || 0}
+                className="pointer-events-none shadow-none"
+              />
+              {selectedProfile.bio && (
+                <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right max-h-48 overflow-y-auto">
+                  {selectedProfile.bio}
+                </div>
+              )}
             </div>
             {consultantSessions.length > 0 ? (
               <div className="p-4 sm:p-5 bg-violet-50/40">
@@ -267,7 +262,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           <div className="space-y-3">
             <h2 className="text-sm font-black text-gray-800">{t.consultantsTitle}</h2>
             <p className="text-xs text-gray-500">{t.pickConsultant}</p>
-            <div className="grid grid-cols-1 min-[520px]:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+            <div className="space-y-2">
               {profilesWithSlots.map(c => (
                 <ConsultantPublicCard
                   key={c.key}
