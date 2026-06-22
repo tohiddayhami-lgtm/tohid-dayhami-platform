@@ -5,6 +5,7 @@ import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebas
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaExpoManager } from './MetaExpoManager';
+import { MetaShopFileUploader } from './MetaShopFileUploader';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { Language } from '../App';
@@ -128,7 +129,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 };
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
-  const [section, setSection] = useState<'shops' | 'bazaars' | 'expos'>('shops');
+  const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
@@ -524,8 +525,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
       <button type="button" onClick={() => setSection('shops')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'shops' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'فروشگاه‌ها' : 'Shops'}</button>
       <button type="button" onClick={() => setSection('bazaars')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'bazaars' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'بازارچه‌ها' : 'Bazaars'}</button>
       <button type="button" onClick={() => setSection('expos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'expos' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'نمایشگاه‌های متاورسی' : 'Metaverse expos'}</button>
+      <button type="button" onClick={() => setSection('uploads')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'uploads' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'آپلود فایل‌ها' : 'File uploads'}</button>
     </div>
   );
+
+  if (section === 'uploads') {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <MetaShopFileUploader lang={lang} readonly={readonly} />
+      </div>
+    );
+  }
 
   // ════════════ METAVERSE EXPOS section ════════════
   if (section === 'expos' && onSaveMetaBazaar && onDeleteMetaBazaar) {
