@@ -466,6 +466,10 @@ export interface Meeting {
   sessionType?: MeetingSessionType;
   consultantId?: string;
   consultantName?: string;
+  /** رزومه اختصاصی این جلسه (مشاور قراردادی یا بازنویسی) */
+  consultantBio?: string;
+  /** عکس اختصاصی این جلسه */
+  consultantPhoto?: string;
   price?: Price;
   prices?: Price[];
   guests?: MeetingBookingGuest[];

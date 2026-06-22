@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { tryBookMeeting } from '../services/firebaseService';
-import { meetingPrices, getMeetingSessionLabel } from '../utils/meetingBookingUtils';
+import { meetingPrices, getMeetingSessionLabel, getMeetingConsultantBio, getMeetingConsultantName, getMeetingConsultantPhoto } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { ConsultantAvatar } from './ConsultantAvatar';
 
@@ -30,6 +30,9 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
 
   const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
   const prices = meetingPrices(meeting);
+  const consultantName = getMeetingConsultantName(meeting, consultant);
+  const consultantBio = getMeetingConsultantBio(meeting, consultant);
+  const consultantPhoto = getMeetingConsultantPhoto(meeting, consultant);
 
   const t = {
     title: fa ? 'رزرو جلسه' : 'Book session',
@@ -101,16 +104,16 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-5 space-y-3">
-            {(consultant || meeting.consultantName) && (
+            {(consultantName) && (
               <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3 flex gap-3">
-                <ConsultantAvatar person={consultant} name={meeting.consultantName} size="md" ring />
+                <ConsultantAvatar name={consultantName} avatarUrl={consultantPhoto} person={consultant} size="md" ring />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-gray-900">{consultant?.fullName || meeting.consultantName}</div>
+                  <div className="text-sm font-bold text-gray-900">{consultantName}</div>
                   {consultant?.roles?.length ? (
                     <div className="text-[10px] text-violet-600 font-medium">{(consultant.roles || []).join(' · ')}</div>
                   ) : null}
-                  {consultant?.consultantBio && (
-                    <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed line-clamp-4 whitespace-pre-wrap">{consultant.consultantBio}</p>
+                  {consultantBio && (
+                    <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed line-clamp-6 whitespace-pre-wrap">{consultantBio}</p>
                   )}
                 </div>
               </div>
@@ -119,7 +122,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm space-y-1.5">
               <div><span className="text-gray-500">{t.session}: </span><strong>{sessionLabel}</strong></div>
               {meeting.consultantName && (
-                <div><span className="text-gray-500">{t.consultant}: </span><strong>{meeting.consultantName}</strong></div>
+                <div><span className="text-gray-500">{t.consultant}: </span><strong>{consultantName}</strong></div>
               )}
               <div dir="ltr" className="text-left"><span className="text-gray-500">{t.date}: </span><strong>{meeting.date}</strong> — {meeting.startTime}–{meeting.endTime}</div>
               {prices.length > 0 && (

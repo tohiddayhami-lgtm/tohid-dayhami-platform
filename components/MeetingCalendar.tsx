@@ -2,13 +2,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
-import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking } from '../services/firebaseService';
+import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking, uploadFileWithProgress } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
-import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
+import { ALL_CURRENCIES, CUR_LABEL, normalizePrices } from '../utils/servicePriceList';
+import { InvoiceAmountInput } from './InvoiceAmountInput';
+import { formatInvoiceAmount } from '../utils/invoiceMoney';
 import { MEETING_STATUS_STYLE, getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting } from '../utils/meetingBookingUtils';
-import { ConsultantAvatar } from './ConsultantAvatar';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -109,8 +110,13 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     kind: 'internal' as MeetingKind,
     sessionType: '',
     consultantId: '',
-    priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: '' })),
+    consultantName: '',
+    consultantBio: '',
+    consultantPhoto: '',
+    priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: 0 })),
   });
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const isMasterOrAdmin = currentUser.username === 'master' || (currentUser.roles || []).includes('مدیر');
@@ -148,11 +154,11 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); };
   const goToday  = () => setWeekStart(getWeekStart(new Date()));
 
-  const emptyPriceInputs = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: '' }));
+  const emptyPriceInputs = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: 0 }));
 
   const pricesFromForm = (): { prices: Price[]; price?: Price } => {
     const raw = formData.priceInputs
-      .map(p => ({ currency: p.currency as Currency, amount: Number(p.amount) || 0 }))
+      .map(p => ({ currency: p.currency as Currency, amount: p.amount || 0 }))
       .filter(p => p.amount > 0);
     return normalizePrices(raw);
   };
@@ -161,8 +167,34 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     const list = m?.prices?.length ? m.prices : m?.price ? [m.price] : [];
     return ALL_CURRENCIES.map(c => {
       const found = list.find(p => p.currency === c);
-      return { currency: c, amount: found?.amount ? String(found.amount) : '' };
+      return { currency: c, amount: found?.amount || 0 };
     });
+  };
+
+  const applyConsultantFromPersonnel = (personId: string, mergeOnlyEmpty = false) => {
+    const p = activePersonnel.find(x => x.id === personId);
+    if (!p) return;
+    setFormData(prev => ({
+      ...prev,
+      consultantId: personId,
+      consultantName: mergeOnlyEmpty && prev.consultantName.trim() ? prev.consultantName : p.fullName,
+      consultantBio: mergeOnlyEmpty && prev.consultantBio.trim() ? prev.consultantBio : (p.consultantBio || ''),
+      consultantPhoto: mergeOnlyEmpty && prev.consultantPhoto ? prev.consultantPhoto : (p.avatar || ''),
+    }));
+  };
+
+  const handleConsultantPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    uploadFileWithProgress(
+      file,
+      () => {},
+      (url) => { setFormData(prev => ({ ...prev, consultantPhoto: url })); setUploadingPhoto(false); },
+      (err) => { alert(err.message); setUploadingPhoto(false); },
+      'images',
+    );
+    e.target.value = '';
   };
 
   const handleOpenCreate = (date?: string, st?: string, et?: string) => {
@@ -171,7 +203,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     setFormData({
       title: '', date: date || todayStr, startTime: s, endTime: et || addMinutes(s, 60),
       location: '', attendeeIds: [], description: '',
-      kind: 'internal', sessionType: '', consultantId: currentUser.id,
+      kind: 'internal', sessionType: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
       priceInputs: emptyPriceInputs(),
     });
     setShowModal(true);
@@ -190,7 +222,10 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       description: meeting.description || '',
       kind: meeting.kind || 'internal',
       sessionType: meeting.sessionType || '',
-      consultantId: meeting.consultantId || meeting.organizerId,
+      consultantId: meeting.consultantId || '',
+      consultantName: meeting.consultantName || '',
+      consultantBio: meeting.consultantBio || '',
+      consultantPhoto: meeting.consultantPhoto || '',
       priceInputs: loadPricesToForm(meeting),
     });
     setShowModal(true);
@@ -267,6 +302,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     const { prices, price } = pricesFromForm();
     const isBookable = formData.kind === 'bookable';
     const sessionLabel = formData.sessionType.trim();
+    const consultantName = formData.consultantName.trim() || consultant?.fullName || '';
     return {
       id,
       title: formData.title.trim() || (isBookable ? sessionLabel : ''),
@@ -280,8 +316,10 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       description: formData.description,
       kind: formData.kind,
       sessionType: isBookable ? sessionLabel : undefined,
-      consultantId: isBookable ? formData.consultantId : undefined,
-      consultantName: isBookable ? consultant?.fullName : undefined,
+      consultantId: isBookable && formData.consultantId ? formData.consultantId : undefined,
+      consultantName: isBookable ? consultantName : undefined,
+      consultantBio: isBookable && formData.consultantBio.trim() ? formData.consultantBio.trim() : undefined,
+      consultantPhoto: isBookable && formData.consultantPhoto ? formData.consultantPhoto : undefined,
       prices: isBookable && prices.length ? prices : undefined,
       price: isBookable ? price : undefined,
       bookingStatus: isBookable ? 'open' : undefined,
@@ -293,8 +331,8 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title && formData.kind === 'internal') return;
-    if (formData.kind === 'bookable' && !formData.consultantId) return;
     if (formData.kind === 'bookable' && !formData.sessionType.trim()) return;
+    if (formData.kind === 'bookable' && !formData.consultantName.trim() && !formData.consultantId) return;
     if (editingMeetingId) {
       const oldM = meetings.find(m => m.id === editingMeetingId);
       const payload = buildMeetingPayload(editingMeetingId);
@@ -311,6 +349,8 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
         sessionType: payload.sessionType,
         consultantId: payload.consultantId,
         consultantName: payload.consultantName,
+        consultantBio: payload.consultantBio,
+        consultantPhoto: payload.consultantPhoto,
         prices: payload.prices,
         price: payload.price,
       };
@@ -599,50 +639,91 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'مشاور' : 'Consultant'}</label>
-                    <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                      value={formData.consultantId} onChange={e => setFormData({ ...formData, consultantId: e.target.value })}>
-                      <option value="">{fa ? 'انتخاب مشاور' : 'Select consultant'}</option>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نام مشاور' : 'Consultant name'} *</label>
+                    <input
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      value={formData.consultantName}
+                      onChange={e => setFormData({ ...formData, consultantName: e.target.value })}
+                      placeholder={fa ? 'نام مشاور قراردادی یا پرسنل' : 'Contract or staff consultant name'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'انتخاب از پرسنل (اختیاری)' : 'Pick from staff (optional)'}</label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      value={formData.consultantId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        if (id) applyConsultantFromPersonnel(id, true);
+                        else setFormData(prev => ({ ...prev, consultantId: '' }));
+                      }}
+                    >
+                      <option value="">{fa ? '— مشاور قراردادی / دستی —' : '— Contract / manual —'}</option>
                       {activePersonnel.map(p => (
                         <option key={p.id} value={p.id}>{p.fullName}</option>
                       ))}
                     </select>
-                    {formData.consultantId && (() => {
-                      const c = activePersonnel.find(p => p.id === formData.consultantId);
-                      if (!c) return null;
-                      return (
-                        <div className="mt-2 flex gap-3 p-2.5 rounded-lg bg-violet-50 border border-violet-100">
-                          <ConsultantAvatar person={c} size="sm" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-gray-800">{c.fullName}</p>
-                            {c.consultantBio ? (
-                              <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.consultantBio}</p>
-                            ) : (
-                              <p className="text-[10px] text-amber-600 mt-0.5">{fa ? 'رزومه در بخش پرسنل تکمیل نشده' : 'Add bio in Personnel'}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                    <p className="text-[10px] text-gray-400 mt-1">{fa ? 'عکس و رزومه از بخش مدیریت پرسنل تنظیم می‌شود' : 'Photo & bio are set in Personnel management'}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{fa ? 'با انتخاب پرسنل، نام و رزومه پر می‌شود؛ قابل ویرایش است' : 'Selecting staff fills name & bio; you can still edit'}</p>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'هزینه (چند ارزی)' : 'Fee (multi-currency)'}</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'عکس مشاور' : 'Consultant photo'}</label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => !uploadingPhoto && photoInputRef.current?.click()}
+                        className={`w-16 h-16 rounded-full border-2 border-dashed border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50 hover:bg-gray-100 shrink-0 ${uploadingPhoto ? 'opacity-50' : ''}`}
+                      >
+                        {formData.consultantPhoto ? (
+                          <img src={formData.consultantPhoto} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-gray-400 px-1 text-center">{fa ? 'آپلود' : 'Upload'}</span>
+                        )}
+                      </button>
+                      <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handleConsultantPhotoSelect} />
+                      {formData.consultantPhoto && (
+                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, consultantPhoto: '' }))} className="text-[10px] text-red-500 font-medium">{fa ? 'حذف عکس' : 'Remove'}</button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'رزومه مشاور' : 'Consultant resume'}</label>
+                    <textarea
+                      rows={4}
+                      className="w-full px-3 py-2 border border-violet-200 bg-violet-50/30 rounded-lg text-sm resize-y outline-none focus:ring-2 focus:ring-violet-400"
+                      value={formData.consultantBio}
+                      onChange={e => setFormData({ ...formData, consultantBio: e.target.value })}
+                      placeholder={fa ? 'سوابق، تخصص، قرارداد، مدارک… (برای مشاور قراردادی اینجا بنویسید)' : 'Experience, contract details, credentials…'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'هزینه مشاوره' : 'Consultation fee'}</label>
+                    <p className="text-[10px] text-gray-400 mb-2">{fa ? 'مبالغ با جداکننده هزارگان — ارزهای مورد نیاز را پر کنید' : 'Amounts with thousand separators — fill needed currencies'}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {formData.priceInputs.map((p, idx) => (
-                        <div key={p.currency} className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-500 w-12 shrink-0">{CUR_LABEL[p.currency][fa ? 'fa' : 'en']}</span>
-                          <input type="number" min={0} dir="ltr" placeholder="0"
-                            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                        <div key={p.currency} className="flex items-center gap-2 rounded-lg border border-gray-200 px-2 py-1.5 bg-gray-50/50">
+                          <span className="text-[10px] text-gray-600 w-14 shrink-0 font-semibold">{CUR_LABEL[p.currency][fa ? 'fa' : 'en']}</span>
+                          <InvoiceAmountInput
                             value={p.amount}
-                            onChange={e => {
+                            maxDecimals={0}
+                            className="flex-1 px-2 py-1 border border-gray-200 rounded-md text-xs dir-ltr text-left bg-white outline-none focus:ring-1 focus:ring-violet-400"
+                            placeholder="0"
+                            onChange={n => {
                               const next = [...formData.priceInputs];
-                              next[idx] = { ...next[idx], amount: e.target.value };
+                              next[idx] = { ...next[idx], amount: n };
                               setFormData({ ...formData, priceInputs: next });
-                            }} />
+                            }}
+                          />
                         </div>
                       ))}
                     </div>
+                    {formData.priceInputs.some(p => p.amount > 0) && (
+                      <p className="text-[10px] text-emerald-700 mt-1.5 font-medium" dir="ltr">
+                        {formData.priceInputs.filter(p => p.amount > 0).map(p =>
+                          `${CUR_LABEL[p.currency][fa ? 'fa' : 'en']}: ${formatInvoiceAmount(p.amount, 0)}`
+                        ).join(' · ')}
+                      </p>
+                    )}
                   </div>
                 </>
               )}

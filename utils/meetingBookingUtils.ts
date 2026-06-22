@@ -73,6 +73,59 @@ export const findConsultant = (personnel: Personnel[], id?: string | null): Pers
 export const countConsultantOpenSlots = (meetings: Meeting[], consultantId: string): number =>
   meetings.filter(m => m.consultantId === consultantId && getMeetingDisplayStatus(m) === 'open').length;
 
+export const getMeetingConsultantName = (m: Meeting, person?: Personnel): string =>
+  m.consultantName?.trim() || person?.fullName || '';
+
+export const getMeetingConsultantBio = (m: Meeting, person?: Personnel): string =>
+  m.consultantBio?.trim() || person?.consultantBio?.trim() || '';
+
+export const getMeetingConsultantPhoto = (m: Meeting, person?: Personnel): string | undefined =>
+  m.consultantPhoto || person?.avatar || undefined;
+
+export interface MeetingConsultantProfile {
+  key: string;
+  id?: string;
+  name: string;
+  bio: string;
+  photo?: string;
+}
+
+export const collectMeetingConsultantProfiles = (
+  meetings: Meeting[],
+  personnel: Personnel[],
+): MeetingConsultantProfile[] => {
+  const seen = new Set<string>();
+  const list: MeetingConsultantProfile[] = [];
+  for (const m of meetings.filter(isBookableMeeting)) {
+    const person = findConsultant(personnel, m.consultantId);
+    const name = getMeetingConsultantName(m, person);
+    if (!name) continue;
+    const key = m.consultantId || `name:${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({
+      key,
+      id: m.consultantId,
+      name,
+      bio: getMeetingConsultantBio(m, person),
+      photo: getMeetingConsultantPhoto(m, person),
+    });
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+};
+
+export const countOpenSlotsForProfile = (
+  meetings: Meeting[],
+  profile: MeetingConsultantProfile,
+  fromDate: string,
+): number =>
+  meetings.filter(m => {
+    if (!isBookableMeeting(m) || m.date < fromDate) return false;
+    if (getMeetingDisplayStatus(m) !== 'open') return false;
+    if (profile.id) return m.consultantId === profile.id;
+    return !m.consultantId && getMeetingConsultantName(m) === profile.name;
+  }).length;
+
 export const buildBookingPublicUrl = (baseUrl: string, consultantId?: string | null) => {
   const url = new URL(baseUrl, typeof window !== 'undefined' ? window.location.origin : 'https://localhost');
   url.search = '';
