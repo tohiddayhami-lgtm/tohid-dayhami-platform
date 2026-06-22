@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { IconCalendarClock, IconCopy } from './Icons';
@@ -19,14 +19,53 @@ import {
   meetingPrices,
 } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
-import { WeekPieCalendar } from './WeekPieCalendar';
-import { getWeekStart, getWeekDays, toDateStr, parseDateLocal, getDayName, getWeekRangeLabel } from '../utils/weekCalendar';
+
+const HOUR_HEIGHT = 52;
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const diff = (d.getDay() - 6 + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getWeekDays(ws: Date): Date[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(ws);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function normalizeTime(t?: string | null, fallback = '09:00'): string {
+  if (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) return t;
+  return fallback;
+}
+
+function timeToMinutes(t?: string | null): number {
+  const [h, m] = normalizeTime(t).split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function parseDateLocal(ds: string): Date {
+  const [y, m, d] = ds.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
 
 function sortMeetingsChronologically(list: Meeting[]): Meeting[] {
   return [...list].sort((a, b) => {
     const dc = a.date.localeCompare(b.date);
     if (dc !== 0) return dc;
-    return (a.startTime || '').localeCompare(b.startTime || '');
+    return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
   });
 }
 
@@ -59,9 +98,9 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 }) => {
   const fa = lang === 'fa';
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
-  const [selectedDay, setSelectedDay] = useState(() => toDateStr(new Date()));
   const [bookingMeeting, setBookingMeeting] = useState<Meeting | null>(null);
   const [copied, setCopied] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const allBookableMeetings = useMemo(
     () => filterPublicBookableMeetings(meetings),
@@ -78,11 +117,6 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const todayStr = toDateStr(new Date());
   const weekDays = getWeekDays(weekStart);
-
-  useEffect(() => {
-    const inWeek = weekDays.some(d => toDateStr(d) === selectedDay);
-    if (!inWeek) setSelectedDay(toDateStr(weekDays[0]));
-  }, [weekStart, weekDays, selectedDay]);
 
   const upcomingSlots = useMemo(() => {
     const upcoming = visibleMeetings.filter(m => m.date >= todayStr);
@@ -112,8 +146,25 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     }),
   [upcomingSlots]);
 
-  const getDayNameLocal = (d: Date, short = false) => getDayName(d, fa, short);
-  const getWeekRange = () => getWeekRangeLabel(weekDays, fa);
+  const DAY_FA = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
+  const DAY_FA_SHORT = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+  const DAY_EN = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const MON_FA = ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر'];
+  const MON_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const getDayName = (d: Date, short = false) => {
+    const idx = d.getDay() === 6 ? 0 : d.getDay() + 1;
+    return fa ? (short ? DAY_FA_SHORT[idx] : DAY_FA[idx]) : DAY_EN[idx];
+  };
+
+  const getWeekRange = () => {
+    const s = weekDays[0], e = weekDays[6];
+    const ms = fa ? MON_FA[s.getMonth()] : MON_EN[s.getMonth()];
+    const me = fa ? MON_FA[e.getMonth()] : MON_EN[e.getMonth()];
+    return s.getMonth() === e.getMonth()
+      ? `${ms} ${s.getDate()}–${e.getDate()}`
+      : `${ms} ${s.getDate()} – ${me} ${e.getDate()}`;
+  };
 
   const t = {
     title: fa ? 'رزرو جلسه مشاوره' : 'Book a consultation',
@@ -144,7 +195,6 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     consultantsTitle: fa ? 'مشاوران ما' : 'Our consultants',
     resume: fa ? 'رزومه' : 'Resume',
     openSlots: (n: number) => fa ? `${n} زمان باز` : `${n} open slot${n === 1 ? '' : 's'}`,
-    pieHint: fa ? 'روی هر روز کلیک کنید — کل هفته یکجا' : 'Click a day — full week at a glance',
     selectConsultant: fa ? 'انتخاب مشاور' : 'Select consultant',
     roles: fa ? 'سمت' : 'Role',
   };
@@ -161,7 +211,6 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const jumpToMeetingWeek = (m: Meeting) => {
     setWeekStart(getWeekStart(parseDateLocal(m.date)));
-    setSelectedDay(m.date);
     if (canPublicBookMeeting(m)) setBookingMeeting(m);
   };
 
@@ -176,14 +225,18 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     } catch {}
   };
 
-  const handlePieMeetingClick = (m: Meeting) => {
-    if (canPublicBookMeeting(m)) setBookingMeeting(m);
+  const statusBlockClass = (m: Meeting) => {
+    const st = getMeetingDisplayStatus(m);
+    if (st === 'internal') return 'bg-gray-400';
+    return MEETING_STATUS_STYLE[st].bg;
   };
 
-  const weekVisibleMeetings = useMemo(
-    () => visibleMeetings.filter(m => weekDays.some(d => toDateStr(d) === m.date)),
-    [visibleMeetings, weekDays],
-  );
+  const statusLabel = (m: Meeting) => {
+    const st = getMeetingDisplayStatus(m);
+    if (st === 'internal') return '';
+    const s = MEETING_STATUS_STYLE[st];
+    return fa ? s.labelFa : s.labelEn;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-50 to-white" dir={fa ? 'rtl' : 'ltr'}>
@@ -377,7 +430,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                         <div className="text-[10px] text-gray-600 truncate mt-0.5">{consultantName}</div>
                       )}
                       <div className="text-[10px] text-gray-500 mt-1" dir="ltr">
-                        {formatSlotDate(meeting.date, fa, getDayNameLocal)}
+                        {formatSlotDate(meeting.date, fa, getDayName)}
                       </div>
                       <div className="text-[11px] font-bold text-violet-700 mt-0.5" dir="ltr">
                         {meeting.startTime} – {meeting.endTime}
@@ -407,24 +460,103 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden p-4 sm:p-6">
-          <div className="flex items-center justify-center gap-1 mb-3" dir="ltr">
-            <button type="button" onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }} className="w-7 h-7 rounded-md bg-gray-50 border border-gray-200 text-gray-600 font-bold hover:bg-gray-100">‹</button>
-            <button type="button" onClick={() => { setWeekStart(getWeekStart(new Date())); setSelectedDay(todayStr); }} className="px-2.5 py-1 text-[11px] font-semibold rounded-md border border-gray-300 bg-white hover:bg-gray-50">{fa ? 'امروز' : 'Today'}</button>
-            <button type="button" onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }} className="w-7 h-7 rounded-md bg-gray-50 border border-gray-200 text-gray-600 font-bold hover:bg-gray-100">›</button>
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden" style={{ minHeight: '560px' }}>
+          <div className="flex items-center justify-center gap-1 px-4 py-2.5 border-b border-gray-200 bg-gray-50" dir="ltr">
+            <button type="button" onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }} className="w-7 h-7 rounded-md bg-white border border-gray-200 text-gray-600 font-bold">‹</button>
+            <button type="button" onClick={() => setWeekStart(getWeekStart(new Date()))} className="px-2.5 py-1 text-[11px] font-semibold rounded-md border border-gray-300 bg-white">{fa ? 'امروز' : 'Today'}</button>
+            <button type="button" onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }} className="w-7 h-7 rounded-md bg-white border border-gray-200 text-gray-600 font-bold">›</button>
             <span className="text-[11px] font-semibold text-gray-500 px-2 min-w-[100px] text-center">{getWeekRange()}</span>
           </div>
-          <p className="text-center text-xs text-gray-400 mb-2">{t.pieHint}</p>
-          <WeekPieCalendar
-            weekDays={weekDays}
-            meetings={weekVisibleMeetings}
-            fa={fa}
-            selectedDate={selectedDay}
-            onSelectDate={setSelectedDay}
-            onMeetingClick={handlePieMeetingClick}
-            canBookMeeting={canPublicBookMeeting}
-            size={340}
-          />
+
+          <div className="flex border-b border-gray-200 bg-gray-50" dir="ltr">
+            <div className="w-10 flex-shrink-0 border-r border-gray-200" />
+            {weekDays.map(day => {
+              const ds = toDateStr(day);
+              const isToday = ds === todayStr;
+              const count = visibleMeetings.filter(m => m.date === ds).length;
+              return (
+                <div key={ds} className="flex-1 text-center py-1.5 border-l border-gray-200">
+                  <div className={`text-[10px] font-bold uppercase ${isToday ? 'text-violet-600' : 'text-gray-400'}`}>{getDayName(day, true)}</div>
+                  <div className={`text-base font-black w-8 h-8 flex items-center justify-center mx-auto rounded-full mt-0.5 ${isToday ? 'bg-violet-600 text-white' : 'text-gray-700'}`}>{day.getDate()}</div>
+                  {count > 0 && <span className="text-[9px] text-gray-400">{count}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          <div ref={gridRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)', minHeight: '480px' }} dir="ltr">
+            <div className="flex relative" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
+              <div className="w-10 flex-shrink-0 border-r border-gray-200 relative bg-white">
+                {HOURS.map(h => (
+                  <div key={h} className="absolute flex items-start justify-end pr-1 w-full" style={{ top: `${h * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}>
+                    {h > 0 && <span className="text-[9px] text-gray-400 font-mono -mt-2">{h.toString().padStart(2, '0')}</span>}
+                  </div>
+                ))}
+              </div>
+
+              {weekDays.map(day => {
+                const ds = toDateStr(day);
+                const isToday = ds === todayStr;
+                const dayMeetings = visibleMeetings.filter(m => m.date === ds);
+
+                return (
+                  <div key={ds} className={`flex-1 relative border-l border-gray-200 ${isToday ? 'bg-violet-50/20' : ''}`}>
+                    {HOURS.map(h => (
+                      <div key={h} className="absolute left-0 right-0 border-t border-gray-100" style={{ top: `${h * HOUR_HEIGHT}px` }} />
+                    ))}
+
+                    {dayMeetings.map(meeting => {
+                      const startMin = timeToMinutes(meeting.startTime);
+                      const endMin = timeToMinutes(meeting.endTime);
+                      const top = (startMin / 60) * HOUR_HEIGHT;
+                      const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
+                      const bookable = canPublicBookMeeting(meeting);
+                      const prices = meetingPrices(meeting);
+                      const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
+                      const guestCount = meeting.guests?.length || 0;
+
+                      return (
+                        <button
+                          key={meeting.id}
+                          type="button"
+                          disabled={!bookable}
+                          onClick={() => bookable && setBookingMeeting(meeting)}
+                          className={`absolute rounded overflow-hidden shadow-sm z-10 text-right transition-all ${statusBlockClass(meeting)} ${bookable ? 'hover:shadow-lg hover:z-20 cursor-pointer' : 'opacity-90 cursor-not-allowed'}`}
+                          style={{ top: `${top + 1}px`, height: `${height - 2}px`, left: '1px', right: '1px' }}
+                          title={bookable ? t.clickToBook : statusLabel(meeting)}
+                        >
+                          <div className="px-1 py-0.5 h-full flex flex-col overflow-hidden text-white">
+                            <div className="font-semibold truncate" style={{ fontSize: '10px' }}>{sessionLabel}</div>
+                            {height > 26 && (
+                              <div className="opacity-90 truncate" style={{ fontSize: '9px' }}>
+                                {meeting.startTime}–{meeting.endTime}
+                              </div>
+                            )}
+                            {height > 38 && getMeetingConsultantName(meeting, findConsultant(personnel, meeting.consultantId)) && (
+                              <div className="opacity-80 truncate" style={{ fontSize: '9px' }}>
+                                {getMeetingConsultantName(meeting, findConsultant(personnel, meeting.consultantId))}
+                              </div>
+                            )}
+                            {height > 50 && prices.length > 0 && (
+                              <div className="opacity-90 truncate" style={{ fontSize: '8px' }}>
+                                {prices.map(p => formatPriceAmount(p.amount, p.currency, lang)).join(' / ')}
+                              </div>
+                            )}
+                            {guestCount > 0 && height > 36 && (
+                              <div className="opacity-75" style={{ fontSize: '8px' }}>{guestCount} {t.guests}</div>
+                            )}
+                            {height > 20 && (
+                              <div className="mt-auto opacity-90 font-bold" style={{ fontSize: '8px' }}>{statusLabel(meeting)}</div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {visibleMeetings.length === 0 && slotStats.total === 0 && (
