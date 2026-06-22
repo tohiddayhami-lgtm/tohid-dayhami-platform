@@ -891,12 +891,38 @@ export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void)
   });
 
 // ── Team brainstorm (sticky-note ideas board) ──
-export const saveTeamBrainstormPost = async (post: TeamBrainstormPost) => {
-  const payload = { ...post, files: cleanFilesForDB(post.files) };
-  await setDocCloud('team_brainstorm', post.id, payload);
-};
+function normalizeTeamBrainstormPost(p: TeamBrainstormPost): TeamBrainstormPost {
+  const color = p.color && TB_COLORS.includes(p.color as TBColor) ? p.color : 'yellow';
+  return {
+    ...p,
+    id: p.id || '',
+    color,
+    likedBy: Array.isArray(p.likedBy) ? p.likedBy : [],
+    comments: Array.isArray(p.comments) ? p.comments : [],
+    files: Array.isArray(p.files) ? p.files : [],
+  };
+}
 
-export const updateTeamBrainstormPostInCloud = async (id: string, updates: Partial<TeamBrainstormPost>) => {
+const TB_COLORS = ['yellow', 'pink', 'mint', 'sky', 'lavender', 'peach'] as const;
+type TBColor = typeof TB_COLORS[number];
+
+async function patchTeamBrainstormPost(
+  id: string,
+  patch: (post: TeamBrainstormPost) => Partial<TeamBrainstormPost>,
+): Promise<TeamBrainstormPost> {
+  const proxy = await checkProxyMode();
+  let existing: TeamBrainstormPost | null = null;
+  if (proxy) {
+    existing = await proxyGet<TeamBrainstormPost>('team_brainstorm', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'team_brainstorm', id));
+    if (snap.exists()) {
+      const data = snap.data() as TeamBrainstormPost;
+      existing = normalizeTeamBrainstormPost({ ...data, id: data.id || snap.id });
+    }
+  }
+  if (!existing) throw new Error(`Brainstorm post ${id} not found`);
+  const updates = patch(existing);
   const payload: Record<string, unknown> = { ...updates };
   if (updates.files) payload.files = cleanFilesForDB(updates.files);
   if (updates.comments) {
@@ -905,7 +931,18 @@ export const updateTeamBrainstormPostInCloud = async (id: string, updates: Parti
       files: cleanFilesForDB(c.files),
     }));
   }
-  await updateDocCloud('team_brainstorm', id, payload);
+  const merged = normalizeTeamBrainstormPost({ ...existing, ...payload, id: existing.id || id });
+  await setDocCloud('team_brainstorm', id, merged);
+  return merged;
+}
+
+export const saveTeamBrainstormPost = async (post: TeamBrainstormPost) => {
+  const payload = { ...post, files: cleanFilesForDB(post.files) };
+  await setDocCloud('team_brainstorm', post.id, payload);
+};
+
+export const updateTeamBrainstormPostInCloud = async (id: string, updates: Partial<TeamBrainstormPost>) => {
+  await patchTeamBrainstormPost(id, (existing) => ({ ...existing, ...updates }));
 };
 
 export const deleteTeamBrainstormPostFromCloud = async (id: string) => {
@@ -913,9 +950,12 @@ export const deleteTeamBrainstormPostFromCloud = async (id: string) => {
 };
 
 export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]) => void) =>
-  subscribeCollection<TeamBrainstormPost>('team_brainstorm', callback, {
+  subscribeCollection<TeamBrainstormPost>('team_brainstorm', list => {
+    callback(list.map(p => normalizeTeamBrainstormPost(p)));
+  }, {
     sort: (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
     intervalMs: 8_000,
+    mergeDocId: true,
   });
 
 // ── Standalone Invoices (Invoices archive) ──
