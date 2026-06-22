@@ -3,7 +3,7 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types
 import { shopCodeOf } from './shopCode';
 import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
-import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, formatMoney } from '../utils/metaShopRealEstate';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, formatMoney, resolveDisplayLang, REAL_ESTATE_DEFAULT_LANGS } from '../utils/metaShopRealEstate';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -84,24 +84,41 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [inquiryProp, setInquiryProp] = useState<MetaShopProduct | null>(null);
   const [inquiryForm, setInquiryForm] = useState({ customerName: '', phone: '', email: '', visitWhen: '', notes: '' });
   const [inquiryTracking, setInquiryTracking] = useState<string | null>(null);
-  // Supported languages (defaults to FA + EN). Visitor can switch; default from shop.defaultLang.
-  const langs: import('../types').MetaShopLang[] = (shop.languages && shop.languages.length)
-    ? shop.languages
-    : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
+  // Supported languages — real-estate shops always offer FA + AR + EN
+  const mergeShopLangs = (configured: import('../types').MetaShopLang[], ensure: import('../types').MetaShopLang[]) => {
+    const map = new Map<string, import('../types').MetaShopLang>();
+    [...configured, ...ensure].forEach(l => { if (l.code) map.set(l.code, { ...map.get(l.code), ...l }); });
+    return ensure.map(l => map.get(l.code) || l);
+  };
+  const langs: import('../types').MetaShopLang[] = isRealEstate
+    ? mergeShopLangs(shop.languages || [], REAL_ESTATE_DEFAULT_LANGS)
+    : (shop.languages && shop.languages.length)
+      ? shop.languages
+      : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
   const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
   const isRtl = (code: string) => { const l = langs.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
   const [uiLang, setUiLang] = useState<string>(shop.defaultLang || langs[0]?.code || lang);
   const [tab, setTab] = useState<string>('products');
 
-  const T = uiLang === 'fa';
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
   const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
   const pages = shop.pages || [];
 
-  // Legacy bilingual fallback (fa base / en variant); for other languages → en||fa
-  const L = (faVal?: string, enVal?: string) => (uiLang === 'fa' ? faVal : (enVal || faVal)) || (faVal || enVal || '');
-  // Content translation: item.i18n[lang][key] if present, else the legacy value
-  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
+  const reLang = () => resolveDisplayLang(uiLang);
+
+  // Legacy bilingual fallback (fa / en / ar)
+  const L = (faVal?: string, enVal?: string, arVal?: string) => {
+    if (uiLang === 'fa') return faVal || enVal || arVal || '';
+    if (uiLang === 'ar') return arVal || enVal || faVal || '';
+    return enVal || arVal || faVal || '';
+  };
+  // Content translation: item.i18n[lang][key] if present, else sensible fallback
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => {
+    if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
+    if (uiLang === 'ar' && i18n?.en?.[key]) return i18n.en[key];
+    if (uiLang !== 'fa' && i18n?.en?.[key]) return i18n.en[key];
+    return legacy || '';
+  };
 
   // ── UI chrome strings per language (en is the fallback for any missing key/language) ──
   const STRINGS: Record<string, Record<string, string>> = {
@@ -129,6 +146,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       inquirySubmit: 'Submit request', inquiryThanks: 'Request received!', trackInquiries: 'Track my requests',
       featuredProperties: 'Featured properties', callAgent: 'Call', whatsappAgent: 'WhatsApp',
       priceDisplayOnly: 'Listed price (informational)',
+      inquiryAsideHint: 'Our agent will contact you after you submit.',
+      inquiryFormHint: 'Enter your contact details to schedule a viewing.',
+      namePh: 'Your full name', visitWhenPh: 'e.g. Saturday 10 AM', notesPhExtra: 'Any extra questions…',
+      watchVideo: 'Watch video', pcs: 'pcs', offTag: ' off', cartEmptyErr: 'Cart is empty.',
+      invalidDiscount: 'Invalid discount code.', minOrderDiscount: 'Minimum order for this code is',
+      discountNoApply: 'This code does not apply to your cart items.',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -154,6 +177,43 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       inquirySubmit: 'ثبت درخواست بازدید', inquiryThanks: 'درخواست شما ثبت شد!', trackInquiries: 'پیگیری درخواست‌ها',
       featuredProperties: 'املاک ویژه', callAgent: 'تماس', whatsappAgent: 'واتس‌اپ',
       priceDisplayOnly: 'قیمت اعلامی (فقط نمایش)',
+      inquiryAsideHint: 'پس از ثبت، کارشناس املاک با شما تماس می‌گیرد.',
+      inquiryFormHint: 'اطلاعات تماس خود را وارد کنید تا هماهنگی بازدید انجام شود.',
+      namePh: 'نام کامل', visitWhenPh: 'مثلاً شنبه ۱۰ صبح', notesPhExtra: 'سوال یا توضیح اضافه…',
+      watchVideo: 'تماشای ویدئو', pcs: 'عدد', offTag: ' تخفیف', cartEmptyErr: 'سبد خالی است.',
+      invalidDiscount: 'کد تخفیف نامعتبر است.', minOrderDiscount: 'حداقل مبلغ سفارش برای این کد',
+      discountNoApply: 'این کد برای اقلام سبد شما اعمال نمی‌شود.',
+    },
+    ar: {
+      cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
+      searchPh: 'بحث في العقارات...', empty: 'لا توجد نتائج.', cartTitle: 'طلبك', cartEmpty: 'لا توجد عناصر بعد.',
+      qty: 'الكمية', remove: 'حذف', total: 'الإجمالي', yourInfo: 'معلوماتك', name: 'الاسم الكامل', company: 'الشركة',
+      phone: 'الجوال / واتساب', email: 'البريد الإلكتروني', country: 'الدولة', city: 'المدينة / الوجهة', notes: 'ملاحظات / طلبات خاصة',
+      submit: 'إرسال الطلب', submitting: 'جارٍ الإرسال...', incomplete: 'يرجى إدخال الاسم ورقم الجوال.', err: 'فشل الإرسال. حاول مرة أخرى.',
+      thanksTitle: 'تم استلام الطلب!', thanksDesc: 'تم استلام طلبك. احتفظ برمز التتبع أدناه — سنتواصل معك قريباً.',
+      trackingCode: 'رمز تتبع الطلب', copy: 'نسخ', copied: 'تم النسخ', close: 'إغلاق', trackMy: 'متابعة طلباتي', trackBtn: 'عرض',
+      trackCodePh: 'رمز التتبع', trackHint: 'ابحث برمز التتبع أو رقم الجوال — أضف اسمك لتضييق النتائج.', trackNeed: 'أدخل رمز التتبع أو رقم الجوال.',
+      noOrders: 'لم يُعثر على طلبات. تحقق من رمز التتبع أو الجوال أو الاسم.', moq: 'الحد الأدنى', pack: 'عبوة', statusNew: 'جديد', statusProg: 'قيد التنفيذ', statusDone: 'مكتمل', statusCanc: 'ملغى',
+      perPack: '/ عبوة', review: 'متابعة لمعاينة الفاتورة', invoiceTitle: 'معاينة الفاتورة', editCart: 'تعديل السلة',
+      featured: 'مميز', featuredTitle: 'عقارات مميزة', negotiable: 'قابل للتفاوض — اطلب عرض سعر',
+      outOfStock: 'غير متاح حالياً',
+      colItem: 'البند', colQty: 'الكمية', colUnit: 'سعر الوحدة', colLine: 'المبلغ', invHint: 'هذه معاينة أولية؛ يُؤكد المبلغ النهائي بعد المراجعة.',
+      confirm: 'تأكيد وإرسال الطلب', tabProducts: 'قائمة المنتجات', tabServices: 'الخدمات', subtotalLabel: 'مجموع البنود',
+      feesLabel: 'رسوم إضافية', optionalFee: '(اختياري)', discountTitle: 'رمز الخصم', discountPh: 'أدخل رمز الخصم', apply: 'تطبيق',
+      discountLine: 'خصم', taxIncl: 'شامل الضريبة', taxExcl: 'الضريبة', footPhone: 'الهاتف:', footEmail: 'البريد:', footWebsite: 'الموقع:',
+      catalog: 'كتالوج PDF', downloadCatalog: 'تحميل كتالوج PDF',
+      addProperty: 'طلب معاينة', tabRealEstate: 'العقارات', monthlyRent: 'الإيجار الشهري', deposit: 'التأمين',
+      specs: 'مواصفات العقار', faqTitle: 'الأسئلة الشائعة', viewMap: 'عرض على الخريطة', virtualTour: 'جولة افتراضية', forSale: 'للبيع',
+      inquiryBtn: 'طلب معاينة', inquiryTitle: 'طلب معاينة العقار', visitWhen: 'الوقت المفضل للمعاينة',
+      inquirySubmit: 'إرسال طلب المعاينة', inquiryThanks: 'تم استلام طلبك!', trackInquiries: 'متابعة طلباتي',
+      featuredProperties: 'عقارات مميزة', callAgent: 'اتصال', whatsappAgent: 'واتساب',
+      priceDisplayOnly: 'السعر المعلن (للعرض فقط)',
+      inquiryAsideHint: 'بعد التسجيل، سيتواصل معك مستشار العقارات.',
+      inquiryFormHint: 'أدخل بيانات الاتصال لترتيب المعاينة.',
+      namePh: 'الاسم الكامل', visitWhenPh: 'مثلاً السبت ١٠ صباحاً', notesPhExtra: 'أسئلة أو ملاحظات إضافية…',
+      watchVideo: 'مشاهدة الفيديو', pcs: 'قطعة', offTag: ' خصم', cartEmptyErr: 'السلة فارغة.',
+      invalidDiscount: 'رمز الخصم غير صالح.', minOrderDiscount: 'الحد الأدنى للطلب لهذا الرمز',
+      discountNoApply: 'هذا الرمز لا ينطبق على عناصر سلتك.',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -180,7 +240,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
   t.add = isRealEstate ? S('inquiryBtn') : isServices ? S('addService') : S('addProduct');
   t.productsTab = isRealEstate
-    ? (T ? (shop.productsTabLabel || S('tabRealEstate')) : (shop.productsTabLabelEn || shop.productsTabLabel || S('tabRealEstate')))
+    ? (TR(shop.i18n, 'productsTabLabel', L(shop.productsTabLabel, shop.productsTabLabelEn)) || S('tabRealEstate'))
     : isServices ? S('tabServices') : S('tabProducts');
   if (isRealEstate) {
     t.featuredTitle = S('featuredProperties');
@@ -199,7 +259,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const re = p.realEstate;
     if (!re) return null;
     const cur = re.rentCurrency || p.currency || shop.currency;
-    const Lg = uiLang === 'fa' ? 'fa' as const : 'en' as const;
+    const Lg = reLang();
     if (re.dealType === 'rent' || re.dealType === 'rent-short') {
       const parts: string[] = [];
       if (re.monthlyRent) parts.push(`${S('monthlyRent')}: ${formatMoney(re.monthlyRent, cur, Lg)}`);
@@ -335,9 +395,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const code = discountInput.trim();
     if (!code) return;
     const d = (shop.discounts || []).find(x => x.active !== false && x.code.trim().toLowerCase() === code.toLowerCase());
-    if (!d) { setAppliedDiscount(null); setDiscountErr(T ? 'کد تخفیف نامعتبر است.' : 'Invalid discount code.'); return; }
-    if (d.minOrder && grandTotal < d.minOrder) { setAppliedDiscount(null); setDiscountErr(T ? `حداقل مبلغ سفارش برای این کد ${shop.currency} ${d.minOrder.toLocaleString()} است.` : `Minimum order for this code is ${shop.currency} ${d.minOrder.toLocaleString()}.`); return; }
-    if (computeDiscount(d) <= 0) { setAppliedDiscount(null); setDiscountErr(T ? 'این کد برای اقلام سبد شما اعمال نمی‌شود.' : 'This code does not apply to your cart items.'); return; }
+    if (!d) { setAppliedDiscount(null); setDiscountErr(S('invalidDiscount')); return; }
+    if (d.minOrder && grandTotal < d.minOrder) { setAppliedDiscount(null); setDiscountErr(`${S('minOrderDiscount')} ${shop.currency} ${d.minOrder.toLocaleString()}`); return; }
+    if (computeDiscount(d) <= 0) { setAppliedDiscount(null); setDiscountErr(S('discountNoApply')); return; }
     setAppliedDiscount(d); setDiscountErr('');
   };
   const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
@@ -391,7 +451,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
   const submit = async () => {
     if (!form.customerName.trim() || !form.phone.trim()) { setError(t.incomplete); return; }
-    if (cartItems.length === 0) { setError(T ? 'سبد خالی است.' : 'Cart is empty.'); return; }
+    if (cartItems.length === 0) { setError(S('cartEmptyErr')); return; }
     setSubmitting(true); setError('');
     try {
       const code = await onSubmitOrder({
@@ -500,7 +560,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <div className="ms-price-row">
               {hasDiscount(p) && <span className="ms-price-was">{money(basePrice, cur)}</span>}
               <span className="ms-price-amt">{money(curPrice, cur)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
-              {off > 0 && <span className="ms-disc-tag">{off}%{T ? ' تخفیف' : ' off'}</span>}
+              {off > 0 && <span className="ms-disc-tag">{off}%{S('offTag')}</span>}
             </div>
           )}
           {!isServices && !isRealEstate && opts.length === 0 && basePack != null && basePack > 0 && (
@@ -522,10 +582,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
             </div>
             {!hidden && curPrice != null && curPrice > 0 && (
-              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
+              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : S('pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
             )}
             {hidden && (
-              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : (T ? 'عدد' : 'pcs')} · <b>{negLabel(p)}</b></div>
+              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : S('pcs')} · <b>{negLabel(p)}</b></div>
             )}
           </>
         ) : (
@@ -539,13 +599,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
     const re = p.realEstate;
-    const reSummary = isRealEstate ? realEstateCardSummary(p, uiLang === 'fa' ? 'fa' : 'en') : [];
+    const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className="ms-card-img" onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
           {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
-          {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, uiLang === 'fa' ? 'fa' : 'en')}</span>}
+          {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, reLang())}</span>}
           {!re && p.group && <span className="ms-group-badge">{p.group}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
           {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
@@ -558,7 +618,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           <h3 className="ms-pname" onClick={() => openDetail(p)}>{pName(p)}</h3>
           <div className="ms-badges">
             {p.sku && <span className="ms-sku">{p.sku}</span>}
-            {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, uiLang === 'fa' ? 'fa' : 'en')}</span>}
+            {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, reLang())}</span>}
             {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
             {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
           </div>
@@ -749,7 +809,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 if (!v) return null;
                 if (v.type === 'iframe') return <div className="ms-video"><iframe src={v.src} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="video" /></div>;
                 if (v.type === 'video') return <div className="ms-video"><video src={v.src} controls /></div>;
-                return <a className="ms-video-link" href={v.src} target="_blank" rel="noreferrer">▶ {T ? 'تماشای ویدئو' : 'Watch video'}</a>;
+                return <a className="ms-video-link" href={v.src} target="_blank" rel="noreferrer">▶ {S('watchVideo')}</a>;
               })()}
               {detail.colors && detail.colors.length > 0 && (
                 <div className="ms-colors">{detail.colors.map((c, i) => <span key={i} className="ms-color-chip"><i style={{ background: c.hex2 ? `linear-gradient(135deg, ${c.hex}, ${c.hex2})` : c.hex }} />{c.name}</span>)}</div>
@@ -761,7 +821,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 <div className="ms-meta">{detail.pack != null && <span>{t.pack}: <b>{detail.pack} {detail.unit}</b></span>}{detail.moq && <span>{t.moq}: <b>{detail.moq}</b></span>}</div>
               )}
               {isRealEstate && detail.realEstate && (() => {
-                const rows = realEstateDetailRows(detail, uiLang === 'fa' ? 'fa' : 'en');
+                const rows = realEstateDetailRows(detail, reLang());
                 const re = detail.realEstate;
                 const faq = re.faq || [];
                 return (
@@ -788,8 +848,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                         <div className="ms-re-specs-title">{S('faqTitle')}</div>
                         {faq.map((f, i) => (
                           <details key={i} className="ms-re-faq-item">
-                            <summary>{uiLang === 'fa' ? f.q : (f.qEn || f.q)}</summary>
-                            <p>{uiLang === 'fa' ? f.a : (f.aEn || f.a)}</p>
+                            <summary>{realEstateFaqText(f, 'q', reLang())}</summary>
+                            <p>{realEstateFaqText(f, 'a', reLang())}</p>
                           </details>
                         ))}
                       </div>
@@ -805,10 +865,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
       {/* Real-estate inquiry modal (no cart) */}
       {inquiryProp && (() => {
-        const inqSummary = realEstateCardSummary(inquiryProp, uiLang === 'fa' ? 'fa' : 'en');
+        const inqSummary = realEstateCardSummary(inquiryProp, reLang());
         const inqListed = rePriceLabel(inquiryProp);
         const inqDeal = inquiryProp.realEstate?.dealType
-          ? dealTypeLabel(inquiryProp.realEstate.dealType, uiLang === 'fa' ? 'fa' : 'en')
+          ? dealTypeLabel(inquiryProp.realEstate.dealType, reLang())
           : '';
         const inqImg = inquiryProp.images?.[0];
         return (
@@ -846,19 +906,19 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                       )}
                       {inqListed && <p className="ms-inq-price">{inqListed}</p>}
                       {inquiryProp.sku && <p className="ms-inq-sku" dir="ltr">{inquiryProp.sku}</p>}
-                      <p className="ms-inq-aside-hint">{T ? 'پس از ثبت، کارشناس املاک با شما تماس می‌گیرد.' : 'Our agent will contact you after you submit.'}</p>
+                      <p className="ms-inq-aside-hint">{S('inquiryAsideHint')}</p>
                     </div>
                   </aside>
                   <div className="ms-inq-main">
                     <header className="ms-inq-head">
                       <h2 id="ms-inq-title">{S('inquiryTitle')}</h2>
-                      <p>{T ? 'اطلاعات تماس خود را وارد کنید تا هماهنگی بازدید انجام شود.' : 'Enter your contact details to schedule a viewing.'}</p>
+                      <p>{S('inquiryFormHint')}</p>
                     </header>
                     <div className="ms-inq-form-wrap">
                       <div className="ms-inq-form">
                         <label className="ms-inq-field">
                           <span>{t.name} <em>*</em></span>
-                          <input value={inquiryForm.customerName} onChange={e => setInquiryForm(f => ({ ...f, customerName: e.target.value }))} placeholder={T ? 'نام کامل' : 'Your full name'} autoComplete="name" />
+                          <input value={inquiryForm.customerName} onChange={e => setInquiryForm(f => ({ ...f, customerName: e.target.value }))} placeholder={S('namePh')} autoComplete="name" />
                         </label>
                         <label className="ms-inq-field">
                           <span>{t.phone} <em>*</em></span>
@@ -870,11 +930,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                         </label>
                         <label className="ms-inq-field">
                           <span>{S('visitWhen')}</span>
-                          <input value={inquiryForm.visitWhen} onChange={e => setInquiryForm(f => ({ ...f, visitWhen: e.target.value }))} placeholder={T ? 'مثلاً شنبه ۱۰ صبح' : 'e.g. Saturday 10 AM'} />
+                          <input value={inquiryForm.visitWhen} onChange={e => setInquiryForm(f => ({ ...f, visitWhen: e.target.value }))} placeholder={S('visitWhenPh')} />
                         </label>
                         <label className="ms-inq-field ms-inq-field-full">
                           <span>{t.notes}</span>
-                          <textarea rows={3} value={inquiryForm.notes} onChange={e => setInquiryForm(f => ({ ...f, notes: e.target.value }))} placeholder={T ? 'سوال یا توضیح اضافه…' : 'Any extra questions…'} />
+                          <textarea rows={3} value={inquiryForm.notes} onChange={e => setInquiryForm(f => ({ ...f, notes: e.target.value }))} placeholder={S('notesPhExtra')} />
                         </label>
                       </div>
                     </div>

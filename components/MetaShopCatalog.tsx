@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
+import { REAL_ESTATE_DEFAULT_LANGS } from '../utils/metaShopRealEstate';
 
 interface Props {
   shop: MetaShop;
@@ -37,6 +38,15 @@ const STR: Record<string, Record<string, string>> = {
     downloadPdf: 'دانلود PDF', backToShop: 'بازگشت به فروشگاه', preparing: 'در حال آماده‌سازی کاتالوگ…',
     printHint: 'در پنجره چاپ، گزینه‌ی «ذخیره به‌صورت PDF» را انتخاب کنید.', pages: 'صفحه', item: 'ردیف', items_col: 'مورد',
   },
+  ar: {
+    productCatalog: 'كتالوج المنتجات', serviceCatalog: 'كتالوج الخدمات', propertyCatalog: 'كتالوج العقارات', items: 'منتج', services: 'خدمة', properties: 'عقار',
+    issued: 'تاريخ الإصدار', sku: 'رمز SKU', moq: 'الحد الأدنى', pack: 'عبوة', origin: 'المنشأ', requestQuote: 'اطلب عرض سعر', negotiable: 'قابل للتفاوض',
+    index: 'جدول المحتويات', page: 'صفحة', thankYou: 'شكراً لاهتمامكم',
+    thankYouSub: 'نتطلع للتعاون معكم. امسح الرمز أدناه لعرض الكتالوج وتقديم الطلب عبر الإنترنت.',
+    scanToOrder: 'امسح للعرض والطلب عبر الإنترنت', phone: 'الهاتف', email: 'البريد', website: 'الموقع', address: 'العنوان',
+    downloadPdf: 'تحميل PDF', backToShop: 'العودة للمتجر', preparing: 'جارٍ تجهيز الكتالوج…',
+    printHint: 'في نافذة الطباعة، اختر «حفظ كـ PDF».', pages: 'صفحات', item: 'م', items_col: 'بند',
+  },
 };
 
 export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
@@ -44,10 +54,17 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const isRealEstate = shop.type === 'realestate';
   const theme = shop.theme;
 
-  // ── Languages (defaults fa + en). Visitor can switch from the toolbar; init from ?lang= / shop default ──
-  const langsList: import('../types').MetaShopLang[] = (shop.languages && shop.languages.length)
-    ? shop.languages
-    : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
+  // ── Languages — real-estate catalogs always offer FA + AR + EN ──
+  const mergeShopLangs = (configured: import('../types').MetaShopLang[], ensure: import('../types').MetaShopLang[]) => {
+    const map = new Map<string, import('../types').MetaShopLang>();
+    [...configured, ...ensure].forEach(l => { if (l.code) map.set(l.code, { ...map.get(l.code), ...l }); });
+    return ensure.map(l => map.get(l.code) || l);
+  };
+  const langsList: import('../types').MetaShopLang[] = isRealEstate
+    ? mergeShopLangs(shop.languages || [], REAL_ESTATE_DEFAULT_LANGS)
+    : (shop.languages && shop.languages.length)
+      ? shop.languages
+      : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
   const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
   const isRtl = (code: string) => { const l = langsList.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
   const initialLang = (() => {
@@ -59,11 +76,20 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const T = uiLang === 'fa';
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
   const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
-  const s = (k: string): string => (STR[uiLang] && STR[uiLang][k]) || STR.en[k] || STR.fa[k] || k;
+  const s = (k: string): string => (STR[uiLang] && STR[uiLang][k]) || STR.en[k] || STR.fa[k] || STR.ar?.[k] || k;
 
-  // Content helpers (legacy fa/en + per-item i18n overrides) — mirror MetaShopView
-  const L = (faVal?: string, enVal?: string) => (uiLang === 'fa' ? faVal : (enVal || faVal)) || (faVal || enVal || '');
-  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
+  // Content helpers (legacy fa/en/ar + per-item i18n overrides) — mirror MetaShopView
+  const L = (faVal?: string, enVal?: string, arVal?: string) => {
+    if (uiLang === 'fa') return faVal || enVal || arVal || '';
+    if (uiLang === 'ar') return arVal || enVal || faVal || '';
+    return enVal || arVal || faVal || '';
+  };
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => {
+    if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
+    if (uiLang === 'ar' && i18n?.en?.[key]) return i18n.en[key];
+    if (uiLang !== 'fa' && i18n?.en?.[key]) return i18n.en[key];
+    return legacy || '';
+  };
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;

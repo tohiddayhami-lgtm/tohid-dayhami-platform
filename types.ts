@@ -1098,8 +1098,10 @@ export interface MetaShopProduct {
 export interface MetaShopRealEstateFaq {
   q: string;
   qEn?: string;
+  qAr?: string;
   a: string;
   aEn?: string;
+  aAr?: string;
 }
 
 export interface MetaShopRealEstate {
