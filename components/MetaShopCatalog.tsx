@@ -4,6 +4,7 @@ import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry } from '../utils/metaShopCategories';
+import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
 
 interface Props {
   shop: MetaShop;
@@ -11,8 +12,8 @@ interface Props {
   autoPrint?: boolean; // when reached via ?catalog=1 — opens the browser print dialog once images are ready
 }
 
-// Products per A4 page (2 columns × 2 rows). Large cards → product image shows well and the layout stays tidy.
-const PER_PAGE = 4;
+// Products per A4 page. Real-estate cards need room for full specs → 2 per page (1 row × 2 cols).
+const perPageFor = (re: boolean) => (re ? 2 : 4);
 
 const chunk = <T,>(arr: T[], n: number): T[][] => {
   const out: T[][] = [];
@@ -101,7 +102,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
       }));
   }, [products, shop.categories, uiLang, isServices, isRealEstate, shop]);
 
-  const showToc = grouped.length > 1 && products.length > PER_PAGE;
+  const perPage = perPageFor(isRealEstate);
+  const showToc = grouped.length > 1 && products.length > perPage;
   const coverPages = 1;
   const tocPages = showToc ? 1 : 0;
 
@@ -112,7 +114,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     let globalNo = 0;
     const firstProductPrintNo = coverPages + tocPages + 1; // 1-based printed page index of the first product page
     grouped.forEach(g => {
-      const parts = chunk(g.items, PER_PAGE);
+      const parts = chunk(g.items, perPage);
       tocEntries.push({ label: g.label, count: g.items.length, pageStart: firstProductPrintNo + pgs.length });
       parts.forEach((items, i) => {
         pgs.push({ cat: g.cat, label: g.label, items, part: i, parts: parts.length, startNo: globalNo });
@@ -120,7 +122,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
       });
     });
     return { pages: pgs, toc: tocEntries };
-  }, [grouped, tocPages]);
+  }, [grouped, tocPages, perPage]);
 
   const totalPages = coverPages + tocPages + pages.length + 1; // + back cover
 
@@ -217,7 +219,52 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     return bits;
   };
 
+  const realEstateCard = (p: MetaShopProduct, no: number) => {
+    const re = p.realEstate!;
+    const img = p.images && p.images[0];
+    const name = pName(p);
+    const desc = pDesc(p);
+    const summary = realEstateCardSummary(p, uiLang);
+    const rows = realEstateDetailRows(p, uiLang);
+    return (
+      <article className="msc-prod msc-prod-re" key={p.id}>
+        <div className="msc-prod-media">
+          {img ? <img src={img} alt={name} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
+          <span className="msc-prod-no">{no}</span>
+        </div>
+        <div className="msc-prod-info">
+          <h3 className="msc-prod-name">{name}</h3>
+          <div className="msc-prod-tags">
+            {p.sku && <span className="msc-tag">{s('sku')}: {p.sku}</span>}
+            <span className="msc-tag">{dealTypeLabel(re.dealType, uiLang)}</span>
+            <span className="msc-tag soft">{propertyTypeLabel(re.propertyType, uiLang)}</span>
+          </div>
+          {summary.length > 0 && (
+            <div className="msc-re-chips">
+              {summary.map((line, i) => <span key={i} className="msc-re-chip">{line}</span>)}
+            </div>
+          )}
+          {desc && <p className="msc-prod-desc msc-re-desc">{desc}</p>}
+          {rows.length > 0 && (
+            <dl className="msc-re-specs">
+              {rows.map((r, i) => (
+                <div key={i} className="msc-re-spec-row">
+                  <dt>{r.label}</dt>
+                  <dd>{r.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <div className="msc-prod-bottom">
+            <div className="msc-prod-price">{priceJsx(p)}</div>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   const productCard = (p: MetaShopProduct, no: number) => {
+    if (isRealEstate && p.realEstate) return realEstateCard(p, no);
     const img = p.images && p.images[0];
     const name = pName(p);
     const desc = pDesc(p);
@@ -365,7 +412,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
                 </div>
                 <div className="msc-run-cat">{pg.label}{pg.parts > 1 ? ` (${pg.part + 1}/${pg.parts})` : ''}</div>
               </header>
-              <div className="msc-grid">
+              <div className={`msc-grid${isRealEstate ? ' msc-grid-re' : ''}`}>
                 {pg.items.map((p, i) => productCard(p, pg.startNo + i + 1))}
               </div>
               <footer className="msc-run-foot">
@@ -535,6 +582,22 @@ const MSC_CSS = `
 .msc-price-opt{ font-size:8.6pt; font-weight:700; color:var(--c-heading); background:color-mix(in srgb, var(--c-primary) 8%, #fff);
   border:1px solid color-mix(in srgb, var(--c-primary) 20%, #fff); border-radius:4px; padding:1px 7px; text-align:end; max-width:100%; overflow-wrap:anywhere; }
 .msc-price-opt b{ color:var(--c-primary); }
+
+/* ── Real-estate cards: taller single-row grid, full spec block fills the card ── */
+.msc-grid-re{ grid-template-rows:1fr; }
+.msc-prod-re .msc-prod-media{ height:40mm; }
+.msc-prod-re .msc-prod-desc.msc-re-desc{ -webkit-line-clamp:3; flex:none; }
+.msc-re-chips{ flex:none; display:flex; flex-wrap:wrap; gap:1.5mm; margin-bottom:2.5mm; }
+.msc-re-chip{ font-size:8pt; font-weight:800; color:var(--c-heading); background:#f1f5f9;
+  border:1px solid #e2e8f0; border-radius:4px; padding:1.5px 7px; white-space:nowrap; }
+.msc-re-specs{ flex:1 1 auto; min-height:0; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr;
+  gap:1.2mm 4mm; align-content:start; overflow:hidden; }
+.msc-re-spec-row{ min-width:0; }
+.msc-re-spec-row dt{ font-size:7.4pt; font-weight:800; color:var(--c-primary); margin:0 0 0.5px;
+  letter-spacing:.2px; line-height:1.25; }
+.msc-re-spec-row dd{ font-size:8.2pt; font-weight:600; color:var(--c-heading); margin:0; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+.msc-prod-re .msc-prod-bottom{ width:100%; justify-content:flex-end; }
 
 /* ── Back cover ── */
 .msc-back{ background:linear-gradient(160deg, var(--c-cover), var(--c-primary)); color:var(--c-coverText);
