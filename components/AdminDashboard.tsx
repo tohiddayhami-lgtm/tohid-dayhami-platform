@@ -75,7 +75,7 @@ interface Props {
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
-  onMessageRead?: (messageId: string, userId: string) => void;
+  onMessagePatch?: (messageId: string, patch: Partial<InternalMessage>) => void;
 }
 
 export const AdminDashboard: React.FC<Props> = ({
@@ -121,7 +121,7 @@ export const AdminDashboard: React.FC<Props> = ({
   metaBazaars = [],
   onSaveMetaBazaar,
   onDeleteMetaBazaar,
-  onMessageRead,
+  onMessagePatch,
 }) => {
   const safeRoles = currentUser?.roles || [];
   const isAdmin = safeRoles.includes('مدیر');
@@ -2243,7 +2243,7 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'messages' && <InternalMessenger
             currentUser={currentUser} personnel={personnel} messages={messages} lang={lang} departments={config.departments || []}
-            onMessageRead={onMessageRead}
+            onMessagePatch={onMessagePatch}
             onAfterSend={async (recipientIds, senderName, subject) => {
               const nc = config.notificationConfig;
               if (!nc?.enabled || !nc.onNewMessage) return;

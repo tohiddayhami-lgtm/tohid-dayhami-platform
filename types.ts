@@ -372,6 +372,7 @@ export interface InternalMessage {
   replies?: ContactReply[];         // staff replies, visible to the customer by name+mobile
   referrals?: MessageReferral[];    // history of referrals/forwards to other personnel/departments
   archivedBy?: string[];            // personnel ids who archived this message (per-user archive, keeps inbox/sent tidy)
+  hiddenBy?: string[];              // personnel ids who removed this from their inbox/sent (per-user soft delete)
 }
 
 /** Sticky-note color for team brainstorm board. */

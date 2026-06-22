@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { InternalMessage, Personnel, AttachedFile, ContactReply, MessageReferral, Department } from '../types';
 import { IconMail, IconSend, IconInbox, IconPaperclip, IconTrash, IconFile, IconReply, IconPlus, IconSearch, IconArrowRight, IconFolder } from './Icons';
-import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress, markMessageAsRead } from '../services/firebaseService';
+import { sendInternalMessage, updateMessageInCloud, deleteMessageFromCloud, uploadFileWithProgress, markMessageAsRead, setMessageArchivedForUser, hideMessageForUser } from '../services/firebaseService';
 import { getStaffCode, formatPersonnelLabel, formatPersonnelIds } from '../services/staffId';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
@@ -14,10 +14,10 @@ interface Props {
   lang: Language;
   departments?: Department[];
   onAfterSend?: (recipientIds: string[], senderName: string, subject: string) => void;
-  onMessageRead?: (messageId: string, userId: string) => void;
+  onMessagePatch?: (messageId: string, patch: Partial<InternalMessage>) => void;
 }
 
-export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend, onMessageRead }) => {
+export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, messages, lang, departments = [], onAfterSend, onMessagePatch }) => {
   const [activeTab, setActiveTab] = useState<'inbox' | 'sent' | 'contacts' | 'archive'>('inbox');
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -53,7 +53,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   const t = {
     fa: {
       inbox: 'صندوق ورودی', sent: 'ارسال‌شده', allContacts: 'همه مکاتبات', archiveTab: 'آرشیو',
-      archive: 'آرشیو', unarchive: 'خروج از آرشیو',
+      archive: 'آرشیو', unarchive: 'خروج از آرشیو', remove: 'حذف از صندوق',
+      removeConfirm: 'این پیام از صندوق شما حذف شود؟ (برای بقیه همچنان موجود است)',
+      actionFailed: 'عملیات انجام نشد. دوباره تلاش کنید.',
       compose: 'پیام جدید', search: 'جستجو...',
       subject: 'موضوع', body: 'متن پیام',
       recipients: 'گیرندگان', send: 'ارسال',
@@ -91,7 +93,9 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     },
     en: {
       inbox: 'Inbox', sent: 'Sent', allContacts: 'All correspondence', archiveTab: 'Archive',
-      archive: 'Archive', unarchive: 'Unarchive',
+      archive: 'Archive', unarchive: 'Unarchive', remove: 'Remove',
+      removeConfirm: 'Remove this message from your inbox? (Others can still see it)',
+      actionFailed: 'Action failed. Please try again.',
       compose: 'New Message', search: 'Search...',
       subject: 'Subject', body: 'Message',
       recipients: 'To', send: 'Send',
@@ -130,6 +134,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   }[lang];
 
   const isArchived = (m: InternalMessage) => (m.archivedBy || []).includes(currentUser.id);
+  const isHidden = (m: InternalMessage) => (m.hiddenBy || []).includes(currentUser.id);
   const messageReadBy = (m: InternalMessage) => m.readBy || [];
   const isUnreadForUser = (m: InternalMessage) =>
     (m.recipientIds || []).includes(currentUser.id) && !messageReadBy(m).includes(currentUser.id);
@@ -138,20 +143,18 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
     if (activeTab !== 'inbox') return;
     if (!(msg.recipientIds || []).includes(currentUser.id)) return;
     if (messageReadBy(msg).includes(currentUser.id)) return;
-    onMessageRead?.(msg.id, currentUser.id);
+    onMessagePatch?.(msg.id, { readBy: [...messageReadBy(msg), currentUser.id] });
     markMessageAsRead(msg.id, currentUser.id).catch(() => {});
-  }, [activeTab, currentUser.id, onMessageRead]);
+  }, [activeTab, currentUser.id, onMessagePatch]);
 
   const filteredMessages = useMemo(() => {
     let list = activeTab === 'archive'
-      // Everything the current user archived (whether received, sent, or a correspondence)
-      ? messages.filter(m => (m.archivedBy || []).includes(currentUser.id))
+      ? messages.filter(m => (m.archivedBy || []).includes(currentUser.id) && !isHidden(m))
       : activeTab === 'inbox'
-      ? messages.filter(m => m.recipientIds.includes(currentUser.id) && !(m.archivedBy || []).includes(currentUser.id))
+      ? messages.filter(m => (m.recipientIds || []).includes(currentUser.id) && !(m.archivedBy || []).includes(currentUser.id) && !isHidden(m))
       : activeTab === 'sent'
-      ? messages.filter(m => m.senderId === currentUser.id && !(m.archivedBy || []).includes(currentUser.id))
-      // Master-only: every customer correspondence in the system (even if not a recipient), excluding archived
-      : messages.filter(m => m.isCustomerContact && !(m.archivedBy || []).includes(currentUser.id));
+      ? messages.filter(m => m.senderId === currentUser.id && !(m.archivedBy || []).includes(currentUser.id) && !isHidden(m))
+      : messages.filter(m => m.isCustomerContact && !(m.archivedBy || []).includes(currentUser.id) && !isHidden(m));
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       list = list.filter(m =>
@@ -212,13 +215,44 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
   }, [selectedMessage, markReadIfNeeded]);
 
   // Archive / unarchive a message for the current user only (keeps inbox/sent tidy)
-  const handleToggleArchive = (msg: InternalMessage) => {
-    const archived = (msg.archivedBy || []).includes(currentUser.id);
+  const handleToggleArchive = async (msg: InternalMessage) => {
+    const archived = isArchived(msg);
+    const prevArchivedBy = msg.archivedBy || [];
     const next = archived
-      ? (msg.archivedBy || []).filter(id => id !== currentUser.id)
-      : [...(msg.archivedBy || []), currentUser.id];
-    updateMessageInCloud(msg.id, { archivedBy: next });
+      ? prevArchivedBy.filter(id => id !== currentUser.id)
+      : [...prevArchivedBy, currentUser.id];
+    onMessagePatch?.(msg.id, { archivedBy: next });
+    if (!archived) setSelectedMsgId(null);
+    try {
+      await setMessageArchivedForUser(msg.id, currentUser.id, !archived);
+    } catch {
+      onMessagePatch?.(msg.id, { archivedBy: prevArchivedBy });
+      alert(t.actionFailed);
+    }
+  };
+
+  const handleRemoveFromInbox = async (msg: InternalMessage) => {
+    if (!window.confirm(t.removeConfirm)) return;
+    const prevHiddenBy = msg.hiddenBy || [];
+    const next = [...prevHiddenBy, currentUser.id];
+    onMessagePatch?.(msg.id, { hiddenBy: next });
     setSelectedMsgId(null);
+    try {
+      await hideMessageForUser(msg.id, currentUser.id);
+    } catch {
+      onMessagePatch?.(msg.id, { hiddenBy: prevHiddenBy });
+      alert(t.actionFailed);
+    }
+  };
+
+  const handlePermanentDelete = async (msg: InternalMessage) => {
+    if (!window.confirm(lang === 'fa' ? 'پیام برای همه حذف شود؟' : 'Delete for everyone?')) return;
+    setSelectedMsgId(null);
+    try {
+      await deleteMessageFromCloud(msg.id);
+    } catch {
+      alert(t.actionFailed);
+    }
   };
 
   const participantLine = (id: string, fallbackName: string) => {
@@ -409,7 +443,7 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                   <div
                     key={msg.id}
                     onClick={() => handleSelectMessage(msg)}
-                    className={`flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-white'}`}
+                    className={`group flex items-start gap-3 px-4 py-3 cursor-pointer border-b border-gray-100 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-white'}`}
                   >
                     {/* Avatar */}
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 mt-0.5 ${isUnread ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
@@ -443,6 +477,29 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                     </div>
 
                     {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />}
+
+                    <div className="flex flex-col gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      {activeTab !== 'archive' && (
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleArchive(msg)}
+                          className="p-1 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50"
+                          title={t.archive}
+                        >
+                          <IconFolder className="w-3 h-3" />
+                        </button>
+                      )}
+                      {activeTab !== 'contacts' && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFromInbox(msg)}
+                          className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          title={t.remove}
+                        >
+                          <IconTrash className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -488,19 +545,28 @@ export const InternalMessenger: React.FC<Props> = ({ currentUser, personnel, mes
                     {t.refer}
                   </button>
                   <button
-                    onClick={() => handleToggleArchive(selectedMessage)}
+                    onClick={() => void handleToggleArchive(selectedMessage)}
                     className="flex items-center gap-1 px-2.5 h-7 rounded-lg border border-gray-200 text-gray-600 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors text-xs font-medium"
                     title={isArchived(selectedMessage) ? t.unarchive : t.archive}
                   >
                     <IconFolder className="w-3.5 h-3.5" />
                     {isArchived(selectedMessage) ? t.unarchive : t.archive}
                   </button>
+                  <button
+                    onClick={() => void handleRemoveFromInbox(selectedMessage)}
+                    className="flex items-center gap-1 px-2.5 h-7 rounded-lg border border-gray-200 text-gray-600 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors text-xs font-medium"
+                    title={t.remove}
+                  >
+                    <IconTrash className="w-3.5 h-3.5" />
+                    {t.remove}
+                  </button>
                   {isMaster && (
                     <button
-                      onClick={() => { if (confirm('پیام حذف شود؟')) { deleteMessageFromCloud(selectedMessage.id); setSelectedMsgId(null); } }}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      onClick={() => void handlePermanentDelete(selectedMessage)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors text-[10px] font-bold"
+                      title={lang === 'fa' ? 'حذف کامل' : 'Delete permanently'}
                     >
-                      <IconTrash className="w-3.5 h-3.5" />
+                      ✕
                     </button>
                   )}
                 </div>

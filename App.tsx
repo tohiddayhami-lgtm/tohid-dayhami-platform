@@ -534,7 +534,23 @@ const App: React.FC = () => {
     const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
     const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
     const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
-    const unsubMessages = subscribeToMessages((data) => setMessages(data));
+    const unsubMessages = subscribeToMessages((data) => {
+      setMessages(prev => {
+        if (prev.length === 0) return data;
+        const prevById = new Map(prev.map(m => [m.id, m]));
+        return data.map(serverMsg => {
+          const local = prevById.get(serverMsg.id);
+          if (!local) return serverMsg;
+          const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
+          return {
+            ...serverMsg,
+            readBy: union(serverMsg.readBy, local.readBy),
+            archivedBy: union(serverMsg.archivedBy, local.archivedBy),
+            hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
+          };
+        });
+      });
+    });
     const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
     const unsubMeetings = subscribeToMeetings((data) => setMeetings(data));
@@ -1087,12 +1103,10 @@ const App: React.FC = () => {
   const handleUpdateServices = async (newServices: ServiceOption[]) => { await saveServicesToCloud(newServices); };
   const handleUpdatePersonnel = async (newPersonnel: Personnel[]) => { await savePersonnelToCloud(newPersonnel); };
   const handleUpdateConfig = async (newConfig: AppConfig) => { await saveAppConfigToCloud(newConfig); };
-  const handleMessageRead = useCallback((messageId: string, userId: string) => {
+  const handleMessagePatch = useCallback((messageId: string, patch: Partial<InternalMessage>) => {
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
-      const readBy = m.readBy || [];
-      if (readBy.includes(userId)) return m;
-      return { ...m, readBy: [...readBy, userId] };
+      return { ...m, ...patch };
     }));
   }, []);
 
@@ -1958,7 +1972,7 @@ const App: React.FC = () => {
                     metaBazaars={metaBazaars}
                     onSaveMetaBazaar={async (b) => { await saveMetaBazaarToCloud(b); }}
                     onDeleteMetaBazaar={async (id) => { await deleteMetaBazaarFromCloud(id); }}
-                    onMessageRead={handleMessageRead}
+                    onMessagePatch={handleMessagePatch}
                   />
                 )}
               </>

@@ -1,7 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
-import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc, arrayUnion } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -803,25 +803,64 @@ export const sendInternalMessage = async (message: InternalMessage) => {
 function normalizeInternalMessage(m: InternalMessage): InternalMessage {
   return {
     ...m,
+    id: m.id || '',
     recipientIds: Array.isArray(m.recipientIds) ? m.recipientIds : [],
     recipientNames: Array.isArray(m.recipientNames) ? m.recipientNames : [],
     readBy: Array.isArray(m.readBy) ? m.readBy : [],
     archivedBy: Array.isArray(m.archivedBy) ? m.archivedBy : [],
+    hiddenBy: Array.isArray(m.hiddenBy) ? m.hiddenBy : [],
   };
+}
+
+async function patchMessageInCloud(
+  id: string,
+  patch: (msg: InternalMessage) => Partial<InternalMessage>,
+): Promise<InternalMessage> {
+  const proxy = await checkProxyMode();
+  let existing: InternalMessage | null = null;
+  if (proxy) {
+    existing = await proxyGet<InternalMessage>('messages', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'messages', id));
+    if (snap.exists()) {
+      const data = snap.data() as InternalMessage;
+      existing = normalizeInternalMessage({ ...data, id: data.id || snap.id });
+    }
+  }
+  if (!existing) throw new Error(`Message ${id} not found`);
+  const updates = patch(existing);
+  const merged = normalizeInternalMessage({ ...existing, ...updates, id: existing.id || id });
+  await setDocCloud('messages', id, merged);
+  return merged;
 }
 
 export const markMessageAsRead = async (id: string, userId: string): Promise<void> => {
   if (!id || !userId) return;
-  const proxy = await checkProxyMode();
-  if (proxy) {
-    const existing = await proxyGet<InternalMessage>('messages', { doc: id });
-    if (!existing) return;
-    const readBy = Array.isArray(existing.readBy) ? existing.readBy : [];
-    if (readBy.includes(userId)) return;
-    await proxyWrite('messages', id, sanitizeData({ ...existing, readBy: [...readBy, userId] }));
-  } else {
-    await updateDoc(doc(db, 'messages', id), { readBy: arrayUnion(userId) });
-  }
+  await patchMessageInCloud(id, (msg) => {
+    const readBy = msg.readBy || [];
+    if (readBy.includes(userId)) return {};
+    return { readBy: [...readBy, userId] };
+  });
+};
+
+export const setMessageArchivedForUser = async (id: string, userId: string, archived: boolean): Promise<void> => {
+  if (!id || !userId) return;
+  await patchMessageInCloud(id, (msg) => {
+    const archivedBy = msg.archivedBy || [];
+    const next = archived
+      ? (archivedBy.includes(userId) ? archivedBy : [...archivedBy, userId])
+      : archivedBy.filter(x => x !== userId);
+    return { archivedBy: next };
+  });
+};
+
+export const hideMessageForUser = async (id: string, userId: string): Promise<void> => {
+  if (!id || !userId) return;
+  await patchMessageInCloud(id, (msg) => {
+    const hiddenBy = msg.hiddenBy || [];
+    if (hiddenBy.includes(userId)) return {};
+    return { hiddenBy: [...hiddenBy, userId] };
+  });
 };
 
 export const updateMessageInCloud = async (id: string, updates: Partial<InternalMessage>) => {
@@ -844,10 +883,11 @@ export const deleteMessageFromCloud = async (id: string) => {
 
 export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void) =>
   subscribeCollection<InternalMessage>('messages', list => {
-    callback(list.map(normalizeInternalMessage));
+    callback(list.map(m => normalizeInternalMessage(m)));
   }, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     intervalMs: 6_000,
+    mergeDocId: true,
   });
 
 // ── Team brainstorm (sticky-note ideas board) ──
