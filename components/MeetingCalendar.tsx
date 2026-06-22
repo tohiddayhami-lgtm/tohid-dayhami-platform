@@ -10,6 +10,8 @@ import { ALL_CURRENCIES, CUR_LABEL, normalizePrices } from '../utils/servicePric
 import { InvoiceAmountInput } from './InvoiceAmountInput';
 import { formatInvoiceAmount } from '../utils/invoiceMoney';
 import { MEETING_STATUS_STYLE, getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting } from '../utils/meetingBookingUtils';
+import { WeekPieCalendar } from './WeekPieCalendar';
+import { getWeekStart as weekStartFn, getWeekDays as weekDaysFn, toDateStr as dateStr, getDayName as dayLabel, getWeekRangeLabel, timeToMinutes as mins, normalizeTime as normTime } from '../utils/weekCalendar';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -20,39 +22,11 @@ const MEETING_COLORS = [
   'bg-indigo-500', 'bg-orange-500',
 ];
 
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const diff = (d.getDay() - 6 + 7) % 7; // Saturday start
-  d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getWeekDays(ws: Date): Date[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(ws);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-}
-
-function toDateStr(d: Date): string {
-  // Use local date parts — toISOString() shifts to UTC and causes off-by-one in UTC+3:30
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function normalizeTime(t?: string | null, fallback = '09:00'): string {
-  if (typeof t === 'string' && /^\d{1,2}:\d{2}$/.test(t)) return t;
-  return fallback;
-}
-
-function timeToMinutes(t?: string | null): number {
-  const [h, m] = normalizeTime(t).split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
+const getWeekStart = weekStartFn;
+const getWeekDays = weekDaysFn;
+const toDateStr = dateStr;
+const normalizeTime = normTime;
+const timeToMinutes = mins;
 
 function addMinutes(t: string, mins: number): string {
   const total = Math.min(timeToMinutes(t) + mins, 23 * 60 + 59);
@@ -100,6 +74,7 @@ interface Props {
 
 export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang, notificationConfig, shopBaseUrl }) => {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => toDateStr(new Date()));
   const [showModal, setShowModal] = useState(false);
   const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -126,33 +101,21 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     if (gridRef.current) gridRef.current.scrollTop = 7 * HOUR_HEIGHT;
   }, []);
 
+  useEffect(() => {
+    const inWeek = getWeekDays(weekStart).some(d => toDateStr(d) === selectedDay);
+    if (!inWeek) setSelectedDay(toDateStr(getWeekDays(weekStart)[0]));
+  }, [weekStart, selectedDay]);
+
   const fa = lang === 'fa';
   const todayStr = toDateStr(new Date());
   const weekDays = getWeekDays(weekStart);
 
-  const DAY_FA  = ['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنج‌شنبه','جمعه'];
-  const DAY_FA_SHORT = ['ش','ی','د','س','چ','پ','ج'];
-  const DAY_EN  = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
-  const MON_FA  = ['ژانویه','فوریه','مارس','آوریل','مه','ژوئن','ژوئیه','اوت','سپتامبر','اکتبر','نوامبر','دسامبر'];
-  const MON_EN  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  const getDayName = (d: Date, short = false) => {
-    const idx = d.getDay() === 6 ? 0 : d.getDay() + 1;
-    return fa ? (short ? DAY_FA_SHORT[idx] : DAY_FA[idx]) : DAY_EN[idx];
-  };
-
-  const getWeekRange = () => {
-    const s = weekDays[0], e = weekDays[6];
-    const ms = fa ? MON_FA[s.getMonth()] : MON_EN[s.getMonth()];
-    const me = fa ? MON_FA[e.getMonth()] : MON_EN[e.getMonth()];
-    return s.getMonth() === e.getMonth()
-      ? `${ms} ${s.getDate()}–${e.getDate()}`
-      : `${ms} ${s.getDate()} – ${me} ${e.getDate()}`;
-  };
+  const getDayName = (d: Date, short = false) => dayLabel(d, fa, short);
+  const getWeekRange = () => getWeekRangeLabel(weekDays, fa);
 
   const prevWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); };
   const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); };
-  const goToday  = () => setWeekStart(getWeekStart(new Date()));
+  const goToday  = () => { setWeekStart(getWeekStart(new Date())); setSelectedDay(toDateStr(new Date())); };
 
   const emptyPriceInputs = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: 0 }));
 
@@ -455,148 +418,111 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
         <span className="text-gray-400">{fa ? 'جلسات پرسنل در لینک عمومی نمایش داده نمی‌شوند' : 'Internal staff meetings are hidden from public link'}</span>
       </div>
 
-      {/* ── Day header ── */}
-      <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0" dir="ltr">
-        <div className="w-10 flex-shrink-0 border-r border-gray-200" />
-        {weekDays.map(day => {
+      {/* ── Week pie overview ── */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <WeekPieCalendar
+          weekDays={weekDays}
+          meetings={meetings.map(normalizeMeeting).filter(m => m.title || m.sessionType)}
+          fa={fa}
+          selectedDate={selectedDay}
+          onSelectDate={setSelectedDay}
+          onMeetingClick={handleOpenEdit}
+          size={300}
+          className="mb-4"
+        />
+
+        {/* ── Selected day timeline ── */}
+        {(() => {
+          const day = weekDays.find(d => toDateStr(d) === selectedDay) || weekDays[0];
           const ds = toDateStr(day);
           const isToday = ds === todayStr;
-          const count = meetings.filter(m => m.date === ds).length;
+          const dayMeetings = meetings
+            .map(normalizeMeeting)
+            .filter(m => m.date === ds && (m.title || m.sessionType));
+
           return (
-            <div key={ds} className="flex-1 text-center py-1.5 border-l border-gray-200 first:border-l-0">
-              <div className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
-                {getDayName(day, true)}
+            <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+              <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+                <span className="text-xs font-bold text-gray-700">
+                  {getDayName(day)} {day.getDate()} — {fa ? 'برنامه ساعتی' : 'Hourly schedule'}
+                </span>
+                <button type="button" onClick={() => handleOpenCreate(ds)}
+                  className="text-[10px] font-bold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-50">
+                  + {fa ? 'جلسه در این روز' : 'Add on this day'}
+                </button>
               </div>
-              <div className={`text-base font-black w-8 h-8 flex items-center justify-center mx-auto rounded-full mt-0.5 cursor-pointer transition-colors ${isToday ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}
-                onClick={() => handleOpenCreate(ds)}>
-                {day.getDate()}
-              </div>
-              {count > 0 && (
-                <div className="flex justify-center mt-0.5">
-                  <span className={`text-[9px] font-bold px-1 rounded-full ${isToday ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'}`}>{count}</span>
+              <div ref={gridRef} className="overflow-y-auto" style={{ maxHeight: '320px' }} dir="ltr">
+                <div className="flex relative" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
+                  <div className="w-10 flex-shrink-0 border-r border-gray-200 relative select-none bg-white">
+                    {HOURS.map(h => (
+                      <div key={h} className="absolute flex items-start justify-end pr-1 w-full"
+                        style={{ top: `${h * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}>
+                        {h > 0 && (
+                          <span className="text-[9px] text-gray-400 font-mono leading-none -mt-2">
+                            {h.toString().padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    className={`flex-1 relative cursor-pointer ${isToday ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'} transition-colors`}
+                    onClick={e => handleSlotClick(e, ds)}
+                  >
+                    {HOURS.map(h => (
+                      <div key={h} className="absolute left-0 right-0 border-t border-gray-100" style={{ top: `${h * HOUR_HEIGHT}px` }} />
+                    ))}
+                    {HOURS.map(h => (
+                      <div key={`hf${h}`} className="absolute left-0 right-0 border-t border-dashed border-gray-100/60" style={{ top: `${h * HOUR_HEIGHT + HOUR_HEIGHT / 2}px` }} />
+                    ))}
+                    {isToday && (
+                      <div className="absolute left-0 right-0 z-20 pointer-events-none flex items-center" style={{ top: `${nowTop}px` }}>
+                        <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 -ml-1 shadow-sm" />
+                        <div className="h-px bg-red-400 flex-1" />
+                      </div>
+                    )}
+                    {dayMeetings.map(meeting => {
+                      const startMin = timeToMinutes(meeting.startTime);
+                      const endMin = timeToMinutes(meeting.endTime);
+                      const top = (startMin / 60) * HOUR_HEIGHT;
+                      const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 18);
+                      const colorClass = getMeetingColor(meeting);
+                      const canEdit = meeting.organizerId === currentUser.id || (currentUser.roles || []).includes('مدیر');
+
+                      return (
+                        <div key={meeting.id}
+                          className={`absolute rounded overflow-hidden shadow-sm z-10 group/m transition-all hover:shadow-md hover:z-30 ${colorClass}`}
+                          style={{ top: `${top + 1}px`, height: `${height - 2}px`, left: '4px', right: '4px' }}
+                          onClick={e => { e.stopPropagation(); handleOpenEdit(meeting); }}>
+                          <div className="px-1.5 py-0.5 h-full flex flex-col overflow-hidden">
+                            <div className="text-white font-semibold leading-tight truncate" style={{ fontSize: '11px' }}>
+                              {isBookableMeeting(meeting)
+                                ? getMeetingSessionLabel(meeting, fa ? 'fa' : 'en')
+                                : meeting.title}
+                            </div>
+                            {height > 28 && (
+                              <div className="text-white/80 truncate" style={{ fontSize: '10px' }}>
+                                {meeting.startTime}–{meeting.endTime}
+                              </div>
+                            )}
+                          </div>
+                          <div className="absolute top-0 right-0 hidden group-hover/m:flex gap-px bg-black/40 rounded-bl p-0.5"
+                            onClick={e => e.stopPropagation()}>
+                            <button onClick={() => handleCopy(meeting)} className="text-white p-0.5"><IconCopy className="w-2.5 h-2.5" /></button>
+                            {canEdit && <>
+                              <button onClick={() => handleOpenEdit(meeting)} className="text-white p-0.5"><IconEdit className="w-2.5 h-2.5" /></button>
+                              <button onClick={() => handleDelete(meeting.id)} className="text-white p-0.5"><IconTrash className="w-2.5 h-2.5" /></button>
+                            </>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           );
-        })}
-      </div>
-
-      {/* ── Scrollable grid ── */}
-      <div ref={gridRef} className="flex-1 overflow-y-auto" dir="ltr">
-        <div className="flex" style={{ height: `${24 * HOUR_HEIGHT}px` }}>
-
-          {/* Time labels */}
-          <div className="w-10 flex-shrink-0 border-r border-gray-200 relative select-none bg-white">
-            {HOURS.map(h => (
-              <div key={h} className="absolute flex items-start justify-end pr-1 w-full"
-                style={{ top: `${h * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}>
-                {h > 0 && (
-                  <span className="text-[9px] text-gray-400 font-mono leading-none -mt-2">
-                    {h.toString().padStart(2, '0')}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          {weekDays.map(day => {
-            const ds = toDateStr(day);
-            const isToday = ds === todayStr;
-            const dayMeetings = meetings
-              .map(normalizeMeeting)
-              .filter(m => m.date === ds && m.title);
-
-            return (
-              <div key={ds}
-                className={`flex-1 relative border-l border-gray-200 first:border-l-0 cursor-pointer ${isToday ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'} transition-colors`}
-                onClick={e => handleSlotClick(e, ds)}>
-
-                {/* Hour lines */}
-                {HOURS.map(h => (
-                  <div key={h} className="absolute left-0 right-0 border-t border-gray-100" style={{ top: `${h * HOUR_HEIGHT}px` }} />
-                ))}
-                {/* Half-hour lines */}
-                {HOURS.map(h => (
-                  <div key={`hf${h}`} className="absolute left-0 right-0 border-t border-dashed border-gray-100/60" style={{ top: `${h * HOUR_HEIGHT + HOUR_HEIGHT / 2}px` }} />
-                ))}
-
-                {/* Now line */}
-                {isToday && (
-                  <div className="absolute left-0 right-0 z-20 pointer-events-none flex items-center" style={{ top: `${nowTop}px` }}>
-                    <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 -ml-1 shadow-sm" />
-                    <div className="h-px bg-red-400 flex-1" />
-                  </div>
-                )}
-
-                {/* Meetings */}
-                {dayMeetings.map(meeting => {
-                  const startMin = timeToMinutes(meeting.startTime);
-                  const endMin   = timeToMinutes(meeting.endTime);
-                  const top    = (startMin / 60) * HOUR_HEIGHT;
-                  const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 18);
-                  const colorClass = getMeetingColor(meeting);
-                  const canEdit = meeting.organizerId === currentUser.id || (currentUser.roles || []).includes('مدیر');
-
-                  return (
-                    <div key={meeting.id}
-                      className={`absolute rounded overflow-hidden shadow-sm z-10 group/m transition-all hover:shadow-md hover:z-30 ${colorClass}`}
-                      style={{ top: `${top + 1}px`, height: `${height - 2}px`, left: '1px', right: '1px' }}
-                      onClick={e => { e.stopPropagation(); handleOpenEdit(meeting); }}>
-
-                      <div className="px-1 py-0.5 h-full flex flex-col overflow-hidden">
-                        {/* Title always visible */}
-                        <div className="text-white font-semibold leading-tight truncate" style={{ fontSize: '10px' }}>
-                          {isBookableMeeting(meeting)
-                            ? getMeetingSessionLabel(meeting, fa ? 'fa' : 'en')
-                            : meeting.title}
-                        </div>
-                        {isBookableMeeting(meeting) && height > 22 && (
-                          <div className="text-white/80 leading-none truncate" style={{ fontSize: '8px' }}>
-                            {fa ? MEETING_STATUS_STYLE[getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed'].labelFa
-                              : MEETING_STATUS_STYLE[getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed'].labelEn}
-                            {(meeting.guests?.length || 0) > 0 ? ` (${meeting.guests!.length})` : ''}
-                          </div>
-                        )}
-                        {/* Time — only if tall enough */}
-                        {height > 28 && (
-                          <div className="text-white/80 leading-none truncate" style={{ fontSize: '9px' }}>
-                            {meeting.startTime}–{meeting.endTime}
-                          </div>
-                        )}
-                        {/* Location — only if taller */}
-                        {height > 44 && meeting.location && (
-                          <div className="text-white/70 truncate" style={{ fontSize: '9px' }}>
-                            📍 {meeting.location}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Hover actions */}
-                      <div className="absolute top-0 right-0 hidden group-hover/m:flex gap-px bg-black/40 rounded-bl p-0.5"
-                        onClick={e => e.stopPropagation()}>
-                        <button onClick={() => handleCopy(meeting)} title={fa ? 'کپی' : 'Copy'}
-                          className="text-white hover:text-yellow-300 transition-colors p-0.5">
-                          <IconCopy className="w-2.5 h-2.5" />
-                        </button>
-                        {canEdit && <>
-                          <button onClick={() => handleOpenEdit(meeting)} title={fa ? 'ویرایش' : 'Edit'}
-                            className="text-white hover:text-blue-200 transition-colors p-0.5">
-                            <IconEdit className="w-2.5 h-2.5" />
-                          </button>
-                          <button onClick={() => handleDelete(meeting.id)} title={fa ? 'حذف' : 'Delete'}
-                            className="text-white hover:text-red-200 transition-colors p-0.5">
-                            <IconTrash className="w-2.5 h-2.5" />
-                          </button>
-                        </>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
+        })()}
       </div>
 
       {/* ── Modal ── */}
