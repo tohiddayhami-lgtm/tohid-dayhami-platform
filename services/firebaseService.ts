@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
@@ -1104,6 +1104,20 @@ export const lookupMetaShopOrdersByTracking = async (trackingCode: string): Prom
         return snap.docs.map(d => d.data() as MetaShopOrder).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch { return []; }
 };
+
+// ── Meta Shop property referrals (public submissions) ──
+export const saveMetaShopPropertyReferralToCloud = async (ref: MetaShopPropertyReferral) => {
+    await setDocCloud('metaShopPropertyReferrals', ref.id, ref);
+    logSystemAction('CREATE', 'MetaShop', `معرفی ملک جدید از ${ref.referrerName} (${ref.shopName})`, ref.referrerName, ref.id);
+};
+export const updateMetaShopPropertyReferralInCloud = async (id: string, updates: Partial<MetaShopPropertyReferral>) => {
+    await updateDocCloud('metaShopPropertyReferrals', id, updates as Record<string, unknown>);
+};
+export const subscribeToMetaShopPropertyReferrals = (callback: (refs: MetaShopPropertyReferral[]) => void) =>
+  subscribeCollection<MetaShopPropertyReferral>('metaShopPropertyReferrals', callback, {
+    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    intervalMs: 8_000,
+  });
 
 // ── Meta Bazaars (curated multi-level shop directories) ──
 export const saveMetaBazaarToCloud = async (bazaar: MetaBazaar) => {

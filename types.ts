@@ -1298,6 +1298,42 @@ export interface MetaShopOrder {
   via?: 'shop' | 'gsite';  // where the order was placed from: direct shop page, or an embedded Google Site / external site
 }
 
+/** Public submission: someone refers a property they own or know for a real-estate MetaShop */
+export interface MetaShopPropertyReferral {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopSlug: string;
+  trackingCode: string;
+  status: 'pending' | 'approved' | 'rejected';
+  referrerName: string;
+  referrerPhone: string;
+  referrerEmail?: string;
+  /** owner | acquaintance | agent | other */
+  relation?: string;
+  propertyTitle?: string;
+  dealType?: MetaShopRealEstate['dealType'];
+  propertyType?: string;
+  city?: string;
+  district?: string;
+  areaSqm?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  price?: number;
+  monthlyRent?: number;
+  deposit?: number;
+  currency?: string;
+  description?: string;
+  notes?: string;
+  images: string[];
+  productId?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectReason?: string;
+  createdAt: string;
+  via?: 'shop' | 'gsite';
+}
+
 export interface NewsArticle {
   id: string;
   title: string;

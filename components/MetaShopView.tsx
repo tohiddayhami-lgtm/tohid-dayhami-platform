@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
-import { logMetaShopEvent } from '../services/firebaseService';
+import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
-import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney } from '../utils/metaShopRealEstate';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
@@ -22,10 +22,32 @@ interface OrderData {
   total: number; currency: string;
 }
 
+export interface MetaShopReferralSubmit {
+  referrerName: string;
+  referrerPhone: string;
+  referrerEmail?: string;
+  relation?: string;
+  propertyTitle?: string;
+  dealType?: string;
+  propertyType?: string;
+  city?: string;
+  district?: string;
+  areaSqm?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  price?: number;
+  monthlyRent?: number;
+  deposit?: number;
+  description?: string;
+  notes?: string;
+  images: string[];
+}
+
 interface Props {
   shop: MetaShop;
   lang: Language;
   onSubmitOrder: (data: OrderData) => Promise<string>; // returns tracking code
+  onSubmitReferral?: (data: MetaShopReferralSubmit) => Promise<string>;
   onLookup?: (criteria: { phone?: string; trackingCode?: string; name?: string }) => Promise<MetaShopOrder[]>;
   embed?: boolean; // rendered inside an iframe (Google Sites / external site embed) — slightly compacts chrome
 }
@@ -37,7 +59,7 @@ const PdfIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
 );
 
-export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup, embed }) => {
+export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSubmitReferral, onLookup, embed }) => {
   const isServices = shop.type === 'services';
   const isRealEstate = shop.type === 'realestate';
   const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
@@ -86,6 +108,18 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [copied, setCopied] = useState(false);
   const [inquiryProp, setInquiryProp] = useState<MetaShopProduct | null>(null);
   const [inquiryForm, setInquiryForm] = useState({ customerName: '', phone: '', email: '', visitWhen: '', notes: '' });
+  const [referOpen, setReferOpen] = useState(false);
+  const [referTracking, setReferTracking] = useState<string | null>(null);
+  const [referImages, setReferImages] = useState<string[]>([]);
+  const [referUploading, setReferUploading] = useState(false);
+  const referFileRef = useRef<HTMLInputElement>(null);
+  const emptyReferForm = () => ({
+    referrerName: '', referrerPhone: '', referrerEmail: '', relation: 'owner',
+    propertyTitle: '', dealType: 'sale', propertyType: 'apartment',
+    city: '', district: '', areaSqm: '', bedrooms: '', bathrooms: '',
+    price: '', monthlyRent: '', deposit: '', description: '', notes: '',
+  });
+  const [referForm, setReferForm] = useState(emptyReferForm);
   const [inquiryTracking, setInquiryTracking] = useState<string | null>(null);
   // Supported languages — whatever is configured on the shop (defaults only when empty)
   const langs = resolveShopLanguages(shop);
@@ -138,6 +172,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       watchVideo: 'Watch video', pcs: 'pcs', offTag: ' off', cartEmptyErr: 'Cart is empty.',
       invalidDiscount: 'Invalid discount code.', minOrderDiscount: 'Minimum order for this code is',
       discountNoApply: 'This code does not apply to your cart items.',
+      referProperty: 'Refer a property', referTitle: 'Refer a property to us',
+      referHint: 'Own a home or know someone selling/renting? Share what you know — our team will review and contact you.',
+      referSubmit: 'Submit referral', referThanks: 'Thank you!', referThanksDesc: 'Your referral was received. Keep the tracking code below — we will contact you after review.',
+      referRelation: 'Your relation to the property', relOwner: 'I own it', relAcquaintance: 'I know the owner', relAgent: 'I am an agent', relOther: 'Other',
+      propertyTitle: 'Property title (optional)', dealType: 'Deal type', propertyType: 'Property type', district: 'District / area',
+      areaSqm: 'Area (m²)', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', price: 'Sale price (if known)', addPhotos: 'Add photos',
+      uploading: 'Uploading…', photoLimit: 'Up to 8 photos', referNotes: 'Anything else you know',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -169,6 +210,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       watchVideo: 'تماشای ویدئو', pcs: 'عدد', offTag: ' تخفیف', cartEmptyErr: 'سبد خالی است.',
       invalidDiscount: 'کد تخفیف نامعتبر است.', minOrderDiscount: 'حداقل مبلغ سفارش برای این کد',
       discountNoApply: 'این کد برای اقلام سبد شما اعمال نمی‌شود.',
+      referProperty: 'معرفی ملک', referTitle: 'معرفی ملک به ما',
+      referHint: 'خانه‌ای دارید یا کسی را می‌شناسید که می‌خواهد بفروشد یا اجاره دهد؟ هر اطلاعی که دارید بنویسید — پس از بررسی با شما تماس می‌گیریم.',
+      referSubmit: 'ثبت معرفی', referThanks: 'متشکریم!', referThanksDesc: 'معرفی شما ثبت شد. کد رهگیری را نگه دارید — پس از تأیید کارشناسان با شما تماس می‌گیریم.',
+      referRelation: 'نسبت شما با ملک', relOwner: 'مالک هستم', relAcquaintance: 'مالک را می‌شناسم', relAgent: 'مشاور / واسطه', relOther: 'سایر',
+      propertyTitle: 'عنوان ملک (اختیاری)', dealType: 'نوع معامله', propertyType: 'نوع ملک', district: 'منطقه / محله',
+      areaSqm: 'متراژ (م²)', bedrooms: 'خواب', bathrooms: 'حمام', price: 'قیمت فروش (در صورت اطلاع)', addPhotos: 'افزودن عکس',
+      uploading: 'در حال آپلود…', photoLimit: 'حداکثر ۸ عکس', referNotes: 'هر نکته دیگری که می‌دانید',
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
@@ -200,6 +248,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       watchVideo: 'مشاهدة الفيديو', pcs: 'قطعة', offTag: ' خصم', cartEmptyErr: 'السلة فارغة.',
       invalidDiscount: 'رمز الخصم غير صالح.', minOrderDiscount: 'الحد الأدنى للطلب لهذا الرمز',
       discountNoApply: 'هذا الرمز لا ينطبق على عناصر سلتك.',
+      referProperty: 'إحالة عقار', referTitle: 'أحِل عقاراً إلينا',
+      referHint: 'تملك منزلاً أو تعرف من يريد البيع أو الإيجار؟ شارك ما تعرفه — سنتواصل معك بعد المراجعة.',
+      referSubmit: 'إرسال الإحالة', referThanks: 'شكراً لك!', referThanksDesc: 'تم استلام إحالتك. احتفظ برمز التتبع — سنتواصل معك بعد المراجعة.',
+      referRelation: 'علاقتك بالعقار', relOwner: 'أنا المالك', relAcquaintance: 'أعرف المالك', relAgent: 'وسيط / وكيل', relOther: 'أخرى',
+      propertyTitle: 'عنوان العقار (اختياري)', dealType: 'نوع الصفقة', propertyType: 'نوع العقار', district: 'المنطقة / الحي',
+      areaSqm: 'المساحة (م²)', bedrooms: 'غرف النوم', bathrooms: 'الحمامات', price: 'سعر البيع (إن وُجد)', addPhotos: 'إضافة صور',
+      uploading: 'جارٍ الرفع…', photoLimit: 'حتى ٨ صور', referNotes: 'أي معلومات إضافية',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -421,6 +476,63 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         currency: shop.currency,
       });
       setInquiryTracking(code);
+    } catch { setError(t.err); }
+    finally { setSubmitting(false); }
+  };
+
+  const openReferral = () => {
+    setReferOpen(true);
+    setReferTracking(null);
+    setReferImages([]);
+    setReferForm(emptyReferForm());
+    setError('');
+  };
+
+  const uploadReferPhotos = (files: FileList | null) => {
+    if (!files?.length) return;
+    const remain = 8 - referImages.length;
+    if (remain <= 0) return;
+    const batch = Array.from(files).slice(0, remain);
+    setReferUploading(true);
+    let done = 0;
+    const urls: string[] = [];
+    const tick = () => {
+      done++;
+      if (done >= batch.length) {
+        setReferImages(prev => [...prev, ...urls].slice(0, 8));
+        setReferUploading(false);
+      }
+    };
+    batch.forEach(f => uploadFileWithProgress(f, () => {}, u => { urls.push(u); tick(); }, () => tick(), 'images'));
+  };
+
+  const submitReferral = async () => {
+    if (!onSubmitReferral) return;
+    if (!referForm.referrerName.trim() || !referForm.referrerPhone.trim()) { setError(t.incomplete); return; }
+    setSubmitting(true); setError('');
+    try {
+      const num = (s: string) => { const n = parseFloat(s.replace(/[^\d.]/g, '')); return Number.isFinite(n) && n > 0 ? n : undefined; };
+      const code = await onSubmitReferral({
+        referrerName: referForm.referrerName.trim(),
+        referrerPhone: referForm.referrerPhone.trim(),
+        referrerEmail: referForm.referrerEmail.trim() || undefined,
+        relation: referForm.relation,
+        propertyTitle: referForm.propertyTitle.trim() || undefined,
+        dealType: referForm.dealType,
+        propertyType: referForm.propertyType,
+        city: referForm.city.trim() || undefined,
+        district: referForm.district.trim() || undefined,
+        areaSqm: num(referForm.areaSqm),
+        bedrooms: num(referForm.bedrooms) != null ? Math.round(num(referForm.bedrooms)!) : undefined,
+        bathrooms: num(referForm.bathrooms) != null ? Math.round(num(referForm.bathrooms)!) : undefined,
+        price: num(referForm.price),
+        monthlyRent: num(referForm.monthlyRent),
+        deposit: num(referForm.deposit),
+        description: referForm.description.trim() || undefined,
+        notes: referForm.notes.trim() || undefined,
+        images: referImages,
+      });
+      setReferTracking(code);
     } catch { setError(t.err); }
     finally { setSubmitting(false); }
   };
@@ -783,9 +895,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           {shop.website && <div><b>{t.footWebsite}</b> <a href={shop.website.startsWith('http') ? shop.website : `https://${shop.website}`} target="_blank" rel="noreferrer" dir="ltr">{shop.website}</a></div>}
           {footAddress && <div>{footAddress}</div>}
         </div>
-        <a className="ms-foot-catalog" href={catalogHref} target="_blank" rel="noreferrer">
-          <PdfIcon s={17} /><span>{t.downloadCatalog}</span>
-        </a>
+        <div className="ms-foot-actions">
+          <a className="ms-foot-catalog" href={catalogHref} target="_blank" rel="noreferrer">
+            <PdfIcon s={17} /><span>{t.downloadCatalog}</span>
+          </a>
+          {isRealEstate && onSubmitReferral && (
+            <button type="button" className="ms-foot-refer" onClick={openReferral}>
+              <span>🏠</span><span>{S('referProperty')}</span>
+            </button>
+          )}
+        </div>
         {footText && <p className="ms-foot-text">{footText}</p>}
       </footer>
 
@@ -968,6 +1087,103 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           </div>
         );
       })()}
+
+      {/* Property referral modal — real estate only */}
+      {referOpen && onSubmitReferral && (
+        <div className="ms-modal-ov" onClick={() => !submitting && !referUploading && setReferOpen(false)}>
+          <div className="ms-refer-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <button type="button" className="ms-inq-close" onClick={() => setReferOpen(false)} disabled={submitting || referUploading} aria-label={t.close}>✕</button>
+            {referTracking ? (
+              <div className="ms-inq-success">
+                <div className="ms-inq-success-ic">✓</div>
+                <h2>{S('referThanks')}</h2>
+                <p>{S('referThanksDesc')}</p>
+                <div className="ms-track-code">
+                  <span className="ms-track-label">{t.trackingCode}</span>
+                  <div className="ms-track-val"><b dir="ltr">{referTracking}</b>
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(referTracking); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>{copied ? t.copied : t.copy}</button>
+                  </div>
+                </div>
+                <button type="button" className="ms-inq-submit" onClick={() => setReferOpen(false)}>{t.close}</button>
+              </div>
+            ) : (
+              <div className="ms-refer-body">
+                <header className="ms-inq-head">
+                  <h2>{S('referTitle')}</h2>
+                  <p>{S('referHint')}</p>
+                </header>
+                <div className="ms-refer-form">
+                  <div className="ms-refer-section">
+                    <h4>{t.yourInfo}</h4>
+                    <div className="ms-refer-grid">
+                      <label className="ms-inq-field"><span>{t.name} <em>*</em></span><input value={referForm.referrerName} onChange={e => setReferForm(f => ({ ...f, referrerName: e.target.value }))} autoComplete="name" /></label>
+                      <label className="ms-inq-field"><span>{t.phone} <em>*</em></span><input value={referForm.referrerPhone} onChange={e => setReferForm(f => ({ ...f, referrerPhone: e.target.value }))} dir="ltr" autoComplete="tel" /></label>
+                      <label className="ms-inq-field"><span>{t.email}</span><input type="email" value={referForm.referrerEmail} onChange={e => setReferForm(f => ({ ...f, referrerEmail: e.target.value }))} dir="ltr" /></label>
+                      <label className="ms-inq-field"><span>{S('referRelation')}</span>
+                        <select value={referForm.relation} onChange={e => setReferForm(f => ({ ...f, relation: e.target.value }))}>
+                          <option value="owner">{S('relOwner')}</option>
+                          <option value="acquaintance">{S('relAcquaintance')}</option>
+                          <option value="agent">{S('relAgent')}</option>
+                          <option value="other">{S('relOther')}</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="ms-refer-section">
+                    <h4>{S('tabRealEstate')}</h4>
+                    <div className="ms-refer-grid">
+                      <label className="ms-inq-field ms-inq-field-full"><span>{S('propertyTitle')}</span><input value={referForm.propertyTitle} onChange={e => setReferForm(f => ({ ...f, propertyTitle: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{S('dealType')}</span>
+                        <select value={referForm.dealType} onChange={e => setReferForm(f => ({ ...f, dealType: e.target.value }))}>
+                          {Object.keys(DEAL_TYPE_LABEL).map(k => <option key={k} value={k}>{dealTypeLabel(k, uiLang)}</option>)}
+                        </select>
+                      </label>
+                      <label className="ms-inq-field"><span>{S('propertyType')}</span>
+                        <select value={referForm.propertyType} onChange={e => setReferForm(f => ({ ...f, propertyType: e.target.value }))}>
+                          {Object.keys(PROPERTY_TYPE_LABEL).map(k => <option key={k} value={k}>{propertyTypeLabel(k, uiLang)}</option>)}
+                        </select>
+                      </label>
+                      <label className="ms-inq-field"><span>{t.city}</span><input value={referForm.city} onChange={e => setReferForm(f => ({ ...f, city: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{S('district')}</span><input value={referForm.district} onChange={e => setReferForm(f => ({ ...f, district: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{S('areaSqm')}</span><input inputMode="decimal" value={referForm.areaSqm} onChange={e => setReferForm(f => ({ ...f, areaSqm: e.target.value }))} dir="ltr" /></label>
+                      <label className="ms-inq-field"><span>{S('bedrooms')}</span><input inputMode="numeric" value={referForm.bedrooms} onChange={e => setReferForm(f => ({ ...f, bedrooms: e.target.value }))} dir="ltr" /></label>
+                      <label className="ms-inq-field"><span>{S('bathrooms')}</span><input inputMode="numeric" value={referForm.bathrooms} onChange={e => setReferForm(f => ({ ...f, bathrooms: e.target.value }))} dir="ltr" /></label>
+                      {(referForm.dealType === 'rent' || referForm.dealType === 'rent-short') ? (<>
+                        <label className="ms-inq-field"><span>{S('monthlyRent')}</span><input inputMode="decimal" value={referForm.monthlyRent} onChange={e => setReferForm(f => ({ ...f, monthlyRent: e.target.value }))} dir="ltr" /></label>
+                        <label className="ms-inq-field"><span>{S('deposit')}</span><input inputMode="decimal" value={referForm.deposit} onChange={e => setReferForm(f => ({ ...f, deposit: e.target.value }))} dir="ltr" /></label>
+                      </>) : (
+                        <label className="ms-inq-field"><span>{S('price')}</span><input inputMode="decimal" value={referForm.price} onChange={e => setReferForm(f => ({ ...f, price: e.target.value }))} dir="ltr" /></label>
+                      )}
+                      <label className="ms-inq-field ms-inq-field-full"><span>{t.notes}</span><textarea rows={2} value={referForm.description} onChange={e => setReferForm(f => ({ ...f, description: e.target.value }))} /></label>
+                      <label className="ms-inq-field ms-inq-field-full"><span>{S('referNotes')}</span><textarea rows={2} value={referForm.notes} onChange={e => setReferForm(f => ({ ...f, notes: e.target.value }))} /></label>
+                    </div>
+                  </div>
+                  <div className="ms-refer-section">
+                    <h4>{S('addPhotos')} <span className="ms-refer-ph-limit">({S('photoLimit')})</span></h4>
+                    <div className="ms-refer-photos">
+                      {referImages.map((url, i) => (
+                        <div key={i} className="ms-refer-ph"><img src={url} alt="" /><button type="button" onClick={() => setReferImages(im => im.filter((_, j) => j !== i))}>✕</button></div>
+                      ))}
+                      {referImages.length < 8 && (
+                        <button type="button" className="ms-refer-ph-add" onClick={() => referFileRef.current?.click()} disabled={referUploading}>
+                          {referUploading ? S('uploading') : '+'}
+                        </button>
+                      )}
+                    </div>
+                    <input type="file" ref={referFileRef} className="hidden" accept="image/*" multiple onChange={e => { uploadReferPhotos(e.target.files); e.target.value = ''; }} />
+                  </div>
+                </div>
+                <footer className="ms-inq-foot">
+                  {error && <p className="ms-err">{error}</p>}
+                  <button type="button" className="ms-inq-submit" onClick={submitReferral} disabled={submitting || referUploading}>
+                    {submitting ? t.submitting : S('referSubmit')}
+                  </button>
+                </footer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Cart drawer — products & services only */}
       {!isRealEstate && (
@@ -1199,6 +1415,26 @@ const MS_CSS = `
 @media (max-width:560px){ .ms-cat-lbl { display:none; } }
 .ms-foot-catalog { display:inline-flex; align-items:center; gap:9px; margin:26px auto 0; padding:12px 26px; background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.5); color:#fff; border-radius:999px; font-size:14px; font-weight:800; text-decoration:none; cursor:pointer; transition:background .15s; }
 .ms-foot-catalog:hover { background:rgba(255,255,255,.28); }
+.ms-foot-actions { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; margin-top:26px; }
+.ms-foot-actions .ms-foot-catalog { margin:0; }
+.ms-foot-refer { display:inline-flex; align-items:center; gap:9px; padding:12px 26px; background:#fff; color:var(--ms-primary); border:none; border-radius:999px; font-size:14px; font-weight:800; cursor:pointer; font-family:inherit; box-shadow:0 4px 18px rgba(0,0,0,.15); transition:transform .12s, box-shadow .12s; }
+.ms-foot-refer:hover { transform:translateY(-1px); box-shadow:0 6px 22px rgba(0,0,0,.2); }
+.ms-refer-modal { background:#fff; border-radius:22px; width:100%; max-width:720px; max-height:min(92vh,860px); display:flex; flex-direction:column; overflow:hidden; position:relative; box-shadow:0 24px 64px rgba(15,23,42,.28); }
+.ms-refer-body { display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden; }
+.ms-refer-form { flex:1; overflow-y:auto; padding:0 22px 12px; }
+.ms-refer-section { margin-bottom:18px; }
+.ms-refer-section h4 { margin:0 0 10px; font-size:13px; font-weight:800; color:var(--ms-heading); }
+.ms-refer-ph-limit { font-weight:600; opacity:.55; font-size:11px; }
+.ms-refer-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+@media (max-width:560px){ .ms-refer-grid { grid-template-columns:1fr; } }
+.ms-refer-grid select { width:100%; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; font-family:inherit; font-size:14px; background:#fff; }
+.ms-refer-photos { display:flex; flex-wrap:wrap; gap:8px; }
+.ms-refer-ph { position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0; }
+.ms-refer-ph img { width:100%; height:100%; object-fit:cover; }
+.ms-refer-ph button { position:absolute; top:2px; inset-inline-end:2px; width:22px; height:22px; border:none; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:11px; cursor:pointer; }
+.ms-refer-ph-add { width:72px; height:72px; border:2px dashed #cbd5e1; border-radius:10px; background:#f8fafc; color:#64748b; font-size:28px; font-weight:300; cursor:pointer; }
+.ms-refer-ph-add:disabled { opacity:.5; cursor:default; }
+.hidden { display:none !important; }
 .ms-badge { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 7px; font-size:11px; font-weight:800; }
 .ms-top-actions { display:flex; align-items:center; gap:10px; }
 .ms-lang { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }

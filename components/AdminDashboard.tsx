@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaBazaar, TeamBrainstormPost } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, TeamBrainstormPost } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -68,9 +68,11 @@ interface Props {
   onDeleteInvoice?: (id: string) => Promise<void>;
   metaShops?: MetaShop[];
   metaShopOrders?: MetaShopOrder[];
+  metaShopReferrals?: MetaShopPropertyReferral[];
   onSaveMetaShop?: (shop: MetaShop) => Promise<void>;
   onDeleteMetaShop?: (id: string) => Promise<void>;
   onUpdateMetaShopOrder?: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
+  onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
   shopBaseUrl?: string;
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
@@ -114,9 +116,11 @@ export const AdminDashboard: React.FC<Props> = ({
   onDeleteInvoice,
   metaShops = [],
   metaShopOrders = [],
+  metaShopReferrals = [],
   onSaveMetaShop,
   onDeleteMetaShop,
   onUpdateMetaShopOrder,
+  onUpdateMetaShopPropertyReferral,
   shopBaseUrl = '',
   metaBazaars = [],
   onSaveMetaBazaar,
@@ -143,6 +147,10 @@ export const AdminDashboard: React.FC<Props> = ({
     const ids = new Set(visibleMetaShops.map(s => s.id));
     return metaShopOrders.filter(o => ids.has(o.shopId));
   }, [visibleMetaShops, metaShopOrders]);
+  const visibleMetaShopReferrals = useMemo(() => {
+    const ids = new Set(visibleMetaShops.map(s => s.id));
+    return metaShopReferrals.filter(r => ids.has(r.shopId));
+  }, [visibleMetaShops, metaShopReferrals]);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
@@ -1915,7 +1923,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
+          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />

@@ -8,7 +8,7 @@ import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, CustomForm, TeamBrainstormPost } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, CustomForm, TeamBrainstormPost } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -25,11 +25,14 @@ import {
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
+  subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { MetaShopView } from './components/MetaShopView';
+import type { MetaShopReferralSubmit } from './components/MetaShopView';
+import { generateReferralTrackingCode } from './utils/metaShopReferral';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
 import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
@@ -327,6 +330,7 @@ const App: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
+  const [metaShopReferrals, setMetaShopReferrals] = useState<MetaShopPropertyReferral[]>([]);
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
   const [isEmbed] = useState<boolean>(extractEmbedFlag); // shop loaded inside an iframe (Google Sites / external site)
   const [catalogMode, setCatalogMode] = useState<boolean>(extractCatalogFlag); // shop link opened as a printable A4 PDF catalog (?catalog=1)
@@ -626,8 +630,9 @@ const App: React.FC = () => {
     const unsubInvoices = subscribeToInvoices(setInvoices);
     const unsubMetaShops = subscribeToMetaShops(setMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
+    const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
     const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
-    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaBazaars(); };
+    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaBazaars(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1398,6 +1403,63 @@ const App: React.FC = () => {
     return trackingCode;
   };
 
+  const handleMetaShopReferral = async (shop: MetaShop, data: MetaShopReferralSubmit): Promise<string> => {
+    const phoneRaw = data.referrerPhone.trim();
+    const trackingCode = generateReferralTrackingCode(phoneRaw);
+    const ref: MetaShopPropertyReferral = {
+      id: `msref-${Date.now()}`,
+      shopId: shop.id,
+      shopName: shop.name,
+      shopSlug: shop.slug,
+      trackingCode,
+      status: 'pending',
+      referrerName: data.referrerName,
+      referrerPhone: phoneRaw,
+      referrerEmail: data.referrerEmail,
+      relation: data.relation,
+      propertyTitle: data.propertyTitle,
+      dealType: data.dealType as MetaShopPropertyReferral['dealType'],
+      propertyType: data.propertyType,
+      city: data.city,
+      district: data.district,
+      areaSqm: data.areaSqm,
+      bedrooms: data.bedrooms,
+      bathrooms: data.bathrooms,
+      price: data.price,
+      monthlyRent: data.monthlyRent,
+      deposit: data.deposit,
+      currency: shop.currency,
+      description: data.description,
+      notes: data.notes,
+      images: data.images || [],
+      createdAt: new Date().toISOString(),
+      via: isEmbed ? 'gsite' : 'shop',
+    };
+    await saveMetaShopPropertyReferralToCloud(ref);
+
+    let recipients: Personnel[] = [];
+    if (shop.assignType === 'department' && shop.assignedDepartmentId) {
+      const dept = (appConfig.departments || []).find(d => d.id === shop.assignedDepartmentId);
+      if (dept) recipients = personnel.filter(p => (p.roles || []).some(r => (dept.positions || []).includes(r)));
+    } else if (shop.assignType === 'personnel' && shop.assignedPersonnelIds?.length) {
+      recipients = personnel.filter(p => shop.assignedPersonnelIds!.includes(p.id));
+    }
+    const masterUser = personnel.find(p => p.username === 'master');
+    if (masterUser && !recipients.some(p => p.id === masterUser.id)) recipients = [...recipients, masterUser];
+
+    const body = `🏠 معرفی ملک جدید — «${shop.name}»\nکد رهگیری: ${trackingCode}\n\nمعرف: ${data.referrerName}\nموبایل: ${phoneRaw}${data.referrerEmail ? `\nایمیل: ${data.referrerEmail}` : ''}\n\n${data.propertyTitle ? `عنوان: ${data.propertyTitle}\n` : ''}${data.city ? `شهر: ${data.city}` : ''}${data.district ? ` · ${data.district}` : ''}\n${data.areaSqm ? `متراژ: ${data.areaSqm} m²\n` : ''}${data.description || data.notes ? `\n${data.description || ''}\n${data.notes || ''}` : ''}${data.images?.length ? `\n\n📷 ${data.images.length} عکس ضمیمه` : ''}`;
+    const msg: InternalMessage = {
+      id: `refmsg-${Date.now()}`, senderId: '', senderName: data.referrerName,
+      recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),
+      subject: `معرفی ملک — ${shop.name} (${trackingCode})`, body,
+      createdAt: new Date().toISOString(), readBy: [],
+      isCustomerContact: true, contactName: data.referrerName, contactPhone: phoneRaw,
+      contactDepartmentName: shop.name, contactTrackingCode: trackingCode,
+    };
+    await sendInternalMessage(msg);
+    return trackingCode;
+  };
+
   const handleMetaShopLookup = async (criteria: { phone?: string; trackingCode?: string; name?: string }): Promise<MetaShopOrder[]> => {
     const code = (criteria.trackingCode || '').trim().toUpperCase();
     const ph = normalizePhone(criteria.phone || '');
@@ -1555,7 +1617,7 @@ const App: React.FC = () => {
     if (publicShop && publicShop.isActive !== false) {
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
       if (catalogMode) return <MetaShopCatalog shop={publicShop} lang={lang} autoPrint />;
-      return <MetaShopView shop={publicShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onLookup={handleMetaShopLookup} />;
+      return <MetaShopView shop={publicShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onSubmitReferral={publicShop.type === 'realestate' ? (d) => handleMetaShopReferral(publicShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
     // Still resolving the shop → show the "raising the shutter" loader (no artificial delay)
     if (shopLoading || (metaShops.length === 0 && shopSlug)) {
@@ -1998,9 +2060,11 @@ const App: React.FC = () => {
                     onDeleteInvoice={async (id) => { if (currentUser) await deleteInvoiceFromCloud(id, currentUser); }}
                     metaShops={metaShops}
                     metaShopOrders={metaShopOrders}
+                    metaShopReferrals={metaShopReferrals}
                     onSaveMetaShop={async (s) => { await saveMetaShopToCloud(s); }}
                     onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
+                    onUpdateMetaShopPropertyReferral={async (id, u) => { await updateMetaShopPropertyReferralInCloud(id, u); }}
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
                     metaBazaars={metaBazaars}
                     onSaveMetaBazaar={async (b) => { await saveMetaBazaarToCloud(b); }}

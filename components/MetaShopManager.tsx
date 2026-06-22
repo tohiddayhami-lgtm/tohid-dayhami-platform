@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
+import { referralToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
@@ -16,6 +17,7 @@ import { Language } from '../App';
 interface Props {
   metaShops: MetaShop[];
   metaShopOrders: MetaShopOrder[];
+  metaShopReferrals?: MetaShopPropertyReferral[];
   personnel: Personnel[];
   config: AppConfig;
   lang: Language;
@@ -23,6 +25,7 @@ interface Props {
   onSaveMetaShop: (shop: MetaShop) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
+  onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
@@ -134,12 +137,13 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
+  const [referralsShopId, setReferralsShopId] = useState<string | null>(null);
   const [analyticsShopId, setAnalyticsShopId] = useState<string | null>(null);
   const [analyticsEvents, setAnalyticsEvents] = useState<MetaShopEvent[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -278,6 +282,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
     oCode: T ? 'کد رهگیری' : 'Tracking', oCustomer: T ? 'مشتری' : 'Customer', oTotal: T ? 'مبلغ' : 'Total', oDate: T ? 'تاریخ' : 'Date', oStatus: T ? 'وضعیت' : 'Status', oItems: T ? 'اقلام' : 'Items',
     sNew: T ? 'جدید' : 'New', sProg: T ? 'در حال انجام' : 'In progress', sDone: T ? 'انجام شد' : 'Done', sCanc: T ? 'لغو شد' : 'Cancelled',
+    referrals: T ? 'معرفی ملک' : 'Property referrals',
+    referralsTitle: T ? 'معرفی‌های ملک' : 'Property referrals',
+    noReferrals: T ? 'معرفی ملکی ثبت نشده است.' : 'No property referrals yet.',
+    refPending: T ? 'در انتظار' : 'Pending', refApproved: T ? 'تأیید شده' : 'Approved', refRejected: T ? 'رد شده' : 'Rejected',
+    refApprove: T ? 'تأیید و افزودن به فروشگاه' : 'Approve & add listing',
+    refReject: T ? 'رد' : 'Reject',
+    refApproveOk: T ? 'ملک به لیست اضافه شد (غیرفعال). ویرایش کنید و سپس فعالش کنید.' : 'Listing added (inactive). Edit it and activate when ready.',
+    refRejectReason: T ? 'دلیل رد (اختیاری)' : 'Rejection reason (optional)',
+    refReferrer: T ? 'معرف' : 'Referrer', refRelation: T ? 'نسبت' : 'Relation',
+    refPhotos: T ? 'عکس‌ها' : 'Photos', refEditShop: T ? 'ویرایش فروشگاه' : 'Edit shop',
     deleteConfirm: T ? 'این فروشگاه حذف شود؟' : 'Delete this shop?',
     linkLabel: T ? 'لینک عمومی:' : 'Public link:',
     // PDF catalog
@@ -309,6 +323,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     metaShopOrders.forEach(o => { (m[o.shopId] = m[o.shopId] || []).push(o); });
     return m;
   }, [metaShopOrders]);
+  const referralsByShop = useMemo(() => {
+    const m: Record<string, MetaShopPropertyReferral[]> = {};
+    metaShopReferrals.forEach(r => { (m[r.shopId] = m[r.shopId] || []).push(r); });
+    return m;
+  }, [metaShopReferrals]);
 
   const shopUrl = (shop: MetaShop) => `${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`;
   const copyLink = (shop: MetaShop) => { navigator.clipboard.writeText(shopUrl(shop)); setCopiedId(shop.id); setTimeout(() => setCopiedId(null), 1800); };
@@ -349,6 +368,29 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
 
   const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
+
+  const approveReferral = async (ref: MetaShopPropertyReferral) => {
+    if (readonly || !onUpdateMetaShopPropertyReferral) return;
+    const shop = metaShops.find(s => s.id === ref.shopId);
+    if (!shop) return;
+    if (!confirm(T ? 'این ملک به لیست فروشگاه اضافه شود؟ (ابتدا غیرفعال است)' : 'Add this property to the shop? (starts inactive)')) return;
+    const productId = `p-${Date.now()}`;
+    const product = referralToProduct(ref, shop, productId);
+    const updated: MetaShop = { ...shop, products: [...(shop.products || []), product] };
+    await onSaveMetaShop(updated);
+    await onUpdateMetaShopPropertyReferral(ref.id, { status: 'approved', productId, reviewedAt: new Date().toISOString() });
+    if (draft?.id === shop.id) setDraft(updated);
+    alert(t.refApproveOk);
+  };
+
+  const rejectReferral = async (ref: MetaShopPropertyReferral) => {
+    if (readonly || !onUpdateMetaShopPropertyReferral) return;
+    const reason = prompt(t.refRejectReason) || undefined;
+    await onUpdateMetaShopPropertyReferral(ref.id, { status: 'rejected', rejectReason: reason, reviewedAt: new Date().toISOString() });
+  };
+
+  const refStatusLabel = (s: MetaShopPropertyReferral['status']) => s === 'approved' ? t.refApproved : s === 'rejected' ? t.refRejected : t.refPending;
+  const refStatusCls = (s: MetaShopPropertyReferral['status']) => s === 'approved' ? 'bg-emerald-100 text-emerald-700' : s === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
   const updShopI18n = (code: string, field: string, val: string) => {
     const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
@@ -628,6 +670,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredShops.map(s => {
               const orders = ordersByShop[s.id] || [];
+              const refs = referralsByShop[s.id] || [];
+              const pendingRefs = refs.filter(r => r.status === 'pending').length;
               return (
                 <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                   <div className="h-20 flex items-center justify-center text-white font-bold relative" style={{ background: s.theme?.cover || '#334155', backgroundImage: s.coverImage ? `linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.45)), url(${s.coverImage})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -647,6 +691,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                       <button onClick={() => { setEmbedShop(s); }} title={t.gsiteTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.gsite}</button>
                       <a href={catalogUrl(s)} target="_blank" rel="noreferrer" title={t.catalogTitle} className="text-xs px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1">📄 {t.catalog}</a>
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
+                      {s.type === 'realestate' && (
+                        <button onClick={() => { setReferralsShopId(s.id); setMode('referrals'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50">{t.referrals}{pendingRefs > 0 && <span className="ml-1 bg-teal-600 text-white rounded-full px-1.5 text-[10px]">{pendingRefs}</span>}</button>
+                      )}
                       <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
@@ -702,6 +749,62 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ════════════ PROPERTY REFERRALS ════════════
+  if (mode === 'referrals') {
+    const shop = metaShops.find(s => s.id === referralsShopId);
+    const refs = referralsShopId ? (referralsByShop[referralsShopId] || []) : [];
+    const relLabel = (r?: string) => r === 'owner' ? (T ? 'مالک' : 'Owner') : r === 'agent' ? (T ? 'مشاور' : 'Agent') : r === 'acquaintance' ? (T ? 'آشنای مالک' : 'Knows owner') : r || '—';
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+        <h3 className="text-lg font-bold text-gray-800">{t.referralsTitle} — {shop?.name}</h3>
+        {refs.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noReferrals}</div> : (
+          <div className="space-y-4">
+            {refs.map(ref => (
+              <div key={ref.id} className={card + ' p-4'}>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-bold text-gray-800">{ref.propertyTitle || ref.city || (T ? 'ملک معرفی‌شده' : 'Referred property')}</div>
+                    <div className="text-xs text-gray-400 font-mono" dir="ltr">{ref.trackingCode} · {new Date(ref.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</div>
+                  </div>
+                  <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${refStatusCls(ref.status)}`}>{refStatusLabel(ref.status)}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-3">
+                  <div><span className="text-gray-500">{t.refReferrer}:</span> <b>{ref.referrerName}</b> <span dir="ltr" className="text-gray-400">({ref.referrerPhone})</span></div>
+                  <div><span className="text-gray-500">{t.refRelation}:</span> {relLabel(ref.relation)}</div>
+                  {(ref.city || ref.district) && <div><span className="text-gray-500">{T ? 'موقعیت' : 'Location'}:</span> {[ref.city, ref.district].filter(Boolean).join(' · ')}</div>}
+                  {ref.areaSqm && <div><span className="text-gray-500">{T ? 'متراژ' : 'Area'}:</span> {ref.areaSqm} m²</div>}
+                  {(ref.bedrooms != null || ref.bathrooms != null) && <div>{ref.bedrooms != null && <span>{ref.bedrooms} {T ? 'خواب' : 'bed'} </span>}{ref.bathrooms != null && <span>· {ref.bathrooms} {T ? 'حمام' : 'bath'}</span>}</div>}
+                  {ref.price != null && <div><span className="text-gray-500">{T ? 'قیمت' : 'Price'}:</span> {ref.currency} {ref.price.toLocaleString()}</div>}
+                  {ref.monthlyRent != null && <div><span className="text-gray-500">{T ? 'اجاره' : 'Rent'}:</span> {ref.currency} {ref.monthlyRent.toLocaleString()}</div>}
+                </div>
+                {(ref.description || ref.notes) && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-3 whitespace-pre-wrap">{[ref.description, ref.notes].filter(Boolean).join('\n\n')}</p>}
+                {ref.images?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-xs font-bold text-gray-500 mb-2">{t.refPhotos}</div>
+                    <div className="flex flex-wrap gap-2">{ref.images.map((url, i) => <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" /></a>)}</div>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                  {ref.status === 'pending' && !readonly && onUpdateMetaShopPropertyReferral && (
+                    <>
+                      <button onClick={() => approveReferral(ref)} className="text-xs px-3 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700">{t.refApprove}</button>
+                      <button onClick={() => rejectReferral(ref)} className="text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">{t.refReject}</button>
+                    </>
+                  )}
+                  {ref.status === 'approved' && ref.productId && shop && (
+                    <button onClick={() => { const s = metaShops.find(x => x.id === shop.id); if (s) startEdit(s); }} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">{t.refEditShop}</button>
+                  )}
+                  {ref.status === 'rejected' && ref.rejectReason && <span className="text-xs text-red-500 italic">{ref.rejectReason}</span>}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
