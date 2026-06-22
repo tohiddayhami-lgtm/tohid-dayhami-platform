@@ -6,13 +6,13 @@ import { MeetingBookingModal } from './MeetingBookingModal';
 import { ConsultantAvatar } from './ConsultantAvatar';
 import {
   MEETING_STATUS_STYLE,
-  SESSION_TYPE_LABEL,
   canPublicBookMeeting,
   countConsultantOpenSlots,
   filterPublicBookableMeetings,
   findConsultant,
   getBookableConsultants,
   getMeetingDisplayStatus,
+  getMeetingSessionLabel,
   meetingPrices,
 } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
@@ -385,7 +385,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
               </div>
               <div className="flex gap-2 overflow-x-auto p-3 snap-x snap-mandatory scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {slotChips.map(({ meeting, status, guestCount, bookable }) => {
-                  const sessionLabel = SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title;
+                  const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
                   const prices = meetingPrices(meeting);
                   const style = MEETING_STATUS_STYLE[status];
                   const isHot = status === 'pending' && guestCount >= 2;
@@ -504,7 +504,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                       const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
                       const bookable = canPublicBookMeeting(meeting);
                       const prices = meetingPrices(meeting);
-                      const sessionLabel = SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title;
+                      const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
                       const guestCount = meeting.guests?.length || 0;
 
                       return (

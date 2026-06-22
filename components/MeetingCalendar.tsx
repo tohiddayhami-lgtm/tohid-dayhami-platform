@@ -1,13 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Meeting, Personnel, NotificationConfig, MeetingKind, MeetingSessionType, Price, Currency } from '../types';
+import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency } from '../types';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
 import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
-import { MEETING_STATUS_STYLE, SESSION_TYPE_LABEL, getMeetingDisplayStatus, isBookableMeeting } from '../utils/meetingBookingUtils';
+import { MEETING_STATUS_STYLE, getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting } from '../utils/meetingBookingUtils';
 import { ConsultantAvatar } from './ConsultantAvatar';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
@@ -107,7 +107,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     startTime: '09:00', endTime: '10:00',
     location: '', attendeeIds: [] as string[], description: '',
     kind: 'internal' as MeetingKind,
-    sessionType: 'consultation' as MeetingSessionType,
+    sessionType: '',
     consultantId: '',
     priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: '' })),
   });
@@ -171,7 +171,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     setFormData({
       title: '', date: date || todayStr, startTime: s, endTime: et || addMinutes(s, 60),
       location: '', attendeeIds: [], description: '',
-      kind: 'internal', sessionType: 'consultation', consultantId: currentUser.id,
+      kind: 'internal', sessionType: '', consultantId: currentUser.id,
       priceInputs: emptyPriceInputs(),
     });
     setShowModal(true);
@@ -189,7 +189,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       attendeeIds: meeting.attendeeIds,
       description: meeting.description || '',
       kind: meeting.kind || 'internal',
-      sessionType: meeting.sessionType || 'consultation',
+      sessionType: meeting.sessionType || '',
       consultantId: meeting.consultantId || meeting.organizerId,
       priceInputs: loadPricesToForm(meeting),
     });
@@ -266,10 +266,10 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     const consultant = activePersonnel.find(p => p.id === formData.consultantId);
     const { prices, price } = pricesFromForm();
     const isBookable = formData.kind === 'bookable';
-    const sessionLabel = SESSION_TYPE_LABEL[formData.sessionType]?.[fa ? 'fa' : 'en'] || formData.title;
+    const sessionLabel = formData.sessionType.trim();
     return {
       id,
-      title: formData.title || (isBookable ? sessionLabel : ''),
+      title: formData.title.trim() || (isBookable ? sessionLabel : ''),
       date: formData.date,
       startTime: formData.startTime,
       endTime: formData.endTime,
@@ -279,7 +279,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       attendeeIds: isBookable ? [] : formData.attendeeIds,
       description: formData.description,
       kind: formData.kind,
-      sessionType: isBookable ? formData.sessionType : undefined,
+      sessionType: isBookable ? sessionLabel : undefined,
       consultantId: isBookable ? formData.consultantId : undefined,
       consultantName: isBookable ? consultant?.fullName : undefined,
       prices: isBookable && prices.length ? prices : undefined,
@@ -294,6 +294,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
     e.preventDefault();
     if (!formData.title && formData.kind === 'internal') return;
     if (formData.kind === 'bookable' && !formData.consultantId) return;
+    if (formData.kind === 'bookable' && !formData.sessionType.trim()) return;
     if (editingMeetingId) {
       const oldM = meetings.find(m => m.id === editingMeetingId);
       const payload = buildMeetingPayload(editingMeetingId);
@@ -507,7 +508,7 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                         {/* Title always visible */}
                         <div className="text-white font-semibold leading-tight truncate" style={{ fontSize: '10px' }}>
                           {isBookableMeeting(meeting)
-                            ? (SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title)
+                            ? getMeetingSessionLabel(meeting, fa ? 'fa' : 'en')
                             : meeting.title}
                         </div>
                         {isBookableMeeting(meeting) && height > 22 && (
@@ -588,14 +589,14 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
               {formData.kind === 'bookable' && (
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع جلسه' : 'Session type'}</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
-                      value={formData.sessionType} onChange={e => setFormData({ ...formData, sessionType: e.target.value as MeetingSessionType })}>
-                      <option value="consultation">{fa ? 'مشاوره' : 'Consultation'}</option>
-                      <option value="workshop">{fa ? 'ورکشاپ' : 'Workshop'}</option>
-                      <option value="session">{fa ? 'جلسه' : 'Session'}</option>
-                      <option value="other">{fa ? 'سایر' : 'Other'}</option>
-                    </select>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع جلسه' : 'Session type'} *</label>
+                    <input
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      value={formData.sessionType}
+                      onChange={e => setFormData({ ...formData, sessionType: e.target.value })}
+                      placeholder={fa ? 'مثلاً مشاوره صادرات، ورکشاپ بسته‌بندی، جلسه آنلاین…' : 'e.g. export consultation, packaging workshop…'}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'مشاور' : 'Consultant'}</label>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { tryBookMeeting } from '../services/firebaseService';
-import { meetingPrices, SESSION_TYPE_LABEL } from '../utils/meetingBookingUtils';
+import { meetingPrices, getMeetingSessionLabel } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { ConsultantAvatar } from './ConsultantAvatar';
 
@@ -28,7 +28,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
 
   if (!open || !meeting) return null;
 
-  const sessionLabel = SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title;
+  const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
   const prices = meetingPrices(meeting);
 
   const t = {

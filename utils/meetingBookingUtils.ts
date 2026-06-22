@@ -20,6 +20,17 @@ export const SESSION_TYPE_LABEL: Record<string, { fa: string; en: string }> = {
   other: { fa: 'سایر', en: 'Other' },
 };
 
+/** نوع جلسه — متن آزاد یا برچسب‌های قدیمی ذخیره‌شده */
+export const getMeetingSessionLabel = (m: Meeting, lang: 'fa' | 'en' = 'fa'): string => {
+  const st = m.sessionType?.trim();
+  if (st) {
+    const legacy = SESSION_TYPE_LABEL[st];
+    if (legacy) return lang === 'fa' ? legacy.fa : legacy.en;
+    return st;
+  }
+  return m.title?.trim() || (lang === 'fa' ? 'جلسه' : 'Session');
+};
+
 export const isBookableMeeting = (m: Meeting) => m.kind === 'bookable';
 
 export const isInternalMeeting = (m: Meeting) => !m.kind || m.kind === 'internal';

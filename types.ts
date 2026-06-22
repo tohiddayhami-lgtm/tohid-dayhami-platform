@@ -437,7 +437,7 @@ export interface Task {
 
 export type MeetingKind = 'internal' | 'bookable';
 export type MeetingBookingStatus = 'open' | 'pending' | 'confirmed';
-export type MeetingSessionType = 'consultation' | 'workshop' | 'session' | 'other';
+export type MeetingSessionType = string;
 
 export interface MeetingBookingGuest {
   id: string;
