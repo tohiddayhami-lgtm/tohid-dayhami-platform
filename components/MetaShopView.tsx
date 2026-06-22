@@ -5,6 +5,7 @@ import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney } from '../utils/metaShopRealEstate';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
+import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 
 interface OrderData {
@@ -129,7 +130,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       specs: 'Specifications', faqTitle: 'FAQ', viewMap: 'View on map', virtualTour: 'Virtual tour', forSale: 'For sale',
       inquiryBtn: 'Request viewing', inquiryTitle: 'Property viewing request', visitWhen: 'Preferred visit time',
       inquirySubmit: 'Submit request', inquiryThanks: 'Request received!', trackInquiries: 'Track my requests',
-      featuredProperties: 'Featured properties', callAgent: 'Call', whatsappAgent: 'WhatsApp',
+      featuredProperties: 'Featured properties', callAgent: 'Call', whatsappAgent: 'WhatsApp', footWhatsapp: 'WhatsApp:',
       priceDisplayOnly: 'Listed price (informational)',
       inquiryAsideHint: 'Our agent will contact you after you submit.',
       inquiryFormHint: 'Enter your contact details to schedule a viewing.',
@@ -160,7 +161,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       specs: 'مشخصات ملک', faqTitle: 'سوالات متداول', viewMap: 'مشاهده روی نقشه', virtualTour: 'تور مجازی', forSale: 'فروش',
       inquiryBtn: 'درخواست بازدید', inquiryTitle: 'درخواست بازدید ملک', visitWhen: 'زمان پیشنهادی بازدید',
       inquirySubmit: 'ثبت درخواست بازدید', inquiryThanks: 'درخواست شما ثبت شد!', trackInquiries: 'پیگیری درخواست‌ها',
-      featuredProperties: 'املاک ویژه', callAgent: 'تماس', whatsappAgent: 'واتس‌اپ',
+      featuredProperties: 'املاک ویژه', callAgent: 'تماس', whatsappAgent: 'واتس‌اپ', footWhatsapp: 'واتس‌اپ:',
       priceDisplayOnly: 'قیمت اعلامی (فقط نمایش)',
       inquiryAsideHint: 'پس از ثبت، کارشناس املاک با شما تماس می‌گیرد.',
       inquiryFormHint: 'اطلاعات تماس خود را وارد کنید تا هماهنگی بازدید انجام شود.',
@@ -191,7 +192,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       specs: 'مواصفات العقار', faqTitle: 'الأسئلة الشائعة', viewMap: 'عرض على الخريطة', virtualTour: 'جولة افتراضية', forSale: 'للبيع',
       inquiryBtn: 'طلب معاينة', inquiryTitle: 'طلب معاينة العقار', visitWhen: 'الوقت المفضل للمعاينة',
       inquirySubmit: 'إرسال طلب المعاينة', inquiryThanks: 'تم استلام طلبك!', trackInquiries: 'متابعة طلباتي',
-      featuredProperties: 'عقارات مميزة', callAgent: 'اتصال', whatsappAgent: 'واتساب',
+      featuredProperties: 'عقارات مميزة', callAgent: 'اتصال', whatsappAgent: 'واتساب', footWhatsapp: 'واتساب:',
       priceDisplayOnly: 'السعر المعلن (للعرض فقط)',
       inquiryAsideHint: 'بعد التسجيل، سيتواصل معك مستشار العقارات.',
       inquiryFormHint: 'أدخل بيانات الاتصال لترتيب المعاينة.',
@@ -483,10 +484,28 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
 
   // Real-estate: viewing request + contact — no cart / quantity
+  const reContactActions = (p: MetaShopProduct, big = false) => {
+    const c = resolvePropertyContact(shop, p, reLang());
+    const stop = (e: React.MouseEvent) => e.stopPropagation();
+    return (
+      <>
+        {c.phone && (
+          <a className="ms-re-contact" href={telHref(c.phone)} dir="ltr" title={c.phone}
+            onClick={e => { stop(e); openTel(c.phone); }}>
+            📞 {S('callAgent')}
+          </a>
+        )}
+        {c.whatsapp && (
+          <a className="ms-re-contact wa" href={waHref(c.whatsapp)} target="_blank" rel="noreferrer" dir="ltr" title={c.whatsapp}
+            onClick={e => { stop(e); openWhatsApp(c.whatsapp); }}>
+            💬 {S('whatsappAgent')}
+          </a>
+        )}
+      </>
+    );
+  };
+
   const inquiryBlock = (p: MetaShopProduct, big = false) => {
-    const re = p.realEstate;
-    const phone = re?.agentPhone || shop.phone;
-    const wa = (re?.agentWhatsapp || phone || '').replace(/\D/g, '');
     const listed = rePriceLabel(p);
     return (
       <div className="ms-buy ms-re-inquiry">
@@ -502,8 +521,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           ) : (
             <button type="button" className={`ms-add ${big ? 'lg' : ''}`} onClick={() => openInquiry(p)}>{t.inquiryBtn || S('inquiryBtn')}</button>
           )}
-          {phone && <a className="ms-re-contact" href={`tel:${phone}`} dir="ltr">📞 {S('callAgent')}</a>}
-          {wa && <a className="ms-re-contact wa" href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer">💬 {S('whatsappAgent')}</a>}
+          {reContactActions(p, big)}
         </div>
       </div>
     );
@@ -625,6 +643,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       </article>
     );
   };
+
+  const footText = TR(shop.i18n, 'footerText', shop.footerText || '');
+  const footAddress = TR(shop.i18n, 'address', shop.address || '');
 
   // Printable A4 PDF catalog of this shop — same link with ?catalog=1 (+ current language). Opens in a new tab.
   const catalogHref = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}&catalog=1&lang=${uiLang}`;
@@ -756,15 +777,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
 
       <footer className="ms-footer">
         <div className="ms-foot-grid">
-          {shop.phone && <div><b>{t.footPhone}</b> <span dir="ltr">{shop.phone}</span></div>}
-          {shop.email && <div><b>{t.footEmail}</b> {shop.email}</div>}
-          {shop.website && <div><b>{t.footWebsite}</b> {shop.website}</div>}
-          {shop.address && <div>{shop.address}</div>}
+          {shop.phone && <div><b>{t.footPhone}</b> <a href={telHref(shop.phone)} dir="ltr" onClick={e => { e.preventDefault(); openTel(shop.phone); }}>{shop.phone}</a></div>}
+          {shop.whatsapp && <div><b>{S('footWhatsapp')}</b> <a href={waHref(shop.whatsapp)} dir="ltr" target="_blank" rel="noreferrer" onClick={e => { e.preventDefault(); openWhatsApp(shop.whatsapp); }}>{shop.whatsapp}</a></div>}
+          {shop.email && <div><b>{t.footEmail}</b> <a href={`mailto:${shop.email}`}>{shop.email}</a></div>}
+          {shop.website && <div><b>{t.footWebsite}</b> <a href={shop.website.startsWith('http') ? shop.website : `https://${shop.website}`} target="_blank" rel="noreferrer" dir="ltr">{shop.website}</a></div>}
+          {footAddress && <div>{footAddress}</div>}
         </div>
         <a className="ms-foot-catalog" href={catalogHref} target="_blank" rel="noreferrer">
           <PdfIcon s={17} /><span>{t.downloadCatalog}</span>
         </a>
-        {shop.footerText && <p className="ms-foot-text">{shop.footerText}</p>}
+        {footText && <p className="ms-foot-text">{footText}</p>}
       </footer>
 
       {/* Product detail modal */}
@@ -816,7 +838,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                 const rows = realEstateDetailRows(detail, reLang());
                 const re = detail.realEstate;
                 const faq = realEstateFaqs(re, reLang(), detail.i18n);
-                const agentName = resolveReText(re, 'agentName', reLang(), detail.i18n);
+                const contact = resolvePropertyContact(shop, detail, reLang());
                 return (
                   <div className="ms-realestate-detail">
                     {rePriceLabel(detail) && !priceHidden(detail) && (
@@ -830,10 +852,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
                     )}
                     {re.mapUrl && <a className="ms-video-link" href={re.mapUrl} target="_blank" rel="noreferrer">📍 {S('viewMap')}</a>}
                     {re.virtualTourUrl && <a className="ms-video-link" href={re.virtualTourUrl} target="_blank" rel="noreferrer" style={{ marginInlineStart: 12 }}>🎥 {S('virtualTour')}</a>}
-                    {(agentName || re.agentPhone) && (
-                      <div className="ms-meta" style={{ marginTop: 8 }}>
-                        {agentName && <span>{agentName}</span>}
-                        {re.agentPhone && <span dir="ltr">{re.agentPhone}</span>}
+                    {(contact.agentName || contact.phone || contact.whatsapp) && (
+                      <div className="ms-re-agent-block">
+                        {contact.agentName && <span className="ms-re-agent-name">{contact.agentName}</span>}
+                        <div className="ms-re-actions">
+                          {reContactActions(detail)}
+                        </div>
                       </div>
                     )}
                     {faq.length > 0 && (
@@ -1317,6 +1341,10 @@ const MS_CSS = `
 .ms-re-inquiry .ms-re-actions.big { flex-direction:column; align-items:stretch; }
 .ms-re-contact { display:inline-flex; align-items:center; gap:4px; padding:9px 14px; border-radius:999px; border:1px solid #e2e8f0; font-size:12px; font-weight:700; color:var(--ms-heading); text-decoration:none; background:#fff; }
 .ms-re-contact.wa { border-color:#25d366; color:#128c7e; }
+.ms-re-agent-block { margin-top:10px; padding-top:10px; border-top:1px solid #e2e8f0; }
+.ms-re-agent-name { display:block; font-size:13px; font-weight:800; color:var(--ms-heading); margin-bottom:6px; }
+.ms-footer a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
+.ms-footer a:hover { color:var(--ms-primary); }
 /* real-estate inquiry modal */
 .ms-inquiry-modal { background:#fff; border-radius:22px; width:100%; max-width:720px; max-height:min(92vh,780px); display:flex; flex-direction:column; overflow:hidden; position:relative; box-shadow:0 24px 64px rgba(15,23,42,.28); }
 .ms-inq-close { position:absolute; top:14px; inset-inline-end:14px; z-index:20; width:38px; height:38px; border-radius:50%; border:none; background:#fff; color:#475569; cursor:pointer; font-size:15px; box-shadow:0 2px 12px rgba(15,23,42,.15); transition:background .15s, transform .15s; }

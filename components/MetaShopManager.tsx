@@ -97,6 +97,7 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
     logo: cc.logoImage || base.logo,
     currency,
     phone: cc.contactPhone || base.phone,
+    whatsapp: cc.contactWhatsapp || cc.whatsapp || base.whatsapp,
     email: cc.contactEmail || base.email,
     website: cc.website || base.website,
     address: cc.contactAddress || base.address,
@@ -238,7 +239,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
     coverImg: T ? 'تصویر کاور (پس‌زمینه)' : 'Cover image (background)', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
     orLink: T ? 'یا لینک تصویر' : 'or image URL', addLink: T ? 'افزودن لینک' : 'Add URL', imgUrlPh: T ? 'https://...  (لینک عکس)' : 'https://...  (image URL)',
-    phone: T ? 'تلفن' : 'Phone', email: T ? 'ایمیل' : 'Email', website: T ? 'وب‌سایت' : 'Website', address: T ? 'آدرس' : 'Address', footer: T ? 'متن فوتر' : 'Footer text',
+    phone: T ? 'تلفن (پیش‌فرض همه ملک‌ها)' : 'Phone (default for all properties)',
+    whatsapp: T ? 'واتس‌اپ (پیش‌فرض همه ملک‌ها)' : 'WhatsApp (default for all properties)',
+    whatsappHint: T ? 'با + و کد کشور وارد کنید، مثلاً +96891234567' : 'Include country code, e.g. +96891234567',
+    contactReHint: T ? 'برای شماره مخصوص هر ملک، در ویرایش همان ملک بخش «مشاور / تماس» را پر کنید.' : 'For a property-specific number, fill the «Agent / contact» section when editing that property.',
+    footerI18n: T ? 'فوتر و آدرس به زبان‌های مختلف' : 'Footer & address per language',
+    footerI18nHint: T ? 'متن و آدرس هر زبان را جداگانه بنویسید. اگر خالی بماند، از فیلد پیش‌فرض بالا استفاده می‌شود.' : 'Enter footer text and address per language. Empty fields fall back to the defaults above.',
+    email: T ? 'ایمیل' : 'Email', website: T ? 'وب‌سایت' : 'Website', address: T ? 'آدرس (پیش‌فرض)' : 'Address (default)', footer: T ? 'متن فوتر (پیش‌فرض)' : 'Footer text (default)',
+    agentSection: T ? 'مشاور / تماس (اختیاری — جایگزین پیش‌فرض فروشگاه)' : 'Agent / contact (optional — overrides shop default)',
+    agentName: T ? 'نام مشاور' : 'Agent name', agentPhone: T ? 'تلفن مشاور' : 'Agent phone', agentWhatsapp: T ? 'واتس‌اپ مشاور' : 'Agent WhatsApp',
+    agentHint: T ? 'خالی = استفاده از شماره پیش‌فرض فروشگاه (بخش تماس و فوتر)' : 'Leave empty to use the shop default (Contact & footer section)',
     thanksTxt: T ? 'متن تشکر پس از سفارش' : 'Order thank-you text', cartBtn: T ? 'متن دکمه سفارش' : 'Order button text',
     routeHint: T ? 'سفارش‌های این فروشگاه به کارتابل چه کسانی برود؟' : 'Whose cartable should orders go to?',
     routePersonnel: T ? 'پرسنل مشخص' : 'Specific personnel', routeDept: T ? 'یک دپارتمان' : 'A department', routeNone: T ? 'پیش‌فرض (مستر)' : 'Default (master)',
@@ -340,6 +350,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
+  const updShopI18n = (code: string, field: string, val: string) => {
+    const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: val };
+    upd({ i18n });
+  };
   const updTheme = (patch: Partial<MetaShop['theme']>) => setDraft(d => d ? { ...d, theme: { ...d.theme, ...patch } } : d);
   // Directory categories (bilingual, multi): a shop can appear under several bazaar categories
   const dirCats = (): import('../types').MetaShopDirCat[] => {
@@ -963,13 +978,30 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
       {/* Contact */}
       <div className={card}>
         <h4 className="font-bold text-gray-700 mb-4">{t.contact}</h4>
+        {isRealEstate && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">{t.contactReHint}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><label className={lbl}>{t.phone}</label><input className={fld + ' dir-ltr'} value={draft.phone || ''} onChange={e => upd({ phone: e.target.value })} /></div>
+          <div><label className={lbl}>{t.phone}</label><input className={fld + ' dir-ltr'} value={draft.phone || ''} onChange={e => upd({ phone: e.target.value })} placeholder="+968 …" /></div>
+          <div><label className={lbl}>{t.whatsapp}</label><input className={fld + ' dir-ltr'} value={draft.whatsapp || ''} onChange={e => upd({ whatsapp: e.target.value })} placeholder="+968 …" /><p className="text-[10px] text-gray-400 mt-0.5">{t.whatsappHint}</p></div>
           <div><label className={lbl}>{t.email}</label><input className={fld + ' dir-ltr'} value={draft.email || ''} onChange={e => upd({ email: e.target.value })} /></div>
           <div><label className={lbl}>{t.website}</label><input className={fld + ' dir-ltr'} value={draft.website || ''} onChange={e => upd({ website: e.target.value })} /></div>
-          <div><label className={lbl}>{t.address}</label><input className={fld} value={draft.address || ''} onChange={e => upd({ address: e.target.value })} /></div>
+          <div className="md:col-span-2"><label className={lbl}>{t.address}</label><input className={fld} value={draft.address || ''} onChange={e => upd({ address: e.target.value })} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.footer}</label><input className={fld} value={draft.footerText || ''} onChange={e => upd({ footerText: e.target.value })} /></div>
         </div>
+        {shopLangs().length > 0 && (
+          <div className="border-t border-gray-100 mt-4 pt-4">
+            <h5 className="text-sm font-bold text-gray-700 mb-1">{t.footerI18n}</h5>
+            <p className="text-xs text-gray-500 mb-3">{t.footerI18nHint}</p>
+            <div className="space-y-3">
+              {shopLangs().map(lg => (
+                <div key={lg.code} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                  <div className="md:col-span-2 text-xs font-bold text-indigo-700">{lg.name || lg.code}</div>
+                  <div className="md:col-span-2"><label className={lbl}>{t.footer}</label><input className={fld} value={draft.i18n?.[lg.code]?.footerText || ''} onChange={e => updShopI18n(lg.code, 'footerText', e.target.value)} /></div>
+                  <div className="md:col-span-2"><label className={lbl}>{t.address}</label><input className={fld} value={draft.i18n?.[lg.code]?.address || ''} onChange={e => updShopI18n(lg.code, 'address', e.target.value)} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Routing */}

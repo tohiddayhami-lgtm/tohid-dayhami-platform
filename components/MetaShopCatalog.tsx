@@ -30,6 +30,7 @@ const STR: Record<string, Record<string, string>> = {
     scanToOrder: 'Scan to view & order online', phone: 'Phone', email: 'Email', website: 'Website', address: 'Address',
     downloadPdf: 'Download PDF', backToShop: 'Back to shop', preparing: 'Preparing your catalog…',
     printHint: 'In the print dialog, choose “Save as PDF”.', pages: 'pages', item: 'No.', items_col: 'items',
+    visitShop: 'Visit online shop', whatsapp: 'WhatsApp',
   },
   fa: {
     productCatalog: 'کاتالوگ محصولات', serviceCatalog: 'کاتالوگ خدمات', propertyCatalog: 'کاتالوگ املاک', items: 'محصول', services: 'خدمت', properties: 'ملک',
@@ -39,6 +40,7 @@ const STR: Record<string, Record<string, string>> = {
     scanToOrder: 'برای مشاهده و سفارش آنلاین اسکن کنید', phone: 'تلفن', email: 'ایمیل', website: 'وب‌سایت', address: 'نشانی',
     downloadPdf: 'دانلود PDF', backToShop: 'بازگشت به فروشگاه', preparing: 'در حال آماده‌سازی کاتالوگ…',
     printHint: 'در پنجره چاپ، گزینه‌ی «ذخیره به‌صورت PDF» را انتخاب کنید.', pages: 'صفحه', item: 'ردیف', items_col: 'مورد',
+    visitShop: 'ورود به فروشگاه آنلاین', whatsapp: 'واتس‌اپ',
   },
   ar: {
     productCatalog: 'كتالوج المنتجات', serviceCatalog: 'كتالوج الخدمات', propertyCatalog: 'كتالوج العقارات', items: 'منتج', services: 'خدمة', properties: 'عقار',
@@ -48,6 +50,7 @@ const STR: Record<string, Record<string, string>> = {
     scanToOrder: 'امسح للعرض والطلب عبر الإنترنت', phone: 'الهاتف', email: 'البريد', website: 'الموقع', address: 'العنوان',
     downloadPdf: 'تحميل PDF', backToShop: 'العودة للمتجر', preparing: 'جارٍ تجهيز الكتالوج…',
     printHint: 'في نافذة الطباعة، اختر «حفظ كـ PDF».', pages: 'صفحات', item: 'م', items_col: 'بند',
+    visitShop: 'الدخول إلى المتجر الإلكتروني', whatsapp: 'واتساب',
   },
 };
 
@@ -306,6 +309,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const coverTitle = TR(shop.i18n, 'title', shop.title || shop.name);
   const coverSub = TR(shop.i18n, 'subtitle', shop.subtitle || '');
   const coverEyebrow = TR(shop.i18n, 'collectionText', shop.collectionText || '');
+  const footText = TR(shop.i18n, 'footerText', shop.footerText || '');
+  const footAddress = TR(shop.i18n, 'address', shop.address || '');
   const heroStyle: React.CSSProperties = shop.coverImage
     ? { backgroundImage: `linear-gradient(155deg, rgba(0,0,0,.28), rgba(0,0,0,.62)), url(${shop.coverImage})` }
     : { background: `linear-gradient(150deg, ${theme.cover}, ${theme.primary})` };
@@ -365,9 +370,10 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
             <div className="msc-cover-rule" />
             <div className="msc-cover-contact">
               {shop.phone && <div><span>{s('phone')}</span><b dir="ltr">{shop.phone}</b></div>}
+              {shop.whatsapp && <div><span>{s('whatsapp')}</span><b dir="ltr">{shop.whatsapp}</b></div>}
               {shop.email && <div><span>{s('email')}</span><b dir="ltr">{shop.email}</b></div>}
               {shop.website && <div><span>{s('website')}</span><b dir="ltr">{shop.website}</b></div>}
-              {shop.address && <div className="wide"><span>{s('address')}</span><b>{shop.address}</b></div>}
+              {footAddress && <div className="wide"><span>{s('address')}</span><b>{footAddress}</b></div>}
             </div>
             <div className="msc-cover-issue">
               <span>{s('issued')}: {dateStr}</span>
@@ -430,18 +436,19 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
               ? <span className="msc-back-logo-plate"><img className="msc-back-logo" src={shop.logo} alt={shop.name} /></span>
               : <div className="msc-back-logo-txt">{shop.name}</div>}
             <h2 className="msc-back-title">{s('thankYou')}</h2>
-            <p className="msc-back-sub">{shop.footerText || s('thankYouSub')}</p>
+            <p className="msc-back-sub">{footText || s('thankYouSub')}</p>
             <div className="msc-back-qr">
               <img src={qrUrl} alt="QR" />
               <span>{s('scanToOrder')}</span>
             </div>
             <div className="msc-back-contact">
               {shop.phone && <div><span>{s('phone')}</span><b dir="ltr">{shop.phone}</b></div>}
+              {shop.whatsapp && <div><span>{s('whatsapp')}</span><b dir="ltr">{shop.whatsapp}</b></div>}
               {shop.email && <div><span>{s('email')}</span><b dir="ltr">{shop.email}</b></div>}
               {shop.website && <div><span>{s('website')}</span><b dir="ltr">{shop.website}</b></div>}
-              {shop.address && <div className="wide"><span>{s('address')}</span><b>{shop.address}</b></div>}
+              {footAddress && <div className="wide"><span>{s('address')}</span><b>{footAddress}</b></div>}
             </div>
-            <div className="msc-back-link" dir="ltr">{shopLink}</div>
+            <a className="msc-back-link" href={shopLink} target="_blank" rel="noreferrer">{s('visitShop')}</a>
           </div>
         </section>
       </div>
@@ -618,8 +625,9 @@ const MSC_CSS = `
 .msc-back-contact div{ display:flex; flex-direction:column; gap:2px; }
 .msc-back-contact span{ font-size:8pt; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; opacity:.7; }
 .msc-back-contact b{ font-size:12pt; font-weight:700; }
-.msc-back-link{ margin-top:4mm; font-size:9.5pt; font-weight:600; opacity:.8; background:rgba(255,255,255,.14);
-  padding:3px 12px; border-radius:20px; word-break:break-all; }
+.msc-back-link{ margin-top:4mm; font-size:10.5pt; font-weight:700; opacity:.95; background:rgba(255,255,255,.18);
+  padding:4px 16px; border-radius:20px; color:inherit; text-decoration:underline; text-underline-offset:3px; display:inline-block; }
+.msc-back-link:hover{ background:rgba(255,255,255,.28); }
 
 /* ── Print ── */
 @media print {

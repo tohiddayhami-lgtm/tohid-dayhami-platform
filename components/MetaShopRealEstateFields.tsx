@@ -125,13 +125,31 @@ export const MetaShopRealEstateFields: React.FC<Props> = ({ value, onChange, lan
           <label className={lbl}>{T ? 'رزومه / توضیح تکمیلی ملک' : 'Property resume / extra notes'}</label>
           <textarea rows={3} className={fld} value={arrToLines(re.publicHighlights)} onChange={e => set({ publicHighlights: linesToArr(e.target.value) })} placeholder={T ? 'هر خط یک نکته مهم برای مشتری' : 'One highlight per line'} />
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 md:col-span-4">
           <label className={lbl}>{T ? 'لینک نقشه' : 'Map URL'}</label>
           <input className={fld + ' dir-ltr'} value={re.mapUrl || ''} onChange={e => set({ mapUrl: e.target.value })} />
         </div>
-        <div className="col-span-2">
+        <div className="col-span-2 md:col-span-4">
           <label className={lbl}>{T ? 'تور مجازی' : 'Virtual tour'}</label>
           <input className={fld + ' dir-ltr'} value={re.virtualTourUrl || ''} onChange={e => set({ virtualTourUrl: e.target.value })} />
+        </div>
+      </div>
+      <div className="border-t border-emerald-200 pt-3 mt-1">
+        <p className="text-xs font-bold text-emerald-900 mb-2">{T ? '📞 مشاور / تماس این ملک' : '📞 Agent / contact for this property'}</p>
+        <p className="text-[10px] text-gray-500 mb-2">{T ? 'خالی بگذارید تا از شماره پیش‌فرض فروشگاه (بخش تماس و فوتر) استفاده شود.' : 'Leave empty to use the shop default (Contact & footer section).'}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div>
+            <label className={lbl}>{T ? 'نام مشاور' : 'Agent name'}</label>
+            <input className={fld} value={re.agentName || ''} onChange={e => set({ agentName: e.target.value })} />
+          </div>
+          <div>
+            <label className={lbl}>{T ? 'تلفن مشاور' : 'Agent phone'}</label>
+            <input className={fld + ' dir-ltr'} value={re.agentPhone || ''} onChange={e => set({ agentPhone: e.target.value })} placeholder="+968 …" />
+          </div>
+          <div>
+            <label className={lbl}>{T ? 'واتس‌اپ مشاور' : 'Agent WhatsApp'}</label>
+            <input className={fld + ' dir-ltr'} value={re.agentWhatsapp || ''} onChange={e => set({ agentWhatsapp: e.target.value })} placeholder="+968 …" />
+          </div>
         </div>
       </div>
     </div>

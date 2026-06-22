@@ -1225,6 +1225,7 @@ export interface MetaShop {
   currency: string;
   // contact / footer
   phone?: string;
+  whatsapp?: string;   // default WhatsApp for all properties (per-property override in realEstate.agentWhatsapp)
   email?: string;
   website?: string;
   address?: string;

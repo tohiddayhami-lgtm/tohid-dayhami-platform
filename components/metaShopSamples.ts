@@ -169,7 +169,7 @@ export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> 
       'سوالات رایج مشتری؟ → realEstate.faq[] با q/a فارسی، qEn/aEn انگلیسی، qAr/aAr عربی، یا faq[].i18n.{کد}.{q,a} برای زبان‌های دیگر',
       'ترجمهٔ مقادیر مشخصات (کاربری، شهر، امکانات…): روش ۱) فیلد فارسی + پسوند En/Ar مثل usageEn، cityAr، amenitiesEn[] — روش ۲) realEstate.i18n.{کد}.{field} — روش ۳) products[].i18n.{کد}.realEstate.{field} برای هر زبان جدید (zh، tr، …)',
       'نکات مهم برای مشتری؟ → description + realEstate.publicHighlights[]',
-      'تماس مشاور؟ → realEstate.agentName, agentPhone, agentWhatsapp + shop.phone/email',
+      'تماس مشاور؟ → shop.phone + shop.whatsapp (پیش‌فرض)؛ override: realEstate.agentPhone / agentWhatsapp',
     ],
     dealTypes: { sale: 'فروش', rent: 'اجاره بلندمدت', 'rent-short': 'اجاره کوتاه‌مدت/روزانه', 'pre-sale': 'پیش‌فروش', exchange: 'معاوضه' },
     propertyTypes: { apartment: 'آپارتمان', villa: 'ویلا', penthouse: 'پنت‌هاوس', studio: 'سوئیت', shop: 'مغازه تجاری', office: 'دفتر', warehouse: 'انبار', industrial: 'صنعتی', land: 'زمین', building: 'ساختمان', hotel: 'هتل/مهمان‌پذیر' },
