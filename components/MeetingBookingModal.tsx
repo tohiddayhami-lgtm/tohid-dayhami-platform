@@ -67,7 +67,7 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
     required: fa ? 'نام و شماره تماس الزامی است.' : 'Name and phone are required.',
     fail: fa ? 'خطا در ثبت. دوباره تلاش کنید.' : 'Save failed. Please try again.',
     hint: fa
-      ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ مستر یکی را قطعی می‌کند.'
+      ? 'چند نفر می‌توانند همزمان رزرو موقت ثبت کنند؛ اولویت با عزیزانی است که رزرو را قطعی می‌کنند.'
       : 'Multiple people can book temporarily; master confirms one winner.',
   };
 
