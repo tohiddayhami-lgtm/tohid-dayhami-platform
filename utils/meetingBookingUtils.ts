@@ -126,6 +126,46 @@ export const countOpenSlotsForProfile = (
     return !m.consultantId && getMeetingConsultantName(m) === profile.name;
   }).length;
 
+export interface ConsultantSessionTopic {
+  key: string;
+  label: string;
+  description?: string;
+  openCount: number;
+  totalCount: number;
+}
+
+/** سرفصل‌های یکتا برای یک مشاور (از جلسات آینده) */
+export const collectConsultantSessionTopics = (
+  meetings: Meeting[],
+  consultantId: string,
+  fromDate: string,
+  fa: boolean,
+): ConsultantSessionTopic[] => {
+  const map = new Map<string, ConsultantSessionTopic>();
+  for (const m of meetings) {
+    if (!isBookableMeeting(m) || m.date < fromDate) continue;
+    if (m.consultantId !== consultantId) continue;
+    const label = getMeetingSessionLabel(m, fa ? 'fa' : 'en');
+    const key = (m.sessionType?.trim() || label).toLowerCase();
+    const existing = map.get(key);
+    const isOpen = getMeetingDisplayStatus(m) === 'open';
+    if (existing) {
+      existing.totalCount += 1;
+      if (isOpen) existing.openCount += 1;
+      if (!existing.description && m.description?.trim()) existing.description = m.description.trim();
+    } else {
+      map.set(key, {
+        key,
+        label,
+        description: m.description?.trim() || undefined,
+        openCount: isOpen ? 1 : 0,
+        totalCount: 1,
+      });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'fa'));
+};
+
 export const buildBookingPublicUrl = (baseUrl: string, consultantId?: string | null) => {
   const url = new URL(baseUrl, typeof window !== 'undefined' ? window.location.origin : 'https://localhost');
   url.search = '';

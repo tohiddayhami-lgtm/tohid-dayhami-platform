@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { tryBookMeeting } from '../services/firebaseService';
+import { formatConsultationSlot, formatJalaliDateFa, formatTimeRangeFa } from '../utils/persianDateTime';
 import { meetingPrices, getMeetingSessionLabel, getMeetingConsultantBio, getMeetingConsultantName, getMeetingConsultantPhoto } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { ConsultantAvatar } from './ConsultantAvatar';
@@ -153,7 +154,15 @@ export const MeetingBookingModal: React.FC<Props> = ({ open, meeting, consultant
 
             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm space-y-1.5">
               <div><span className="text-gray-500">{t.session}: </span><strong>{sessionLabel}</strong></div>
-              <div dir="ltr" className="text-left"><span className="text-gray-500">{t.date}: </span><strong>{meeting.date}</strong> — {meeting.startTime}–{meeting.endTime}</div>
+              <div className={fa ? 'text-right' : 'text-left'} dir={fa ? 'rtl' : 'ltr'}>
+                <span className="text-gray-500">{t.date}: </span>
+                <strong>{fa ? formatJalaliDateFa(meeting.date) : meeting.date}</strong>
+                {fa ? (
+                  <div className="mt-0.5"><strong>{formatTimeRangeFa(meeting.startTime, meeting.endTime)}</strong></div>
+                ) : (
+                  <span> — {meeting.startTime}–{meeting.endTime}</span>
+                )}
+              </div>
               {prices.length > 0 && (
                 <div>
                   <span className="text-gray-500">{t.price}: </span>

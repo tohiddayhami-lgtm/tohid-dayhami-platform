@@ -8,6 +8,7 @@ import {
   MEETING_STATUS_STYLE,
   canPublicBookMeeting,
   collectMeetingConsultantProfiles,
+  collectConsultantSessionTopics,
   countOpenSlotsForProfile,
   filterPublicBookableMeetingsByCategory,
   findConsultant,
@@ -20,15 +21,7 @@ import {
 } from '../utils/meetingBookingUtils';
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
-import { getDayName, parseDateLocal } from '../utils/weekCalendar';
-
-function formatSlotDate(ds: string, fa: boolean): string {
-  const d = parseDateLocal(ds);
-  const mon = fa
-    ? ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر']
-    : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${getDayName(d, fa)} ${d.getDate()} ${mon[d.getMonth()]}`;
-}
+import { formatConsultationSlot } from '../utils/persianDateTime';
 
 interface Props {
   meetings: Meeting[];
@@ -100,12 +93,36 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     bookNow: fa ? 'رزرو' : 'Book',
     full: fa ? 'پر شده' : 'Full',
     consultantsTitle: fa ? 'مشاوران' : 'Consultants',
-    openSlots: (n: number) => fa ? `${n} زمان باز` : `${n} open`,
+    openSlots: (n: number) => fa ? `${n.toLocaleString('fa-IR')} زمان باز` : `${n} open`,
     uncategorized: fa ? 'سایر مشاوره‌ها' : 'Other consultations',
     sessionsTitle: fa ? 'جلسات قابل رزرو' : 'Available sessions',
     pendingCount: (n: number) => fa ? `${n.toLocaleString('fa-IR')} رزرو موقت` : `${n} temporary booking${n === 1 ? '' : 's'}`,
     selectConsultant: fa ? 'انتخاب' : 'Select',
+    sessionTopics: fa ? 'سرفصل‌های جلسه' : 'Session topics',
+    sessionTopicsHint: fa ? 'موضوعات مشاوره‌ای که این مشاور ارائه می‌دهد' : 'Topics this consultant offers',
+    openSlotsTopic: (n: number) => fa ? `${n.toLocaleString('fa-IR')} زمان باز` : `${n} open slot${n === 1 ? '' : 's'}`,
+    clearConsultant: fa ? 'همه مشاوران' : 'All consultants',
   };
+
+  const selectedConsultant = useMemo(
+    () => consultantProfiles.find(p => p.id === consultantId) || null,
+    [consultantProfiles, consultantId],
+  );
+
+  const selectedConsultantPerson = useMemo(
+    () => findConsultant(personnel, consultantId),
+    [personnel, consultantId],
+  );
+
+  const sessionTopics = useMemo(() => {
+    if (!consultantId) return [];
+    return collectConsultantSessionTopics(
+      filterPublicBookableMeetingsByCategory(meetings, categoryFilter),
+      consultantId,
+      todayStr,
+      fa,
+    );
+  }, [consultantId, meetings, categoryFilter, todayStr, fa]);
 
   const copyPageLink = async () => {
     try {
@@ -154,9 +171,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
             <h3 className="font-bold text-gray-900 text-sm">{sessionLabel}</h3>
             {consultantName && <p className="text-xs text-gray-600 mt-0.5">{consultantName}</p>}
             <p className="text-xs text-gray-500 mt-1">
-              {formatSlotDate(meeting.date, fa)}
-              <span className="mx-1">·</span>
-              <span dir="ltr">{meeting.startTime} – {meeting.endTime}</span>
+              {formatConsultationSlot(meeting.date, meeting.startTime, meeting.endTime, fa)}
             </p>
             {prices.length > 0 && (
               <p className="text-xs text-emerald-700 font-semibold mt-1">
@@ -246,9 +261,9 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
             ))}
           </select>
           <div className="flex flex-wrap gap-2 mr-auto text-[11px]">
-            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold">{t.statsOpen}: {slotStats.open}</span>
-            <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-800 font-bold">{t.statsPending}: {slotStats.pending}</span>
-            <span className="px-2 py-1 rounded-lg bg-red-100 text-red-800 font-bold">{t.statsConfirmed}: {slotStats.confirmed}</span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold">{t.statsOpen}: {fa ? slotStats.open.toLocaleString('fa-IR') : slotStats.open}</span>
+            <span className="px-2 py-1 rounded-lg bg-orange-100 text-orange-800 font-bold">{t.statsPending}: {fa ? slotStats.pending.toLocaleString('fa-IR') : slotStats.pending}</span>
+            <span className="px-2 py-1 rounded-lg bg-red-100 text-red-800 font-bold">{t.statsConfirmed}: {fa ? slotStats.confirmed.toLocaleString('fa-IR') : slotStats.confirmed}</span>
           </div>
         </div>
 
@@ -259,7 +274,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                 key={c.key}
                 type="button"
                 onClick={() => c.id && onConsultantChange?.(c.id)}
-                className="shrink-0 flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-violet-300"
+                className="shrink-0 flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-violet-300 hover:shadow-md transition-all"
               >
                 <ConsultantAvatar name={c.name} avatarUrl={c.photo} size="sm" />
                 <div className="text-right">
@@ -268,6 +283,69 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* مشاور انتخاب‌شده + سرفصل‌های جلسه */}
+        {consultantId && selectedConsultant && (
+          <div className="bg-white rounded-2xl border border-violet-100 shadow-md overflow-hidden">
+            <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5 border-b border-violet-50">
+              <ConsultantAvatar
+                name={selectedConsultant.name}
+                avatarUrl={selectedConsultant.photo}
+                person={selectedConsultantPerson}
+                size="xl"
+                ring
+                className="mx-auto sm:mx-0 shrink-0"
+              />
+              <div className="flex-1 min-w-0 text-center sm:text-right">
+                <div className="flex flex-wrap items-center justify-center sm:justify-between gap-2 mb-1">
+                  <h3 className="text-lg font-black text-gray-900">{selectedConsultant.name}</h3>
+                  <button
+                    type="button"
+                    onClick={() => onConsultantChange?.(null)}
+                    className="text-[11px] font-bold text-violet-600 hover:bg-violet-50 px-2 py-1 rounded-lg"
+                  >
+                    ← {t.clearConsultant}
+                  </button>
+                </div>
+                <p className="text-xs font-bold text-emerald-600">
+                  {t.openSlots(countOpenSlotsForProfile(meetings.filter(m => m.kind === 'bookable'), selectedConsultant, todayStr))}
+                </p>
+                {selectedConsultant.bio && (
+                  <div className="mt-2 text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-xl p-3 border border-gray-100 text-right max-h-40 overflow-y-auto">
+                    {selectedConsultant.bio}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {sessionTopics.length > 0 && (
+              <div className="p-4 sm:p-5 bg-violet-50/40">
+                <h4 className="text-sm font-black text-violet-900 mb-0.5">{t.sessionTopics}</h4>
+                <p className="text-[11px] text-gray-500 mb-3">{t.sessionTopicsHint}</p>
+                <div className="space-y-2">
+                  {sessionTopics.map(topic => (
+                    <div
+                      key={topic.key}
+                      className="rounded-xl border border-violet-100 bg-white px-4 py-3 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <h5 className="font-bold text-gray-900 text-sm">{topic.label}</h5>
+                        {topic.openCount > 0 && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
+                            {t.openSlotsTopic(topic.openCount)}
+                          </span>
+                        )}
+                      </div>
+                      {topic.description && (
+                        <p className="text-xs text-gray-600 mt-1.5 leading-relaxed whitespace-pre-wrap">{topic.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

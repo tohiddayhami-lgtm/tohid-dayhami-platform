@@ -281,12 +281,19 @@ export const ConsultationAdminManager: React.FC<Props> = ({
                 <option value="">{fa ? 'انتخاب از پرسنل' : 'Pick staff'}</option>
                 {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
               </select>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">{fa ? 'رزومه مشاور' : 'Consultant bio'}</label>
+                <textarea rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder={fa ? 'رزومه مشاور' : 'Bio'} value={form.consultantBio} onChange={e => setForm(p => ({ ...p, consultantBio: e.target.value }))} />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <input type="date" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
                 <input type="time" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
                 <input type="time" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm col-span-2" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
               </div>
-              <textarea rows={3} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder={fa ? 'رزومه مشاور' : 'Bio'} value={form.consultantBio} onChange={e => setForm(p => ({ ...p, consultantBio: e.target.value }))} />
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600">{fa ? 'سرفصل / توضیحات جلسه' : 'Session agenda / details'}</label>
+                    <textarea rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder={fa ? 'سرفصل و جزئیات جلسه برای نمایش در لینک عمومی…' : 'Agenda shown on public booking page…'} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+                  </div>
 
               {editingId && (meetings.find(m => m.id === editingId)?.guests?.length || 0) > 0 && (
                 <div>
