@@ -1226,7 +1226,9 @@ export interface MetaShop {
   address?: string;
   footerText?: string;
   // catalog
-  categories?: string[];   // ordered category list (falls back to product groups)
+  categories?: (string | MetaShopDirCat)[];   // ordered category list (string or { fa, en, ar, … })
+  groupI18n?: Record<string, Record<string, string>>;  // product.group (fa key) → { en, ar, … }
+  groupLabels?: Record<string, Record<string, string>>; // alias for groupI18n in imported JSON
   hidePrices?: boolean;    // hide ALL product prices shop-wide → «قابل مذاکره»; orders still capture quantities for a later quote
   hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
   products: MetaShopProduct[];

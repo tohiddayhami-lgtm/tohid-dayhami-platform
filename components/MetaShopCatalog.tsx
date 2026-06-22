@@ -3,6 +3,7 @@ import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
+import { normalizeShopCategories, categoryLabel, findCategoryEntry } from '../utils/metaShopCategories';
 
 interface Props {
   shop: MetaShop;
@@ -82,7 +83,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const grouped = useMemo(() => {
     const map = new Map<string, MetaShopProduct[]>();
     const order: string[] = [];
-    (shop.categories || []).forEach(c => { if (c && !map.has(c)) { map.set(c, []); order.push(c); } });
+    const catKeys = normalizeShopCategories(shop.categories, products);
+    catKeys.forEach(c => { if (c && !map.has(c)) { map.set(c, []); order.push(c); } });
     products.forEach(p => {
       const g = (p.group && p.group.trim()) ? p.group : UNCAT;
       if (!map.has(g)) { map.set(g, []); order.push(g); }
@@ -90,8 +92,14 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     });
     return order
       .filter(c => (map.get(c) || []).length)
-      .map(c => ({ cat: c, label: c === UNCAT ? (isRealEstate ? s('properties') : isServices ? s('services') : s('items')) : c, items: map.get(c)! }));
-  }, [products, shop.categories, uiLang, isServices, isRealEstate]);
+      .map(c => ({
+        cat: c,
+        label: c === UNCAT
+          ? (isRealEstate ? s('properties') : isServices ? s('services') : s('items'))
+          : categoryLabel(findCategoryEntry(shop.categories, c), uiLang, shop),
+        items: map.get(c)!,
+      }));
+  }, [products, shop.categories, uiLang, isServices, isRealEstate, shop]);
 
   const showToc = grouped.length > 1 && products.length > PER_PAGE;
   const coverPages = 1;

@@ -47,17 +47,18 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
   // Native MetaShop format (top-level products[]) — import everything, normalize products.
   if (json.products && Array.isArray(json.products)) {
     const { _aiGuide, _instructions, ...clean } = json;
+    const products = json.products.map((p: any, i: number) => ({
+      ...p,
+      id: p.id || `p-${Date.now()}-${i}`,
+      images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
+      active: p.active !== false,
+    }));
     return {
       ...base, ...clean,
       id: base.id, createdAt: base.createdAt,
       theme: { ...DEFAULT_THEME, ...(json.theme || {}) },
       type: (['services', 'realestate'].includes(json.type) ? json.type : 'products') as MetaShopType,
-      products: json.products.map((p: any, i: number) => ({
-        ...p,
-        id: p.id || `p-${Date.now()}-${i}`,
-        images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
-        active: p.active !== false,
-      })),
+      products,
     };
   }
   const data = json.data || json;

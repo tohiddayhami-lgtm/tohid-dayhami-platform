@@ -5,6 +5,7 @@ import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, formatMoney } from '../utils/metaShopRealEstate';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
+import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -240,6 +241,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   // Content helpers (use per-product/shop i18n with legacy fallback)
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
+  const pGroup = (p: MetaShopProduct) => translateProductGroup(shop, p.group || '', uiLang, p.i18n);
+  const pSubcategory = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n);
+  const catLabel = (key: string) => categoryLabel(findCategoryEntry(shop.categories, key), uiLang, shop);
 
   const rePriceLabel = (p: MetaShopProduct): string | null => {
     const re = p.realEstate;
@@ -262,12 +266,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   // Up to 3 «ویژه» (featured) products, shown in a highlighted rail above the grid.
   const featuredProducts = useMemo(() => products.filter(p => p.featured).slice(0, 3), [products]);
-  const categories = useMemo(() => {
-    if (shop.categories && shop.categories.length) return shop.categories;
-    const set: string[] = [];
-    products.forEach(p => { if (p.group && !set.includes(p.group)) set.push(p.group); });
-    return set;
-  }, [shop.categories, products]);
+  const categories = useMemo(
+    () => normalizeShopCategories(shop.categories, products),
+    [shop.categories, products],
+  );
 
   // Subcategories available under the active category (derived from products)
   const subcategories = useMemo(() => {
@@ -592,7 +594,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
           {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
           {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, reLang())}</span>}
-          {!re && p.group && <span className="ms-group-badge">{p.group}</span>}
+          {!re && p.group && <span className="ms-group-badge">{pGroup(p)}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
           {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
           <div className="ms-media-badges">
@@ -605,7 +607,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           <div className="ms-badges">
             {p.sku && <span className="ms-sku">{p.sku}</span>}
             {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, reLang())}</span>}
-            {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
+            {p.subcategory && <span className="ms-subcat-badge">{pSubcategory(p)}</span>}
             {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
           </div>
           {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
@@ -688,7 +690,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {categories.length > 0 && (
           <div className="ms-filter-bar">
             <button className={`ms-pill ${activeCat === 'all' ? 'active' : ''}`} onClick={() => selectCat('all')}>{t.all}</button>
-            {categories.map(c => <button key={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => selectCat(c)}>{c}</button>)}
+            {categories.map(c => <button key={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => selectCat(c)}>{catLabel(c)}</button>)}
           </div>
         )}
 
@@ -696,7 +698,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         {subcategories.length > 0 && (
           <div className="ms-subfilter-bar">
             <button className={`ms-subpill ${activeSub === 'all' ? 'active' : ''}`} onClick={() => setActiveSub('all')}>{t.all}</button>
-            {subcategories.map(s => <button key={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{s}</button>)}
+            {subcategories.map(s => {
+              const sample = products.find(p => p.group === activeCat && p.subcategory === s);
+              const label = sample ? pSubcategory(sample) : translateProductSubcategory(s, uiLang);
+              return <button key={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{label}</button>;
+            })}
           </div>
         )}
 
