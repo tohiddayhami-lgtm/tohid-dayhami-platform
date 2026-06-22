@@ -7,7 +7,7 @@ import { LoginView } from './components/LoginView';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
-import { PublicFormView } from './components/PublicFormView';
+import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaBazaar, CustomForm, TeamBrainstormPost } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
 import {
@@ -257,6 +257,15 @@ const extractServiceId = (): string | null => {
   return null;
 };
 
+// Public meeting booking — ?page=booking&consultant=<personnelId>
+const extractBookingConsultantId = (): string | null => {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('consultant') || null;
+  } catch {}
+  return null;
+};
+
 // Parses current URL into a ViewState, checking query params first (social-media-safe),
 // then hash fragments (internal navigation). Query params survive Instagram/WhatsApp/Telegram.
 const parseUrl = (search: string, hash: string): ViewState | null => {
@@ -266,6 +275,7 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'form')     return 'new-ticket';
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
+    if (page === 'booking') return 'booking';
     if (p.get('form'))       return 'custom-form';
     if (p.get('expo-map')) return 'expo-map';
     if (p.get('page') === 'expo-map') return 'expo-map';
@@ -335,6 +345,7 @@ const App: React.FC = () => {
   const [expoLoading, setExpoLoading] = useState(false);
   const [expoMapResolved, setExpoMapResolved] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [bookingConsultantId, setBookingConsultantId] = useState<string | null>(extractBookingConsultantId);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(true);
@@ -351,7 +362,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=',
+    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=', booking: '?page=booking',
   };
 
   // Public "ثبت درخواست" entry point. If an external URL is configured (e.g. a Google
@@ -455,7 +466,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map' || initialView === 'booking';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -492,6 +503,7 @@ const App: React.FC = () => {
       if (v === 'bazaar') setBazaarSlug(extractBazaarSlug());
       if (v === 'expo') { setExpoSlug(extractExpoSlug()); setEnvEditMode(extractEnvEditFlag()); }
       if (v === 'expo-map') setExpoMapSlug(extractExpoMapSlug());
+      if (v === 'booking') setBookingConsultantId(extractBookingConsultantId());
       if (v === 'new-ticket') setPreSelectedServiceId(extractServiceId());
       setViewState(v);
       localStorage.setItem(STORAGE_KEYS.VIEW, v);
@@ -1414,6 +1426,26 @@ const App: React.FC = () => {
     };
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
+
+  // ── Public meeting booking calendar ──
+  if (view === 'booking') {
+    const onConsultantChange = (id: string | null) => {
+      setBookingConsultantId(id);
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const url = id ? `${base}?page=booking&consultant=${encodeURIComponent(id)}` : `${base}?page=booking`;
+      history.replaceState(null, '', url);
+    };
+    return (
+      <PublicMeetingBookingView
+        meetings={meetings}
+        personnel={personnel}
+        lang={lang}
+        consultantId={bookingConsultantId}
+        onConsultantChange={onConsultantChange}
+        onExit={() => setView('landing')}
+      />
+    );
+  }
 
   // ── Public Metaverse Expo reservation map (2D floor plan, shareable link) ──
   if (view === 'expo-map') {

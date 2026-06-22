@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
@@ -1194,6 +1194,65 @@ export const deleteMeetingFromCloud = async (id: string) => {
 
 export const subscribeToMeetings = (callback: (meetings: Meeting[]) => void) =>
   subscribeCollection<Meeting>('meetings', callback, { intervalMs: 10_000 });
+
+const MAX_MEETING_PENDING_GUESTS = 100;
+
+export const tryBookMeeting = async (
+    meetingId: string,
+    guest: Omit<MeetingBookingGuest, 'id' | 'bookedAt'>,
+): Promise<'ok' | 'taken' | 'full' | 'error' | 'not_found'> => {
+    try {
+        if (!meetingId) return 'error';
+        const proxy = await checkProxyMode();
+        let meeting: Meeting | null = null;
+        if (proxy) {
+            meeting = await proxyGet<Meeting>('meetings', { doc: meetingId });
+        } else {
+            const snap = await getDoc(doc(db, 'meetings', meetingId));
+            if (snap.exists()) meeting = snap.data() as Meeting;
+        }
+        if (!meeting || meeting.kind !== 'bookable') return 'not_found';
+        if (meeting.bookingStatus === 'confirmed' || meeting.confirmedGuestId) return 'taken';
+        const guests = meeting.guests || [];
+        if (guests.length >= MAX_MEETING_PENDING_GUESTS) return 'full';
+
+        const newGuest: MeetingBookingGuest = {
+            ...guest,
+            id: `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            bookedAt: new Date().toISOString(),
+        };
+        await updateDocCloud('meetings', meetingId, {
+            guests: [...guests, newGuest],
+            bookingStatus: 'pending',
+        });
+        return 'ok';
+    } catch { return 'error'; }
+};
+
+export const confirmMeetingBooking = async (
+    meetingId: string,
+    guestId: string,
+    actorName: string,
+): Promise<void> => {
+    try {
+        if (!meetingId || !guestId) return;
+        const proxy = await checkProxyMode();
+        let meeting: Meeting | null = null;
+        if (proxy) {
+            meeting = await proxyGet<Meeting>('meetings', { doc: meetingId });
+        } else {
+            const snap = await getDoc(doc(db, 'meetings', meetingId));
+            if (snap.exists()) meeting = snap.data() as Meeting;
+        }
+        if (!meeting || meeting.kind !== 'bookable') return;
+        const guest = (meeting.guests || []).find(g => g.id === guestId);
+        if (!guest) return;
+        await updateMeetingInCloud(meetingId, {
+            bookingStatus: 'confirmed',
+            confirmedGuestId: guestId,
+        }, actorName);
+    } catch {}
+};
 
 export const saveKPIToCloud = async (kpi: KPI) => {
     await setDocCloud('kpis', kpi.id, kpi);

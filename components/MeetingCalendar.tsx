@@ -1,11 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Meeting, Personnel, NotificationConfig } from '../types';
-import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy } from './Icons';
-import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog } from '../services/firebaseService';
+import { Meeting, Personnel, NotificationConfig, MeetingKind, MeetingSessionType, Price, Currency } from '../types';
+import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
+import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { StaffIdPicker } from './StaffIdPicker';
 import { Language } from '../App';
+import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
+import { MEETING_STATUS_STYLE, SESSION_TYPE_LABEL, getMeetingDisplayStatus, isBookableMeeting } from '../utils/meetingBookingUtils';
 
 const HOUR_HEIGHT = 52; // px per hour — compact
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -69,10 +71,17 @@ function normalizeMeeting(m: Meeting): Meeting {
     attendeeIds: Array.isArray(m.attendeeIds) ? m.attendeeIds : [],
     organizerId: m.organizerId || '',
     organizerName: m.organizerName || '',
+    kind: m.kind || 'internal',
+    guests: Array.isArray(m.guests) ? m.guests : [],
+    prices: Array.isArray(m.prices) ? m.prices : undefined,
   };
 }
 
 function getMeetingColor(m: Meeting): string {
+  if (isBookableMeeting(m)) {
+    const st = getMeetingDisplayStatus(m);
+    if (st !== 'internal') return MEETING_STATUS_STYLE[st].bg;
+  }
   const id = m.id || '';
   const h = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return MEETING_COLORS[h % MEETING_COLORS.length];
@@ -84,18 +93,27 @@ interface Props {
   personnel: Personnel[];
   lang: Language;
   notificationConfig?: NotificationConfig;
+  shopBaseUrl?: string;
 }
 
-export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang, notificationConfig }) => {
+export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, personnel, lang, notificationConfig, shopBaseUrl }) => {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [showModal, setShowModal] = useState(false);
   const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [formData, setFormData] = useState({
     title: '', date: toDateStr(new Date()),
     startTime: '09:00', endTime: '10:00',
     location: '', attendeeIds: [] as string[], description: '',
+    kind: 'internal' as MeetingKind,
+    sessionType: 'consultation' as MeetingSessionType,
+    consultantId: '',
+    priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: '' })),
   });
   const gridRef = useRef<HTMLDivElement>(null);
+
+  const isMasterOrAdmin = currentUser.username === 'master' || (currentUser.roles || []).includes('مدیر');
+  const activePersonnel = personnel.filter(p => (p.status || 'active') === 'active');
 
   useEffect(() => {
     if (gridRef.current) gridRef.current.scrollTop = 7 * HOUR_HEIGHT;
@@ -129,10 +147,32 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); };
   const goToday  = () => setWeekStart(getWeekStart(new Date()));
 
+  const emptyPriceInputs = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: '' }));
+
+  const pricesFromForm = (): { prices: Price[]; price?: Price } => {
+    const raw = formData.priceInputs
+      .map(p => ({ currency: p.currency as Currency, amount: Number(p.amount) || 0 }))
+      .filter(p => p.amount > 0);
+    return normalizePrices(raw);
+  };
+
+  const loadPricesToForm = (m?: Meeting) => {
+    const list = m?.prices?.length ? m.prices : m?.price ? [m.price] : [];
+    return ALL_CURRENCIES.map(c => {
+      const found = list.find(p => p.currency === c);
+      return { currency: c, amount: found?.amount ? String(found.amount) : '' };
+    });
+  };
+
   const handleOpenCreate = (date?: string, st?: string, et?: string) => {
     setEditingMeetingId(null);
     const s = st || '09:00';
-    setFormData({ title: '', date: date || todayStr, startTime: s, endTime: et || addMinutes(s, 60), location: '', attendeeIds: [], description: '' });
+    setFormData({
+      title: '', date: date || todayStr, startTime: s, endTime: et || addMinutes(s, 60),
+      location: '', attendeeIds: [], description: '',
+      kind: 'internal', sessionType: 'consultation', consultantId: currentUser.id,
+      priceInputs: emptyPriceInputs(),
+    });
     setShowModal(true);
   };
 
@@ -147,6 +187,10 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
       location: meeting.location,
       attendeeIds: meeting.attendeeIds,
       description: meeting.description || '',
+      kind: meeting.kind || 'internal',
+      sessionType: meeting.sessionType || 'consultation',
+      consultantId: meeting.consultantId || meeting.organizerId,
+      priceInputs: loadPricesToForm(meeting),
     });
     setShowModal(true);
   };
@@ -217,30 +261,91 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
   };
   // ────────────────────────────────────────────────────────────────
 
+  const buildMeetingPayload = (id: string): Meeting => {
+    const consultant = activePersonnel.find(p => p.id === formData.consultantId);
+    const { prices, price } = pricesFromForm();
+    const isBookable = formData.kind === 'bookable';
+    const sessionLabel = SESSION_TYPE_LABEL[formData.sessionType]?.[fa ? 'fa' : 'en'] || formData.title;
+    return {
+      id,
+      title: formData.title || (isBookable ? sessionLabel : ''),
+      date: formData.date,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      location: formData.location,
+      organizerId: currentUser.id,
+      organizerName: currentUser.fullName,
+      attendeeIds: isBookable ? [] : formData.attendeeIds,
+      description: formData.description,
+      kind: formData.kind,
+      sessionType: isBookable ? formData.sessionType : undefined,
+      consultantId: isBookable ? formData.consultantId : undefined,
+      consultantName: isBookable ? consultant?.fullName : undefined,
+      prices: isBookable && prices.length ? prices : undefined,
+      price: isBookable ? price : undefined,
+      bookingStatus: isBookable ? 'open' : undefined,
+      guests: editingMeetingId ? meetings.find(m => m.id === editingMeetingId)?.guests : undefined,
+      confirmedGuestId: editingMeetingId ? meetings.find(m => m.id === editingMeetingId)?.confirmedGuestId : undefined,
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title) return;
+    if (!formData.title && formData.kind === 'internal') return;
+    if (formData.kind === 'bookable' && !formData.consultantId) return;
     if (editingMeetingId) {
       const oldM = meetings.find(m => m.id === editingMeetingId);
-      await updateMeetingInCloud(editingMeetingId, {
-        title: formData.title, date: formData.date, startTime: formData.startTime,
-        endTime: formData.endTime, location: formData.location,
-        attendeeIds: formData.attendeeIds, description: formData.description,
-      }, currentUser.fullName);
-      const updatedM: Meeting = { id: editingMeetingId, title: formData.title, date: formData.date,
-        startTime: formData.startTime, endTime: formData.endTime, location: formData.location,
-        organizerId: currentUser.id, organizerName: currentUser.fullName,
-        attendeeIds: formData.attendeeIds, description: formData.description };
-      if (oldM) sendMeetingUpdatedNotifications(oldM, updatedM);
+      const payload = buildMeetingPayload(editingMeetingId);
+      const existing = meetings.find(m => m.id === editingMeetingId);
+      const updates: Partial<Meeting> = {
+        title: payload.title,
+        date: payload.date,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        location: payload.location,
+        attendeeIds: payload.attendeeIds,
+        description: payload.description,
+        kind: payload.kind,
+        sessionType: payload.sessionType,
+        consultantId: payload.consultantId,
+        consultantName: payload.consultantName,
+        prices: payload.prices,
+        price: payload.price,
+      };
+      if (payload.kind === 'internal') {
+        updates.bookingStatus = undefined;
+        updates.guests = undefined;
+        updates.confirmedGuestId = undefined;
+      }
+      await updateMeetingInCloud(editingMeetingId, updates, currentUser.fullName);
+      if (oldM) sendMeetingUpdatedNotifications(oldM, { ...existing!, ...updates } as Meeting);
     } else {
-      const meeting: Meeting = { id: `meet-${Date.now()}`, title: formData.title, date: formData.date,
-        startTime: formData.startTime, endTime: formData.endTime, location: formData.location,
-        organizerId: currentUser.id, organizerName: currentUser.fullName,
-        attendeeIds: formData.attendeeIds, description: formData.description };
+      const meeting = buildMeetingPayload(`meet-${Date.now()}`);
+      if (meeting.kind === 'bookable') {
+        meeting.bookingStatus = 'open';
+        meeting.guests = [];
+      }
       await saveMeetingToCloud(meeting);
-      sendMeetingCreatedNotifications(meeting);
+      if (meeting.kind === 'internal') sendMeetingCreatedNotifications(meeting);
     }
     setShowModal(false);
+  };
+
+  const handleConfirmGuest = async (meetingId: string, guestId: string) => {
+    if (!isMasterOrAdmin) return;
+    if (!window.confirm(fa ? 'این رزرو قطعی شود؟' : 'Confirm this booking?')) return;
+    await confirmMeetingBooking(meetingId, guestId, currentUser.fullName);
+    setShowModal(false);
+  };
+
+  const copyPublicLink = async () => {
+    const base = (shopBaseUrl || `${window.location.origin}${window.location.pathname}`).replace(/\?.*$/, '').replace(/\/$/, '');
+    const url = `${base}?page=booking`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 1800);
+    } catch {}
   };
 
   const handleDelete = async (id: string) => {
@@ -294,6 +399,18 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
           <IconPlus className="w-3.5 h-3.5" />
           {fa ? 'جلسه جدید' : 'New Meeting'}
         </button>
+        <button type="button" onClick={copyPublicLink} className="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 shadow-sm transition-colors text-[11px]">
+          <IconLink className="w-3.5 h-3.5" />
+          {copiedLink ? (fa ? 'کپی شد ✓' : 'Copied ✓') : (fa ? 'لینک رزرو عمومی' : 'Public booking link')}
+        </button>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 px-4 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />{fa ? 'باز' : 'Open'}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500" />{fa ? 'رزرو موقت' : 'Temporary'}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-600" />{fa ? 'رزرو قطعی' : 'Confirmed'}</span>
+        <span className="text-gray-400">{fa ? 'جلسات پرسنل در لینک عمومی نمایش داده نمی‌شوند' : 'Internal staff meetings are hidden from public link'}</span>
       </div>
 
       {/* ── Day header ── */}
@@ -388,8 +505,17 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
                       <div className="px-1 py-0.5 h-full flex flex-col overflow-hidden">
                         {/* Title always visible */}
                         <div className="text-white font-semibold leading-tight truncate" style={{ fontSize: '10px' }}>
-                          {meeting.title}
+                          {isBookableMeeting(meeting)
+                            ? (SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title)
+                            : meeting.title}
                         </div>
+                        {isBookableMeeting(meeting) && height > 22 && (
+                          <div className="text-white/80 leading-none truncate" style={{ fontSize: '8px' }}>
+                            {fa ? MEETING_STATUS_STYLE[getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed'].labelFa
+                              : MEETING_STATUS_STYLE[getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed'].labelEn}
+                            {(meeting.guests?.length || 0) > 0 ? ` (${meeting.guests!.length})` : ''}
+                          </div>
+                        )}
                         {/* Time — only if tall enough */}
                         {height > 28 && (
                           <div className="text-white/80 leading-none truncate" style={{ fontSize: '9px' }}>
@@ -445,8 +571,65 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
 
             <form onSubmit={handleSubmit} className="p-5 space-y-3 max-h-[82vh] overflow-y-auto">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'موضوع جلسه' : 'Title'}</label>
-                <input required autoFocus
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع ثبت' : 'Type'}</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setFormData(p => ({ ...p, kind: 'internal' }))}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold border ${formData.kind === 'internal' ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600'}`}>
+                    {fa ? 'جلسه پرسنل' : 'Staff meeting'}
+                  </button>
+                  <button type="button" onClick={() => setFormData(p => ({ ...p, kind: 'bookable' }))}
+                    className={`flex-1 py-2 rounded-lg text-xs font-bold border ${formData.kind === 'bookable' ? 'bg-violet-600 text-white border-violet-600' : 'border-gray-200 text-gray-600'}`}>
+                    {fa ? 'قابل رزرو عمومی' : 'Public bookable'}
+                  </button>
+                </div>
+              </div>
+
+              {formData.kind === 'bookable' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'نوع جلسه' : 'Session type'}</label>
+                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      value={formData.sessionType} onChange={e => setFormData({ ...formData, sessionType: e.target.value as MeetingSessionType })}>
+                      <option value="consultation">{fa ? 'مشاوره' : 'Consultation'}</option>
+                      <option value="workshop">{fa ? 'ورکشاپ' : 'Workshop'}</option>
+                      <option value="session">{fa ? 'جلسه' : 'Session'}</option>
+                      <option value="other">{fa ? 'سایر' : 'Other'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'مشاور' : 'Consultant'}</label>
+                    <select required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      value={formData.consultantId} onChange={e => setFormData({ ...formData, consultantId: e.target.value })}>
+                      <option value="">{fa ? 'انتخاب مشاور' : 'Select consultant'}</option>
+                      {activePersonnel.map(p => (
+                        <option key={p.id} value={p.id}>{p.fullName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'هزینه (چند ارزی)' : 'Fee (multi-currency)'}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {formData.priceInputs.map((p, idx) => (
+                        <div key={p.currency} className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-500 w-12 shrink-0">{CUR_LABEL[p.currency][fa ? 'fa' : 'en']}</span>
+                          <input type="number" min={0} dir="ltr" placeholder="0"
+                            className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs"
+                            value={p.amount}
+                            onChange={e => {
+                              const next = [...formData.priceInputs];
+                              next[idx] = { ...next[idx], amount: e.target.value };
+                              setFormData({ ...formData, priceInputs: next });
+                            }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'موضوع جلسه' : 'Title'}{formData.kind === 'bookable' ? ` (${fa ? 'اختیاری' : 'optional'})` : ''}</label>
+                <input autoFocus required={formData.kind === 'internal'}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
               </div>
@@ -480,14 +663,44 @@ export const MeetingCalendar: React.FC<Props> = ({ meetings, currentUser, person
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}</label>
-                <StaffIdPicker
-                  personnel={personnel}
-                  selectedIds={formData.attendeeIds}
-                  onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
-                  lang={lang}
-                />
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}{formData.kind === 'bookable' ? ` (${fa ? 'فقط پرسنل' : 'staff only'})` : ''}</label>
+                {formData.kind === 'internal' ? (
+                  <StaffIdPicker
+                    personnel={personnel}
+                    selectedIds={formData.attendeeIds}
+                    onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
+                    lang={lang}
+                  />
+                ) : (
+                  <p className="text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">{fa ? 'مشتریان از لینک عمومی رزرو می‌کنند' : 'Customers book via the public link'}</p>
+                )}
               </div>
+
+              {editingMeetingId && (meetings.find(m => m.id === editingMeetingId)?.guests?.length || 0) > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'درخواست‌های رزرو' : 'Booking requests'}</label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {(meetings.find(m => m.id === editingMeetingId)?.guests || []).map(g => {
+                      const confirmed = meetings.find(m => m.id === editingMeetingId)?.confirmedGuestId === g.id;
+                      return (
+                        <div key={g.id} className={`rounded-lg border px-3 py-2 text-xs ${confirmed ? 'border-red-200 bg-red-50' : 'border-orange-200 bg-orange-50'}`}>
+                          <div className="font-bold text-gray-800">{g.name}</div>
+                          <div dir="ltr" className="text-gray-600">{g.phone}{g.email ? ` · ${g.email}` : ''}</div>
+                          {g.company && <div className="text-gray-500">{g.company}</div>}
+                          {g.note && <div className="text-gray-500 italic">{g.note}</div>}
+                          {isMasterOrAdmin && !confirmed && getMeetingDisplayStatus(meetings.find(m => m.id === editingMeetingId)!) !== 'confirmed' && (
+                            <button type="button" onClick={() => handleConfirmGuest(editingMeetingId, g.id)}
+                              className="mt-1.5 px-2 py-1 rounded bg-red-600 text-white text-[10px] font-bold">
+                              {fa ? 'قطعی کردن' : 'Confirm'}
+                            </button>
+                          )}
+                          {confirmed && <span className="text-red-600 font-bold text-[10px]">{fa ? 'رزرو قطعی ✓' : 'Confirmed ✓'}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'توضیحات' : 'Notes'}</label>

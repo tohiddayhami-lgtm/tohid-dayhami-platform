@@ -433,6 +433,20 @@ export interface Task {
   comments: TaskComment[];
 }
 
+export type MeetingKind = 'internal' | 'bookable';
+export type MeetingBookingStatus = 'open' | 'pending' | 'confirmed';
+export type MeetingSessionType = 'consultation' | 'workshop' | 'session' | 'other';
+
+export interface MeetingBookingGuest {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  note?: string;
+  bookedAt: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -444,6 +458,16 @@ export interface Meeting {
   organizerName: string;
   attendeeIds: string[];
   description?: string;
+  /** internal = پرسنل (مخفی از تقویم عمومی) | bookable = قابل رزرو مشتری */
+  kind?: MeetingKind;
+  bookingStatus?: MeetingBookingStatus;
+  sessionType?: MeetingSessionType;
+  consultantId?: string;
+  consultantName?: string;
+  price?: Price;
+  prices?: Price[];
+  guests?: MeetingBookingGuest[];
+  confirmedGuestId?: string;
 }
 
 export interface KPI {
@@ -610,7 +634,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services';
