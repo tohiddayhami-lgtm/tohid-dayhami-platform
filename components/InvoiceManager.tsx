@@ -31,7 +31,7 @@ import {
   filterInvoicesForUser,
   isInvoiceMasterOrAdmin,
 } from '../utils/invoiceAccess';
-import { computeInvoiceTotals, invoiceNetExclVat } from '../utils/invoiceTotals';
+import { computeInvoiceTotals, invoiceLineTotal, invoiceNetExclVat } from '../utils/invoiceTotals';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
@@ -67,7 +67,7 @@ const genInvoiceNumber = (template: InvoiceTemplate, count: number): string => {
 
 const cloneItems = (items?: InvoiceItem[]): InvoiceItem[] =>
   (items && items.length > 0 ? items : [{ description: '', quantity: 1, unitPrice: 0, total: 0 }])
-    .map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) }));
+    .map(it => ({ ...it, total: invoiceLineTotal(it) }));
 
 const normalizePaymentDetails = (value: unknown): string => {
   if (typeof value === 'string') return value;
@@ -243,6 +243,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     if (!readonly && !canEditInvoice(currentUser, inv)) { denyAccess(); return; }
     setDraft(recompute({
       ...inv,
+      items: inv.items.map(it => ({ ...it, total: invoiceLineTotal(it) })),
       adjustments: inv.adjustments || [],
       paymentDetails: normalizePaymentDetails(inv.paymentDetails),
       receipts: inv.receipts || [],
@@ -254,7 +255,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     if (!d) return d;
     const items = [...d.items];
     const item = { ...items[idx], [field]: value };
-    if (field === 'quantity' || field === 'unitPrice') item.total = (item.quantity || 0) * (item.unitPrice || 0);
+    if (field === 'quantity' || field === 'unitPrice' || field === 'priceIncluded') {
+      item.total = invoiceLineTotal(item);
+    }
     items[idx] = item;
     return recompute({ ...d, items });
   });
@@ -319,7 +322,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       } else if (preset.section === 'items' && preset.items?.length) {
         next = {
           ...next,
-          items: preset.items.map(it => ({ ...it, total: (it.quantity || 0) * (it.unitPrice || 0) })),
+          items: preset.items.map(it => ({ ...it, total: invoiceLineTotal(it) })),
           qtyColumnLabel: preset.qtyColumnLabel ?? next.qtyColumnLabel,
           unitPriceColumnLabel: preset.unitPriceColumnLabel ?? next.unitPriceColumnLabel,
         };
@@ -855,9 +858,46 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     onChange={e => setField('documentTitle', e.target.value)}
                     readOnly={readonly}
                   />
-                  <div className="mt-2 text-[12px] space-y-1">
-                    <div><span className="text-gray-500">Invoice No. </span><span className="font-semibold" style={{ color: accent }}>{draft.number}</span></div>
-                    <div><span className="text-gray-500">Date </span><span className="font-medium">{fmtDate(draft.createdAt || draft.date)}</span></div>
+                  <div className="mt-2 text-[12px] space-y-1.5">
+                    <div className="flex items-center justify-end gap-1 flex-wrap">
+                      <span className="text-gray-500 shrink-0">Invoice No.</span>
+                      {readonly ? (
+                        <span className="font-semibold" style={{ color: accent }}>{draft.number}</span>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            className="invoice-inline-field font-semibold text-right outline-none bg-transparent border-b border-gray-200 focus:border-indigo-300 min-w-[120px] max-w-[200px] print:border-0"
+                            style={{ color: accent }}
+                            value={draft.number}
+                            onChange={e => setField('number', e.target.value.slice(0, 48))}
+                          />
+                          <button
+                            type="button"
+                            title={t.regenNo}
+                            onClick={() => setField('number', genInvoiceNumber(template, visibleInvoices.length + 1))}
+                            className="text-[9px] text-indigo-600 hover:underline print:hidden shrink-0"
+                          >
+                            {t.regenNo}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-1">
+                      <span className="text-gray-500 shrink-0">Date</span>
+                      {readonly ? (
+                        <span className="font-medium">{fmtDate(draft.date)}</span>
+                      ) : (
+                        <input
+                          type="date"
+                          dir="ltr"
+                          className="invoice-inline-field font-medium outline-none bg-transparent border-b border-gray-200 focus:border-indigo-300 print:border-0"
+                          value={draft.date || ''}
+                          onChange={e => setField('date', e.target.value)}
+                        />
+                      )}
+                    </div>
                     <div>
                       <span className="text-gray-500">Currency </span>
                       <select className="invoice-inline-field font-medium outline-none bg-transparent border-b border-gray-200 print:border-0 print:appearance-none" value={currencySelectValue} onChange={e => setCurrencyPreset(e.target.value)}>
@@ -957,20 +997,42 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   <tr key={idx} className="border-b border-gray-100 align-top">
                     <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
                     <td className="px-2 py-2">
-                      <input className="invoice-block-field w-full font-semibold outline-none bg-transparent leading-snug" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} />
-                      <input className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:border-0" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} />
+                      <input className="invoice-block-field w-full font-semibold outline-none bg-transparent leading-snug" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} readOnly={readonly} />
+                      <input className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:border-0" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} readOnly={readonly} />
                     </td>
-                    <td className="px-2 py-2 text-center"><input type="number" min="0" className="invoice-inline-field w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} /></td>
+                    <td className="px-2 py-2 text-center"><input type="number" min="0" className="invoice-inline-field w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} readOnly={readonly} /></td>
                     <td className="px-2 py-2 text-right">
-                      <InvoiceAmountInput
-                        className="invoice-inline-field w-full outline-none bg-transparent text-right dir-ltr"
-                        placeholder="0"
-                        value={item.unitPrice || 0}
-                        maxDecimals={draftAmountDecimals}
-                        onChange={n => setItem(idx, 'unitPrice', n)}
-                      />
+                      {!readonly && (
+                        <label className="flex items-center justify-end gap-1 text-[9px] text-gray-500 print:hidden mb-1 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="accent-emerald-600"
+                            checked={!!item.priceIncluded}
+                            onChange={e => setItem(idx, 'priceIncluded', e.target.checked)}
+                          />
+                          {lang === 'fa' ? 'شامل (Included)' : 'Included'}
+                        </label>
+                      )}
+                      {item.priceIncluded ? (
+                        <span className="text-emerald-700 font-bold italic text-[11px] tracking-wide">Included</span>
+                      ) : (
+                        <InvoiceAmountInput
+                          className="invoice-inline-field w-full outline-none bg-transparent text-right dir-ltr"
+                          placeholder="0"
+                          value={item.unitPrice || 0}
+                          maxDecimals={draftAmountDecimals}
+                          onChange={n => setItem(idx, 'unitPrice', n)}
+                          readOnly={readonly}
+                        />
+                      )}
                     </td>
-                    <td className="px-2 py-2 text-right font-bold" style={{ color: DARK }}>{money(item.total)}</td>
+                    <td className="px-2 py-2 text-right font-bold" style={{ color: DARK }}>
+                      {item.priceIncluded ? (
+                        <span className="text-emerald-700 font-bold italic text-[11px]">Included</span>
+                      ) : (
+                        money(item.total)
+                      )}
+                    </td>
                     <td className="print:hidden text-center">{draft.items.length > 1 && <button onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-3.5 h-3.5" /></button>}</td>
                   </tr>
                 ))}
@@ -1114,7 +1176,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </div>
                 <div />
               </div>
-              <div className="text-center text-[9px] text-gray-400">Generated by {template.companyName} — issued {fmtDate(draft.createdAt || draft.date)}</div>
+              <div className="text-center text-[9px] text-gray-400">Generated by {template.companyName} — issued {fmtDate(draft.date)}</div>
             </div>
             </div>{/* end invoice-pdf-sheet */}
           </div>

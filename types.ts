@@ -150,6 +150,8 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  /** نمایش «Included» به‌جای قیمت — در جمع فاکتور لحاظ نمی‌شود */
+  priceIncluded?: boolean;
 }
 
 /** Extra line in totals area — fees, discounts, or other charges (not main line items). */

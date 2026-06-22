@@ -1,4 +1,7 @@
-import { Invoice } from '../types';
+import { Invoice, InvoiceItem } from '../types';
+
+export const invoiceLineTotal = (it: InvoiceItem): number =>
+  it.priceIncluded ? 0 : (it.quantity || 0) * (it.unitPrice || 0);
 
 export const invoiceAdjustmentsSum = (inv: Invoice): number =>
   (inv.adjustments || []).reduce((acc, a) => acc + (a.amount || 0), 0);
@@ -20,7 +23,7 @@ export const invoiceNetExclVat = (inv: Invoice): number => {
 export const computeInvoiceTotals = (
   inv: Invoice,
 ): Pick<Invoice, 'subTotal' | 'taxAmount' | 'total'> => {
-  const subTotal = inv.items.reduce((acc, it) => acc + (it.total || 0), 0);
+  const subTotal = inv.items.reduce((acc, it) => acc + invoiceLineTotal(it), 0);
   const gross = subTotal + invoiceAdjustmentsSum(inv) - (inv.discount || 0);
   const rate = inv.taxRate || 0;
 

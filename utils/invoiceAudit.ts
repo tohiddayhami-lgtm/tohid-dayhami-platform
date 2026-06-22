@@ -4,7 +4,7 @@ import { formatInvoiceMoney } from './invoiceMoney';
 const eq = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '');
 
 const itemsSummary = (items: InvoiceItem[]) =>
-  items.map((it, i) => `#${i + 1} ${(it.description || '').split('\n')[0] || '—'} ×${it.quantity} @ ${it.unitPrice}`).join('; ');
+  items.map((it, i) => `#${i + 1} ${(it.description || '').split('\n')[0] || '—'} ×${it.quantity} ${it.priceIncluded ? '@ Included' : `@ ${it.unitPrice}`}`).join('; ');
 
 const adjustmentsSummary = (adj: InvoiceAdjustment[]) =>
   adj.filter(a => a.amount !== 0).map(a => `${a.label}: ${a.amount}`).join('; ') || '—';
