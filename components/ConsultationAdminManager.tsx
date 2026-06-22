@@ -9,10 +9,10 @@ import {
 import { IconCalendarClock, IconPlus, IconTrash, IconEdit, IconCopy } from './Icons';
 import { AppModal, modalFieldInput, modalFieldLabel, modalFieldTextarea } from './AppModal';
 import {
-  getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting, MEETING_STATUS_STYLE,
+  getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting, MEETING_STATUS_STYLE, meetingPrices,
 } from '../utils/meetingBookingUtils';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
-import { ALL_CURRENCIES, CUR_LABEL, normalizePrices } from '../utils/servicePriceList';
+import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
 import { InvoiceAmountInput } from './InvoiceAmountInput';
 import { toDateStr, parseDateLocal } from '../utils/weekCalendar';
 
@@ -79,7 +79,17 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     duplicate: fa ? 'کپی' : 'Duplicate',
     duplicateSession: fa ? 'کپی جلسه' : 'Duplicate session',
     category: fa ? 'دسته موضوعی' : 'Category',
+    fee: fa ? 'هزینه مشاوره (چند ارزی)' : 'Consultation fee (multi-currency)',
+    feeHint: fa ? 'فقط ارزهایی که مبلغ دارند در لینک عمومی نمایش داده می‌شوند' : 'Only filled currencies appear on the public booking page',
     pending: (n: number) => fa ? `${n} رزرو موقت` : `${n} temp.`,
+  };
+
+  const setPriceAmount = (idx: number, amount: number) => {
+    setForm(prev => {
+      const next = [...prev.priceInputs];
+      next[idx] = { ...next[idx], amount };
+      return { ...prev, priceInputs: next };
+    });
   };
 
   const saveCategory = async () => {
@@ -264,6 +274,11 @@ export const ConsultationAdminManager: React.FC<Props> = ({
                 </div>
                 <div className="font-bold text-sm text-gray-900">{getMeetingSessionLabel(m, fa ? 'fa' : 'en')}</div>
                 <div className="text-xs text-gray-500">{m.consultantName} · <span dir="ltr">{m.date} {m.startTime}–{m.endTime}</span></div>
+                {meetingPrices(m).length > 0 && (
+                  <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                    {meetingPrices(m).map(p => formatPriceAmount(p.amount, p.currency, fa ? 'fa' : 'en')).join(' · ')}
+                  </div>
+                )}
               </div>
               <button type="button" onClick={() => openEdit(m)} className="p-2 rounded-lg hover:bg-white border border-gray-200" title={fa ? 'ویرایش' : 'Edit'}><IconEdit className="w-4 h-4 text-gray-600" /></button>
               <button type="button" onClick={() => openDuplicate(m)} className="p-2 rounded-lg hover:bg-violet-50 border border-gray-200" title={t.duplicate}><IconCopy className="w-4 h-4 text-violet-600" /></button>
@@ -346,6 +361,27 @@ export const ConsultationAdminManager: React.FC<Props> = ({
           <div>
             <label className={modalFieldLabel}>{fa ? 'سرفصل / توضیحات جلسه' : 'Session agenda / details'}</label>
             <textarea rows={2} className={modalFieldTextarea} placeholder={fa ? 'سرفصل و جزئیات جلسه برای نمایش در لینک عمومی…' : 'Agenda shown on public booking page…'} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+          </div>
+
+          <div>
+            <label className={modalFieldLabel}>{t.fee}</label>
+            <p className="text-[10px] text-gray-400 mb-2">{t.feeHint}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {form.priceInputs.map((p, idx) => (
+                <div key={p.currency} className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] font-medium text-gray-600 w-[4.5rem] shrink-0">
+                    {CUR_LABEL[p.currency as Currency][fa ? 'fa' : 'en']}
+                  </span>
+                  <InvoiceAmountInput
+                    value={p.amount}
+                    maxDecimals={p.currency === 'IRR' ? 0 : 2}
+                    className={`${modalFieldInput} flex-1 !py-2 dir-ltr text-left`}
+                    placeholder="0"
+                    onChange={n => setPriceAmount(idx, n)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {editingId && (meetings.find(m => m.id === editingId)?.guests?.length || 0) > 0 && (

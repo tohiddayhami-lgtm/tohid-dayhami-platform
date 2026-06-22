@@ -3,7 +3,7 @@ import type { Currency, Price, ServiceOption, SubService } from '../types';
 export const ALL_CURRENCIES: Currency[] = ['IRR', 'OMR', 'USD', 'EUR', 'AED', 'AUD'];
 
 export const CUR_LABEL: Record<Currency, { fa: string; en: string }> = {
-  IRR: { fa: 'ریال', en: 'IRR' },
+  IRR: { fa: 'تومان', en: 'Toman' },
   OMR: { fa: 'ریال عمان', en: 'OMR' },
   USD: { fa: 'دلار', en: 'USD' },
   EUR: { fa: 'یورو', en: 'EUR' },
