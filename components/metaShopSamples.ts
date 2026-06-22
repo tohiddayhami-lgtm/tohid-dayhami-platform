@@ -166,7 +166,7 @@ export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> 
       'حیوان خانگی؟ حداقل مدت اجاره؟ → petsAllowed, minLeaseMonths, leaseDuration',
       'قابل مذاکره؟ کمیسیون؟ → negotiable, commission',
       'تور مجازی / پلان؟ → virtualTourUrl, floorPlanUrl, images[] (حداقل ۳–۸ عکس: نما، پذیرایی، آشپزخانه، خواب، سرویس، پارکینگ، محله)',
-      'سوالات رایج مشتری؟ → realEstate.faq[] با q/a فارسی، qEn/aEn انگلیسی و qAr/aAr عربی',
+      'سوالات رایج مشتری؟ → realEstate.faq[] با q/a فارسی، qEn/aEn انگلیسی، qAr/aAr عربی، یا faq[].i18n.{کد}.{q,a} برای زبان‌های دیگر',
       'نکات مهم برای مشتری؟ → description + realEstate.publicHighlights[]',
       'تماس مشاور؟ → realEstate.agentName, agentPhone, agentWhatsapp + shop.phone/email',
     ],

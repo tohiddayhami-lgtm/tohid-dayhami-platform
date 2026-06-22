@@ -3,7 +3,8 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types
 import { shopCodeOf } from './shopCode';
 import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
-import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, formatMoney, resolveDisplayLang, REAL_ESTATE_DEFAULT_LANGS } from '../utils/metaShopRealEstate';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, formatMoney } from '../utils/metaShopRealEstate';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -84,41 +85,24 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [inquiryProp, setInquiryProp] = useState<MetaShopProduct | null>(null);
   const [inquiryForm, setInquiryForm] = useState({ customerName: '', phone: '', email: '', visitWhen: '', notes: '' });
   const [inquiryTracking, setInquiryTracking] = useState<string | null>(null);
-  // Supported languages — real-estate shops always offer FA + AR + EN
-  const mergeShopLangs = (configured: import('../types').MetaShopLang[], ensure: import('../types').MetaShopLang[]) => {
-    const map = new Map<string, import('../types').MetaShopLang>();
-    [...configured, ...ensure].forEach(l => { if (l.code) map.set(l.code, { ...map.get(l.code), ...l }); });
-    return ensure.map(l => map.get(l.code) || l);
-  };
-  const langs: import('../types').MetaShopLang[] = isRealEstate
-    ? mergeShopLangs(shop.languages || [], REAL_ESTATE_DEFAULT_LANGS)
-    : (shop.languages && shop.languages.length)
-      ? shop.languages
-      : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
-  const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
-  const isRtl = (code: string) => { const l = langs.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
-  const [uiLang, setUiLang] = useState<string>(shop.defaultLang || langs[0]?.code || lang);
+  // Supported languages — whatever is configured on the shop (defaults only when empty)
+  const langs = resolveShopLanguages(shop);
+  const isRtl = (code: string) => isRtlLang(code, langs);
+  const [uiLang, setUiLang] = useState<string>(() => {
+    const preferred = shop.defaultLang || langs[0]?.code || lang;
+    return langs.some(l => l.code === preferred) ? preferred : (langs[0]?.code || lang);
+  });
   const [tab, setTab] = useState<string>('products');
 
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
-  const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
+  const locale = localeForLang(uiLang);
   const pages = shop.pages || [];
 
-  const reLang = () => resolveDisplayLang(uiLang);
+  const reLang = () => uiLang;
 
-  // Legacy bilingual fallback (fa / en / ar)
-  const L = (faVal?: string, enVal?: string, arVal?: string) => {
-    if (uiLang === 'fa') return faVal || enVal || arVal || '';
-    if (uiLang === 'ar') return arVal || enVal || faVal || '';
-    return enVal || arVal || faVal || '';
-  };
-  // Content translation: item.i18n[lang][key] if present, else sensible fallback
-  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => {
-    if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
-    if (uiLang === 'ar' && i18n?.en?.[key]) return i18n.en[key];
-    if (uiLang !== 'fa' && i18n?.en?.[key]) return i18n.en[key];
-    return legacy || '';
-  };
+  const L = (faVal?: string, enVal?: string) => legacyBilingual(uiLang, faVal, enVal);
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) =>
+    translateField(i18n, key, legacy, uiLang);
 
   // ── UI chrome strings per language (en is the fallback for any missing key/language) ──
   const STRINGS: Record<string, Record<string, string>> = {
@@ -234,8 +218,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       discountLine: '折扣', taxIncl: '含税', taxExcl: '税', footPhone: '电话：', footEmail: '邮箱：', footWebsite: '网站：',
     },
   };
-  const dict = STRINGS[uiLang] || STRINGS.en;
-  const S = (k: string) => dict[k] ?? STRINGS.en[k] ?? STRINGS.fa[k] ?? k;
+  const S = (k: string) => uiString(STRINGS, uiLang, k);
   const t: Record<string, string> = {};
   Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
   t.add = isRealEstate ? S('inquiryBtn') : isServices ? S('addService') : S('addProduct');
@@ -245,11 +228,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   if (isRealEstate) {
     t.featuredTitle = S('featuredProperties');
     t.trackMy = S('trackInquiries');
-    if (shop.cartButtonText) t.inquiryBtn = shop.cartButtonText;
+    if (shop.cartButtonText) t.inquiryBtn = TR(shop.i18n, 'cartButtonText', shop.cartButtonText);
   }
-  if (shop.cartButtonText) { t.cartBtn = shop.cartButtonText; t.submit = shop.cartButtonText; }
-  if (shop.searchPlaceholder) t.searchPh = shop.searchPlaceholder;
-  if (shop.orderThankYouText) t.thanksDesc = shop.orderThankYouText;
+  if (shop.cartButtonText) {
+    const cartTxt = TR(shop.i18n, 'cartButtonText', shop.cartButtonText);
+    t.cartBtn = cartTxt; t.submit = cartTxt;
+  }
+  if (shop.searchPlaceholder) t.searchPh = TR(shop.i18n, 'searchPlaceholder', shop.searchPlaceholder);
+  if (shop.orderThankYouText) t.thanksDesc = TR(shop.i18n, 'orderThankYouText', shop.orderThankYouText);
 
   // Content helpers (use per-product/shop i18n with legacy fallback)
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);

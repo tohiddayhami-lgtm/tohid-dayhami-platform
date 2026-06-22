@@ -8,6 +8,7 @@ import { MetaExpoManager } from './MetaExpoManager';
 import { MetaShopFileUploader } from './MetaShopFileUploader';
 import { MetaShopRealEstateFields } from './MetaShopRealEstateFields';
 import { defaultRealEstate } from '../utils/metaShopRealEstate';
+import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { Language } from '../App';
@@ -207,7 +208,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', typeRealEstate: T ? 'املاک' : 'Real Estate',
     currency: T ? 'واحد پول' : 'Currency',
     defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
-    langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند. کد مثل en، fa، zh، ar. ترجمه‌ی محتوا (نام/توضیحات محصول) را در همان محصول وارد کنید.' : 'Languages the customer can switch between. Code like en, fa, zh, ar. Enter content translations on each product.',
+    langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند — هر کدی مثل fa، en، ar، zh، tr. ترجمهٔ نام/توضیحات هر محصول را در همان محصول (دکمه 🌐) وارد کنید.' : 'Languages visitors can switch between — any code like fa, en, ar, zh, tr. Enter product translations on each product (🌐 button).',
     langCode: T ? 'کد' : 'Code', langName: T ? 'نام نمایشی' : 'Display name', langRtl: T ? 'راست‌چین' : 'RTL', addLang: T ? 'افزودن زبان' : 'Add language',
     transBtn: T ? 'ترجمه‌ها' : 'Translations', transFor: T ? 'ترجمه برای' : 'Translation for',
     pagesT: T ? 'صفحات و تب‌ها' : 'Pages & Tabs', pagesHint: T ? 'تب‌های اضافی فروشگاه مثل «درباره ما» یا «گواهینامه‌ها». تب «محصولات/خدمات» همیشه هست.' : 'Extra shop tabs like About Us or Certifications. The products tab is always present.',
@@ -394,7 +395,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const addLang = () => upd({ languages: [...shopLangs(), { code: '', name: '' }] });
   const updLang = (idx: number, patch: Partial<import('../types').MetaShopLang>) => setDraft(d => { if (!d) return d; const ls = [...(d.languages || [])]; ls[idx] = { ...ls[idx], ...patch }; return { ...d, languages: ls }; });
   const removeLang = (idx: number) => setDraft(d => d ? { ...d, languages: (d.languages || []).filter((_, i) => i !== idx) } : d);
-  const langOptions = (): { code: string; name: string }[] => { const ls = shopLangs().filter(l => l.code); return ls.length ? ls : [{ code: 'fa', name: 'فارسی' }, { code: 'en', name: 'English' }]; };
+  const langOptions = (): { code: string; name: string }[] => {
+    const ls = shopLangs().filter(l => l.code);
+    if (ls.length) return ls;
+    return draft?.type === 'realestate' ? DEFAULT_REALESTATE_LANGS : DEFAULT_PRODUCT_LANGS;
+  };
 
   // ── Product rate options (max 3) ──
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };

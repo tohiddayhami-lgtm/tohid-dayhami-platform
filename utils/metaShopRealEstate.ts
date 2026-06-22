@@ -1,29 +1,19 @@
-import type { MetaShopLang, MetaShopProduct, MetaShopRealEstate, MetaShopRealEstateFaq } from '../types';
+import type { MetaShopProduct, MetaShopRealEstate, MetaShopRealEstateFaq } from '../types';
 import { formatInvoiceAmount } from './invoiceMoney';
 
-export type MetaShopDisplayLang = 'fa' | 'en' | 'ar';
-
-export const REAL_ESTATE_DEFAULT_LANGS: MetaShopLang[] = [
-  { code: 'fa', name: 'فارسی', rtl: true },
-  { code: 'ar', name: 'العربية', rtl: true },
-  { code: 'en', name: 'English' },
-];
-
-export const resolveDisplayLang = (code: string): MetaShopDisplayLang => {
-  if (code === 'fa') return 'fa';
-  if (code === 'ar') return 'ar';
-  return 'en';
-};
+export type { MetaShopLang } from '../types';
+export { DEFAULT_REALESTATE_LANGS, DEFAULT_PRODUCT_LANGS, resolveShopLanguages } from './metaShopLang';
 
 type Tri = { fa: string; en: string; ar: string };
 
-const pick = (t: Tri, lang: MetaShopDisplayLang) => {
+/** Built-in fa/ar/en labels; other language codes fall back to English */
+const pick = (t: Tri, lang: string) => {
   if (lang === 'fa') return t.fa;
-  if (lang === 'ar') return t.ar;
-  return t.en;
+  if (lang === 'ar') return t.ar || t.en || t.fa;
+  return t.en || t.fa;
 };
 
-const L3 = (fa: string, en: string, ar: string, lang: MetaShopDisplayLang) => pick({ fa, en, ar }, lang);
+const L3 = (fa: string, en: string, ar: string, lang: string) => pick({ fa, en, ar }, lang);
 
 export const DEAL_TYPE_LABEL: Record<string, Tri> = {
   sale: { fa: 'فروش', en: 'For Sale', ar: 'للبيع' },
@@ -47,26 +37,28 @@ export const PROPERTY_TYPE_LABEL: Record<string, Tri> = {
   hotel: { fa: 'هتل / مهمان‌پذیر', en: 'Hospitality', ar: 'ضيافة' },
 };
 
-export const propertyTypeLabel = (code: string | undefined, lang: MetaShopDisplayLang) => {
+export const propertyTypeLabel = (code: string | undefined, lang: string) => {
   if (!code) return '';
   const known = PROPERTY_TYPE_LABEL[code];
   if (known) return pick(known, lang);
   return code;
 };
 
-export const dealTypeLabel = (code: string | undefined, lang: MetaShopDisplayLang) => {
+export const dealTypeLabel = (code: string | undefined, lang: string) => {
   if (!code) return '';
   const known = DEAL_TYPE_LABEL[code];
   if (known) return pick(known, lang);
   return code;
 };
 
-export const formatMoney = (n: number | undefined, currency: string, _lang: MetaShopDisplayLang) => {
+export const formatMoney = (n: number | undefined, currency: string, _lang: string) => {
   if (n == null || !n) return '';
   return `${formatInvoiceAmount(n, 0)} ${currency}`;
 };
 
-export const realEstateFaqText = (f: MetaShopRealEstateFaq, part: 'q' | 'a', lang: MetaShopDisplayLang): string => {
+export const realEstateFaqText = (f: MetaShopRealEstateFaq, part: 'q' | 'a', lang: string): string => {
+  const fromI18n = f.i18n?.[lang]?.[part];
+  if (fromI18n) return fromI18n;
   if (lang === 'fa') return part === 'q' ? f.q : f.a;
   if (lang === 'ar') {
     if (part === 'q') return f.qAr || f.qEn || f.q;
@@ -77,7 +69,7 @@ export const realEstateFaqText = (f: MetaShopRealEstateFaq, part: 'q' | 'a', lan
 };
 
 /** خلاصه برای کارت لیست */
-export const realEstateCardSummary = (p: MetaShopProduct, lang: MetaShopDisplayLang): string[] => {
+export const realEstateCardSummary = (p: MetaShopProduct, lang: string): string[] => {
   const re = p.realEstate;
   if (!re) return [];
   const lines: string[] = [];
@@ -98,7 +90,7 @@ export const realEstateCardSummary = (p: MetaShopProduct, lang: MetaShopDisplayL
 };
 
 /** ردیف‌های مشخصات برای مودال جزئیات */
-export const realEstateDetailRows = (p: MetaShopProduct, lang: MetaShopDisplayLang): { label: string; value: string }[] => {
+export const realEstateDetailRows = (p: MetaShopProduct, lang: string): { label: string; value: string }[] => {
   const re = p.realEstate;
   if (!re) return [];
   const L = (fa: string, en: string, ar: string) => L3(fa, en, ar, lang);

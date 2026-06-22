@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
-import { REAL_ESTATE_DEFAULT_LANGS } from '../utils/metaShopRealEstate';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
 
 interface Props {
   shop: MetaShop;
@@ -54,42 +54,23 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const isRealEstate = shop.type === 'realestate';
   const theme = shop.theme;
 
-  // ── Languages — real-estate catalogs always offer FA + AR + EN ──
-  const mergeShopLangs = (configured: import('../types').MetaShopLang[], ensure: import('../types').MetaShopLang[]) => {
-    const map = new Map<string, import('../types').MetaShopLang>();
-    [...configured, ...ensure].forEach(l => { if (l.code) map.set(l.code, { ...map.get(l.code), ...l }); });
-    return ensure.map(l => map.get(l.code) || l);
-  };
-  const langsList: import('../types').MetaShopLang[] = isRealEstate
-    ? mergeShopLangs(shop.languages || [], REAL_ESTATE_DEFAULT_LANGS)
-    : (shop.languages && shop.languages.length)
-      ? shop.languages
-      : [{ code: 'fa', name: 'فارسی', rtl: true }, { code: 'en', name: 'English' }];
-  const RTL_CODES = ['fa', 'ar', 'he', 'ur', 'ps'];
-  const isRtl = (code: string) => { const l = langsList.find(x => x.code === code); return l ? !!l.rtl : RTL_CODES.includes(code); };
+  // ── Languages — whatever is configured on the shop ──
+  const langsList = resolveShopLanguages(shop);
+  const isRtl = (code: string) => isRtlLang(code, langsList);
   const initialLang = (() => {
     try { const q = new URLSearchParams(window.location.search).get('lang'); if (q && langsList.find(l => l.code === q)) return q; } catch {}
-    return shop.defaultLang || langsList[0]?.code || lang;
+    const preferred = shop.defaultLang || langsList[0]?.code || lang;
+    return langsList.some(l => l.code === preferred) ? preferred : (langsList[0]?.code || lang);
   })();
   const [uiLang, setUiLang] = useState<string>(initialLang);
 
-  const T = uiLang === 'fa';
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
-  const locale = uiLang === 'fa' ? 'fa-IR' : uiLang === 'zh' ? 'zh-CN' : uiLang === 'ar' ? 'ar' : 'en-US';
-  const s = (k: string): string => (STR[uiLang] && STR[uiLang][k]) || STR.en[k] || STR.fa[k] || STR.ar?.[k] || k;
+  const locale = localeForLang(uiLang);
+  const s = (k: string): string => uiString(STR, uiLang, k);
 
-  // Content helpers (legacy fa/en/ar + per-item i18n overrides) — mirror MetaShopView
-  const L = (faVal?: string, enVal?: string, arVal?: string) => {
-    if (uiLang === 'fa') return faVal || enVal || arVal || '';
-    if (uiLang === 'ar') return arVal || enVal || faVal || '';
-    return enVal || arVal || faVal || '';
-  };
-  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => {
-    if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
-    if (uiLang === 'ar' && i18n?.en?.[key]) return i18n.en[key];
-    if (uiLang !== 'fa' && i18n?.en?.[key]) return i18n.en[key];
-    return legacy || '';
-  };
+  const L = (faVal?: string, enVal?: string) => legacyBilingual(uiLang, faVal, enVal);
+  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) =>
+    translateField(i18n, key, legacy, uiLang);
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
@@ -109,8 +90,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     });
     return order
       .filter(c => (map.get(c) || []).length)
-      .map(c => ({ cat: c, label: c === UNCAT ? (isRealEstate ? (T ? 'املاک' : 'Properties') : isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Products')) : c, items: map.get(c)! }));
-  }, [products, shop.categories, T, isServices, isRealEstate]);
+      .map(c => ({ cat: c, label: c === UNCAT ? (isRealEstate ? s('properties') : isServices ? s('services') : s('items')) : c, items: map.get(c)! }));
+  }, [products, shop.categories, uiLang, isServices, isRealEstate]);
 
   const showToc = grouped.length > 1 && products.length > PER_PAGE;
   const coverPages = 1;
@@ -147,9 +128,9 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   // ── Nice default filename for "Save as PDF" ──
   useEffect(() => {
     const prev = document.title;
-    document.title = `${shop.name} — ${T ? 'کاتالوگ' : 'Catalog'}`;
+    document.title = `${shop.name} — ${isRealEstate ? s('propertyCatalog') : isServices ? s('serviceCatalog') : s('productCatalog')}`;
     return () => { document.title = prev; };
-  }, [shop.name, T]);
+  }, [shop.name, uiLang, isRealEstate, isServices]);
 
   // ── Preload images, then (optionally) open the print dialog once everything is ready ──
   const [ready, setReady] = useState(false);

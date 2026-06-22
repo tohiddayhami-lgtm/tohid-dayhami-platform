@@ -1102,6 +1102,8 @@ export interface MetaShopRealEstateFaq {
   a: string;
   aEn?: string;
   aAr?: string;
+  /** Any extra language: { zh: { q, a }, tr: { q, a }, … } */
+  i18n?: Record<string, { q?: string; a?: string }>;
 }
 
 export interface MetaShopRealEstate {
