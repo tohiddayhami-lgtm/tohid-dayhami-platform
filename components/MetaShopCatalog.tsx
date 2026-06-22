@@ -20,7 +20,7 @@ const chunk = <T,>(arr: T[], n: number): T[][] => {
 
 const STR: Record<string, Record<string, string>> = {
   en: {
-    productCatalog: 'Product Catalog', serviceCatalog: 'Service Catalog', items: 'products', services: 'services',
+    productCatalog: 'Product Catalog', serviceCatalog: 'Service Catalog', propertyCatalog: 'Property Catalog', items: 'products', services: 'services', properties: 'properties',
     issued: 'Issued', sku: 'SKU', moq: 'MOQ', pack: 'Pack', origin: 'Origin', requestQuote: 'Price on request', negotiable: 'Negotiable',
     index: 'Table of Contents', page: 'Page', thankYou: 'Thank you for your interest',
     thankYouSub: 'We look forward to serving you. Scan the code below to open the live catalog and place your order online.',
@@ -29,7 +29,7 @@ const STR: Record<string, Record<string, string>> = {
     printHint: 'In the print dialog, choose “Save as PDF”.', pages: 'pages', item: 'No.', items_col: 'items',
   },
   fa: {
-    productCatalog: 'کاتالوگ محصولات', serviceCatalog: 'کاتالوگ خدمات', items: 'محصول', services: 'خدمت',
+    productCatalog: 'کاتالوگ محصولات', serviceCatalog: 'کاتالوگ خدمات', propertyCatalog: 'کاتالوگ املاک', items: 'محصول', services: 'خدمت', properties: 'ملک',
     issued: 'تاریخ صدور', sku: 'کد کالا', moq: 'حداقل سفارش', pack: 'بسته', origin: 'مبدأ', requestQuote: 'استعلام قیمت', negotiable: 'قابل مذاکره',
     index: 'فهرست مطالب', page: 'صفحه', thankYou: 'از توجه شما سپاسگزاریم',
     thankYouSub: 'مشتاق همکاری با شما هستیم. برای مشاهده کاتالوگ آنلاین و ثبت سفارش، کد زیر را اسکن کنید.',
@@ -41,6 +41,7 @@ const STR: Record<string, Record<string, string>> = {
 
 export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const isServices = shop.type === 'services';
+  const isRealEstate = shop.type === 'realestate';
   const theme = shop.theme;
 
   // ── Languages (defaults fa + en). Visitor can switch from the toolbar; init from ?lang= / shop default ──
@@ -82,8 +83,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     });
     return order
       .filter(c => (map.get(c) || []).length)
-      .map(c => ({ cat: c, label: c === UNCAT ? (isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Products')) : c, items: map.get(c)! }));
-  }, [products, shop.categories, T, isServices]);
+      .map(c => ({ cat: c, label: c === UNCAT ? (isRealEstate ? (T ? 'املاک' : 'Properties') : isServices ? (T ? 'خدمات' : 'Services') : (T ? 'محصولات' : 'Products')) : c, items: map.get(c)! }));
+  }, [products, shop.categories, T, isServices, isRealEstate]);
 
   const showToc = grouped.length > 1 && products.length > PER_PAGE;
   const coverPages = 1;
@@ -296,7 +297,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
               <h1 className="msc-cover-title">{coverTitle}</h1>
               {coverSub && <p className="msc-cover-sub">{coverSub}</p>}
             </div>
-            <div className="msc-cover-kind">{isServices ? s('serviceCatalog') : s('productCatalog')} · {yearStr}</div>
+            <div className="msc-cover-kind">{isRealEstate ? s('propertyCatalog') : isServices ? s('serviceCatalog') : s('productCatalog')} · {yearStr}</div>
           </div>
           <div className="msc-cover-foot">
             <div className="msc-cover-rule" />
@@ -308,7 +309,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
             </div>
             <div className="msc-cover-issue">
               <span>{s('issued')}: {dateStr}</span>
-              <span>{products.length} {isServices ? s('services') : s('items')}</span>
+              <span>{products.length} {isRealEstate ? s('properties') : isServices ? s('services') : s('items')}</span>
             </div>
           </div>
         </section>

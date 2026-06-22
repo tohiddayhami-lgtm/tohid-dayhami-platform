@@ -6,6 +6,8 @@ import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaExpoManager } from './MetaExpoManager';
 import { MetaShopFileUploader } from './MetaShopFileUploader';
+import { MetaShopRealEstateFields } from './MetaShopRealEstateFields';
+import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { Language } from '../App';
@@ -43,11 +45,12 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
   const json = JSON.parse(raw);
   // Native MetaShop format (top-level products[]) — import everything, normalize products.
   if (json.products && Array.isArray(json.products)) {
+    const { _aiGuide, _instructions, ...clean } = json;
     return {
-      ...base, ...json,
+      ...base, ...clean,
       id: base.id, createdAt: base.createdAt,
       theme: { ...DEFAULT_THEME, ...(json.theme || {}) },
-      type: (json.type === 'services' ? 'services' : 'products') as MetaShopType,
+      type: (['services', 'realestate'].includes(json.type) ? json.type : 'products') as MetaShopType,
       products: json.products.map((p: any, i: number) => ({
         ...p,
         id: p.id || `p-${Date.now()}-${i}`,
@@ -130,6 +133,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
+  const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'analytics'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
@@ -200,7 +204,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     code: T ? 'کد فروشگاه' : 'Shop code', regen: T ? 'کد جدید' : 'New code', copyCode: T ? 'کپی کد' : 'Copy code', codeCopied: T ? 'کپی شد ✓' : 'Copied ✓',
     sfTagFa: T ? 'متن نوار ویترین (فارسی)' : 'Storefront banner (FA)', sfTagEn: T ? 'متن نوار ویترین (انگلیسی)' : 'Storefront banner (EN)',
     sfColor: T ? 'رنگ شاخص ویترین در بازارچه' : 'Storefront color in bazaar', sfColorHint: T ? 'اختیاری — برای متمایز شدن در لیست‌ها' : 'Optional — to stand out in lists', sfClear: T ? 'پیش‌فرض' : 'Default',
-    typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', currency: T ? 'واحد پول' : 'Currency',
+    typeProducts: T ? 'محصولات' : 'Products', typeServices: T ? 'خدمات' : 'Services', typeRealEstate: T ? 'املاک' : 'Real Estate',
+    currency: T ? 'واحد پول' : 'Currency',
     defLang: T ? 'زبان پیش‌فرض نمایش' : 'Default display language', langFa: T ? 'فارسی' : 'Persian', langEn: T ? 'انگلیسی' : 'English',
     langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند. کد مثل en، fa، zh، ar. ترجمه‌ی محتوا (نام/توضیحات محصول) را در همان محصول وارد کنید.' : 'Languages the customer can switch between. Code like en, fa, zh, ar. Enter content translations on each product.',
     langCode: T ? 'کد' : 'Code', langName: T ? 'نام نمایشی' : 'Display name', langRtl: T ? 'راست‌چین' : 'RTL', addLang: T ? 'افزودن زبان' : 'Add language',
@@ -282,6 +287,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
     gsiteStep3: T ? 'روی «Next ← Insert» بزن و اندازه‌ی قاب را روی صفحه تنظیم کن. تمام؛ فروشگاه داخل سایت زنده است.' : 'Click "Next → Insert" and resize the frame on the page. Done — the shop is live inside your site.',
     gsiteNote: T ? 'نکته: سفارش‌های ثبت‌شده از داخل گوگل‌سایت در بخش «سفارش‌ها» با برچسب 🌐 گوگل‌سایت مشخص می‌شوند.' : 'Note: orders placed from inside the Google Site are marked with a 🌐 Google Site badge in the Orders tab.',
   };
+
+  const shopTypeBadge = (type: MetaShopType) => type === 'services' ? t.typeServices : type === 'realestate' ? t.typeRealEstate : t.typeProducts;
+
+  const filteredShops = useMemo(() => shopFilter === 'all' ? metaShops : metaShops.filter(s => s.type === shopFilter), [metaShops, shopFilter]);
 
   const ordersByShop = useMemo(() => {
     const m: Record<string, MetaShopOrder[]> = {};
@@ -365,7 +374,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   const uploadImg = (file: File, onUrl: (url: string) => void) => uploadFileWithProgress(file, () => {}, onUrl, (e) => alert(e.message), 'images');
 
   // ── Products editing ──
-  const addProduct = () => upd({ products: [...(draft!.products || []), { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency }] });
+  const addProduct = () => {
+    const base: MetaShopProduct = { id: `p-${Date.now()}`, name: '', images: [], active: true, price: 0, currency: draft!.currency };
+    if (draft!.type === 'realestate') base.realEstate = defaultRealEstate();
+    upd({ products: [...(draft!.products || []), base] });
+  };
   const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
   const featuredCount = (draft?.products || []).filter(p => p.featured).length;
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
@@ -443,7 +456,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <div className="flex flex-wrap gap-2 mb-4">
           <span className="text-xs text-gray-400 self-center">{T ? 'نمونه:' : 'Samples:'}</span>
           <button onClick={() => downloadSample('products')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه محصولات' : 'Products sample'}</button>
-          <button onClick={() => downloadSample('services')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه خدمات' : 'Services sample'}</button>
+          <button onClick={() => downloadSample('realestate')} className="text-xs px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50">{T ? 'دانلود نمونه املاک' : 'Real estate sample'}</button>
         </div>
 
         {/* File upload (primary) */}
@@ -577,11 +590,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
         </div>
 
-        {metaShops.length === 0 ? (
-          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.empty}</div>
+        {/* Shop type filter tabs */}
+        <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+          {(['all', 'products', 'services', 'realestate'] as const).map(f => (
+            <button key={f} type="button" onClick={() => setShopFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${shopFilter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {f === 'all' ? (T ? 'همه' : 'All') : shopTypeBadge(f)}
+              <span className="text-gray-400 font-normal ms-1">({f === 'all' ? metaShops.length : metaShops.filter(s => s.type === f).length})</span>
+            </button>
+          ))}
+        </div>
+
+        {filteredShops.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{shopFilter === 'all' ? t.empty : (T ? 'فروشگاهی در این دسته نیست.' : 'No shops in this category.')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {metaShops.map(s => {
+            {filteredShops.map(s => {
               const orders = ordersByShop[s.id] || [];
               return (
                 <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -592,7 +615,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <div className="p-4 flex-1 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <h4 className="font-bold text-gray-800 text-sm truncate flex items-center gap-1.5">{s.name}<span className="text-[10px] font-mono font-bold bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr">{shopCodeOf(s)}</span></h4>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{s.type === 'services' ? t.typeServices : t.typeProducts}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
                     <div className="text-[11px] text-gray-400">{(s.products || []).length} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
                     <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px] text-gray-500 truncate" dir="ltr"><IconLink className="w-3 h-3 shrink-0" /><span className="truncate">?shop={s.slug}</span></div>
@@ -800,6 +823,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
   // ════════════ EDITOR ════════════
   if (!draft) return null;
   const isServices = draft.type === 'services';
+  const isRealEstate = draft.type === 'realestate';
   return (
     <div className="space-y-5 animate-fade-in pb-10">
       <div className="flex items-center justify-between gap-2 sticky top-0 bg-gray-50/80 backdrop-blur z-10 py-2">
@@ -826,11 +850,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
               <button type="button" onClick={() => upd({ code: uniqueShopCode(metaShops.filter(s => s.id !== draft.id)) })} className="px-3 py-2 rounded-lg border border-gray-300 text-xs whitespace-nowrap hover:bg-gray-50">{t.regen}</button>
             </div>
           </div>
-          <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option></select></div>
+          <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option><option value="realestate">{t.typeRealEstate}</option></select></div>
           <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
-          <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : 'محصولات'} /></div>
-          <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : 'Product List'} /></div>
+          <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : draft.type === 'realestate' ? 'املاک' : 'محصولات'} /></div>
+          <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : draft.type === 'realestate' ? 'Properties' : 'Product List'} /></div>
         </div>
         <div className="border-t border-gray-100 pt-4 mt-4">
           <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dirT}</h5>
@@ -913,7 +937,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             </div>
             <input className={fld + ' dir-ltr text-xs'} placeholder={t.orLink} value={draft.logo || ''} onChange={e => upd({ logo: e.target.value })} />
           </div>
-          <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
+          <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isRealEstate ? (T ? 'درخواست بازدید' : 'Request viewing') : isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld} value={draft.orderThankYouText || ''} onChange={e => upd({ orderThankYouText: e.target.value })} /></div>
 
           {/* Storefront banner (bazaar lists) — optional */}
@@ -1077,7 +1101,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           {Array.from(new Set(draft.products.map(p => p.group).filter(Boolean))).map(g => <option key={g} value={g as string} />)}
         </datalist>
         <div className="flex items-center justify-between mb-4">
-          <h4 className="font-bold text-gray-700">{t.productsT} <span className="text-xs text-gray-400">({draft.products.length})</span></h4>
+          <h4 className="font-bold text-gray-700">{isRealEstate ? (T ? 'املاک / آگهی‌ها' : 'Properties / Listings') : t.productsT} <span className="text-xs text-gray-400">({draft.products.length})</span></h4>
           <div className="flex gap-2">
             <button onClick={() => { setImportOpen(true); setImportText(''); }} className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center gap-1"><IconUpload className="w-3.5 h-3.5" />{t.importJson}</button>
             <button onClick={addProduct} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addProduct}</button>
@@ -1105,12 +1129,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <input className={fld + ' dir-ltr'} placeholder={t.pSku} value={p.sku || ''} onChange={e => updProduct(idx, { sku: e.target.value })} />
                     <input className={fld} placeholder={t.pGroup} value={p.group || ''} onChange={e => updProduct(idx, { group: e.target.value })} list={`ms-cats-${draft.id}`} />
                     <input className={fld} placeholder={t.pSubcat} value={p.subcategory || ''} onChange={e => updProduct(idx, { subcategory: e.target.value })} />
-                    <input className={fld} type="number" placeholder={t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
+                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت کل فروش' : 'Total sale price') : t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
                     <input className={fld + ' dir-ltr'} placeholder={`${t.pCurrency} (${draft.currency})`} value={p.currency || ''} onChange={e => updProduct(idx, { currency: e.target.value.toUpperCase() })} />
-                    {!isServices && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => updProduct(idx, { packPrice: parseFloat(e.target.value) || 0 })} />}
-                    <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />
-                    {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} />}
-                    {!isServices && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}
+                    {!isServices && !isRealEstate && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => updProduct(idx, { packPrice: parseFloat(e.target.value) || 0 })} />}
+                    {!isRealEstate && <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />}
+                    {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : !isRealEstate ? <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} /> : null}
+                    {!isServices && !isRealEstate && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}
                     <input className={fld} placeholder={t.pStock} value={p.stockLabel || ''} onChange={e => updProduct(idx, { stockLabel: e.target.value })} />
                     <textarea className={fld + ' col-span-2 md:col-span-4'} rows={1} placeholder={t.pDesc} value={p.description || ''} onChange={e => updProduct(idx, { description: e.target.value })} />
                     <input className={fld + ' col-span-2 md:col-span-4 dir-ltr'} placeholder={t.pVideo} value={p.videoUrl || ''} onChange={e => updProduct(idx, { videoUrl: e.target.value })} />
@@ -1130,6 +1154,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>
                 </div>
+
+                {isRealEstate && (
+                  <MetaShopRealEstateFields
+                    value={p.realEstate}
+                    onChange={re => updProduct(idx, { realEstate: re })}
+                    lang={lang}
+                    currency={p.currency || draft.currency}
+                  />
+                )}
 
                 {/* Per-language translations */}
                 {transOpen[p.id] && shopLangs().length > 0 && (

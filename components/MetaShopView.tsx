@@ -3,6 +3,7 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types
 import { shopCodeOf } from './shopCode';
 import { logMetaShopEvent } from '../services/firebaseService';
 import { Language } from '../App';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, formatMoney } from '../utils/metaShopRealEstate';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -35,6 +36,7 @@ const PdfIcon = ({ s = 18 }: { s?: number }) => (
 
 export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLookup, embed }) => {
   const isServices = shop.type === 'services';
+  const isRealEstate = shop.type === 'realestate';
   const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
   const [activeSub, setActiveSub] = useState<string>('all');
@@ -118,6 +120,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
       discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
       catalog: 'PDF Catalog', downloadCatalog: 'Download PDF Catalog',
+      addProperty: 'Request viewing', tabRealEstate: 'Properties', monthlyRent: 'Monthly rent', deposit: 'Deposit',
+      specs: 'Specifications', faqTitle: 'FAQ', viewMap: 'View on map', virtualTour: 'Virtual tour', forSale: 'For sale',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -137,6 +141,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
       discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
       catalog: 'کاتالوگ PDF', downloadCatalog: 'دانلود کاتالوگ PDF',
+      addProperty: 'درخواست بازدید', tabRealEstate: 'املاک', monthlyRent: 'اجاره ماهانه', deposit: 'ودیعه',
+      specs: 'مشخصات ملک', faqTitle: 'سوالات متداول', viewMap: 'مشاهده روی نقشه', virtualTour: 'تور مجازی', forSale: 'فروش',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -161,8 +167,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const S = (k: string) => dict[k] ?? STRINGS.en[k] ?? STRINGS.fa[k] ?? k;
   const t: Record<string, string> = {};
   Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
-  t.add = isServices ? S('addService') : S('addProduct');
-  t.productsTab = isServices ? S('tabServices') : S('tabProducts');
+  t.add = isRealEstate ? S('addProperty') : isServices ? S('addService') : S('addProduct');
+  t.productsTab = isRealEstate
+    ? (T ? (shop.productsTabLabel || S('tabRealEstate')) : (shop.productsTabLabelEn || shop.productsTabLabel || S('tabRealEstate')))
+    : isServices ? S('tabServices') : S('tabProducts');
   if (shop.cartButtonText) { t.cartBtn = shop.cartButtonText; t.submit = shop.cartButtonText; }
   if (shop.searchPlaceholder) t.searchPh = shop.searchPlaceholder;
   if (shop.orderThankYouText) t.thanksDesc = shop.orderThankYouText;
@@ -170,6 +178,21 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   // Content helpers (use per-product/shop i18n with legacy fallback)
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
+
+  const rePriceLabel = (p: MetaShopProduct): string | null => {
+    const re = p.realEstate;
+    if (!re) return null;
+    const cur = re.rentCurrency || p.currency || shop.currency;
+    const Lg = uiLang === 'fa' ? 'fa' as const : 'en' as const;
+    if (re.dealType === 'rent' || re.dealType === 'rent-short') {
+      const parts: string[] = [];
+      if (re.monthlyRent) parts.push(`${S('monthlyRent')}: ${formatMoney(re.monthlyRent, cur, Lg)}`);
+      if (re.deposit) parts.push(`${S('deposit')}: ${formatMoney(re.deposit, cur, Lg)}`);
+      return parts.join(' · ') || null;
+    }
+    if (p.price) return `${S('forSale')}: ${money(p.price, cur)}`;
+    return null;
+  };
 
   const theme = shop.theme;
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
@@ -392,6 +415,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         <div className="ms-prices">
           {hidden ? (
             <div className="ms-price-row"><span className="ms-negotiable">{negLabel(p)}</span></div>
+          ) : isRealEstate && rePriceLabel(p) ? (
+            <div className="ms-price-row"><span className="ms-price-amt">{rePriceLabel(p)}</span></div>
           ) : (<>
           {(curPrice != null) && (
             <div className="ms-price-row">
@@ -400,7 +425,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               {off > 0 && <span className="ms-disc-tag">{off}%{T ? ' تخفیف' : ' off'}</span>}
             </div>
           )}
-          {!isServices && opts.length === 0 && basePack != null && basePack > 0 && (
+          {!isServices && !isRealEstate && opts.length === 0 && basePack != null && basePack > 0 && (
             <div className="ms-price-row">
               {hasDiscount(p) && <span className="ms-price-was">{money(basePack, curOf(p))}</span>}
               <span className="ms-price-amt ms-pack">{money(applyDisc(p, basePack), curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
@@ -435,12 +460,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   // Single product card — reused by the featured rail and the main grid.
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
+    const re = p.realEstate;
+    const reSummary = isRealEstate ? realEstateCardSummary(p, uiLang === 'fa' ? 'fa' : 'en') : [];
+    const rePrice = isRealEstate ? rePriceLabel(p) : null;
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className="ms-card-img" onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
           {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
-          {p.group && <span className="ms-group-badge">{p.group}</span>}
+          {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, uiLang === 'fa' ? 'fa' : 'en')}</span>}
+          {!re && p.group && <span className="ms-group-badge">{p.group}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
           {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
           <div className="ms-media-badges">
@@ -452,11 +481,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           <h3 className="ms-pname" onClick={() => openDetail(p)}>{pName(p)}</h3>
           <div className="ms-badges">
             {p.sku && <span className="ms-sku">{p.sku}</span>}
+            {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, uiLang === 'fa' ? 'fa' : 'en')}</span>}
             {p.subcategory && <span className="ms-subcat-badge">{p.subcategory}</span>}
             {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
           </div>
           {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
-          {!isServices && (p.pack || p.moq) && (
+          {reSummary.length > 0 && (
+            <div className="ms-meta">{reSummary.map((line, i) => <span key={i}>{line}</span>)}</div>
+          )}
+          {rePrice && !priceHidden(p) && <div className="ms-meta" style={{ fontWeight: 700, color: 'var(--ms-primary)' }}>{rePrice}</div>}
+          {!isServices && !isRealEstate && (p.pack || p.moq) && (
             <div className="ms-meta">
               {p.pack != null && <span>{t.pack}: <b>{p.pack} {p.unit}</b></span>}
               {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
@@ -645,9 +679,46 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
               {detail.features && detail.features.length > 0 && (
                 <div className="ms-feats">{detail.features.map((f, i) => <div key={i}><span>{f.label}</span><b>{f.value}</b></div>)}</div>
               )}
-              {!isServices && (detail.pack || detail.moq) && (
+              {!isServices && !isRealEstate && (detail.pack || detail.moq) && (
                 <div className="ms-meta">{detail.pack != null && <span>{t.pack}: <b>{detail.pack} {detail.unit}</b></span>}{detail.moq && <span>{t.moq}: <b>{detail.moq}</b></span>}</div>
               )}
+              {isRealEstate && detail.realEstate && (() => {
+                const rows = realEstateDetailRows(detail, uiLang === 'fa' ? 'fa' : 'en');
+                const re = detail.realEstate;
+                const faq = re.faq || [];
+                return (
+                  <div className="ms-realestate-detail">
+                    {rePriceLabel(detail) && !priceHidden(detail) && (
+                      <div className="ms-price-row" style={{ marginBottom: 12 }}><span className="ms-price-amt">{rePriceLabel(detail)}</span></div>
+                    )}
+                    {rows.length > 0 && (
+                      <div className="ms-feats ms-re-specs">
+                        <div className="ms-re-specs-title">{S('specs')}</div>
+                        {rows.map((r, i) => <div key={i}><span>{r.label}</span><b>{r.value}</b></div>)}
+                      </div>
+                    )}
+                    {re.mapUrl && <a className="ms-video-link" href={re.mapUrl} target="_blank" rel="noreferrer">📍 {S('viewMap')}</a>}
+                    {re.virtualTourUrl && <a className="ms-video-link" href={re.virtualTourUrl} target="_blank" rel="noreferrer" style={{ marginInlineStart: 12 }}>🎥 {S('virtualTour')}</a>}
+                    {(re.agentName || re.agentPhone) && (
+                      <div className="ms-meta" style={{ marginTop: 8 }}>
+                        {re.agentName && <span>{re.agentName}</span>}
+                        {re.agentPhone && <span dir="ltr">{re.agentPhone}</span>}
+                      </div>
+                    )}
+                    {faq.length > 0 && (
+                      <div className="ms-re-faq">
+                        <div className="ms-re-specs-title">{S('faqTitle')}</div>
+                        {faq.map((f, i) => (
+                          <details key={i} className="ms-re-faq-item">
+                            <summary>{uiLang === 'fa' ? f.q : (f.qEn || f.q)}</summary>
+                            <p>{uiLang === 'fa' ? f.a : (f.aEn || f.a)}</p>
+                          </details>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {buyBlock(detail, true)}
             </div>
           </div>
@@ -1013,6 +1084,11 @@ const MS_CSS = `
 .ms-feats { display:flex; flex-direction:column; gap:4px; }
 .ms-feats > div { display:flex; justify-content:space-between; font-size:12px; border-bottom:1px solid #f1f5f9; padding:4px 0; }
 .ms-feats span { color:#94a3b8; } .ms-feats b { color:#334155; }
+.ms-re-specs-title { font-size:13px; font-weight:800; color:var(--ms-heading); margin:12px 0 6px; }
+.ms-re-faq { margin-top:12px; }
+.ms-re-faq-item { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:6px; padding:8px 10px; font-size:12px; }
+.ms-re-faq-item summary { cursor:pointer; font-weight:700; color:var(--ms-heading); }
+.ms-re-faq-item p { margin:8px 0 0; color:var(--ms-text); line-height:1.5; }
 /* footer */
 .ms-footer { background:var(--ms-primary); color:#fff; padding:48px 24px 36px; text-align:center; margin-top:24px; }
 .ms-foot-grid { display:grid; gap:8px; max-width:480px; margin:0 auto; font-size:15px; }

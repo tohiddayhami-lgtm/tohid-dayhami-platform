@@ -643,7 +643,7 @@ export interface FeaturedBusiness {
 export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
-export type MetaShopType = 'products' | 'services';
+export type MetaShopType = 'products' | 'services' | 'realestate';
 
 export interface MetaShopTheme {
   primary: string;     // accent: buttons, prices, active states
@@ -1090,6 +1090,96 @@ export interface MetaShopProduct {
   colors?: MetaShopColorOption[];
   origin?: { name: string; flagUrl?: string };
   features?: { label: string; value: string }[];
+  /** فیلدهای تخصصی املاک — خرید، اجاره، مغازه، دفتر، زمین و… */
+  realEstate?: MetaShopRealEstate;
+}
+
+/** اطلاعات کامل یک ملک برای پاسخ به سوالات مشتری خریدار/مستأجر */
+export interface MetaShopRealEstateFaq {
+  q: string;
+  qEn?: string;
+  a: string;
+  aEn?: string;
+}
+
+export interface MetaShopRealEstate {
+  dealType: 'sale' | 'rent' | 'rent-short' | 'pre-sale' | 'exchange';
+  propertyType: string;
+  usage?: string;
+  areaSqm?: number;
+  landAreaSqm?: number;
+  builtAreaSqm?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  halfBaths?: number;
+  floor?: number;
+  totalFloors?: number;
+  unitsPerFloor?: number;
+  yearBuilt?: number;
+  renovatedYear?: number;
+  buildingAge?: string;
+  facing?: string;
+  view?: string;
+  documentType?: string;
+  ownership?: string;
+  occupancyStatus?: string;
+  furnished?: string;
+  renovation?: string;
+  parkingSpaces?: number;
+  parkingType?: string;
+  storage?: boolean;
+  storageSqm?: number;
+  balcony?: boolean;
+  balconySqm?: number;
+  elevator?: boolean;
+  freightElevator?: boolean;
+  heating?: string;
+  cooling?: string;
+  flooring?: string;
+  kitchen?: string;
+  wcType?: string;
+  monthlyRent?: number;
+  rentCurrency?: string;
+  deposit?: number;
+  rentPeriod?: string;
+  pricePerSqm?: number;
+  maintenanceFee?: number;
+  utilitiesIncluded?: string[];
+  negotiable?: boolean;
+  commission?: string;
+  city?: string;
+  province?: string;
+  district?: string;
+  neighborhood?: string;
+  street?: string;
+  fullAddress?: string;
+  postalCode?: string;
+  mapUrl?: string;
+  nearbyPlaces?: string[];
+  amenities?: string[];
+  buildingFeatures?: string[];
+  security?: string[];
+  accessibility?: string[];
+  availableFrom?: string;
+  leaseDuration?: string;
+  minLeaseMonths?: number;
+  petsAllowed?: string;
+  commercialLicense?: string;
+  frontageMeters?: number;
+  ceilingHeight?: number;
+  powerCapacity?: string;
+  loadingDock?: boolean;
+  footTraffic?: string;
+  currentTenant?: string;
+  rentalYield?: string;
+  loanEligible?: boolean;
+  virtualTourUrl?: string;
+  floorPlanUrl?: string;
+  agentName?: string;
+  agentPhone?: string;
+  agentWhatsapp?: string;
+  publicHighlights?: string[];
+  faq?: MetaShopRealEstateFaq[];
 }
 
 export interface MetaShop {

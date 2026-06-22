@@ -34,7 +34,7 @@ export const metaFromMetaShop = (shop: MetaShop, origin = ''): PageMeta => {
   const title = shop.title?.trim() || shop.name?.trim() || shop.slug;
   const description = shop.subtitle?.trim()
     || shop.collectionText?.trim()
-    || (shop.type === 'services' ? `خدمات ${shop.name}` : `فروشگاه ${shop.name}`);
+    || (shop.type === 'services' ? `خدمات ${shop.name}` : shop.type === 'realestate' ? `املاک ${shop.name}` : `فروشگاه ${shop.name}`);
   return {
     title,
     description: truncate(description, 160),

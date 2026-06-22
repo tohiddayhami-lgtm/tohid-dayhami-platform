@@ -91,7 +91,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     all: T ? 'همه' : 'All',
     enter: T ? 'ورود به مغازه' : 'Enter shop',
     items: T ? 'مورد' : 'items',
-    products: T ? 'محصولات' : 'Products', services: T ? 'خدمات' : 'Services',
+    products: T ? 'محصولات' : 'Products', services: T ? 'خدمات' : 'Services', realestate: T ? 'املاک' : 'Real Estate',
     empty: T ? 'فروشگاهی یافت نشد.' : 'No shops found.',
     shopNo: T ? 'پلاک' : 'No.',
     count: (n: number) => T ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
@@ -121,7 +121,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             {shop.logo
               ? <img className="msd-logo" src={shop.logo} alt="" />
               : <div className="msd-logo-fallback" style={{ background: accent }}>{(shop.name || '?').charAt(0)}</div>}
-            <div className="msd-type">{shop.type === 'services' ? t.services : t.products} · {(shop.products || []).length} {t.items}</div>
+            <div className="msd-type">{shop.type === 'services' ? t.services : shop.type === 'realestate' ? t.realestate : t.products} · {(shop.products || []).length} {t.items}</div>
             {cats.length > 0 && <div className="msd-tags">{cats.map((c, i) => <span key={i}>{c}</span>)}</div>}
             {sampleNames.length > 0 && <ul className="msd-samples">{sampleNames.map((n, i) => <li key={i}>{n}</li>)}</ul>}
             <span className="msd-enter"><CartIcon s={14} /> {t.enter}</span>
