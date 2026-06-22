@@ -6,6 +6,7 @@ import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconCloc
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking, uploadFileWithProgress } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_CREATED_TEMPLATE, DEFAULT_MEETING_UPDATED_TEMPLATE, DEFAULT_MEETING_DELETED_TEMPLATE } from '../services/notificationService';
 import { StaffIdPicker } from './StaffIdPicker';
+import { AppModal, modalFieldInput, modalFieldLabel, modalFieldTextarea } from './AppModal';
 import { Language } from '../App';
 import { ALL_CURRENCIES, CUR_LABEL, normalizePrices } from '../utils/servicePriceList';
 import { InvoiceAmountInput } from './InvoiceAmountInput';
@@ -647,83 +648,67 @@ export const MeetingCalendar: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* ── Modal ── */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-fade-in" dir={fa ? 'rtl' : 'ltr'}>
-            <div className="flex items-center justify-between px-5 py-3 bg-blue-600 rounded-t-2xl">
-              <h3 className="font-bold text-white text-sm">
-                {editingMeetingId ? (fa ? 'ویرایش جلسه' : 'Edit Meeting') : (fa ? 'جلسه جدید' : 'New Meeting')}
-              </h3>
-              <button onClick={() => setShowModal(false)}
-                className="text-white/80 hover:text-white w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/20 transition-colors text-sm">✕</button>
-            </div>
+      <AppModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingMeetingId ? (fa ? 'ویرایش جلسه' : 'Edit Meeting') : (fa ? 'جلسه جدید' : 'New Meeting')}
+        dir={fa ? 'rtl' : 'ltr'}
+        size="sm"
+        footer={(
+          <button
+            type="submit"
+            form="staff-meeting-form"
+            className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors"
+          >
+            {editingMeetingId ? (fa ? 'بروزرسانی' : 'Update') : (fa ? 'ثبت جلسه' : 'Save')}
+          </button>
+        )}
+      >
+        <form id="staff-meeting-form" onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-[11px] text-gray-500 bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">{fa ? 'جلسات پرسنل — برای مشاوره عمومی به تب «مشاوره عمومی» بروید' : 'Staff meetings — use the Consultations tab for public booking'}</p>
 
-            <form onSubmit={handleSubmit} className="p-5 space-y-3 max-h-[82vh] overflow-y-auto">
-              <p className="text-[11px] text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{fa ? 'جلسات پرسنل — برای مشاوره عمومی به تب «مشاوره عمومی» بروید' : 'Staff meetings — use the Consultations tab for public booking'}</p>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'موضوع جلسه' : 'Title'} *</label>
-                <input autoFocus required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'تاریخ' : 'Date'}</label>
-                <input type="date" required dir="ltr"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شروع' : 'Start'}</label>
-                  <input type="time" required dir="ltr"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm text-center"
-                    value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'پایان' : 'End'}</label>
-                  <input type="time" required dir="ltr"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm text-center"
-                    value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'مکان / لینک' : 'Location'}</label>
-                <input className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'شرکت‌کنندگان' : 'Attendees'}</label>
-                <StaffIdPicker
-                  personnel={personnel}
-                  selectedIds={formData.attendeeIds}
-                  onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
-                  lang={lang}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">{fa ? 'توضیحات' : 'Notes'}</label>
-                <textarea rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-                  value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-md shadow-blue-200 transition-colors">
-                  {editingMeetingId ? (fa ? 'بروزرسانی' : 'Update') : (fa ? 'ثبت جلسه' : 'Save')}
-                </button>
-              </div>
-            </form>
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'موضوع جلسه' : 'Title'} *</label>
+            <input autoFocus required className={modalFieldInput} value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'تاریخ' : 'Date'}</label>
+            <input type="date" required dir="ltr" className={modalFieldInput} value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'شروع' : 'Start'}</label>
+              <input type="time" required dir="ltr" className={`${modalFieldInput} text-center`} value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} />
+            </div>
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'پایان' : 'End'}</label>
+              <input type="time" required dir="ltr" className={`${modalFieldInput} text-center`} value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} />
+            </div>
+          </div>
+
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'مکان / لینک' : 'Location'}</label>
+            <input className={modalFieldInput} value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+          </div>
+
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'شرکت‌کنندگان' : 'Attendees'}</label>
+            <StaffIdPicker
+              personnel={personnel}
+              selectedIds={formData.attendeeIds}
+              onChange={ids => setFormData({ ...formData, attendeeIds: ids })}
+              lang={lang}
+            />
+          </div>
+
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'توضیحات' : 'Notes'}</label>
+            <textarea rows={2} className={modalFieldTextarea} value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+          </div>
+        </form>
+      </AppModal>
     </div>
   );
 };

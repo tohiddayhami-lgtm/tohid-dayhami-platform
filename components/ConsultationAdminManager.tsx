@@ -7,6 +7,7 @@ import {
   saveConsultantCategoryToCloud, deleteConsultantCategoryFromCloud,
 } from '../services/firebaseService';
 import { IconCalendarClock, IconPlus, IconTrash, IconEdit, IconCopy } from './Icons';
+import { AppModal, modalFieldInput, modalFieldLabel, modalFieldTextarea } from './AppModal';
 import {
   getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting, MEETING_STATUS_STYLE,
 } from '../utils/meetingBookingUtils';
@@ -73,6 +74,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     guests: fa ? 'درخواست‌های رزرو' : 'Booking requests',
     confirm: fa ? 'قطعی' : 'Confirm',
     save: fa ? 'ذخیره' : 'Save',
+    cancel: fa ? 'انصراف' : 'Cancel',
     delete: fa ? 'حذف' : 'Delete',
     duplicate: fa ? 'کپی' : 'Duplicate',
     duplicateSession: fa ? 'کپی جلسه' : 'Duplicate session',
@@ -211,7 +213,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
   [bookableMeetings]);
 
   return (
-    <div className={`flex flex-col overflow-hidden animate-fade-in flex-1 ${embedded ? 'bg-white rounded-2xl border border-gray-200 shadow-xl' : 'bg-white rounded-2xl border border-gray-200 shadow-xl'}`} style={embedded ? { minHeight: 'calc(100vh - 200px)' } : undefined}>
+    <div className={`flex flex-col flex-1 ${embedded ? 'bg-white rounded-2xl border border-gray-200 shadow-xl' : 'bg-white rounded-2xl border border-gray-200 shadow-xl'}`} style={embedded ? { minHeight: 'calc(100vh - 200px)' } : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-violet-50">
         <div className="flex items-center gap-2">
           <IconCalendarClock className="w-5 h-5 text-violet-600" />
@@ -272,102 +274,127 @@ export const ConsultationAdminManager: React.FC<Props> = ({
         {sortedSessions.length === 0 && <p className="text-center text-sm text-gray-400 py-8">{fa ? 'جلسه‌ای ثبت نشده' : 'No sessions yet'}</p>}
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" dir={fa ? 'rtl' : 'ltr'}>
-            <div className="sticky top-0 bg-violet-600 text-white px-5 py-3 rounded-t-2xl font-bold text-sm flex justify-between">
-              <span>{editingId ? (fa ? 'ویرایش جلسه' : 'Edit session') : duplicateMode ? t.duplicateSession : t.newSession}</span>
-              <button type="button" onClick={() => { setShowModal(false); setDuplicateMode(false); }}>✕</button>
-            </div>
-            <form onSubmit={handleSaveSession} className="p-5 space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-gray-600">{fa ? 'نوع جلسه' : 'Session'} *</label>
-                <input required className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" value={form.sessionType} onChange={e => setForm(p => ({ ...p, sessionType: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-600">{t.category}</label>
-                <select className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" value={form.consultantCategoryId} onChange={e => setForm(p => ({ ...p, consultantCategoryId: e.target.value }))}>
-                  <option value="">—</option>
-                  {sortedCats.map(c => <option key={c.id} value={c.id}>{categoryLabel(c, fa)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-600">{fa ? 'نام مشاور' : 'Consultant'} *</label>
-                <input required className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" value={form.consultantName} onChange={e => setForm(p => ({ ...p, consultantName: e.target.value }))} />
-              </div>
-              <select className="w-full px-3 py-2 border rounded-lg text-sm" value={form.consultantId} onChange={e => {
-                const id = e.target.value;
-                const p = activePersonnel.find(x => x.id === id);
-                setForm(prev => ({ ...prev, consultantId: id, consultantName: p?.fullName || prev.consultantName, consultantBio: p?.consultantBio || prev.consultantBio, consultantPhoto: p?.avatar || prev.consultantPhoto }));
-              }}>
-                <option value="">{fa ? 'انتخاب از پرسنل' : 'Pick staff'}</option>
-                {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
-              </select>
-              <div>
-                <label className="text-xs font-semibold text-gray-600">{fa ? 'رزومه مشاور' : 'Consultant bio'}</label>
-                <textarea rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder={fa ? 'رزومه مشاور' : 'Bio'} value={form.consultantBio} onChange={e => setForm(p => ({ ...p, consultantBio: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="date" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-                <input type="time" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
-                <input type="time" required dir="ltr" className="px-3 py-2 border rounded-lg text-sm col-span-2" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
-              </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-600">{fa ? 'سرفصل / توضیحات جلسه' : 'Session agenda / details'}</label>
-                    <textarea rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" placeholder={fa ? 'سرفصل و جزئیات جلسه برای نمایش در لینک عمومی…' : 'Agenda shown on public booking page…'} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
-                  </div>
-
-              {editingId && (meetings.find(m => m.id === editingId)?.guests?.length || 0) > 0 && (
-                <div>
-                  <label className="text-xs font-bold text-gray-600">{t.guests}</label>
-                  <div className="space-y-1 mt-1 max-h-28 overflow-y-auto">
-                    {(meetings.find(m => m.id === editingId)?.guests || []).map(g => (
-                      <div key={g.id} className="text-xs border rounded-lg px-2 py-1.5 flex justify-between items-center">
-                        <div>
-                          <strong>{g.name}</strong> <span dir="ltr">{g.phone}</span>
-                          {g.trackingCode && <span className="block text-violet-600 font-mono text-[10px]" dir="ltr">{g.trackingCode}</span>}
-                        </div>
-                        {isMasterOrAdmin && meetings.find(m => m.id === editingId)?.confirmedGuestId !== g.id && (
-                          <button type="button" onClick={() => confirmMeetingBooking(editingId!, g.id, currentUser.fullName)} className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded font-bold">{t.confirm}</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {editingId && meetings.find(m => m.id === editingId)?.confirmedGuestId && (
-                <div className="border-t border-violet-100 pt-3 space-y-2">
-                  <label className="text-xs font-bold text-violet-800">{t.followUp}</label>
-                  <textarea rows={5} className="w-full px-3 py-2 border border-violet-200 rounded-lg text-sm" value={followUpText} onChange={e => setFollowUpText(e.target.value)} placeholder={fa ? 'پیشنهادات، اقدامات بعدی، لینک‌ها…' : 'Recommendations, next steps…'} />
-                  <input ref={fileRef} type="file" className="hidden" onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setUploadingFile(true);
-                    uploadFileWithProgress(file, () => {}, url => {
-                      setFollowUpFiles(prev => [...prev, { id: `f-${Date.now()}`, name: file.name, url, uploadedAt: new Date().toISOString() }]);
-                      setUploadingFile(false);
-                    }, () => setUploadingFile(false), 'documents');
-                    e.target.value = '';
-                  }} />
-                  <button type="button" disabled={uploadingFile} onClick={() => fileRef.current?.click()} className="text-xs text-violet-600 font-bold">{uploadingFile ? '…' : (fa ? '+ ضمیمه فایل' : '+ Attach file')}</button>
-                  {followUpFiles.map(f => (
-                    <div key={f.id} className="text-xs flex justify-between bg-gray-50 px-2 py-1 rounded">📎 {f.name}
-                      <button type="button" onClick={() => setFollowUpFiles(prev => prev.filter(x => x.id !== f.id))} className="text-red-500">×</button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => publishFollowUp(editingId, false)} className="flex-1 py-2 rounded-lg bg-violet-600 text-white text-xs font-bold">{t.publishFollowUp}</button>
-                    <button type="button" onClick={() => publishFollowUp(editingId, true)} className="flex-1 py-2 rounded-lg border border-violet-300 text-violet-700 text-xs font-bold">{t.markDone}</button>
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" className="w-full py-2.5 rounded-lg bg-gray-900 text-white font-bold text-sm">{t.save}</button>
-            </form>
+      <AppModal
+        open={showModal}
+        onClose={() => { setShowModal(false); setDuplicateMode(false); }}
+        title={editingId ? (fa ? 'ویرایش جلسه' : 'Edit session') : duplicateMode ? t.duplicateSession : t.newSession}
+        dir={fa ? 'rtl' : 'ltr'}
+        footer={(
+          <div className="flex gap-2.5">
+            <button
+              type="button"
+              onClick={() => { setShowModal(false); setDuplicateMode(false); }}
+              className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="submit"
+              form="consultation-session-form"
+              className="flex-1 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black transition-colors"
+            >
+              {t.save}
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      >
+        <form id="consultation-session-form" onSubmit={handleSaveSession} className="space-y-4">
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'نوع جلسه' : 'Session'} *</label>
+            <input required className={modalFieldInput} value={form.sessionType} onChange={e => setForm(p => ({ ...p, sessionType: e.target.value }))} />
+          </div>
+          <div>
+            <label className={modalFieldLabel}>{t.category}</label>
+            <select className={modalFieldInput} value={form.consultantCategoryId} onChange={e => setForm(p => ({ ...p, consultantCategoryId: e.target.value }))}>
+              <option value="">—</option>
+              {sortedCats.map(c => <option key={c.id} value={c.id}>{categoryLabel(c, fa)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'نام مشاور' : 'Consultant'} *</label>
+            <input required className={modalFieldInput} value={form.consultantName} onChange={e => setForm(p => ({ ...p, consultantName: e.target.value }))} />
+          </div>
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'انتخاب از پرسنل' : 'Pick staff'}</label>
+            <select className={modalFieldInput} value={form.consultantId} onChange={e => {
+              const id = e.target.value;
+              const p = activePersonnel.find(x => x.id === id);
+              setForm(prev => ({ ...prev, consultantId: id, consultantName: p?.fullName || prev.consultantName, consultantBio: p?.consultantBio || prev.consultantBio, consultantPhoto: p?.avatar || prev.consultantPhoto }));
+            }}>
+              <option value="">—</option>
+              {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'رزومه مشاور' : 'Consultant bio'}</label>
+            <textarea rows={2} className={modalFieldTextarea} placeholder={fa ? 'رزومه مشاور' : 'Bio'} value={form.consultantBio} onChange={e => setForm(p => ({ ...p, consultantBio: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'تاریخ' : 'Date'}</label>
+              <input type="date" required dir="ltr" className={modalFieldInput} value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+            </div>
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'شروع' : 'Start'}</label>
+              <input type="time" required dir="ltr" className={modalFieldInput} value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <label className={modalFieldLabel}>{fa ? 'پایان' : 'End'}</label>
+              <input type="time" required dir="ltr" className={modalFieldInput} value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className={modalFieldLabel}>{fa ? 'سرفصل / توضیحات جلسه' : 'Session agenda / details'}</label>
+            <textarea rows={2} className={modalFieldTextarea} placeholder={fa ? 'سرفصل و جزئیات جلسه برای نمایش در لینک عمومی…' : 'Agenda shown on public booking page…'} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+          </div>
+
+          {editingId && (meetings.find(m => m.id === editingId)?.guests?.length || 0) > 0 && (
+            <div>
+              <label className={modalFieldLabel}>{t.guests}</label>
+              <div className="space-y-1.5 max-h-28 overflow-y-auto">
+                {(meetings.find(m => m.id === editingId)?.guests || []).map(g => (
+                  <div key={g.id} className="text-xs border border-gray-100 rounded-xl px-3 py-2 flex justify-between items-center bg-gray-50/80">
+                    <div>
+                      <strong>{g.name}</strong> <span dir="ltr">{g.phone}</span>
+                      {g.trackingCode && <span className="block text-violet-600 font-mono text-[10px]" dir="ltr">{g.trackingCode}</span>}
+                    </div>
+                    {isMasterOrAdmin && meetings.find(m => m.id === editingId)?.confirmedGuestId !== g.id && (
+                      <button type="button" onClick={() => confirmMeetingBooking(editingId!, g.id, currentUser.fullName)} className="text-[10px] bg-gray-900 text-white px-2 py-0.5 rounded-lg font-bold">{t.confirm}</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {editingId && meetings.find(m => m.id === editingId)?.confirmedGuestId && (
+            <div className="border-t border-gray-100 pt-4 space-y-2">
+              <label className={modalFieldLabel}>{t.followUp}</label>
+              <textarea rows={4} className={modalFieldTextarea} value={followUpText} onChange={e => setFollowUpText(e.target.value)} placeholder={fa ? 'پیشنهادات، اقدامات بعدی، لینک‌ها…' : 'Recommendations, next steps…'} />
+              <input ref={fileRef} type="file" className="hidden" onChange={e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploadingFile(true);
+                uploadFileWithProgress(file, () => {}, url => {
+                  setFollowUpFiles(prev => [...prev, { id: `f-${Date.now()}`, name: file.name, url, uploadedAt: new Date().toISOString() }]);
+                  setUploadingFile(false);
+                }, () => setUploadingFile(false), 'documents');
+                e.target.value = '';
+              }} />
+              <button type="button" disabled={uploadingFile} onClick={() => fileRef.current?.click()} className="text-xs text-gray-600 font-medium hover:text-gray-900">{uploadingFile ? '…' : (fa ? '+ ضمیمه فایل' : '+ Attach file')}</button>
+              {followUpFiles.map(f => (
+                <div key={f.id} className="text-xs flex justify-between bg-gray-50 px-2 py-1 rounded-lg">📎 {f.name}
+                  <button type="button" onClick={() => setFollowUpFiles(prev => prev.filter(x => x.id !== f.id))} className="text-red-500">×</button>
+                </div>
+              ))}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => publishFollowUp(editingId, false)} className="flex-1 py-2 rounded-xl bg-gray-900 text-white text-xs font-semibold">{t.publishFollowUp}</button>
+                <button type="button" onClick={() => publishFollowUp(editingId, true)} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs font-semibold">{t.markDone}</button>
+              </div>
+            </div>
+          )}
+        </form>
+      </AppModal>
     </div>
   );
 };
