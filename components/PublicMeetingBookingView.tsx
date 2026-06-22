@@ -3,24 +3,17 @@ import type { ConsultantCategory, Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { IconCalendarClock, IconCopy, IconSearch } from './Icons';
 import { MeetingBookingModal } from './MeetingBookingModal';
-import { ConsultantAvatar } from './ConsultantAvatar';
 import { ConsultantPublicCard } from './ConsultantPublicCard';
 import {
-  MEETING_STATUS_STYLE,
   canPublicBookMeeting,
   collectMeetingConsultantProfiles,
   countOpenSlotsForProfile,
   filterPublicBookableMeetingsByCategory,
   findConsultant,
-  getMeetingConsultantName,
-  getMeetingConsultantPhoto,
   getMeetingDisplayStatus,
   getMeetingSessionAgenda,
   getMeetingSessionLabel,
-  groupMeetingsByCategory,
-  meetingPrices,
 } from '../utils/meetingBookingUtils';
-import { formatPriceAmount } from '../utils/servicePriceList';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
 import { formatMeetingDateShamsi, formatMeetingTimeRange, toPersianDigits } from '../utils/persianDate';
 
@@ -50,11 +43,6 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     () => filterPublicBookableMeetingsByCategory(meetings, categoryFilter, consultantId)
       .filter(m => m.date >= todayStr),
     [meetings, categoryFilter, consultantId, todayStr],
-  );
-
-  const grouped = useMemo(
-    () => groupMeetingsByCategory(visibleMeetings, sortedCategories),
-    [visibleMeetings, sortedCategories],
   );
 
   const bookableMeetings = useMemo(
@@ -104,7 +92,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const t = {
     title: fa ? 'رزرو جلسه مشاوره' : 'Book a consultation',
-    subtitle: fa ? 'زمان‌های باز را انتخاب کنید — لیست خطی بر اساس موضوع' : 'Pick an open slot — linear list by topic',
+    subtitle: fa ? 'مشاور خود را انتخاب کنید و زمان رزرو را ببینید' : 'Pick a consultant and view available slots',
     consultant: fa ? 'مشاور' : 'Consultant',
     allConsultants: fa ? 'همه مشاوران' : 'All consultants',
     allCategories: fa ? 'همه موضوعات' : 'All topics',
@@ -120,14 +108,10 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     bookNow: fa ? 'رزرو' : 'Book',
     full: fa ? 'پر شده' : 'Full',
     consultantsTitle: fa ? 'مشاوران' : 'Consultants',
-    pickConsultant: fa ? 'یک مشاور را انتخاب کنید' : 'Choose a consultant',
+    pickConsultant: fa ? 'روی کارت مشاور کلیک کنید' : 'Click a consultant card',
     openSlots: (n: number) => fa ? `${toPersianDigits(n)} زمان باز` : `${n} open`,
-    uncategorized: fa ? 'سایر مشاوره‌ها' : 'Other consultations',
-    sessionsTitle: fa ? 'جلسات قابل رزرو' : 'Available sessions',
     sessionAgendaTitle: fa ? 'سرفصل جلسات' : 'Session topics',
     sessionAgendaLabel: fa ? 'سرفصل' : 'Agenda',
-    pendingCount: (n: number) => fa ? `${toPersianDigits(n)} رزرو موقت` : `${n} temporary booking${n === 1 ? '' : 's'}`,
-    selectConsultant: fa ? 'انتخاب' : 'Select',
   };
 
   const copyPageLink = async () => {
@@ -139,78 +123,6 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {}
-  };
-
-  const renderSessionRow = (meeting: Meeting) => {
-    const status = getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed';
-    const style = MEETING_STATUS_STYLE[status];
-    const bookable = canPublicBookMeeting(meeting);
-    const guestCount = meeting.guests?.length || 0;
-    const sessionLabel = getMeetingSessionLabel(meeting, fa ? 'fa' : 'en');
-    const consultantPerson = findConsultant(personnel, meeting.consultantId);
-    const consultantName = getMeetingConsultantName(meeting, consultantPerson);
-    const consultantPhoto = getMeetingConsultantPhoto(meeting, consultantPerson);
-    const sessionAgenda = getMeetingSessionAgenda(meeting);
-    const prices = meetingPrices(meeting);
-
-    return (
-      <div
-        key={meeting.id}
-        className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border-2 transition-shadow ${
-          status === 'open' ? 'border-emerald-200 bg-emerald-50/40'
-            : status === 'pending' ? 'border-orange-200 bg-orange-50/40'
-            : 'border-red-200 bg-red-50/30'
-        }`}
-      >
-        <div className="flex items-start gap-3 flex-1 min-w-0">
-          <ConsultantAvatar name={consultantName} avatarUrl={consultantPhoto} size="md" ring />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full text-white ${style.bg}`}>
-                {fa ? style.labelFa : style.labelEn}
-              </span>
-              {guestCount > 0 && status !== 'confirmed' && (
-                <span className="text-[11px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
-                  👥 {t.pendingCount(guestCount)}
-                </span>
-              )}
-            </div>
-            <h3 className="font-bold text-gray-900 text-sm">{sessionLabel}</h3>
-            {consultantName && !consultantId && <p className="text-xs text-gray-600 mt-0.5">{consultantName}</p>}
-            <p className="text-xs text-gray-700 mt-1 leading-relaxed">
-              {formatMeetingDateShamsi(meeting.date, fa)}
-            </p>
-            <p className="text-xs text-violet-800 font-semibold mt-0.5">
-              {formatMeetingTimeRange(meeting.startTime, meeting.endTime, fa)}
-            </p>
-            {sessionAgenda && (
-              <div className="mt-2 text-[11px] text-gray-600 bg-white/80 rounded-lg px-2.5 py-2 border border-violet-100">
-                <span className="font-bold text-violet-700">{t.sessionAgendaLabel}: </span>
-                <span className="whitespace-pre-wrap">{sessionAgenda}</span>
-              </div>
-            )}
-            {prices.length > 0 && (
-              <p className="text-xs text-emerald-700 font-semibold mt-1">
-                {prices.map(p => formatPriceAmount(p.amount, p.currency, lang)).join(' · ')}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="shrink-0 sm:w-28">
-          {bookable ? (
-            <button
-              type="button"
-              onClick={() => setBookingMeeting(meeting)}
-              className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold shadow-md"
-            >
-              {t.bookNow}
-            </button>
-          ) : (
-            <div className="w-full py-2.5 rounded-xl bg-gray-100 text-red-600 text-sm font-bold text-center">{t.full}</div>
-          )}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -287,13 +199,13 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
         {consultantId && selectedProfile && (
           <div className="bg-white rounded-2xl border border-violet-100 shadow-md overflow-hidden">
             <div className="flex flex-col md:flex-row gap-0 md:gap-5">
-              <div className="md:w-52 lg:w-56 shrink-0 p-4 md:p-5 md:pr-0 flex justify-center md:block">
+              <div className="md:w-1/3 shrink-0 p-4 md:p-5 md:pr-0 flex justify-center md:block">
                 <ConsultantPublicCard
                   profile={selectedProfile}
                   fa={fa}
                   selected
                   openSlots={selectedProfile.openSlots || 0}
-                  className="max-w-[220px] md:max-w-none mx-auto pointer-events-none"
+                  className="w-full max-w-[280px] md:max-w-none mx-auto pointer-events-none"
                 />
               </div>
               <div className="flex-1 min-w-0 p-4 sm:p-5 md:pr-5 border-b md:border-b-0 border-violet-50">
@@ -355,7 +267,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           <div className="space-y-3">
             <h2 className="text-sm font-black text-gray-800">{t.consultantsTitle}</h2>
             <p className="text-xs text-gray-500">{t.pickConsultant}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 min-[520px]:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
               {profilesWithSlots.map(c => (
                 <ConsultantPublicCard
                   key={c.key}
@@ -369,27 +281,9 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="space-y-6">
-          {!consultantId && (
-            <>
-              <h2 className="text-sm font-bold text-gray-800">{t.sessionsTitle}</h2>
-              {grouped.length === 0 ? (
-                <p className="text-center text-sm text-gray-400 py-8">{t.noSlots}</p>
-              ) : (
-                grouped.map(({ category, meetings: groupMeetings }) => (
-                  <div key={category?.id || 'none'} className="space-y-3">
-                    <h3 className="text-xs font-black text-violet-700 uppercase tracking-wide px-1">
-                      {category ? categoryLabel(category, fa) : t.uncategorized}
-                    </h3>
-                    <div className="space-y-2">
-                      {groupMeetings.map(renderSessionRow)}
-                    </div>
-                  </div>
-                ))
-              )}
-            </>
-          )}
-        </div>
+        {!consultantId && profilesWithSlots.length === 0 && (
+          <p className="text-center text-sm text-gray-400 py-8">{t.noSlots}</p>
+        )}
       </div>
 
       <MeetingBookingModal
