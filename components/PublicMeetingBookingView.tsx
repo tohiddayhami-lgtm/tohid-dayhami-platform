@@ -50,6 +50,34 @@ function timeToMinutes(t?: string | null): number {
   return (h || 0) * 60 + (m || 0);
 }
 
+function parseDateLocal(ds: string): Date {
+  const [y, m, d] = ds.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function sortMeetingsChronologically(list: Meeting[]): Meeting[] {
+  return [...list].sort((a, b) => {
+    const dc = a.date.localeCompare(b.date);
+    if (dc !== 0) return dc;
+    return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
+  });
+}
+
+function formatSlotDate(ds: string, fa: boolean, getDayName: (d: Date, short?: boolean) => string): string {
+  const d = parseDateLocal(ds);
+  const mon = fa
+    ? ['ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر']
+    : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${getDayName(d)} ${d.getDate()} ${mon[d.getMonth()]}`;
+}
+
+interface SlotChip {
+  meeting: Meeting;
+  status: 'open' | 'pending' | 'confirmed';
+  guestCount: number;
+  bookable: boolean;
+}
+
 interface Props {
   meetings: Meeting[];
   personnel: Personnel[];
@@ -76,6 +104,34 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const todayStr = toDateStr(new Date());
   const weekDays = getWeekDays(weekStart);
+
+  const upcomingSlots = useMemo(() => {
+    const upcoming = visibleMeetings.filter(m => m.date >= todayStr);
+    return sortMeetingsChronologically(upcoming);
+  }, [visibleMeetings, todayStr]);
+
+  const slotStats = useMemo(() => {
+    let open = 0, pending = 0, confirmed = 0, totalRequests = 0;
+    for (const m of upcomingSlots) {
+      const st = getMeetingDisplayStatus(m);
+      if (st === 'open') open += 1;
+      else if (st === 'pending') { pending += 1; totalRequests += m.guests?.length || 0; }
+      else if (st === 'confirmed') confirmed += 1;
+    }
+    return { open, pending, confirmed, totalRequests, total: upcomingSlots.length };
+  }, [upcomingSlots]);
+
+  const slotChips = useMemo((): SlotChip[] =>
+    upcomingSlots.map(meeting => {
+      const status = getMeetingDisplayStatus(meeting) as 'open' | 'pending' | 'confirmed';
+      return {
+        meeting,
+        status,
+        guestCount: meeting.guests?.length || 0,
+        bookable: canPublicBookMeeting(meeting),
+      };
+    }),
+  [upcomingSlots]);
 
   const DAY_FA = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
   const DAY_FA_SHORT = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
@@ -111,6 +167,23 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     noSlots: fa ? 'در این هفته زمان قابل رزروی ثبت نشده است.' : 'No bookable slots this week.',
     clickToBook: fa ? 'کلیک برای رزرو' : 'Click to book',
     guests: fa ? 'درخواست' : 'requests',
+    statsOpen: fa ? 'زمان باز' : 'Open slots',
+    statsPending: fa ? 'رزرو موقت' : 'Temporary',
+    statsConfirmed: fa ? 'رزرو قطعی' : 'Confirmed',
+    statsRequests: fa ? 'درخواست رزرو' : 'Booking requests',
+    stripTitle: fa ? 'جلسات پیش‌رو' : 'Upcoming sessions',
+    stripHint: fa ? 'روی هر زمان کلیک کنید و رزرو کنید' : 'Tap a slot to book',
+    hurry: fa ? 'عجله کنید! ظرفیت محدود است' : 'Hurry! Limited availability',
+    onlyOpen: (n: number) => fa ? `فقط ${n.toLocaleString('fa-IR')} زمان مشاوره باز مانده` : `Only ${n} open slot${n === 1 ? '' : 's'} left`,
+    peopleWaiting: (n: number) => fa ? `${n.toLocaleString('fa-IR')} نفر در صف رزرو` : `${n} people in the queue`,
+    bookNow: fa ? 'رزرو فوری' : 'Book now',
+    full: fa ? 'پر شده' : 'Full',
+    hot: fa ? 'پرطرفدار' : 'Popular',
+  };
+
+  const jumpToMeetingWeek = (m: Meeting) => {
+    setWeekStart(getWeekStart(parseDateLocal(m.date)));
+    if (canPublicBookMeeting(m)) setBookingMeeting(m);
   };
 
   const copyPageLink = async () => {
@@ -182,6 +255,122 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
             ))}
           </div>
         </div>
+
+        {/* ── Stats + urgency banner ── */}
+        {slotStats.total > 0 && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-3 shadow-md shadow-emerald-200/50">
+                <div className="text-2xl sm:text-3xl font-black tabular-nums">{slotStats.open.toLocaleString(fa ? 'fa-IR' : 'en-US')}</div>
+                <div className="text-[11px] sm:text-xs font-semibold opacity-90 mt-0.5">{t.statsOpen}</div>
+              </div>
+              <div className="rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white p-3 shadow-md shadow-orange-200/50">
+                <div className="text-2xl sm:text-3xl font-black tabular-nums">{slotStats.pending.toLocaleString(fa ? 'fa-IR' : 'en-US')}</div>
+                <div className="text-[11px] sm:text-xs font-semibold opacity-90 mt-0.5">{t.statsPending}</div>
+              </div>
+              <div className="rounded-xl bg-gradient-to-br from-red-600 to-rose-600 text-white p-3 shadow-md shadow-red-200/50">
+                <div className="text-2xl sm:text-3xl font-black tabular-nums">{slotStats.confirmed.toLocaleString(fa ? 'fa-IR' : 'en-US')}</div>
+                <div className="text-[11px] sm:text-xs font-semibold opacity-90 mt-0.5">{t.statsConfirmed}</div>
+              </div>
+              <div className="rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white p-3 shadow-md shadow-violet-200/50">
+                <div className="text-2xl sm:text-3xl font-black tabular-nums">{slotStats.totalRequests.toLocaleString(fa ? 'fa-IR' : 'en-US')}</div>
+                <div className="text-[11px] sm:text-xs font-semibold opacity-90 mt-0.5">{t.statsRequests}</div>
+              </div>
+            </div>
+
+            {(slotStats.open > 0 || slotStats.pending > 0) && (
+              <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50 to-violet-50 border border-orange-200/80 shadow-sm">
+                <span className="text-lg animate-pulse">🔥</span>
+                <div className="flex-1 min-w-0">
+                  {slotStats.open > 0 && (
+                    <p className="text-sm font-bold text-gray-800">{t.onlyOpen(slotStats.open)}</p>
+                  )}
+                  {slotStats.totalRequests > 0 && (
+                    <p className="text-xs text-orange-700 font-medium">{t.peopleWaiting(slotStats.totalRequests)} — {t.hurry}</p>
+                  )}
+                  {slotStats.open === 0 && slotStats.pending > 0 && (
+                    <p className="text-sm font-bold text-orange-800">{t.hurry}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Horizontal slot strip ── */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/80">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-800">{t.stripTitle}</h2>
+                  <p className="text-[10px] text-gray-400">{t.stripHint}</p>
+                </div>
+                <span className="text-[10px] font-bold text-violet-600 bg-violet-50 px-2 py-1 rounded-full shrink-0">
+                  {slotChips.length.toLocaleString(fa ? 'fa-IR' : 'en-US')} {fa ? 'جلسه' : 'sessions'}
+                </span>
+              </div>
+              <div className="flex gap-2 overflow-x-auto p-3 snap-x snap-mandatory scrollbar-thin" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {slotChips.map(({ meeting, status, guestCount, bookable }) => {
+                  const sessionLabel = SESSION_TYPE_LABEL[meeting.sessionType || 'other']?.[fa ? 'fa' : 'en'] || meeting.title;
+                  const prices = meetingPrices(meeting);
+                  const style = MEETING_STATUS_STYLE[status];
+                  const isHot = status === 'pending' && guestCount >= 2;
+
+                  return (
+                    <button
+                      key={meeting.id}
+                      type="button"
+                      disabled={!bookable}
+                      onClick={() => jumpToMeetingWeek(meeting)}
+                      className={`snap-start shrink-0 w-[148px] sm:w-[168px] rounded-xl border-2 text-right p-2.5 transition-all ${
+                        bookable
+                          ? 'hover:scale-[1.02] hover:shadow-lg cursor-pointer active:scale-[0.98]'
+                          : 'opacity-75 cursor-default'
+                      } ${
+                        status === 'open' ? 'border-emerald-400 bg-emerald-50/80 hover:bg-emerald-50'
+                          : status === 'pending' ? 'border-orange-400 bg-orange-50/80 hover:bg-orange-50'
+                          : 'border-red-300 bg-red-50/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full text-white ${style.bg}`}>
+                          {fa ? style.labelFa : style.labelEn}
+                        </span>
+                        {isHot && (
+                          <span className="text-[8px] font-bold text-orange-600 bg-orange-100 px-1 rounded">{t.hot}</span>
+                        )}
+                      </div>
+                      <div className="text-xs font-bold text-gray-900 truncate">{sessionLabel}</div>
+                      {meeting.consultantName && (
+                        <div className="text-[10px] text-gray-600 truncate mt-0.5">{meeting.consultantName}</div>
+                      )}
+                      <div className="text-[10px] text-gray-500 mt-1" dir="ltr">
+                        {formatSlotDate(meeting.date, fa, getDayName)}
+                      </div>
+                      <div className="text-[11px] font-bold text-violet-700 mt-0.5" dir="ltr">
+                        {meeting.startTime} – {meeting.endTime}
+                      </div>
+                      {prices.length > 0 && (
+                        <div className="text-[9px] text-emerald-700 font-semibold mt-1 truncate">
+                          {prices.slice(0, 2).map(p => formatPriceAmount(p.amount, p.currency, lang)).join(' · ')}
+                        </div>
+                      )}
+                      {guestCount > 0 && status !== 'confirmed' && (
+                        <div className="text-[9px] text-orange-700 font-bold mt-1.5 flex items-center gap-0.5">
+                          <span>👥</span> {guestCount} {t.guests}
+                        </div>
+                      )}
+                      {bookable ? (
+                        <div className="mt-2 w-full py-1 rounded-lg bg-violet-600 text-white text-[10px] font-bold text-center">
+                          {t.bookNow}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[10px] font-bold text-red-600 text-center">{t.full}</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden" style={{ minHeight: '560px' }}>
           <div className="flex items-center justify-center gap-1 px-4 py-2.5 border-b border-gray-200 bg-gray-50" dir="ltr">
@@ -280,7 +469,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
           </div>
         </div>
 
-        {visibleMeetings.length === 0 && (
+        {visibleMeetings.length === 0 && slotStats.total === 0 && (
           <p className="text-center text-sm text-gray-400 py-4">{t.noSlots}</p>
         )}
       </div>
