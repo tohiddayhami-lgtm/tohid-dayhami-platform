@@ -6,14 +6,14 @@ import {
   confirmMeetingBooking, uploadFileWithProgress, updateConsultationFollowUp,
   saveConsultantCategoryToCloud, deleteConsultantCategoryFromCloud,
 } from '../services/firebaseService';
-import { IconCalendarClock, IconPlus, IconTrash, IconEdit } from './Icons';
+import { IconCalendarClock, IconPlus, IconTrash, IconEdit, IconCopy } from './Icons';
 import {
   getMeetingDisplayStatus, getMeetingSessionLabel, isBookableMeeting, MEETING_STATUS_STYLE,
 } from '../utils/meetingBookingUtils';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
 import { ALL_CURRENCIES, CUR_LABEL, normalizePrices } from '../utils/servicePriceList';
 import { InvoiceAmountInput } from './InvoiceAmountInput';
-import { toDateStr } from '../utils/weekCalendar';
+import { toDateStr, parseDateLocal } from '../utils/weekCalendar';
 
 interface Props {
   meetings: Meeting[];
@@ -39,6 +39,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [duplicateMode, setDuplicateMode] = useState(false);
   const [followUpText, setFollowUpText] = useState('');
   const [followUpFiles, setFollowUpFiles] = useState<{ id: string; name: string; url: string; uploadedAt: string }[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -73,6 +74,8 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     confirm: fa ? 'قطعی' : 'Confirm',
     save: fa ? 'ذخیره' : 'Save',
     delete: fa ? 'حذف' : 'Delete',
+    duplicate: fa ? 'کپی' : 'Duplicate',
+    duplicateSession: fa ? 'کپی جلسه' : 'Duplicate session',
     category: fa ? 'دسته موضوعی' : 'Category',
     pending: (n: number) => fa ? `${n} رزرو موقت` : `${n} temp.`,
   };
@@ -91,8 +94,27 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     setEditingCatId(null);
   };
 
+  const fillFormFromMeeting = (m: Meeting, dateOverride?: string) => {
+    const prices = m.prices?.length ? m.prices : m.price ? [m.price] : [];
+    setForm({
+      sessionType: m.sessionType || '',
+      consultantId: m.consultantId || '',
+      consultantName: m.consultantName || '',
+      consultantBio: m.consultantBio || '',
+      consultantPhoto: m.consultantPhoto || '',
+      consultantCategoryId: m.consultantCategoryId || '',
+      date: dateOverride ?? m.date,
+      startTime: m.startTime,
+      endTime: m.endTime,
+      location: m.location || '',
+      description: m.description || '',
+      priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: prices.find(p => p.currency === c)?.amount || 0 })),
+    });
+  };
+
   const openCreate = () => {
     setEditingId(null);
+    setDuplicateMode(false);
     setForm({
       sessionType: '', consultantId: '', consultantName: '', consultantBio: '', consultantPhoto: '',
       consultantCategoryId: sortedCats[0]?.id || '', date: toDateStr(new Date()),
@@ -105,23 +127,21 @@ export const ConsultationAdminManager: React.FC<Props> = ({
 
   const openEdit = (m: Meeting) => {
     setEditingId(m.id);
-    const prices = m.prices?.length ? m.prices : m.price ? [m.price] : [];
-    setForm({
-      sessionType: m.sessionType || '',
-      consultantId: m.consultantId || '',
-      consultantName: m.consultantName || '',
-      consultantBio: m.consultantBio || '',
-      consultantPhoto: m.consultantPhoto || '',
-      consultantCategoryId: m.consultantCategoryId || '',
-      date: m.date,
-      startTime: m.startTime,
-      endTime: m.endTime,
-      location: m.location || '',
-      description: m.description || '',
-      priceInputs: ALL_CURRENCIES.map(c => ({ currency: c, amount: prices.find(p => p.currency === c)?.amount || 0 })),
-    });
+    setDuplicateMode(false);
+    fillFormFromMeeting(m);
     setFollowUpText(m.followUp?.recommendations || '');
     setFollowUpFiles(m.followUp?.attachments || []);
+    setShowModal(true);
+  };
+
+  const openDuplicate = (m: Meeting) => {
+    setEditingId(null);
+    setDuplicateMode(true);
+    const nextWeek = parseDateLocal(m.date);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    fillFormFromMeeting(m, toDateStr(nextWeek));
+    setFollowUpText('');
+    setFollowUpFiles([]);
     setShowModal(true);
   };
 
@@ -163,6 +183,7 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     if (editingId) await updateMeetingInCloud(editingId, payload, currentUser.fullName);
     else await saveMeetingToCloud({ ...payload, guests: [], bookingStatus: 'open' });
     setShowModal(false);
+    setDuplicateMode(false);
   };
 
   const publishFollowUp = async (meetingId: string, markCompleted?: boolean) => {
@@ -242,8 +263,9 @@ export const ConsultationAdminManager: React.FC<Props> = ({
                 <div className="font-bold text-sm text-gray-900">{getMeetingSessionLabel(m, fa ? 'fa' : 'en')}</div>
                 <div className="text-xs text-gray-500">{m.consultantName} · <span dir="ltr">{m.date} {m.startTime}–{m.endTime}</span></div>
               </div>
-              <button type="button" onClick={() => openEdit(m)} className="p-2 rounded-lg hover:bg-white border border-gray-200"><IconEdit className="w-4 h-4 text-gray-600" /></button>
-              <button type="button" onClick={() => window.confirm(fa ? 'حذف؟' : 'Delete?') && deleteMeetingFromCloud(m.id)} className="p-2 rounded-lg hover:bg-red-50 border border-gray-200"><IconTrash className="w-4 h-4 text-red-500" /></button>
+              <button type="button" onClick={() => openEdit(m)} className="p-2 rounded-lg hover:bg-white border border-gray-200" title={fa ? 'ویرایش' : 'Edit'}><IconEdit className="w-4 h-4 text-gray-600" /></button>
+              <button type="button" onClick={() => openDuplicate(m)} className="p-2 rounded-lg hover:bg-violet-50 border border-gray-200" title={t.duplicate}><IconCopy className="w-4 h-4 text-violet-600" /></button>
+              <button type="button" onClick={() => window.confirm(fa ? 'حذف؟' : 'Delete?') && deleteMeetingFromCloud(m.id)} className="p-2 rounded-lg hover:bg-red-50 border border-gray-200" title={t.delete}><IconTrash className="w-4 h-4 text-red-500" /></button>
             </div>
           );
         })}
@@ -254,8 +276,8 @@ export const ConsultationAdminManager: React.FC<Props> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto" dir={fa ? 'rtl' : 'ltr'}>
             <div className="sticky top-0 bg-violet-600 text-white px-5 py-3 rounded-t-2xl font-bold text-sm flex justify-between">
-              <span>{editingId ? (fa ? 'ویرایش جلسه' : 'Edit session') : t.newSession}</span>
-              <button type="button" onClick={() => setShowModal(false)}>✕</button>
+              <span>{editingId ? (fa ? 'ویرایش جلسه' : 'Edit session') : duplicateMode ? t.duplicateSession : t.newSession}</span>
+              <button type="button" onClick={() => { setShowModal(false); setDuplicateMode(false); }}>✕</button>
             </div>
             <form onSubmit={handleSaveSession} className="p-5 space-y-3">
               <div>
