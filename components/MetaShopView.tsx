@@ -804,38 +804,93 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       )}
 
       {/* Real-estate inquiry modal (no cart) */}
-      {inquiryProp && (
-        <div className="ms-modal-ov" onClick={() => !submitting && setInquiryProp(null)}>
-          <div className="ms-modal ms-inquiry-modal" onClick={e => e.stopPropagation()}>
-            <button className="ms-modal-x" onClick={() => setInquiryProp(null)} disabled={submitting}>✕</button>
-            {inquiryTracking ? (
-              <div className="ms-thanks" style={{ padding: '24px 8px' }}>
-                <h2>{S('inquiryThanks')}</h2>
-                <p>{shop.orderThankYouText || t.thanksDesc}</p>
-                <div className="ms-track-code"><span>{t.trackingCode}</span><b dir="ltr">{inquiryTracking}</b>
-                  <button onClick={() => { navigator.clipboard.writeText(inquiryTracking); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>{copied ? t.copied : t.copy}</button>
+      {inquiryProp && (() => {
+        const inqSummary = realEstateCardSummary(inquiryProp, uiLang === 'fa' ? 'fa' : 'en');
+        const inqListed = rePriceLabel(inquiryProp);
+        const inqDeal = inquiryProp.realEstate?.dealType
+          ? dealTypeLabel(inquiryProp.realEstate.dealType, uiLang === 'fa' ? 'fa' : 'en')
+          : '';
+        const inqImg = inquiryProp.images?.[0];
+        return (
+          <div className="ms-modal-ov" onClick={() => !submitting && setInquiryProp(null)}>
+            <div className="ms-inquiry-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="ms-inq-title">
+              <button type="button" className="ms-inq-close" onClick={() => setInquiryProp(null)} disabled={submitting} aria-label={t.close}>✕</button>
+              {inquiryTracking ? (
+                <div className="ms-inq-success">
+                  <div className="ms-inq-success-ic">✓</div>
+                  <h2>{S('inquiryThanks')}</h2>
+                  <p>{shop.orderThankYouText || t.thanksDesc}</p>
+                  <div className="ms-track-code">
+                    <span className="ms-track-label">{t.trackingCode}</span>
+                    <div className="ms-track-val"><b dir="ltr">{inquiryTracking}</b>
+                      <button type="button" onClick={() => { navigator.clipboard.writeText(inquiryTracking); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>{copied ? t.copied : t.copy}</button>
+                    </div>
+                  </div>
+                  <button type="button" className="ms-inq-submit" onClick={() => setInquiryProp(null)}>{t.close}</button>
                 </div>
-                <button className="ms-add lg" style={{ marginTop: 16 }} onClick={() => setInquiryProp(null)}>{t.close}</button>
-              </div>
-            ) : (
-              <>
-                <h2 style={{ marginBottom: 8 }}>{S('inquiryTitle')}</h2>
-                <p className="ms-modal-desc" style={{ marginBottom: 16 }}><b>{pName(inquiryProp)}</b>{inquiryProp.sku ? ` · ${inquiryProp.sku}` : ''}</p>
-                {rePriceLabel(inquiryProp) && <p className="ms-meta" style={{ color: 'var(--ms-primary)', fontWeight: 700, marginBottom: 12 }}>{rePriceLabel(inquiryProp)}</p>}
-                <div className="ms-form">
-                  <label>{t.name}<input value={inquiryForm.customerName} onChange={e => setInquiryForm(f => ({ ...f, customerName: e.target.value }))} /></label>
-                  <label>{t.phone}<input value={inquiryForm.phone} onChange={e => setInquiryForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" /></label>
-                  <label>{t.email}<input value={inquiryForm.email} onChange={e => setInquiryForm(f => ({ ...f, email: e.target.value }))} dir="ltr" /></label>
-                  <label>{S('visitWhen')}<input value={inquiryForm.visitWhen} onChange={e => setInquiryForm(f => ({ ...f, visitWhen: e.target.value }))} placeholder={T ? 'مثلاً شنبه ۱۰ صبح' : 'e.g. Saturday 10 AM'} /></label>
-                  <label>{t.notes}<textarea rows={3} value={inquiryForm.notes} onChange={e => setInquiryForm(f => ({ ...f, notes: e.target.value }))} placeholder={T ? 'سوال یا توضیح اضافه…' : 'Extra questions…'} /></label>
+              ) : (
+                <div className="ms-inq-layout">
+                  <aside className="ms-inq-aside">
+                    {inqImg ? (
+                      <div className="ms-inq-img-wrap"><img src={inqImg} alt="" /></div>
+                    ) : (
+                      <div className="ms-inq-img-wrap ms-inq-img-ph">{pName(inquiryProp).charAt(0)}</div>
+                    )}
+                    <div className="ms-inq-aside-body">
+                      {inqDeal && <span className="ms-inq-badge">{inqDeal}</span>}
+                      <h3 className="ms-inq-prop-name">{pName(inquiryProp)}</h3>
+                      {inqSummary.length > 0 && (
+                        <ul className="ms-inq-chips">
+                          {inqSummary.map((line, i) => <li key={i}>{line}</li>)}
+                        </ul>
+                      )}
+                      {inqListed && <p className="ms-inq-price">{inqListed}</p>}
+                      {inquiryProp.sku && <p className="ms-inq-sku" dir="ltr">{inquiryProp.sku}</p>}
+                      <p className="ms-inq-aside-hint">{T ? 'پس از ثبت، کارشناس املاک با شما تماس می‌گیرد.' : 'Our agent will contact you after you submit.'}</p>
+                    </div>
+                  </aside>
+                  <div className="ms-inq-main">
+                    <header className="ms-inq-head">
+                      <h2 id="ms-inq-title">{S('inquiryTitle')}</h2>
+                      <p>{T ? 'اطلاعات تماس خود را وارد کنید تا هماهنگی بازدید انجام شود.' : 'Enter your contact details to schedule a viewing.'}</p>
+                    </header>
+                    <div className="ms-inq-form-wrap">
+                      <div className="ms-inq-form">
+                        <label className="ms-inq-field">
+                          <span>{t.name} <em>*</em></span>
+                          <input value={inquiryForm.customerName} onChange={e => setInquiryForm(f => ({ ...f, customerName: e.target.value }))} placeholder={T ? 'نام کامل' : 'Your full name'} autoComplete="name" />
+                        </label>
+                        <label className="ms-inq-field">
+                          <span>{t.phone} <em>*</em></span>
+                          <input value={inquiryForm.phone} onChange={e => setInquiryForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" placeholder="+968 …" autoComplete="tel" />
+                        </label>
+                        <label className="ms-inq-field">
+                          <span>{t.email}</span>
+                          <input type="email" value={inquiryForm.email} onChange={e => setInquiryForm(f => ({ ...f, email: e.target.value }))} dir="ltr" placeholder="email@example.com" autoComplete="email" />
+                        </label>
+                        <label className="ms-inq-field">
+                          <span>{S('visitWhen')}</span>
+                          <input value={inquiryForm.visitWhen} onChange={e => setInquiryForm(f => ({ ...f, visitWhen: e.target.value }))} placeholder={T ? 'مثلاً شنبه ۱۰ صبح' : 'e.g. Saturday 10 AM'} />
+                        </label>
+                        <label className="ms-inq-field ms-inq-field-full">
+                          <span>{t.notes}</span>
+                          <textarea rows={3} value={inquiryForm.notes} onChange={e => setInquiryForm(f => ({ ...f, notes: e.target.value }))} placeholder={T ? 'سوال یا توضیح اضافه…' : 'Any extra questions…'} />
+                        </label>
+                      </div>
+                    </div>
+                    <footer className="ms-inq-foot">
+                      {error && <p className="ms-err">{error}</p>}
+                      <button type="button" className="ms-inq-submit" onClick={submitInquiry} disabled={submitting}>
+                        {submitting ? t.submitting : (S('inquirySubmit') || t.inquiryBtn)}
+                      </button>
+                    </footer>
+                  </div>
                 </div>
-                {error && <p className="ms-err">{error}</p>}
-                <button className="ms-add lg" style={{ width: '100%', marginTop: 12 }} onClick={submitInquiry} disabled={submitting}>{submitting ? t.submitting : (t.inquiryBtn || S('inquirySubmit'))}</button>
-              </>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Cart drawer — products & services only */}
       {!isRealEstate && (
@@ -1209,9 +1264,63 @@ const MS_CSS = `
 .ms-re-inquiry .ms-re-actions.big { flex-direction:column; align-items:stretch; }
 .ms-re-contact { display:inline-flex; align-items:center; gap:4px; padding:9px 14px; border-radius:999px; border:1px solid #e2e8f0; font-size:12px; font-weight:700; color:var(--ms-heading); text-decoration:none; background:#fff; }
 .ms-re-contact.wa { border-color:#25d366; color:#128c7e; }
-.ms-inquiry-modal { max-width:480px; }
-.ms-inquiry-modal .ms-form label { display:block; margin-bottom:10px; font-size:12px; font-weight:600; color:#64748b; }
-.ms-inquiry-modal .ms-form input, .ms-inquiry-modal .ms-form textarea { width:100%; margin-top:4px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; }
+/* real-estate inquiry modal */
+.ms-inquiry-modal { background:#fff; border-radius:22px; width:100%; max-width:720px; max-height:min(92vh,780px); display:flex; flex-direction:column; overflow:hidden; position:relative; box-shadow:0 24px 64px rgba(15,23,42,.28); }
+.ms-inq-close { position:absolute; top:14px; inset-inline-end:14px; z-index:20; width:38px; height:38px; border-radius:50%; border:none; background:#fff; color:#475569; cursor:pointer; font-size:15px; box-shadow:0 2px 12px rgba(15,23,42,.15); transition:background .15s, transform .15s; }
+.ms-inq-close:hover { background:#f8fafc; transform:scale(1.04); }
+.ms-inq-close:disabled { opacity:.5; cursor:not-allowed; }
+.ms-inq-layout { display:flex; flex:1; min-height:0; flex-direction:row; }
+.ms-inq-aside { width:38%; min-width:220px; max-width:280px; background:linear-gradient(165deg, var(--ms-primary) 0%, color-mix(in srgb, var(--ms-primary) 72%, #0f172a) 100%); color:#fff; display:flex; flex-direction:column; flex-shrink:0; }
+.ms-inq-img-wrap { width:100%; aspect-ratio:4/3; background:rgba(0,0,0,.18); overflow:hidden; flex-shrink:0; }
+.ms-inq-img-wrap img { width:100%; height:100%; object-fit:cover; display:block; }
+.ms-inq-img-ph { display:flex; align-items:center; justify-content:center; font-size:42px; font-weight:800; opacity:.45; }
+.ms-inq-aside-body { padding:18px 18px 22px; display:flex; flex-direction:column; gap:8px; flex:1; overflow-y:auto; }
+.ms-inq-badge { align-self:flex-start; font-size:10px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.28); border-radius:999px; padding:3px 10px; }
+.ms-inq-prop-name { font-size:16px; font-weight:800; line-height:1.45; margin:0; }
+.ms-inq-chips { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:5px; }
+.ms-inq-chips li { font-size:11px; font-weight:600; background:rgba(255,255,255,.14); border-radius:6px; padding:3px 8px; }
+.ms-inq-price { font-size:18px; font-weight:800; margin:4px 0 0; letter-spacing:.01em; }
+.ms-inq-sku { font-size:11px; font-family:ui-monospace,monospace; opacity:.75; margin:0; }
+.ms-inq-aside-hint { font-size:11px; line-height:1.55; opacity:.8; margin-top:auto; padding-top:10px; border-top:1px solid rgba(255,255,255,.2); }
+.ms-inq-main { flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:#fff; }
+.ms-inq-head { flex-shrink:0; padding:22px 52px 14px 22px; border-bottom:1px solid #f1f5f9; }
+.ms-inq-head h2 { font-size:18px; font-weight:800; color:var(--ms-heading,#0f172a); margin:0 0 6px; }
+.ms-inq-head p { font-size:13px; color:#64748b; line-height:1.55; margin:0; }
+.ms-inq-form-wrap { flex:1; overflow-y:auto; min-height:0; padding:16px 22px; }
+.ms-inq-form { display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; }
+.ms-inq-field { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.ms-inq-field-full { grid-column:1 / -1; }
+.ms-inq-field span { font-size:12px; font-weight:700; color:#475569; }
+.ms-inq-field span em { color:#ef4444; font-style:normal; }
+.ms-inq-field input, .ms-inq-field textarea { width:100%; padding:11px 13px; border:1.5px solid #e2e8f0; border-radius:11px; font-size:14px; font-family:inherit; background:#fff; color:#0f172a; outline:none; transition:border-color .15s, box-shadow .15s; }
+.ms-inq-field input::placeholder, .ms-inq-field textarea::placeholder { color:#94a3b8; }
+.ms-inq-field input:focus, .ms-inq-field textarea:focus { border-color:var(--ms-primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--ms-primary) 18%, transparent); }
+.ms-inq-field textarea { resize:vertical; min-height:84px; line-height:1.5; }
+.ms-inq-foot { flex-shrink:0; padding:12px 22px 20px; border-top:1px solid #f1f5f9; background:#fafbfc; }
+.ms-inq-foot .ms-err { margin:0 0 8px; font-size:12px; }
+.ms-inq-submit { width:100%; margin:0; padding:14px 18px; background:var(--ms-primary); color:#fff; font-size:15px; font-weight:800; border:none; border-radius:12px; cursor:pointer; box-shadow:0 4px 14px color-mix(in srgb, var(--ms-primary) 35%, transparent); transition:transform .12s, opacity .12s; }
+.ms-inq-submit:hover:not(:disabled) { transform:translateY(-1px); }
+.ms-inq-submit:active:not(:disabled) { transform:scale(.99); }
+.ms-inq-submit:disabled { opacity:.65; cursor:not-allowed; }
+.ms-inq-success { padding:36px 28px 32px; text-align:center; max-width:420px; margin:0 auto; }
+.ms-inq-success-ic { width:60px; height:60px; border-radius:50%; background:#10b981; color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
+.ms-inq-success h2 { font-size:20px; font-weight:800; color:#0f172a; margin:0 0 8px; }
+.ms-inq-success p { font-size:14px; color:#64748b; line-height:1.6; margin:0 0 18px; }
+.ms-inq-success .ms-track-code { text-align:center; margin-bottom:16px; }
+@media (max-width:640px){
+  .ms-inquiry-modal { max-height:94vh; border-radius:18px; }
+  .ms-inq-layout { flex-direction:column; }
+  .ms-inq-aside { width:100%; max-width:none; min-width:0; flex-direction:row; align-items:stretch; }
+  .ms-inq-img-wrap { width:110px; aspect-ratio:1; flex-shrink:0; }
+  .ms-inq-aside-body { padding:14px 16px; gap:6px; }
+  .ms-inq-prop-name { font-size:14px; }
+  .ms-inq-price { font-size:16px; }
+  .ms-inq-aside-hint { display:none; }
+  .ms-inq-form { grid-template-columns:1fr; }
+  .ms-inq-head { padding:18px 48px 12px 18px; }
+  .ms-inq-form-wrap { padding:14px 18px; }
+  .ms-inq-foot { padding:10px 18px 18px; }
+}
 /* footer */
 .ms-footer { background:var(--ms-primary); color:#fff; padding:48px 24px 36px; text-align:center; margin-top:24px; }
 .ms-foot-grid { display:grid; gap:8px; max-width:480px; margin:0 auto; font-size:15px; }
