@@ -152,7 +152,7 @@ export const SERVICES_SAMPLE: MetaShop = {
 export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> } = {
   _aiGuide: {
     purpose: 'این فایل نمونهٔ فروشگاه املاک MetaShop است. با دادن همین ساختار به هوش مصنوعی (همراه تصاویر)، می‌توان آگهی‌های کامل اجاره/فروش ساخت.',
-    shopType: 'realestate — حتماً type را realestate بگذارید.',
+    shopType: 'realestate — حتماً type را realestate بگذارید. سبد خرید و تعداد ندارد؛ مشتری «درخواست بازدید» ثبت می‌کند.',
     customerQuestions: [
       'قیمت کل / اجاره ماهانه / ودیعه چقدر است؟ → price (فروش) یا realEstate.monthlyRent + realEstate.deposit (اجاره)',
       'کجاست؟ آدرس دقیق؟ → city, district, neighborhood, fullAddress, mapUrl, nearbyPlaces[]',
@@ -172,7 +172,8 @@ export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> 
     ],
     dealTypes: { sale: 'فروش', rent: 'اجاره بلندمدت', 'rent-short': 'اجاره کوتاه‌مدت/روزانه', 'pre-sale': 'پیش‌فروش', exchange: 'معاوضه' },
     propertyTypes: { apartment: 'آپارتمان', villa: 'ویلا', penthouse: 'پنت‌هاوس', studio: 'سوئیت', shop: 'مغازه تجاری', office: 'دفتر', warehouse: 'انبار', industrial: 'صنعتی', land: 'زمین', building: 'ساختمان', hotel: 'هتل/مهمان‌پذیر' },
-    requiredPerListing: ['name', 'description', 'images (۳+)', 'realEstate.dealType', 'realEstate.propertyType', 'realEstate.areaSqm', 'realEstate.city', 'realEstate.district', 'price یا monthlyRent+deposit', 'realEstate.faq (۵+ سوال)'],
+    requiredPerListing: ['name', 'description', 'images (۳+)', 'realEstate.dealType', 'realEstate.propertyType', 'realEstate.areaSqm', 'realEstate.city', 'realEstate.district', 'price (فقط نمایش فروش) یا monthlyRent+deposit (اجاره)', 'realEstate.faq (۵+ سوال)'],
+    noCart: 'املاک کالا نیست — qty و سبد خرید ندارید. price فقط برای نمایش قیمت فروش است؛ اجاره از monthlyRent و deposit.',
     importNote: 'در پنل MetaShop: ساخت از JSON یا به‌روزرسانی از فایل — فیلد _aiGuide فقط راهنماست و ذخیره نمی‌شود.',
   },
   id: 'sample-realestate',
@@ -284,7 +285,7 @@ export const REALESTATE_SAMPLE: MetaShop & { _aiGuide?: Record<string, unknown> 
       subcategory: 'آپارتمان',
       description: 'آپارتمان مبله کامل در محله تاریخی جلفا، مناسب خانواده کوچک یا زوج؛ نزدیک زاینده‌رود و کافه‌ها.',
       images: [`${CF}/hf_20260515_160838_8fda62d3-3580-4ab2-a3e6-354d406285bf.png`, `${CF}/hf_20260515_160807_15f8d67c-56ed-4a12-9962-063b8be3924a.png`],
-      active: true, currency: 'IRR', price: 45000000,
+      active: true, currency: 'IRR', price: 0,
       realEstate: {
         dealType: 'rent', propertyType: 'apartment', usage: 'مسکونی',
         areaSqm: 85, bedrooms: 2, bathrooms: 1, floor: 2, totalFloors: 4, yearBuilt: 1395,

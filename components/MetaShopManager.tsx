@@ -456,6 +456,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         <div className="flex flex-wrap gap-2 mb-4">
           <span className="text-xs text-gray-400 self-center">{T ? 'نمونه:' : 'Samples:'}</span>
           <button onClick={() => downloadSample('products')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه محصولات' : 'Products sample'}</button>
+          <button onClick={() => downloadSample('services')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه خدمات' : 'Services sample'}</button>
           <button onClick={() => downloadSample('realestate')} className="text-xs px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50">{T ? 'دانلود نمونه املاک' : 'Real estate sample'}</button>
         </div>
 
@@ -667,8 +668,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <tr key={o.id} className="hover:bg-gray-50/60 align-top">
                     <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}{o.via === 'gsite' && <span title={T ? 'از طریق گوگل‌سایت' : 'via Google Site'} className="ms-via-badge inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-sans font-bold align-middle">🌐 {T ? 'گوگل‌سایت' : 'GSite'}</span>}</td>
                     <td className="px-4 py-3"><div className="font-medium text-gray-800">{o.customerName}</div><div className="text-xs text-gray-400" dir="ltr">{o.phone}</div>{o.company && <div className="text-xs text-gray-400">{o.company}</div>}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{it.name} × {it.qty}{it.priceHidden && <span className="text-emerald-600 font-bold"> · {t.hidePrice}</span>}</div>)}{o.discountAmount ? <div className="text-[11px] text-rose-600">− {o.currency} {o.discountAmount.toLocaleString()} ({o.discountCode})</div> : null}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.taxAmount ? <div className="text-[11px] text-gray-500">{o.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {o.taxRate}%: {o.currency} {o.taxAmount.toLocaleString()}</div> : null}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
-                    <td className="px-4 py-3 font-bold text-gray-800">{allNeg ? <span className="text-emerald-600">{t.hidePrice}</span> : <>{o.currency} {o.total.toLocaleString()}{someNeg && <span className="text-emerald-600 text-[11px] font-medium"> + {t.hidePrice}</span>}</>}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{shop?.type === 'realestate' ? it.name : <>{it.name} × {it.qty}</>}{it.priceHidden && shop?.type !== 'realestate' && <span className="text-emerald-600 font-bold"> · {t.hidePrice}</span>}{shop?.type === 'realestate' && <span className="text-amber-700 font-bold"> · {T ? 'درخواست بازدید' : 'Viewing request'}</span>}</div>)}{o.discountAmount ? <div className="text-[11px] text-rose-600">− {o.currency} {o.discountAmount.toLocaleString()} ({o.discountCode})</div> : null}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.taxAmount ? <div className="text-[11px] text-gray-500">{o.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {o.taxRate}%: {o.currency} {o.taxAmount.toLocaleString()}</div> : null}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
+                    <td className="px-4 py-3 font-bold text-gray-800">{shop?.type === 'realestate' ? <span className="text-amber-700 text-sm">{T ? 'درخواست بازدید' : 'Viewing request'}</span> : allNeg ? <span className="text-emerald-600">{t.hidePrice}</span> : <>{o.currency} {o.total.toLocaleString()}{someNeg && <span className="text-emerald-600 text-[11px] font-medium"> + {t.hidePrice}</span>}</>}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs" dir="ltr">{new Date(o.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
                     <td className="px-4 py-3">
                       <select value={o.status} onChange={e => onUpdateMetaShopOrder(o.id, { status: e.target.value as MetaShopOrder['status'] })} className={`text-[11px] px-2 py-1 rounded-full font-medium border-0 outline-none cursor-pointer ${statusCls(o.status)}`}>
@@ -1005,7 +1006,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
         </div>
       )}
 
-      {/* Default checkout fees */}
+      {/* Default checkout fees — not used for real-estate shops */}
+      {!isRealEstate && (
       <div className={card}>
         <div className="flex items-center justify-between mb-1">
           <h4 className="font-bold text-gray-700">{t.feesT} <span className="text-xs text-gray-400">({fees().length})</span></h4>
@@ -1039,8 +1041,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
         </div>
       </div>
+      )}
 
       {/* Discount codes */}
+      {!isRealEstate && (
       <div className={card}>
         <div className="flex items-center justify-between mb-1">
           <h4 className="font-bold text-gray-700">{t.discT} <span className="text-xs text-gray-400">({discounts().length})</span></h4>
@@ -1094,6 +1098,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
           </div>
         )}
       </div>
+      )}
 
       {/* Products */}
       <div className={card}>
@@ -1107,10 +1112,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <button onClick={addProduct} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addProduct}</button>
           </div>
         </div>
+        {!isRealEstate && (
         <label className="flex items-start gap-2 mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 cursor-pointer" title={t.hideAllPricesTip}>
           <input type="checkbox" className="accent-emerald-600 mt-0.5" checked={!!draft.hidePrices} onChange={e => setDraft(d => d ? { ...d, hidePrices: e.target.checked } : d)} />
           <span><span className="text-xs font-bold text-emerald-700">{t.hideAllPrices}</span><span className="block text-[11px] text-emerald-600/80">{t.hideAllPricesTip}</span></span>
         </label>
+        )}
+        {!isRealEstate && (
         <div className="flex items-center gap-2 mb-3 px-1" title={t.priceLabelTip}>
           <span className="text-[11px] font-medium text-gray-500 shrink-0">{t.priceLabel}:</span>
           <select className={fld + ' flex-1'} value={draft.hidePriceText || ''} onChange={e => setDraft(d => d ? { ...d, hidePriceText: e.target.value || undefined } : d)}>
@@ -1118,6 +1126,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
             <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
           </select>
         </div>
+        )}
+        {isRealEstate && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">{T ? 'فروشگاه املاک سبد خرید ندارد. مشتری «درخواست بازدید» ثبت می‌کند — قیمت فقط برای نمایش است.' : 'Real-estate shops have no cart. Customers submit viewing requests — prices are display-only.'}</p>
+        )}
         {draft.products.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">{t.noProducts}</p> : (
           <div className="space-y-3">
             {draft.products.map((p, idx) => (
@@ -1129,7 +1141,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                     <input className={fld + ' dir-ltr'} placeholder={t.pSku} value={p.sku || ''} onChange={e => updProduct(idx, { sku: e.target.value })} />
                     <input className={fld} placeholder={t.pGroup} value={p.group || ''} onChange={e => updProduct(idx, { group: e.target.value })} list={`ms-cats-${draft.id}`} />
                     <input className={fld} placeholder={t.pSubcat} value={p.subcategory || ''} onChange={e => updProduct(idx, { subcategory: e.target.value })} />
-                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت کل فروش' : 'Total sale price') : t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
+                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت نمایشی فروش' : 'Display sale price') : t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
                     <input className={fld + ' dir-ltr'} placeholder={`${t.pCurrency} (${draft.currency})`} value={p.currency || ''} onChange={e => updProduct(idx, { currency: e.target.value.toUpperCase() })} />
                     {!isServices && !isRealEstate && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => updProduct(idx, { packPrice: parseFloat(e.target.value) || 0 })} />}
                     {!isRealEstate && <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />}
@@ -1142,9 +1154,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, pe
                   <div className="flex flex-col gap-1 items-center">
                     <label className="flex items-center gap-1 text-[11px] text-gray-500"><input type="checkbox" className="accent-indigo-600" checked={p.active !== false} onChange={e => updProduct(idx, { active: e.target.checked })} />{t.active}</label>
                     <label className={`flex items-center gap-1 text-[11px] ${(!p.featured && featuredCount >= 3) ? 'text-gray-300' : 'text-amber-600'}`} title={t.featuredFull}><input type="checkbox" className="accent-amber-500" checked={!!p.featured} disabled={!p.featured && featuredCount >= 3} onChange={e => updProduct(idx, { featured: e.target.checked })} />★ {t.featured}</label>
-                    <label className="flex items-center gap-1 text-[11px] text-emerald-600" title={t.hidePriceTip}><input type="checkbox" className="accent-emerald-600" checked={!!p.hidePrice} onChange={e => updProduct(idx, { hidePrice: e.target.checked })} />{t.hidePrice}</label>
+                    {!isRealEstate && <label className="flex items-center gap-1 text-[11px] text-emerald-600" title={t.hidePriceTip}><input type="checkbox" className="accent-emerald-600" checked={!!p.hidePrice} onChange={e => updProduct(idx, { hidePrice: e.target.checked })} />{t.hidePrice}</label>}
                     <label className="flex items-center gap-1 text-[11px] text-red-600" title={t.outOfStockTip}><input type="checkbox" className="accent-red-600" checked={!!p.outOfStock} onChange={e => updProduct(idx, { outOfStock: e.target.checked })} />{t.outOfStock}</label>
-                    {(p.hidePrice || draft.hidePrices) && (
+                    {!isRealEstate && (p.hidePrice || draft.hidePrices) && (
                       <select className="text-[10px] border border-gray-200 rounded px-1 py-0.5 max-w-[120px] text-gray-600" title={t.priceLabelTip} value={p.hidePriceText || ''} onChange={e => updProduct(idx, { hidePriceText: e.target.value || undefined })}>
                         <option value="">{t.priceLabelInherit}</option>
                         <option value={t.priceLabelContact}>{t.priceLabelContact}</option>

@@ -81,6 +81,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupResults, setLookupResults] = useState<MetaShopOrder[] | null>(null);
   const [copied, setCopied] = useState(false);
+  const [inquiryProp, setInquiryProp] = useState<MetaShopProduct | null>(null);
+  const [inquiryForm, setInquiryForm] = useState({ customerName: '', phone: '', email: '', visitWhen: '', notes: '' });
+  const [inquiryTracking, setInquiryTracking] = useState<string | null>(null);
   // Supported languages (defaults to FA + EN). Visitor can switch; default from shop.defaultLang.
   const langs: import('../types').MetaShopLang[] = (shop.languages && shop.languages.length)
     ? shop.languages
@@ -122,6 +125,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       catalog: 'PDF Catalog', downloadCatalog: 'Download PDF Catalog',
       addProperty: 'Request viewing', tabRealEstate: 'Properties', monthlyRent: 'Monthly rent', deposit: 'Deposit',
       specs: 'Specifications', faqTitle: 'FAQ', viewMap: 'View on map', virtualTour: 'Virtual tour', forSale: 'For sale',
+      inquiryBtn: 'Request viewing', inquiryTitle: 'Property viewing request', visitWhen: 'Preferred visit time',
+      inquirySubmit: 'Submit request', inquiryThanks: 'Request received!', trackInquiries: 'Track my requests',
+      featuredProperties: 'Featured properties', callAgent: 'Call', whatsappAgent: 'WhatsApp',
+      priceDisplayOnly: 'Listed price (informational)',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -143,6 +150,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
       catalog: 'کاتالوگ PDF', downloadCatalog: 'دانلود کاتالوگ PDF',
       addProperty: 'درخواست بازدید', tabRealEstate: 'املاک', monthlyRent: 'اجاره ماهانه', deposit: 'ودیعه',
       specs: 'مشخصات ملک', faqTitle: 'سوالات متداول', viewMap: 'مشاهده روی نقشه', virtualTour: 'تور مجازی', forSale: 'فروش',
+      inquiryBtn: 'درخواست بازدید', inquiryTitle: 'درخواست بازدید ملک', visitWhen: 'زمان پیشنهادی بازدید',
+      inquirySubmit: 'ثبت درخواست بازدید', inquiryThanks: 'درخواست شما ثبت شد!', trackInquiries: 'پیگیری درخواست‌ها',
+      featuredProperties: 'املاک ویژه', callAgent: 'تماس', whatsappAgent: 'واتس‌اپ',
+      priceDisplayOnly: 'قیمت اعلامی (فقط نمایش)',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -167,10 +178,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   const S = (k: string) => dict[k] ?? STRINGS.en[k] ?? STRINGS.fa[k] ?? k;
   const t: Record<string, string> = {};
   Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
-  t.add = isRealEstate ? S('addProperty') : isServices ? S('addService') : S('addProduct');
+  t.add = isRealEstate ? S('inquiryBtn') : isServices ? S('addService') : S('addProduct');
   t.productsTab = isRealEstate
     ? (T ? (shop.productsTabLabel || S('tabRealEstate')) : (shop.productsTabLabelEn || shop.productsTabLabel || S('tabRealEstate')))
     : isServices ? S('tabServices') : S('tabProducts');
+  if (isRealEstate) {
+    t.featuredTitle = S('featuredProperties');
+    t.trackMy = S('trackInquiries');
+    if (shop.cartButtonText) t.inquiryBtn = shop.cartButtonText;
+  }
   if (shop.cartButtonText) { t.cartBtn = shop.cartButtonText; t.submit = shop.cartButtonText; }
   if (shop.searchPlaceholder) t.searchPh = shop.searchPlaceholder;
   if (shop.orderThankYouText) t.thanksDesc = shop.orderThankYouText;
@@ -326,6 +342,40 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
   };
   const removeDiscount = () => { setAppliedDiscount(null); setDiscountInput(''); setDiscountErr(''); };
 
+  const openInquiry = (p: MetaShopProduct) => {
+    if (p.outOfStock) return;
+    setInquiryProp(p);
+    setInquiryTracking(null);
+    setInquiryForm({ customerName: '', phone: '', email: '', visitWhen: '', notes: '' });
+    setError('');
+    logMetaShopEvent('add_to_cart', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
+  };
+
+  const submitInquiry = async () => {
+    if (!inquiryProp) return;
+    if (!inquiryForm.customerName.trim() || !inquiryForm.phone.trim()) { setError(t.incomplete); return; }
+    setSubmitting(true); setError('');
+    try {
+      const listed = rePriceLabel(inquiryProp);
+      const noteParts = [
+        inquiryForm.visitWhen && `${S('visitWhen')}: ${inquiryForm.visitWhen}`,
+        listed && `${S('priceDisplayOnly')}: ${listed}`,
+        inquiryForm.notes.trim(),
+      ].filter(Boolean);
+      const code = await onSubmitOrder({
+        customerName: inquiryForm.customerName.trim(),
+        phone: inquiryForm.phone.trim(),
+        email: inquiryForm.email.trim() || undefined,
+        notes: noteParts.join('\n') || undefined,
+        items: [{ productId: inquiryProp.id, name: pName(inquiryProp), sku: inquiryProp.sku, qty: 1, priceHidden: true }],
+        total: 0,
+        currency: shop.currency,
+      });
+      setInquiryTracking(code);
+    } catch { setError(t.err); }
+    finally { setSubmitting(false); }
+  };
+
   const addToCart = (p: MetaShopProduct) => {
     if (p.outOfStock) return; // out-of-stock products can't be ordered
     const optId = selOptId(p);
@@ -384,8 +434,36 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     ['--ms-heading' as any]: theme.heading, ['--ms-text' as any]: theme.text,
   };
 
-  // Price + rate options + quantity stepper / add button (used on cards and in the detail modal)
+  // Real-estate: viewing request + contact — no cart / quantity
+  const inquiryBlock = (p: MetaShopProduct, big = false) => {
+    const re = p.realEstate;
+    const phone = re?.agentPhone || shop.phone;
+    const wa = (re?.agentWhatsapp || phone || '').replace(/\D/g, '');
+    const listed = rePriceLabel(p);
+    return (
+      <div className="ms-buy ms-re-inquiry">
+        {listed && (
+          <div className="ms-price-row">
+            <span className="ms-price-amt">{listed}</span>
+            <span className="ms-price-unit" style={{ display: 'block', fontSize: 11, opacity: 0.75 }}>{S('priceDisplayOnly')}</span>
+          </div>
+        )}
+        <div className={`ms-re-actions ${big ? 'big' : ''}`}>
+          {p.outOfStock ? (
+            <div className="ms-oos">{t.outOfStock}</div>
+          ) : (
+            <button type="button" className={`ms-add ${big ? 'lg' : ''}`} onClick={() => openInquiry(p)}>{t.inquiryBtn || S('inquiryBtn')}</button>
+          )}
+          {phone && <a className="ms-re-contact" href={`tel:${phone}`} dir="ltr">📞 {S('callAgent')}</a>}
+          {wa && <a className="ms-re-contact wa" href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer">💬 {S('whatsappAgent')}</a>}
+        </div>
+      </div>
+    );
+  };
+
+  // Price + rate options + quantity stepper / add button (products & services only)
   const buyBlock = (p: MetaShopProduct, big = false) => {
+    if (isRealEstate) return inquiryBlock(p, big);
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
@@ -462,7 +540,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, uiLang === 'fa' ? 'fa' : 'en') : [];
-    const rePrice = isRealEstate ? rePriceLabel(p) : null;
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className="ms-card-img" onClick={() => openDetail(p)}>
@@ -489,14 +566,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
           {reSummary.length > 0 && (
             <div className="ms-meta">{reSummary.map((line, i) => <span key={i}>{line}</span>)}</div>
           )}
-          {rePrice && !priceHidden(p) && <div className="ms-meta" style={{ fontWeight: 700, color: 'var(--ms-primary)' }}>{rePrice}</div>}
           {!isServices && !isRealEstate && (p.pack || p.moq) && (
             <div className="ms-meta">
               {p.pack != null && <span>{t.pack}: <b>{p.pack} {p.unit}</b></span>}
               {p.moq && <span>{t.moq}: <b>{p.moq}</b></span>}
             </div>
           )}
-          {buyBlock(p)}
+          {isRealEstate ? inquiryBlock(p) : buyBlock(p)}
         </div>
       </article>
     );
@@ -526,9 +602,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <a className="ms-cat-btn" href={catalogHref} target="_blank" rel="noreferrer" title={t.downloadCatalog}>
               <PdfIcon s={16} /><span className="ms-cat-lbl">{t.catalog}</span>
             </a>
+            {!isRealEstate && (
             <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
               <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
             </button>
+            )}
           </div>
         </div>
       </nav>
@@ -725,7 +803,43 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
         </div>
       )}
 
-      {/* Cart drawer */}
+      {/* Real-estate inquiry modal (no cart) */}
+      {inquiryProp && (
+        <div className="ms-modal-ov" onClick={() => !submitting && setInquiryProp(null)}>
+          <div className="ms-modal ms-inquiry-modal" onClick={e => e.stopPropagation()}>
+            <button className="ms-modal-x" onClick={() => setInquiryProp(null)} disabled={submitting}>✕</button>
+            {inquiryTracking ? (
+              <div className="ms-thanks" style={{ padding: '24px 8px' }}>
+                <h2>{S('inquiryThanks')}</h2>
+                <p>{shop.orderThankYouText || t.thanksDesc}</p>
+                <div className="ms-track-code"><span>{t.trackingCode}</span><b dir="ltr">{inquiryTracking}</b>
+                  <button onClick={() => { navigator.clipboard.writeText(inquiryTracking); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>{copied ? t.copied : t.copy}</button>
+                </div>
+                <button className="ms-add lg" style={{ marginTop: 16 }} onClick={() => setInquiryProp(null)}>{t.close}</button>
+              </div>
+            ) : (
+              <>
+                <h2 style={{ marginBottom: 8 }}>{S('inquiryTitle')}</h2>
+                <p className="ms-modal-desc" style={{ marginBottom: 16 }}><b>{pName(inquiryProp)}</b>{inquiryProp.sku ? ` · ${inquiryProp.sku}` : ''}</p>
+                {rePriceLabel(inquiryProp) && <p className="ms-meta" style={{ color: 'var(--ms-primary)', fontWeight: 700, marginBottom: 12 }}>{rePriceLabel(inquiryProp)}</p>}
+                <div className="ms-form">
+                  <label>{t.name}<input value={inquiryForm.customerName} onChange={e => setInquiryForm(f => ({ ...f, customerName: e.target.value }))} /></label>
+                  <label>{t.phone}<input value={inquiryForm.phone} onChange={e => setInquiryForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" /></label>
+                  <label>{t.email}<input value={inquiryForm.email} onChange={e => setInquiryForm(f => ({ ...f, email: e.target.value }))} dir="ltr" /></label>
+                  <label>{S('visitWhen')}<input value={inquiryForm.visitWhen} onChange={e => setInquiryForm(f => ({ ...f, visitWhen: e.target.value }))} placeholder={T ? 'مثلاً شنبه ۱۰ صبح' : 'e.g. Saturday 10 AM'} /></label>
+                  <label>{t.notes}<textarea rows={3} value={inquiryForm.notes} onChange={e => setInquiryForm(f => ({ ...f, notes: e.target.value }))} placeholder={T ? 'سوال یا توضیح اضافه…' : 'Extra questions…'} /></label>
+                </div>
+                {error && <p className="ms-err">{error}</p>}
+                <button className="ms-add lg" style={{ width: '100%', marginTop: 12 }} onClick={submitInquiry} disabled={submitting}>{submitting ? t.submitting : (t.inquiryBtn || S('inquirySubmit'))}</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cart drawer — products & services only */}
+      {!isRealEstate && (
+      <>
       <div className={`ms-cart-ov ${cartOpen ? 'open' : ''}`} onClick={() => setCartOpen(false)} />
       <aside className={`ms-drawer ${cartOpen ? 'open' : ''}`}>
         <header className="ms-drawer-head"><h2>{step === 'review' ? t.invoiceTitle : t.cartTitle}</h2><button onClick={() => setCartOpen(false)}>✕</button></header>
@@ -879,6 +993,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onLoo
             <button className="ms-submit" onClick={() => { setTracking(null); setForm({ customerName: '', company: '', phone: '', email: '', country: '', city: '', notes: '' }); }}>{t.close}</button>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
@@ -1089,6 +1205,13 @@ const MS_CSS = `
 .ms-re-faq-item { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:6px; padding:8px 10px; font-size:12px; }
 .ms-re-faq-item summary { cursor:pointer; font-weight:700; color:var(--ms-heading); }
 .ms-re-faq-item p { margin:8px 0 0; color:var(--ms-text); line-height:1.5; }
+.ms-re-inquiry .ms-re-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
+.ms-re-inquiry .ms-re-actions.big { flex-direction:column; align-items:stretch; }
+.ms-re-contact { display:inline-flex; align-items:center; gap:4px; padding:9px 14px; border-radius:999px; border:1px solid #e2e8f0; font-size:12px; font-weight:700; color:var(--ms-heading); text-decoration:none; background:#fff; }
+.ms-re-contact.wa { border-color:#25d366; color:#128c7e; }
+.ms-inquiry-modal { max-width:480px; }
+.ms-inquiry-modal .ms-form label { display:block; margin-bottom:10px; font-size:12px; font-weight:600; color:#64748b; }
+.ms-inquiry-modal .ms-form input, .ms-inquiry-modal .ms-form textarea { width:100%; margin-top:4px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; }
 /* footer */
 .ms-footer { background:var(--ms-primary); color:#fff; padding:48px 24px 36px; text-align:center; margin-top:24px; }
 .ms-foot-grid { display:grid; gap:8px; max-width:480px; margin:0 auto; font-size:15px; }
