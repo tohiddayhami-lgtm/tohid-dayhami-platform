@@ -8,7 +8,7 @@ export type MeetingDisplayStatus = 'internal' | 'open' | 'pending' | 'confirmed'
 export const MEETING_STATUS_STYLE: Record<Exclude<MeetingDisplayStatus, 'internal'>, {
   bg: string; hex: string; labelFa: string; labelEn: string;
 }> = {
-  open: { bg: 'bg-emerald-500', hex: '#22c55e', labelFa: 'باز', labelEn: 'Open' },
+  open: { bg: 'bg-emerald-500', hex: '#22c55e', labelFa: 'قابل رزرو', labelEn: 'Bookable' },
   pending: { bg: 'bg-orange-500', hex: '#f97316', labelFa: 'رزرو موقت', labelEn: 'Temporary' },
   confirmed: { bg: 'bg-red-600', hex: '#dc2626', labelFa: 'رزرو قطعی', labelEn: 'Confirmed' },
 };

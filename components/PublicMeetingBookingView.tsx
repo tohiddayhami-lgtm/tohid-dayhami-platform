@@ -77,7 +77,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
 
   const t = {
     title: fa ? 'رزرو جلسه مشاوره' : 'Book a consultation',
-    subtitle: fa ? 'زمان‌های باز را انتخاب کنید — لیست خطی بر اساس موضوع' : 'Pick an open slot — linear list by topic',
+    subtitle: fa ? 'زمان‌های قابل رزرو را انتخاب کنید — لیست خطی بر اساس موضوع' : 'Pick a bookable slot — linear list by topic',
     consultant: fa ? 'مشاور' : 'Consultant',
     allConsultants: fa ? 'همه مشاوران' : 'All consultants',
     allCategories: fa ? 'همه موضوعات' : 'All topics',
@@ -87,20 +87,20 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     track: fa ? 'پیگیری رزرو' : 'Track booking',
     noSlots: fa ? 'زمان قابل رزروی ثبت نشده است.' : 'No bookable slots available.',
     guests: fa ? 'رزرو موقت' : 'temp. bookings',
-    statsOpen: fa ? 'زمان باز' : 'Open',
+    statsOpen: fa ? 'قابل رزرو' : 'Bookable',
     statsPending: fa ? 'رزرو موقت' : 'Temporary',
     statsConfirmed: fa ? 'رزرو قطعی' : 'Confirmed',
     bookNow: fa ? 'رزرو' : 'Book',
     full: fa ? 'پر شده' : 'Full',
     consultantsTitle: fa ? 'مشاوران' : 'Consultants',
-    openSlots: (n: number) => fa ? `${n.toLocaleString('fa-IR')} زمان باز` : `${n} open`,
+    openSlots: (n: number) => fa ? `${n.toLocaleString('fa-IR')} قابل رزرو` : `${n} bookable`,
     uncategorized: fa ? 'سایر مشاوره‌ها' : 'Other consultations',
     sessionsTitle: fa ? 'جلسات قابل رزرو' : 'Available sessions',
     pendingCount: (n: number) => fa ? `${n.toLocaleString('fa-IR')} رزرو موقت` : `${n} temporary booking${n === 1 ? '' : 's'}`,
     selectConsultant: fa ? 'انتخاب' : 'Select',
     sessionTopics: fa ? 'سرفصل‌های جلسه' : 'Session topics',
     sessionTopicsHint: fa ? 'موضوعات مشاوره‌ای که این مشاور ارائه می‌دهد' : 'Topics this consultant offers',
-    openSlotsTopic: (n: number) => fa ? `${n.toLocaleString('fa-IR')} زمان باز` : `${n} open slot${n === 1 ? '' : 's'}`,
+    openSlotsTopic: (n: number) => fa ? `${n.toLocaleString('fa-IR')} قابل رزرو` : `${n} bookable slot${n === 1 ? '' : 's'}`,
     clearConsultant: fa ? 'همه مشاوران' : 'All consultants',
   };
 
