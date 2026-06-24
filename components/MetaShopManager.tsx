@@ -301,6 +301,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     thanksTxt: T ? 'متن تشکر پس از سفارش' : 'Order thank-you text', cartBtn: T ? 'متن دکمه سفارش' : 'Order button text',
     invoiceHint: T ? 'متن پایین پیش‌فاکتور' : 'Proforma invoice footnote',
     invoiceHintHint: T ? 'در پیش‌نمایش فاکتور (قبل از ثبت نهایی) زیر جمع نمایش داده می‌شود. اگر خالی بماند از متن پیش‌فرض استفاده می‌شود.' : 'Shown below the total on the invoice preview before submit. Leave empty for the default text.',
+    invoiceHintShow: T ? 'نمایش متن پایین پیش‌فاکتور' : 'Show proforma footnote',
+    invoiceHintShowHint: T ? 'اگر تیک را بردارید، هیچ متنی زیر جمع فاکتور نمایش داده نمی‌شود.' : 'Uncheck to hide the footnote below the invoice total entirely.',
     invoiceHintI18n: T ? 'متن پیش‌فاکتور به زبان‌های دیگر' : 'Proforma footnote — other languages',
     routeHint: T ? 'سفارش‌های این فروشگاه به کارتابل چه کسانی برود؟' : 'Whose cartable should orders go to?',
     routePersonnel: T ? 'پرسنل مشخص' : 'Specific personnel', routeDept: T ? 'یک دپارتمان' : 'A department', routeNone: T ? 'پیش‌فرض (مستر)' : 'Default (master)',
@@ -1428,11 +1430,20 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isRealEstate ? (T ? 'درخواست بازدید' : 'Request viewing') : isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld} value={draft.orderThankYouText || ''} onChange={e => upd({ orderThankYouText: e.target.value })} /></div>
           <div className="md:col-span-2">
-            <label className={lbl}>{t.invoiceHint}</label>
-            <textarea rows={2} className={fld} value={invoiceHintLangField('fa')} onChange={e => setInvoiceHintLangField('fa', e.target.value)} placeholder={defaultInvoiceHintPh} />
-            <p className="text-[11px] text-gray-400 mt-1">{t.invoiceHintHint}</p>
+            <label className="flex items-center gap-2 text-sm text-gray-700 mb-2 cursor-pointer">
+              <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.showInvoiceHint !== false} onChange={e => upd({ showInvoiceHint: e.target.checked })} />
+              {t.invoiceHintShow}
+            </label>
+            <p className="text-[11px] text-gray-400 mb-2">{t.invoiceHintShowHint}</p>
+            {draft.showInvoiceHint !== false && (
+              <>
+                <label className={lbl}>{t.invoiceHint}</label>
+                <textarea rows={2} className={fld} value={invoiceHintLangField('fa')} onChange={e => setInvoiceHintLangField('fa', e.target.value)} placeholder={defaultInvoiceHintPh} />
+                <p className="text-[11px] text-gray-400 mt-1">{t.invoiceHintHint}</p>
+              </>
+            )}
           </div>
-          {pageEditorLangs().length > 0 && (
+          {draft.showInvoiceHint !== false && pageEditorLangs().length > 0 && (
             <div className="md:col-span-2 p-3 rounded-xl bg-amber-50/60 border border-amber-100">
               <h5 className="text-sm font-bold text-gray-700 mb-2">{t.invoiceHintI18n}</h5>
               <div className="space-y-3">

@@ -1683,7 +1683,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                   </div>
                 )}
                 <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? negLabel() : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {negLabel()}</span>}</b></div>
-                <p className="ms-inv-hint">{t.invHint}</p>
+                {shop.showInvoiceHint !== false && <p className="ms-inv-hint">{t.invHint}</p>}
               </div>
               <div className="ms-form embedded">
                 <h3>{t.yourInfo}</h3>
