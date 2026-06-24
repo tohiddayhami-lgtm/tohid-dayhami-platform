@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode } from '../types';
 import { shopCodeOf } from './shopCode';
+import { shopSearchHaystack } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -54,7 +55,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const q = search.trim().toLowerCase();
     if (!q) return live;
     return live.filter(s => {
-      const hay = `${s.name} ${s.title || ''} ${shopCodeOf(s)} ${catsOf(s).join(' ')} ${s.directorySubcategory || ''} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase();
+      const hay = `${shopSearchHaystack(s)} ${shopCodeOf(s)} ${catsOf(s).join(' ')}`.toLowerCase();
       return hay.includes(q);
     });
   }, [live, search]);
@@ -136,7 +137,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     const shopBySlug: Record<string, MetaShop> = {};
     live.forEach(s => { shopBySlug[s.slug] = s; });
     const q = search.trim().toLowerCase();
-    const shopMatches = (s: MetaShop) => !q || `${s.name} ${s.title || ''} ${shopCodeOf(s)} ${(s.products || []).map(p => p.name).join(' ')}`.toLowerCase().includes(q);
+    const shopMatches = (s: MetaShop) => !q || `${shopSearchHaystack(s)} ${shopCodeOf(s)}`.includes(q);
     const bLbl = (c?: { fa?: string; en?: string }) => c ? (T ? (c.fa || c.en) : (c.en || c.fa)) || '' : '';
     const accentCover = bazaar.theme?.cover || '#1f2a18';
 

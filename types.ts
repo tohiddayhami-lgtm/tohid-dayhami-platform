@@ -1118,6 +1118,8 @@ export interface MetaShopProduct {
   pack?: number;           // items per pack (products)
   moq?: string;            // MOQ label (products)
   stockLabel?: string;
+  /** Extra search terms (comma-separated in admin) — site & international shop search. */
+  searchKeywords?: string[];
   // rich attributes
   colors?: MetaShopColorOption[];
   origin?: { name: string; flagUrl?: string };
@@ -1285,6 +1287,8 @@ export interface MetaShop {
   cartButtonText?: string;
   orderThankYouText?: string;
   searchPlaceholder?: string;
+  /** Extra search terms for this shop (comma-separated in admin) — site & international shop search. */
+  searchKeywords?: string[];
   createdAt?: string;
 }
 

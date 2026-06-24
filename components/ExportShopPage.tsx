@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
+import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { IconSearch, IconBriefcase } from './Icons';
 import { Language } from '../App';
 
@@ -41,28 +42,9 @@ const collectAllBazaarShops = (bazaar: MetaBazaar, shopBySlug: Record<string, Me
   return acc;
 };
 
-const shopHaystack = (shop: MetaShop): string => {
-  const parts: string[] = [
-    shop.name, shop.title, shop.subtitle, shop.collectionText, shop.footerText,
-    shop.website, shop.address, shopCodeOf(shop),
-    shop.directoryCategory, shop.directorySubcategory,
-    ...(shop.directoryCats || []).flatMap(c => [c.fa, c.en, c.ar, c.zh]),
-    shop.directorySub?.fa, shop.directorySub?.en, shop.directorySub?.ar,
-    ...(shop.pages || []).flatMap(p => [p.name, p.nameEn, p.desc, p.descEn]),
-    ...(shop.products || []).flatMap(p => [
-      p.name, p.sku, p.description, p.group, p.subcategory, p.hsCode,
-      ...(p.priceOptions || []).flatMap(o => [o.label, o.labelEn]),
-    ]),
-  ];
-  return parts.filter(Boolean).join(' ').toLowerCase();
-};
-
 const matchingProducts = (shop: MetaShop, q: string): MetaShopProduct[] => {
   if (!q || q.length < MIN_SEARCH) return [];
-  return (shop.products || []).filter(p => p.active !== false).filter(p => {
-    const hay = [p.name, p.sku, p.description, p.group, p.subcategory, p.hsCode].filter(Boolean).join(' ').toLowerCase();
-    return hay.includes(q);
-  }).slice(0, 3);
+  return (shop.products || []).filter(p => p.active !== false).filter(p => productMatchesSearch(shop, p, q)).slice(0, 3);
 };
 
 const bLbl = (c: { fa?: string; en?: string } | undefined, fa: boolean) =>
@@ -143,7 +125,7 @@ export const ExportShopPage: React.FC<Props> = ({
     if (!q) return pool;
     if (q.length < MIN_SEARCH) return pool;
 
-    return pool.filter(s => shopHaystack(s).includes(q));
+    return pool.filter(s => shopMatchesSearch(s, q));
   }, [bazaar, bazaarShopPool, bazaarPath, shopBySlug, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));

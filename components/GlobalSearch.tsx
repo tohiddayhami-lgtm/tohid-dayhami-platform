@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NewsArticle, ServiceOption, MetaShop } from '../types';
 import { IconSearch, IconNewspaper, IconBriefcase, IconTag } from './Icons';
 import { shopCodeOf } from './shopCode';
+import { shopSearchHaystack, productSearchHaystack } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -12,15 +13,16 @@ interface Props {
   onOpenNews: (id: string) => void;
   onOpenService: (id: string) => void;
   onOpenShop: (slug: string) => void;
+  onOpenProduct: (slug: string, productId: string) => void;
 }
 
 type Result =
   | { kind: 'news'; id: string; title: string; sub: string }
   | { kind: 'service'; id: string; title: string; sub: string }
   | { kind: 'shop'; slug: string; title: string; sub: string; code: string }
-  | { kind: 'product'; slug: string; title: string; sub: string; code: string };
+  | { kind: 'product'; slug: string; productId: string; title: string; sub: string; code: string };
 
-export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onOpenNews, onOpenService, onOpenShop }) => {
+export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onOpenNews, onOpenService, onOpenShop, onOpenProduct }) => {
   const T = lang === 'fa';
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -63,19 +65,19 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
       if (hay.includes(term)) out.push({ kind: 'service', id: s.id, title: (T && s.title) ? s.title : (s.titleEn || s.title), sub: (T ? s.description : (s.descriptionEn || s.description)) || '' });
     });
 
-    // Shops (active only) — by name, title, or CODE
+    // Shops (active only) — name, title, code, custom keywords, products
     shops.filter(s => s.isActive !== false).forEach(s => {
       const code = shopCodeOf(s);
-      const hay = `${s.name} ${s.title || ''} ${code}`.toLowerCase();
+      const hay = `${shopSearchHaystack(s)} ${code}`.toLowerCase();
       if (hay.includes(term)) out.push({ kind: 'shop', slug: s.slug, title: s.title || s.name, sub: s.name, code });
     });
 
-    // Products across shops
+    // Products across shops (name, sku, group, product & shop keywords)
     shops.filter(s => s.isActive !== false).forEach(s => {
       (s.products || []).forEach(p => {
         if (p.active === false) return;
-        const hay = `${p.name} ${p.sku || ''} ${p.group || ''}`.toLowerCase();
-        if (hay.includes(term)) out.push({ kind: 'product', slug: s.slug, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
+        const hay = productSearchHaystack(s, p);
+        if (hay.includes(term)) out.push({ kind: 'product', slug: s.slug, productId: p.id, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
       });
     });
 
@@ -92,6 +94,7 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
     setOpen(false); setQ('');
     if (r.kind === 'news') onOpenNews(r.id);
     else if (r.kind === 'service') onOpenService(r.id);
+    else if (r.kind === 'product') onOpenProduct(r.slug, r.productId);
     else onOpenShop(r.slug);
   };
 

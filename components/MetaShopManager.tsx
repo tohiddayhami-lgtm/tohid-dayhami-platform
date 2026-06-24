@@ -12,6 +12,7 @@ import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
+import { parseSearchKeywords, formatSearchKeywordsForInput } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -262,6 +263,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     pName: T ? 'نام' : 'Name', pSku: T ? 'کد (SKU)' : 'SKU', pGroup: T ? 'دسته' : 'Category', pSubcat: T ? 'زیردسته' : 'Subcategory', pPrice: T ? 'قیمت' : 'Price', pPack: T ? 'قیمت بسته' : 'Pack price',
     pCurrency: T ? 'ارز محصول' : 'Currency', optCur: T ? 'ارز' : 'Cur',
     pUnit: T ? 'واحد' : 'Unit', pPackSize: T ? 'تعداد در بسته' : 'Pack size', pMoq: T ? 'حداقل سفارش' : 'MOQ', pStock: T ? 'وضعیت موجودی' : 'Stock label', pDesc: T ? 'توضیحات' : 'Description', pImg: T ? 'تصویر' : 'Image',
+    pKeywords: T ? 'کلمات کلیدی جستجو' : 'Search keywords',
+    pKeywordsHint: T ? 'با ویرگول جدا کنید — در جستجوی سایت و فروشگاه بین‌المللی' : 'Comma-separated — used in site & international shop search',
+    searchKeywords: T ? 'کلمات کلیدی فروشگاه' : 'Shop search keywords',
+    searchKeywordsHint: T ? 'هر چند کلمه که می‌خواهید با ویرگول یا خط جدید جدا کنید. مشتری با جستجوی این کلمات فروشگاه و محصولاتش را پیدا می‌کند.' : 'Add as many terms as you like, separated by commas or new lines. Customers find this shop and its products when searching these terms.',
     pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
     pDiscount: T ? 'تخفیف' : 'Discount', pDiscNone: T ? 'بدون تخفیف' : 'No discount', pDiscPercent: T ? 'درصدی (٪)' : 'Percent (%)', pDiscAmount: T ? 'مبلغی' : 'Amount',
@@ -1025,6 +1030,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
         </div>
         <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
+        <div className="mt-4">
+          <label className={lbl}>{t.searchKeywords}</label>
+          <textarea
+            className={fld + ' min-h-[72px]'}
+            value={formatSearchKeywordsForInput(draft.searchKeywords)}
+            onChange={e => upd({ searchKeywords: parseSearchKeywords(e.target.value) })}
+            placeholder={T ? 'مثلا: زعفران، pistachio، saffron export' : 'e.g. saffron, pistachio, dried fruit'}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">{t.searchKeywordsHint}</p>
+        </div>
       </div>
 
       {/* Theme */}
@@ -1290,6 +1305,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     {!isServices && !isRealEstate && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}
                     <input className={fld} placeholder={t.pStock} value={p.stockLabel || ''} onChange={e => updProduct(idx, { stockLabel: e.target.value })} />
                     <textarea className={fld + ' col-span-2 md:col-span-4'} rows={1} placeholder={t.pDesc} value={p.description || ''} onChange={e => updProduct(idx, { description: e.target.value })} />
+                    <input
+                      className={fld + ' col-span-2 md:col-span-4'}
+                      placeholder={t.pKeywords}
+                      value={formatSearchKeywordsForInput(p.searchKeywords)}
+                      onChange={e => updProduct(idx, { searchKeywords: parseSearchKeywords(e.target.value) })}
+                      title={t.pKeywordsHint}
+                    />
                     <input className={fld + ' col-span-2 md:col-span-4 dir-ltr'} placeholder={t.pVideo} value={p.videoUrl || ''} onChange={e => updProduct(idx, { videoUrl: e.target.value })} />
                   </div>
                   <div className="flex flex-col gap-1 items-center">

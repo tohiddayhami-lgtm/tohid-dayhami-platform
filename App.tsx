@@ -1748,6 +1748,12 @@ const App: React.FC = () => {
               onOpenNews={(id) => setView('news', id)}
               onOpenService={(id) => openFormWithService(id)}
               onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+              onOpenProduct={(slug, productId) => {
+                history.pushState(null, '', `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`);
+                setShopSlug(slug);
+                setViewState('metashop');
+                window.scrollTo(0, 0);
+              }}
             />
             <div className="flex border border-gray-200 rounded-lg overflow-hidden text-xs">
               <button onClick={() => setLang('fa')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'fa' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>FA</button>
