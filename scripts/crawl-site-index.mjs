@@ -338,17 +338,31 @@ async function main() {
       id: a.id,
       slug: a.slug,
       title: a.title,
+      titleEn: a.titleEn,
       category: a.category,
+      categories: a.categories,
       tags: a.tags || [],
+      publishedAt: a.publishedAt,
+      coverImage: a.coverImage,
     });
+    // Legacy slug-based news links (#/news/<slug>) — kept for completeness
+    if (a.slug) {
+      addUrl(`${origin}/#/news/${encodeURIComponent(a.slug)}`, 'post', {
+        id: a.id,
+        slug: a.slug,
+        title: a.title,
+        legacy: true,
+      });
+    }
   }
 
   const allTags = new Set();
   const allCategories = new Set();
+  const newsCategories = new Set();
   for (const a of articles) {
     (a.tags || []).forEach((t) => allTags.add(t));
-    if (a.category) allCategories.add(a.category);
-    (a.categories || []).forEach((c) => allCategories.add(c));
+    if (a.category) { allCategories.add(a.category); newsCategories.add(a.category); }
+    (a.categories || []).forEach((c) => { allCategories.add(c); newsCategories.add(c); });
   }
 
   for (const f of publicForms) {
@@ -375,15 +389,21 @@ async function main() {
       const label = typeof c === 'string' ? c : c?.fa || c?.en;
       if (label) allCategories.add(label);
     });
-    for (const p of shop.products || []) {
-      addUrl(pageUrl(origin, `shop=${shop.slug}#product-${p.id}`), 'product', {
+    const activeProducts = (shop.products || []).filter((p) => p.active !== false);
+    for (const p of activeProducts) {
+      addUrl(pageUrl(origin, `shop=${shop.slug}&product=${p.id}`), 'product', {
         shopSlug: shop.slug,
+        shopName: shop.name,
         productId: p.id,
         name: p.name,
         sku: p.sku,
         group: p.group,
+        subcategory: p.subcategory,
+        hsCode: p.hsCode,
+        images: p.images || [],
       });
       if (p.group) allCategories.add(p.group);
+      if (p.subcategory) allCategories.add(p.subcategory);
     }
     for (const pg of shop.pages || []) {
       addUrl(pageUrl(origin, `shop=${shop.slug}#page-${pg.id}`), 'page', {
@@ -479,6 +499,11 @@ async function main() {
 
   // ── Content inventory (structured) ──
   const contentInventory = {
+    news: {
+      listingUrl: pageUrl(origin, 'page=news'),
+      count: articles.length,
+      categories: [...newsCategories].sort(),
+    },
     pages: urlInventory.filter((u) => u.type === 'page'),
     posts: articles.map((a) => ({
       id: a.id,
@@ -486,25 +511,35 @@ async function main() {
       title: a.title,
       titleEn: a.titleEn,
       summary: a.summary,
+      summaryEn: a.summaryEn,
+      contentPreview: (a.content || '').slice(0, 500),
       category: a.category,
       categories: a.categories,
       tags: a.tags,
       publishedAt: a.publishedAt,
+      author: a.author,
       url: pageUrl(origin, `page=news&id=${a.id}`),
       coverImage: a.coverImage,
+      metaDescription: a.metaDescription,
+      metaKeywords: a.metaKeywords,
     })),
     products: shops.flatMap((shop) =>
       (shop.products || []).filter((p) => p.active !== false).map((p) => ({
         id: p.id,
         shopSlug: shop.slug,
         shopName: shop.name,
+        shopType: shop.type,
         name: p.name,
         sku: p.sku,
         group: p.group,
         subcategory: p.subcategory,
         hsCode: p.hsCode,
-        url: pageUrl(origin, `shop=${shop.slug}#product-${p.id}`),
+        description: (p.description || '').slice(0, 500),
+        url: pageUrl(origin, `shop=${shop.slug}&product=${p.id}`),
+        shopUrl: pageUrl(origin, `shop=${shop.slug}`),
         images: p.images || [],
+        featured: !!p.featured,
+        active: p.active !== false,
       })),
     ),
     categories: [...allCategories].sort().map((name) => ({ name, kind: 'discovered' })),
@@ -604,6 +639,14 @@ async function main() {
   const sitemapUrls = [...new Set(urlInventory.map((u) => u.url))].filter(
     (u) => !u.includes('/api/') && !u.includes('#') && !u.endsWith('.xml') && !u.endsWith('.txt'),
   );
+  const sitemapPriority = (url) => {
+    if (url.endsWith('/') || url.endsWith('.com')) return '1.0';
+    if (url.includes('page=news') && !url.includes('id=')) return '0.9';
+    if (url.includes('page=news&id=')) return '0.8';
+    if (url.includes('product=')) return '0.7';
+    if (url.includes('shop=')) return '0.75';
+    return '0.6';
+  };
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${sitemapUrls
@@ -612,6 +655,7 @@ ${sitemapUrls
     <loc>${loc.replace(/&/g, '&amp;')}</loc>
     <lastmod>${crawledAt.slice(0, 10)}</lastmod>
     <changefreq>weekly</changefreq>
+    <priority>${sitemapPriority(loc)}</priority>
   </url>`,
   )
   .join('\n')}

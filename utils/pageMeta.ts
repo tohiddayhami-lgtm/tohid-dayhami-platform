@@ -1,4 +1,4 @@
-import type { AppConfig, CustomForm, MetaBazaar, MetaShop, NewsArticle } from '../types';
+import type { AppConfig, CustomForm, MetaBazaar, MetaShop, MetaShopProduct, NewsArticle } from '../types';
 import { translateField } from './metaShopLang';
 
 export interface PageMeta {
@@ -58,6 +58,27 @@ export const metaFromMetaShop = (shop: MetaShop, origin = '', queryLang?: string
     image: absUrl(origin, shop.coverImage || shop.logo),
     type: 'website',
     siteName,
+  };
+};
+
+/** Per-product page meta (?shop=<slug>&product=<id>) — used for SEO / social sharing. */
+export const metaFromMetaShopProduct = (
+  shop: MetaShop,
+  product: MetaShopProduct,
+  origin = '',
+  queryLang?: string | null,
+): PageMeta => {
+  const lang = pickShopOgLang(shop, queryLang);
+  const shopName = shopTr(shop, 'name', shop.name?.trim(), lang) || shop.name;
+  const pName = translateField(product.i18n, 'name', product.name || '', lang) || product.name || product.sku || shop.slug;
+  const pDesc = translateField(product.i18n, 'description', product.description || '', lang) || product.description || '';
+  const group = product.group ? ` — ${product.group}` : '';
+  return {
+    title: `${pName}${group} | ${shopName}`,
+    description: truncate(pDesc || `${pName} — ${shopName}`, 160),
+    image: absUrl(origin, product.images?.[0] || shop.coverImage || shop.logo),
+    type: 'product',
+    siteName: shopName,
   };
 };
 

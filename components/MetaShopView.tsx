@@ -320,6 +320,39 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+  // Deep link: ?shop=<slug>&product=<id> — indexable per-product URLs
+  const readProductParam = () => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('product') || p.get('p');
+    } catch { return null; }
+  };
+  const syncProductUrl = (productId: string | null) => {
+    if (embed) return;
+    try {
+      const url = new URL(window.location.href);
+      if (productId) url.searchParams.set('product', productId);
+      else { url.searchParams.delete('product'); url.searchParams.delete('p'); }
+      const qs = url.searchParams.toString();
+      const next = qs ? `?${qs}` : window.location.pathname;
+      if ((window.location.search || window.location.pathname) !== next) history.replaceState(null, '', next);
+    } catch {}
+  };
+  useEffect(() => {
+    const pid = readProductParam();
+    if (!pid) return;
+    const p = products.find(x => x.id === pid);
+    if (p) { setDetail(p); setTab('products'); }
+  }, [products]);
+  useEffect(() => {
+    const onPop = () => {
+      const pid = readProductParam();
+      if (!pid) { setDetail(null); return; }
+      setDetail(products.find(x => x.id === pid) || null);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [products]);
   // Up to 3 «ویژه» (featured) products, shown in a highlighted rail above the grid.
   const featuredProducts = useMemo(() => products.filter(p => p.featured).slice(0, 3), [products]);
   const categories = useMemo(
@@ -544,8 +577,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     logMetaShopEvent('add_to_cart', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
   };
   // Open a product's detail modal and record the click for the shop's visit report.
+  const closeDetail = () => { setDetail(null); syncProductUrl(null); };
   const openDetail = (p: MetaShopProduct) => {
     setDetail(p);
+    syncProductUrl(p.id);
     logMetaShopEvent('product_click', { id: shop.id, name: shop.name }, { productId: p.id, productName: p.name, productGroup: p.group, via: embed ? 'gsite' : 'shop' });
   };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
@@ -910,9 +945,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
       {/* Product detail modal */}
       {detail && (
-        <div className="ms-modal-ov" onClick={() => setDetail(null)}>
+        <div className="ms-modal-ov" onClick={closeDetail}>
           <div className="ms-modal" onClick={e => e.stopPropagation()}>
-            <button className="ms-modal-x" onClick={() => setDetail(null)}>✕</button>
+            <button className="ms-modal-x" onClick={closeDetail}>✕</button>
             <div className="ms-modal-gal">
               {(() => {
                 const imgs = detail.images || [];

@@ -151,6 +151,23 @@ async function resolveMeta(searchOrParams, origin) {
   if (shopSlug) {
     const shop = await queryByField('metaShops', 'slug', shopSlug);
     if (shop && shop.isActive !== false) {
+      const productId = p.get('product') || p.get('p');
+      if (productId) {
+        const product = (shop.products || []).find(pr => pr.id === productId && pr.active !== false);
+        if (product) {
+          const lang = pickShopOgLang(shop, p.get('lang'));
+          const shopName = translateField(shop.i18n, 'name', shop.name || '', lang) || shop.name;
+          const pName = translateField(product.i18n, 'name', product.name || '', lang) || product.name || product.sku;
+          const pDesc = translateField(product.i18n, 'description', product.description || '', lang) || product.description || '';
+          return {
+            title: `${pName} | ${shopName}`,
+            description: truncate(pDesc || `${pName} — ${shopName}`),
+            image: absUrl(origin, product.images?.[0] || shop.coverImage || shop.logo),
+            siteName: shopName,
+            type: 'product',
+          };
+        }
+      }
       const meta = metaFromShopDoc(shop, origin, p.get('lang'));
       if (!meta.image && defaults.image) meta.image = absUrl(origin, defaults.image);
       return meta;

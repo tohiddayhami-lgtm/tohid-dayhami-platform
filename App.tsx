@@ -30,7 +30,7 @@ import {
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
-import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
+import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { MetaShopView } from './components/MetaShopView';
 import type { MetaShopReferralSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode } from './utils/metaShopReferral';
@@ -425,7 +425,16 @@ const App: React.FC = () => {
     const siteMeta = defaultSiteMeta(appConfig, origin);
 
     if (view === 'metashop' && publicShop) {
-      const shopLang = new URLSearchParams(window.location.search).get('lang');
+      const params = new URLSearchParams(window.location.search);
+      const shopLang = params.get('lang');
+      const productId = params.get('product') || params.get('p');
+      if (productId) {
+        const product = (publicShop.products || []).find(p => p.id === productId && p.active !== false);
+        if (product) {
+          applyPageMeta({ ...metaFromMetaShopProduct(publicShop, product, origin, shopLang), url: window.location.href }, siteMeta);
+          return;
+        }
+      }
       applyPageMeta({ ...metaFromMetaShop(publicShop, origin, shopLang), url: window.location.href }, siteMeta);
       return;
     }
