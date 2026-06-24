@@ -5,11 +5,11 @@ import { productMatchesSearch } from '../utils/metaShopSearch';
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
-import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString } from '../utils/metaShopLang';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { computeShippingQuote } from '../utils/metaShopShipping';
-import { shopDisplayCurrencies, formatShopAmount, displayCurrencyLabel } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, formatShopAmount } from '../utils/metaShopCurrency';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -495,8 +495,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const theme = shop.theme;
   const money = (n?: number, sourceCur?: string) => {
     if (n == null) return '';
-    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, locale);
+    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop);
   };
+  const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   // Deep link: ?shop=<slug>&product=<id> — indexable per-product URLs
@@ -656,7 +657,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     if (!code) return;
     const d = (shop.discounts || []).find(x => x.active !== false && x.code.trim().toLowerCase() === code.toLowerCase());
     if (!d) { setAppliedDiscount(null); setDiscountErr(S('invalidDiscount')); return; }
-    if (d.minOrder && grandTotal < d.minOrder) { setAppliedDiscount(null); setDiscountErr(`${S('minOrderDiscount')} ${shop.currency} ${d.minOrder.toLocaleString()}`); return; }
+    if (d.minOrder && grandTotal < d.minOrder) { setAppliedDiscount(null); setDiscountErr(`${S('minOrderDiscount')} ${shop.currency} ${fmtNum(d.minOrder)}`); return; }
     if (computeDiscount(d) <= 0) { setAppliedDiscount(null); setDiscountErr(S('discountNoApply')); return; }
     setAppliedDiscount(d); setDiscountErr('');
   };
@@ -994,10 +995,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               <button className="ms-card-rm" onClick={() => setQty(p.id, 0)} title={t.remove}>✕</button>
             </div>
             {!hidden && curPrice != null && curPrice > 0 && (
-              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : S('pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
+              <div className="ms-card-calc">{fmtNum(qty, 0)} {p.unit ? p.unit : S('pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
             )}
             {hidden && (
-              <div className="ms-card-calc">{qty.toLocaleString()} {p.unit ? p.unit : S('pcs')} · <b>{negLabel(p)}</b></div>
+              <div className="ms-card-calc">{fmtNum(qty, 0)} {p.unit ? p.unit : S('pcs')} · <b>{negLabel(p)}</b></div>
             )}
           </>
         ) : (
@@ -1073,13 +1074,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           </div>
           <div className="ms-top-actions">
             {displayCurrencies.length > 1 && (
-              <div className="ms-cur" title={S('currency')}>
-                {displayCurrencies.map(dc => (
-                  <button key={dc.code} type="button" className={viewCur === dc.code.trim().toUpperCase() ? 'on' : ''} onClick={() => setViewCur(dc.code.trim().toUpperCase())}>
-                    {displayCurrencyLabel(dc, uiLang)}
-                  </button>
-                ))}
-              </div>
+              <select className="ms-cur-select" dir="ltr" value={viewCur} onChange={e => setViewCur(e.target.value)} aria-label={S('currency')} title={S('currency')}>
+                {displayCurrencies.map(dc => {
+                  const code = dc.code.trim().toUpperCase();
+                  return <option key={code} value={code}>{code}</option>;
+                })}
+              </select>
             )}
             {langs.length > 1 && (
               <div className="ms-lang">
@@ -1872,9 +1872,7 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-lang { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
 .ms-lang button { padding:5px 9px; font-size:11px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; }
 .ms-lang button.on { background:var(--ms-primary); color:#fff; }
-.ms-cur { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; max-width:min(220px, 42vw); flex-wrap:wrap; }
-.ms-cur button { padding:5px 8px; font-size:10px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; white-space:nowrap; }
-.ms-cur button.on { background:#0f766e; color:#fff; }
+.ms-cur-select { padding:5px 24px 5px 8px; font-size:11px; font-weight:700; font-family:inherit; border:1px solid #e2e8f0; border-radius:8px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2364748b' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 7px center; color:#334155; cursor:pointer; max-width:76px; appearance:none; }
 .ms-inv-ship { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:#475569; padding:6px 0; border-top:1px dashed #e2e8f0; margin-top:4px; }
 .ms-inv-ship.free b { color:#059669; }
 .ms-ship-note, .ms-ship-hint { font-size:11px; color:#64748b; line-height:1.45; margin:4px 0 0; }

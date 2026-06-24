@@ -1,4 +1,5 @@
 import type { MetaShop, MetaShopDisplayCurrency } from '../types';
+import { formatMetaShopNumber } from './metaShopLang';
 
 const PRESET_LABELS: Record<string, { fa: string; en: string }> = {
   OMR: { fa: 'ریال عمان', en: 'Omani Rial' },
@@ -72,7 +73,6 @@ export const formatShopAmount = (
   sourceCurrency: string,
   viewCurrency: string,
   shop: MetaShop,
-  locale = 'en-US',
 ): string => {
   const base = (shop.currency || 'USD').trim().toUpperCase();
   const src = (sourceCurrency || base).trim().toUpperCase();
@@ -80,16 +80,15 @@ export const formatShopAmount = (
   let n = amount;
   if (src === base && view !== base) n = convertFromBase(amount, shop, view);
   else if (src !== view) {
-    // Mixed product currencies — show in source currency only.
     const decimals = src === 'IRR' ? 0 : 2;
     const f = 10 ** decimals;
     n = Math.round(amount * f) / f;
-    return `${src} ${n.toLocaleString(locale)}`;
+    return `${src} ${formatMetaShopNumber(n, decimals)}`;
   }
   const decimals = view === 'IRR' ? 0 : 2;
   const f = 10 ** decimals;
   n = Math.round(n * f) / f;
-  return `${view} ${n.toLocaleString(locale)}`;
+  return `${view} ${formatMetaShopNumber(n, decimals)}`;
 };
 
 export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisplayCurrency => {

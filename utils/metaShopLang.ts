@@ -35,6 +35,12 @@ export const localeForLang = (code: string): string => {
   return known[code] || code;
 };
 
+/** Latin digits for prices and quantities on the Meta Shop storefront. */
+export const META_SHOP_NUM_LOCALE = 'en-US';
+
+export const formatMetaShopNumber = (n: number, maximumFractionDigits = 2): string =>
+  n.toLocaleString(META_SHOP_NUM_LOCALE, { maximumFractionDigits, minimumFractionDigits: 0 });
+
 /** Legacy fa/en fields on pages, fees, options, etc. */
 export const legacyBilingual = (uiLang: string, faVal?: string, enVal?: string) => {
   if (uiLang === 'fa') return faVal || enVal || '';
