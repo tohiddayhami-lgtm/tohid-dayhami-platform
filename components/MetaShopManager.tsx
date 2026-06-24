@@ -9,7 +9,7 @@ import { MetaExpoManager } from './MetaExpoManager';
 import { MetaShopFileUploader } from './MetaShopFileUploader';
 import { MetaShopRealEstateFields } from './MetaShopRealEstateFields';
 import { defaultRealEstate } from '../utils/metaShopRealEstate';
-import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS } from '../utils/metaShopLang';
+import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
@@ -171,6 +171,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [dirCatFa, setDirCatFa] = useState('');
   const [dirCatEn, setDirCatEn] = useState('');
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
+  const [pageTransOpen, setPageTransOpen] = useState<Record<string, boolean>>({});
+  const [cardTransOpen, setCardTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
 
@@ -254,9 +256,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     langsT: T ? 'زبان‌های فروشگاه' : 'Shop languages', langsHint: T ? 'زبان‌هایی که مشتری می‌تواند بین آن‌ها سوییچ کند — هر کدی مثل fa، en، ar، zh، tr. ترجمهٔ نام/توضیحات هر محصول را در همان محصول (دکمه 🌐) وارد کنید.' : 'Languages visitors can switch between — any code like fa, en, ar, zh, tr. Enter product translations on each product (🌐 button).',
     langCode: T ? 'کد' : 'Code', langName: T ? 'نام نمایشی' : 'Display name', langRtl: T ? 'راست‌چین' : 'RTL', addLang: T ? 'افزودن زبان' : 'Add language',
     transBtn: T ? 'ترجمه‌ها' : 'Translations', transFor: T ? 'ترجمه برای' : 'Translation for',
-    pagesT: T ? 'صفحات و تب‌ها' : 'Pages & Tabs', pagesHint: T ? 'تب‌های اضافی فروشگاه مثل «درباره ما» یا «گواهینامه‌ها». تب «محصولات/خدمات» همیشه هست.' : 'Extra shop tabs like About Us or Certifications. The products tab is always present.',
+    pagesT: T ? 'صفحات و تب‌ها' : 'Pages & Tabs', pagesHint: T ? 'تب‌های اضافی فروشگاه مثل «درباره ما» یا «گواهینامه‌ها». تب «محصولات/خدمات» همیشه هست. ترجمه هر زبان را با دکمه 🌐 وارد کنید.' : 'Extra shop tabs like About Us or Certifications. The products tab is always present. Use 🌐 to enter each language.',
     addPage: T ? 'افزودن صفحه' : 'Add page', noPages: T ? 'صفحه‌ای اضافه نشده است.' : 'No pages added.',
     pgLabel: T ? 'عنوان تب (فارسی)' : 'Tab label (FA)', pgLabelEn: T ? 'عنوان تب (انگلیسی)' : 'Tab label (EN)', pgType: T ? 'نوع صفحه' : 'Page type',
+    pgDefault: T ? 'محتوای پیش‌فرض (فارسی)' : 'Default content (Persian)',
+    pgI18n: T ? 'ترجمه‌های این صفحه' : 'Page translations',
+    pgI18nHint: T ? 'برای هر زبان فروشگاه عنوان تب و متن را جداگانه وارد کنید. اگر خالی بماند از فارسی یا انگلیسی استفاده می‌شود.' : 'Enter tab title and text per shop language. Empty fields fall back to Persian or English.',
+    pgCardI18n: T ? 'ترجمه کارت' : 'Card translations',
     pgText: T ? 'متن + تصویر' : 'Text + images', pgGallery: T ? 'گالری عکس' : 'Photo gallery', pgCards: T ? 'کارت‌ها (گواهینامه/شرکا)' : 'Cards (certs/partners)',
     pgBody: T ? 'متن (فارسی)' : 'Body (FA)', pgBodyEn: T ? 'متن (انگلیسی)' : 'Body (EN)', pgDesc: T ? 'توضیح (فارسی)' : 'Description (FA)', pgDescEn: T ? 'توضیح (انگلیسی)' : 'Description (EN)',
     pgImages: T ? 'تصاویر' : 'Images', pgAddImg: T ? 'افزودن تصویر' : 'Add image', pgCardsList: T ? 'کارت‌ها' : 'Cards', pgAddCard: T ? 'افزودن کارت' : 'Add card',
@@ -580,6 +586,57 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const addCard = (idx: number) => updPage(idx, { cards: [...((draft!.pages || [])[idx].cards || []), { id: `c-${Date.now()}` }] });
   const updCard = (idx: number, cIdx: number, patch: Partial<import('../types').MetaShopPageCard>) => { const card = ((draft!.pages || [])[idx].cards || []); const next = [...card]; next[cIdx] = { ...next[cIdx], ...patch }; updPage(idx, { cards: next }); };
   const removeCard = (idx: number, cIdx: number) => updPage(idx, { cards: ((draft!.pages || [])[idx].cards || []).filter((_, i) => i !== cIdx) });
+
+  type PageTextField = 'label' | 'body' | 'description';
+  type CardTextField = 'name' | 'desc';
+  const pageEditorLangs = () => langOptions().filter(l => l.code && l.code !== 'fa');
+  const pageLangField = (pg: import('../types').MetaShopPage, code: string, field: PageTextField): string => {
+    const fromI18n = pg.i18n?.[code]?.[field];
+    if (fromI18n != null && fromI18n !== '') return fromI18n;
+    if (code === 'fa') {
+      if (field === 'label') return pg.label || '';
+      if (field === 'body') return pg.body || '';
+      return pg.description || '';
+    }
+    if (code === 'en') {
+      if (field === 'label') return pg.labelEn || '';
+      if (field === 'body') return pg.bodyEn || '';
+      return pg.descriptionEn || '';
+    }
+    return '';
+  };
+  const setPageLangField = (idx: number, code: string, field: PageTextField, val: string) => {
+    const pg = (draft!.pages || [])[idx];
+    const i18n: Record<string, Record<string, string>> = { ...(pg.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: val };
+    const patch: Partial<import('../types').MetaShopPage> = { i18n };
+    if (code === 'fa') {
+      if (field === 'label') patch.label = val;
+      else if (field === 'body') patch.body = val;
+      else patch.description = val;
+    } else if (code === 'en') {
+      if (field === 'label') patch.labelEn = val;
+      else if (field === 'body') patch.bodyEn = val;
+      else patch.descriptionEn = val;
+    }
+    updPage(idx, patch);
+  };
+  const cardLangField = (c: import('../types').MetaShopPageCard, code: string, field: CardTextField): string => {
+    const fromI18n = c.i18n?.[code]?.[field];
+    if (fromI18n != null && fromI18n !== '') return fromI18n;
+    if (code === 'fa') return field === 'name' ? (c.name || '') : (c.desc || '');
+    if (code === 'en') return field === 'name' ? (c.nameEn || '') : (c.descEn || '');
+    return '';
+  };
+  const setCardLangField = (idx: number, cIdx: number, code: string, field: CardTextField, val: string) => {
+    const c = ((draft!.pages || [])[idx].cards || [])[cIdx];
+    const i18n: Record<string, Record<string, string>> = { ...(c.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: val };
+    const patch: Partial<import('../types').MetaShopPageCard> = { i18n };
+    if (code === 'fa') patch[field === 'name' ? 'name' : 'desc'] = val;
+    else if (code === 'en') patch[field === 'name' ? 'nameEn' : 'descEn'] = val;
+    updCard(idx, cIdx, patch);
+  };
 
   const doImport = () => {
     try { const shop = importFromJson(importText, blankShop()); if (!shop.code) shop.code = uniqueShopCode(metaShops); setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor'); }
@@ -1707,21 +1764,39 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                   </select>
                   <button onClick={() => removePage(idx)} className="text-red-400 hover:text-red-600 ml-auto"><IconTrash className="w-4 h-4" /></button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                  <input className={fld} placeholder={t.pgLabel} value={pg.label} onChange={e => updPage(idx, { label: e.target.value })} />
-                  <input className={fld + ' dir-ltr'} placeholder={t.pgLabelEn} value={pg.labelEn || ''} onChange={e => updPage(idx, { labelEn: e.target.value })} />
+                <div className="mb-3">
+                  <p className="text-[11px] font-semibold text-gray-500 mb-2">{t.pgDefault}</p>
+                  <input className={fld + ' mb-2'} placeholder={t.pgLabel} value={pg.label} onChange={e => setPageLangField(idx, 'fa', 'label', e.target.value)} />
+                  {pg.type === 'text' && (
+                    <textarea className={fld} rows={5} placeholder={t.pgBody} value={pg.body || ''} onChange={e => setPageLangField(idx, 'fa', 'body', e.target.value)} />
+                  )}
+                  {(pg.type === 'gallery' || pg.type === 'cards') && (
+                    <input className={fld} placeholder={t.pgDesc} value={pg.description || ''} onChange={e => setPageLangField(idx, 'fa', 'description', e.target.value)} />
+                  )}
                 </div>
 
-                {pg.type === 'text' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <textarea className={fld} rows={5} placeholder={t.pgBody} value={pg.body || ''} onChange={e => updPage(idx, { body: e.target.value })} />
-                    <textarea className={fld + ' dir-ltr'} rows={5} placeholder={t.pgBodyEn} value={pg.bodyEn || ''} onChange={e => updPage(idx, { bodyEn: e.target.value })} />
-                  </div>
-                )}
-                {(pg.type === 'gallery' || pg.type === 'cards') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                    <input className={fld} placeholder={t.pgDesc} value={pg.description || ''} onChange={e => updPage(idx, { description: e.target.value })} />
-                    <input className={fld + ' dir-ltr'} placeholder={t.pgDescEn} value={pg.descriptionEn || ''} onChange={e => updPage(idx, { descriptionEn: e.target.value })} />
+                {pageEditorLangs().length > 0 && (
+                  <div className="mb-3">
+                    <button type="button" onClick={() => setPageTransOpen(s => ({ ...s, [pg.id]: !s[pg.id] }))} className={`text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 ${pageTransOpen[pg.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      🌐 {t.pgI18n} ({pageEditorLangs().length})
+                    </button>
+                    {pageTransOpen[pg.id] && (
+                      <div className="mt-3 space-y-3">
+                        <p className="text-[11px] text-gray-400">{t.pgI18nHint}</p>
+                        {pageEditorLangs().map(lg => (
+                          <div key={lg.code} className="p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                            <div className="text-xs font-bold text-indigo-700 mb-2">{lg.name || lg.code}</div>
+                            <input className={fld + ' mb-2' + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} placeholder={t.pgLabel} value={pageLangField(pg, lg.code, 'label')} onChange={e => setPageLangField(idx, lg.code, 'label', e.target.value)} />
+                            {pg.type === 'text' && (
+                              <textarea className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} rows={4} placeholder={t.pgBody} value={pageLangField(pg, lg.code, 'body')} onChange={e => setPageLangField(idx, lg.code, 'body', e.target.value)} />
+                            )}
+                            {(pg.type === 'gallery' || pg.type === 'cards') && (
+                              <input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} placeholder={t.pgDesc} value={pageLangField(pg, lg.code, 'description')} onChange={e => setPageLangField(idx, lg.code, 'description', e.target.value)} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1752,13 +1827,27 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       {(pg.cards || []).map((c, cIdx) => (
                         <div key={c.id} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2 bg-gray-50/50">
                           <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} />
-                          <div className="flex-1 grid grid-cols-2 gap-1.5">
-                            <input className={fld} placeholder={t.cardName} value={c.name || ''} onChange={e => updCard(idx, cIdx, { name: e.target.value })} />
-                            <input className={fld + ' dir-ltr'} placeholder={t.cardNameEn} value={c.nameEn || ''} onChange={e => updCard(idx, cIdx, { nameEn: e.target.value })} />
-                            <textarea className={fld} rows={1} placeholder={t.cardDesc} value={c.desc || ''} onChange={e => updCard(idx, cIdx, { desc: e.target.value })} />
-                            <textarea className={fld + ' dir-ltr'} rows={1} placeholder={t.cardDescEn} value={c.descEn || ''} onChange={e => updCard(idx, cIdx, { descEn: e.target.value })} />
+                          <div className="flex-1 min-w-0">
+                            <input className={fld + ' mb-1.5'} placeholder={t.cardName} value={c.name || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'name', e.target.value)} />
+                            <textarea className={fld} rows={2} placeholder={t.cardDesc} value={c.desc || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'desc', e.target.value)} />
+                            {pageEditorLangs().length > 0 && (
+                              <div className="mt-2">
+                                <button type="button" onClick={() => setCardTransOpen(s => ({ ...s, [c.id]: !s[c.id] }))} className={`text-[10px] px-1.5 py-0.5 rounded ${cardTransOpen[c.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>🌐 {t.pgCardI18n}</button>
+                                {cardTransOpen[c.id] && (
+                                  <div className="mt-2 space-y-2">
+                                    {pageEditorLangs().map(lg => (
+                                      <div key={lg.code} className="p-2 rounded-lg bg-white border border-gray-100">
+                                        <div className="text-[10px] font-bold text-indigo-600 mb-1">{lg.name || lg.code}</div>
+                                        <input className={fld + ' mb-1' + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} placeholder={t.cardName} value={cardLangField(c, lg.code, 'name')} onChange={e => setCardLangField(idx, cIdx, lg.code, 'name', e.target.value)} />
+                                        <textarea className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} rows={1} placeholder={t.cardDesc} value={cardLangField(c, lg.code, 'desc')} onChange={e => setCardLangField(idx, cIdx, lg.code, 'desc', e.target.value)} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <button onClick={() => removeCard(idx, cIdx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+                          <button onClick={() => removeCard(idx, cIdx)} className="text-red-400 hover:text-red-600 shrink-0"><IconTrash className="w-4 h-4" /></button>
                         </div>
                       ))}
                     </div>

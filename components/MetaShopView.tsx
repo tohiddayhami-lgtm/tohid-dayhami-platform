@@ -1719,10 +1719,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
 // Custom content page (About Us, Certifications, Gallery, ...)
 const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, en?: string) => string }> = ({ page, uiLang, L }) => {
-  const TR = (i18n: Record<string, Record<string, string>> | undefined, key: string, legacy: string) => (i18n && i18n[uiLang] && i18n[uiLang][key]) || legacy || '';
-  const title = TR(page.i18n, 'label', L(page.label, page.labelEn));
-  const desc = TR(page.i18n, 'description', L(page.description, page.descriptionEn));
-  const paras = (TR(page.i18n, 'body', L(page.body, page.bodyEn)) || '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  const title = translateField(page.i18n, 'label', L(page.label, page.labelEn), uiLang);
+  const desc = translateField(page.i18n, 'description', L(page.description, page.descriptionEn), uiLang);
+  const paras = (translateField(page.i18n, 'body', L(page.body, page.bodyEn), uiLang) || '').split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
   const imgs = page.images || [];
 
   if (page.type === 'gallery') {
@@ -1743,8 +1742,8 @@ const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, 
           {(page.cards || []).map(c => (
             <div key={c.id} className="ms-pcard">
               {c.image && <div className="ms-pcard-imgwrap"><img src={c.image} alt="" loading="lazy" /></div>}
-              <div className="ms-pcard-name">{TR(c.i18n, 'name', L(c.name, c.nameEn))}</div>
-              {(c.desc || c.descEn || (c.i18n && c.i18n[uiLang] && c.i18n[uiLang].desc)) && <div className="ms-pcard-desc">{TR(c.i18n, 'desc', L(c.desc, c.descEn))}</div>}
+              <div className="ms-pcard-name">{translateField(c.i18n, 'name', L(c.name, c.nameEn), uiLang)}</div>
+              {(c.desc || c.descEn || c.i18n) && <div className="ms-pcard-desc">{translateField(c.i18n, 'desc', L(c.desc, c.descEn), uiLang)}</div>}
             </div>
           ))}
         </div>
