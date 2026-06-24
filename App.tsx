@@ -349,6 +349,7 @@ const App: React.FC = () => {
   const [catalogMode, setCatalogMode] = useState<boolean>(extractCatalogFlag); // shop link opened as a printable A4 PDF catalog (?catalog=1)
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
+  const [shopResolved, setShopResolved] = useState(false);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
   const [metaBazaarsReady, setMetaBazaarsReady] = useState(false);
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
@@ -398,6 +399,18 @@ const App: React.FC = () => {
     if (url) { window.open(url, '_blank', 'noopener,noreferrer'); return; }
     setPreSelectedServiceId(serviceId);
     setView('new-ticket');
+  };
+
+  const openMetaShop = (slug: string, productId?: string) => {
+    setShopLoading(true);
+    setShopResolved(false);
+    const q = productId
+      ? `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`
+      : `?shop=${encodeURIComponent(slug)}`;
+    history.pushState(null, '', q);
+    setShopSlug(slug);
+    setViewState('metashop');
+    window.scrollTo(0, 0);
   };
 
   const setView = (newView: ViewState, extra?: string) => {
@@ -1297,18 +1310,37 @@ const App: React.FC = () => {
 
   // ── Meta Shop: resolve public shop by slug (from subscription, else direct fetch) ──
   useEffect(() => {
-    if (view !== 'metashop' || !shopSlug) { setPublicShop(null); return; }
-    const local = metaShops.find(s => s.slug === shopSlug);
-    if (local) { setPublicShop(local); return; }
-    if (metaShops.length === 0) {
-      // subscription not warm yet — fetch directly
-      let cancelled = false;
-      setShopLoading(true);
-      getMetaShopBySlug(shopSlug).then(s => { if (!cancelled) { setPublicShop(s); setShopLoading(false); } });
-      return () => { cancelled = true; };
+    if (view !== 'metashop' || !shopSlug) {
+      setPublicShop(null);
+      setShopLoading(false);
+      setShopResolved(false);
+      return;
     }
-    setPublicShop(null); // subscription warm but no match → not found
-  }, [view, shopSlug, metaShops]);
+    const local = metaShops.find(s => s.slug === shopSlug);
+    if (local) {
+      setPublicShop(local);
+      setShopLoading(false);
+      setShopResolved(true);
+      return;
+    }
+    if (!metaShopsReady) {
+      setShopLoading(true);
+      setShopResolved(false);
+      return;
+    }
+    let cancelled = false;
+    setShopLoading(true);
+    setShopResolved(false);
+    setPublicShop(null);
+    getMetaShopBySlug(shopSlug).then(s => {
+      if (!cancelled) {
+        setPublicShop(s);
+        setShopLoading(false);
+        setShopResolved(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [view, shopSlug, metaShops, metaShopsReady]);
 
   // ── Meta Bazaar: resolve public bazaar by slug ──
   useEffect(() => {
@@ -1604,7 +1636,7 @@ const App: React.FC = () => {
             shops={metaShops}
             lang={lang}
             onExit={() => setView('landing')}
-            onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+            onOpenShop={(slug) => openMetaShop(slug)}
             environmentEditMode={allowEnvEdit}
             onSaveExpo={allowEnvEdit ? async (updatedExpo) => {
               await saveMetaBazaarToCloud({ ...publicExpoBazaar, expo: updatedExpo });
@@ -1644,7 +1676,7 @@ const App: React.FC = () => {
             shops={metaShops}
             lang={lang}
             bazaar={publicBazaar}
-            onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+            onOpenShop={(slug) => openMetaShop(slug)}
           />
         )}
       </>
@@ -1657,20 +1689,23 @@ const App: React.FC = () => {
       <MetaShopDirectory
         shops={metaShops}
         lang={lang}
-        onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
+        onOpenShop={(slug) => openMetaShop(slug)}
       />
     );
   }
 
   // ── Public Meta Shop page (full-screen takeover) ──
   if (view === 'metashop') {
-    if (publicShop && publicShop.isActive !== false) {
+    const resolvedShop = shopSlug
+      ? (metaShops.find(s => s.slug === shopSlug) ?? (publicShop?.slug === shopSlug ? publicShop : null))
+      : null;
+    if (resolvedShop && resolvedShop.isActive !== false) {
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
-      if (catalogMode) return <MetaShopCatalog shop={publicShop} lang={lang} autoPrint />;
-      return <MetaShopView shop={publicShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(publicShop, d)} onSubmitReferral={publicShop.type === 'realestate' ? (d) => handleMetaShopReferral(publicShop, d) : undefined} onLookup={handleMetaShopLookup} />;
+      if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
+      return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
-    // Still resolving the shop → show the "raising the shutter" loader (no artificial delay)
-    if (shopLoading || (metaShops.length === 0 && shopSlug)) {
+    // Still resolving — shutter loader (never flash "not found" while loading)
+    if (shopSlug && (shopLoading || !metaShopsReady || !shopResolved)) {
       return <ShopShutterLoader lang={lang} />;
     }
     return (
@@ -1749,13 +1784,8 @@ const App: React.FC = () => {
               lang={lang}
               onOpenNews={(id) => setView('news', id)}
               onOpenService={(id) => openFormWithService(id)}
-              onOpenShop={(slug) => { history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`); setShopSlug(slug); setViewState('metashop'); window.scrollTo(0, 0); }}
-              onOpenProduct={(slug, productId) => {
-                history.pushState(null, '', `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`);
-                setShopSlug(slug);
-                setViewState('metashop');
-                window.scrollTo(0, 0);
-              }}
+              onOpenShop={(slug) => openMetaShop(slug)}
+              onOpenProduct={(slug, productId) => openMetaShop(slug, productId)}
             />
             <div className="flex border border-gray-200 rounded-lg overflow-hidden text-xs">
               <button onClick={() => setLang('fa')} className={`px-2.5 py-1 font-semibold transition-colors ${lang === 'fa' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>FA</button>
@@ -2068,18 +2098,8 @@ const App: React.FC = () => {
                 lang={lang}
                 onBack={() => setView('landing')}
                 isLoading={!metaShopsReady || !metaBazaarsReady}
-                onOpenShop={(slug) => {
-                  history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`);
-                  setShopSlug(slug);
-                  setViewState('metashop');
-                  window.scrollTo(0, 0);
-                }}
-                onOpenProduct={(slug, productId) => {
-                  history.pushState(null, '', `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`);
-                  setShopSlug(slug);
-                  setViewState('metashop');
-                  window.scrollTo(0, 0);
-                }}
+                onOpenShop={(slug) => openMetaShop(slug)}
+                onOpenProduct={(slug, productId) => openMetaShop(slug, productId)}
               />
             )}
 
