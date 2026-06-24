@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
 import { productSearchHaystack } from '../utils/metaShopSearch';
@@ -59,6 +59,93 @@ const CartIcon = ({ s = 18 }: { s?: number }) => (
 const PdfIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
 );
+
+const ChevronIcon = ({ dir }: { dir: 'prev' | 'next' }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    {dir === 'prev' ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+  </svg>
+);
+
+/** Horizontal pill strip with prev/next controls when categories overflow the viewport. */
+const ScrollPillRow: React.FC<{
+  barClassName: string;
+  activeId?: string;
+  children: React.ReactNode;
+}> = ({ barClassName, activeId, children }) => {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ start: false, end: false });
+
+  const refreshEdges = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const pills = Array.from(el.querySelectorAll<HTMLElement>('[data-pill-id]'));
+    if (!pills.length) { setEdges({ start: false, end: false }); return; }
+    const box = el.getBoundingClientRect();
+    const fullyVisible = (r: DOMRect) => r.left >= box.left - 2 && r.right <= box.right + 2;
+    const first = pills[0].getBoundingClientRect();
+    const last = pills[pills.length - 1].getBoundingClientRect();
+    setEdges({
+      start: !fullyVisible(first),
+      end: !fullyVisible(last),
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    refreshEdges();
+    el.addEventListener('scroll', refreshEdges, { passive: true });
+    const ro = new ResizeObserver(refreshEdges);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', refreshEdges); ro.disconnect(); };
+  }, [refreshEdges, children]);
+
+  useEffect(() => {
+    if (!activeId || !scrollerRef.current) return;
+    const btn = scrollerRef.current.querySelector<HTMLElement>(`[data-pill-id="${CSS.escape(activeId)}"]`);
+    btn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    const t = window.setTimeout(refreshEdges, 320);
+    return () => window.clearTimeout(t);
+  }, [activeId, refreshEdges]);
+
+  const scrollStep = (forward: boolean) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const pills = Array.from(el.querySelectorAll<HTMLElement>('[data-pill-id]'));
+    const box = el.getBoundingClientRect();
+    const visible = pills.filter(p => {
+      const r = p.getBoundingClientRect();
+      return r.right > box.left + 2 && r.left < box.right - 2;
+    });
+    if (!visible.length) return;
+    const anchor = forward ? visible[visible.length - 1] : visible[0];
+    const idx = pills.indexOf(anchor);
+    const target = forward ? pills[idx + 1] : pills[idx - 1];
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: forward ? 'end' : 'start' });
+    else el.scrollBy({ left: forward ? box.width * 0.75 : -box.width * 0.75, behavior: 'smooth' });
+    window.setTimeout(refreshEdges, 320);
+  };
+
+  const showArrows = edges.start || edges.end;
+
+  return (
+    <div className="ms-pill-scroll">
+      {showArrows && (
+        <button type="button" className={`ms-pill-arrow ${!edges.start ? 'disabled' : ''}`} disabled={!edges.start} onClick={() => scrollStep(false)} aria-label="Previous categories">
+          <ChevronIcon dir="prev" />
+        </button>
+      )}
+      <div className={`ms-pill-scroll-track${edges.start ? ' fade-start' : ''}${edges.end ? ' fade-end' : ''}`}>
+        <div ref={scrollerRef} className={barClassName}>{children}</div>
+      </div>
+      {showArrows && (
+        <button type="button" className={`ms-pill-arrow ${!edges.end ? 'disabled' : ''}`} disabled={!edges.end} onClick={() => scrollStep(true)} aria-label="Next categories">
+          <ChevronIcon dir="next" />
+        </button>
+      )}
+    </div>
+  );
+};
 
 export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSubmitReferral, onLookup, embed }) => {
   const isServices = shop.type === 'services';
@@ -857,22 +944,26 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
         {/* Category pills */}
         {categories.length > 0 && (
-          <div className="ms-filter-bar">
-            <button className={`ms-pill ${activeCat === 'all' ? 'active' : ''}`} onClick={() => selectCat('all')}>{t.all}</button>
-            {categories.map(c => <button key={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => selectCat(c)}>{catLabel(c)}</button>)}
-          </div>
+          <ScrollPillRow barClassName="ms-filter-bar" activeId={activeCat}>
+            <button type="button" data-pill-id="all" className={`ms-pill ${activeCat === 'all' ? 'active' : ''}`} onClick={() => selectCat('all')}>{t.all}</button>
+            {categories.map(c => (
+              <button type="button" key={c} data-pill-id={c} className={`ms-pill ${activeCat === c ? 'active' : ''}`} onClick={() => selectCat(c)}>{catLabel(c)}</button>
+            ))}
+          </ScrollPillRow>
         )}
 
         {/* Subcategory pills (under the active category) */}
         {subcategories.length > 0 && (
-          <div className="ms-subfilter-bar">
-            <button className={`ms-subpill ${activeSub === 'all' ? 'active' : ''}`} onClick={() => setActiveSub('all')}>{t.all}</button>
+          <ScrollPillRow barClassName="ms-subfilter-bar" activeId={activeSub}>
+            <button type="button" data-pill-id="all" className={`ms-subpill ${activeSub === 'all' ? 'active' : ''}`} onClick={() => setActiveSub('all')}>{t.all}</button>
             {subcategories.map(s => {
               const sample = products.find(p => p.group === activeCat && p.subcategory === s);
               const label = sample ? pSubcategory(sample) : translateProductSubcategory(s, uiLang);
-              return <button key={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{label}</button>;
+              return (
+                <button type="button" key={s} data-pill-id={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{label}</button>
+              );
             })}
-          </div>
+          </ScrollPillRow>
         )}
 
         {/* Featured rail (up to 3) — only on the default «all» view without an active search */}
@@ -1517,11 +1608,23 @@ const MS_CSS = `
 .ms-search input { width:100%; border:1.5px solid #e2e8f0; border-radius:999px; padding:11px 42px 11px 16px; font-size:13px; outline:none; box-shadow:0 8px 26px rgba(15,23,42,.06); }
 .ms-search input:focus { border-color:var(--ms-primary); }
 .ms-search svg { position:absolute; inset-inline-end:15px; top:50%; transform:translateY(-50%); color:#94a3b8; }
-.ms-filter-bar { display:flex; gap:8px; overflow-x:auto; padding:14px 2px 4px; scrollbar-width:none; }
+.ms-filter-bar { display:flex; gap:8px; overflow-x:auto; padding:14px 2px 4px; scrollbar-width:none; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
 .ms-filter-bar::-webkit-scrollbar { display:none; }
+.ms-pill-scroll { display:flex; align-items:center; gap:6px; padding:0 2px; }
+.ms-pill-scroll-track { flex:1; min-width:0; position:relative; }
+.ms-pill-scroll-track.fade-start::before,
+.ms-pill-scroll-track.fade-end::after { content:''; position:absolute; top:0; bottom:0; width:32px; pointer-events:none; z-index:2; }
+.ms-pill-scroll-track.fade-start::before { inset-inline-start:0; background:linear-gradient(90deg, var(--ms-bg,#fff) 30%, transparent); }
+.ms-pill-scroll-track.fade-end::after { inset-inline-end:0; background:linear-gradient(270deg, var(--ms-bg,#fff) 30%, transparent); }
+[dir="rtl"] .ms-pill-scroll-track.fade-start::before { background:linear-gradient(270deg, var(--ms-bg,#fff) 30%, transparent); }
+[dir="rtl"] .ms-pill-scroll-track.fade-end::after { background:linear-gradient(90deg, var(--ms-bg,#fff) 30%, transparent); }
+.ms-pill-arrow { flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1.5px solid #e2e8f0; background:#fff; color:#475569; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(15,23,42,.08); transition:border-color .15s, color .15s, box-shadow .15s; }
+.ms-pill-arrow:hover:not(.disabled) { border-color:var(--ms-primary); color:var(--ms-primary); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+.ms-pill-arrow.disabled { opacity:.3; cursor:default; box-shadow:none; }
 .ms-pill { flex-shrink:0; padding:8px 18px; border-radius:999px; font-size:13px; font-weight:600; border:2px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; white-space:nowrap; }
 .ms-pill.active { background:var(--ms-primary); border-color:var(--ms-primary); color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.15); }
-.ms-subfilter-bar { display:flex; gap:6px; overflow-x:auto; padding:6px 2px 4px; margin-top:2px; scrollbar-width:none; }
+.ms-subfilter-bar { display:flex; gap:6px; overflow-x:auto; padding:6px 2px 4px; margin-top:2px; scrollbar-width:none; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
+.ms-subfilter-bar::-webkit-scrollbar { display:none; }
 .ms-subfilter-bar::-webkit-scrollbar { display:none; }
 .ms-subpill { flex-shrink:0; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; border-radius:999px; padding:6px 14px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
 .ms-subpill:hover { color:var(--ms-primary); border-color:var(--ms-primary); background:#fff; }
