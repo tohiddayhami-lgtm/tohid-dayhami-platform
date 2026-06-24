@@ -75,6 +75,9 @@ const CartIcon = ({ s = 18 }: { s?: number }) => (
 const PdfIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
 );
+const HandshakeIcon = ({ s = 18 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+);
 
 const SUPPLIER_CATALOG_PDF_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -1178,8 +1181,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             </button>
           )}
           {isProducts && shop.supplierCollaborationEnabled && onSubmitSupplierCollaboration && (
-            <button type="button" className="ms-foot-refer" onClick={openSupplierCollab}>
-              <span>🤝</span><span>{t.supplierCollabBtn || S('supplierCollabBtn')}</span>
+            <button type="button" className="ms-foot-catalog" onClick={openSupplierCollab}>
+              <HandshakeIcon s={17} /><span>{t.supplierCollabBtn || S('supplierCollabBtn')}</span>
             </button>
           )}
         </div>
@@ -1779,8 +1782,10 @@ const MS_CSS = `
 .ms-cat-btn:hover { background:var(--ms-primary); color:#fff; }
 .ms-embed .ms-cat-lbl { display:none; }
 @media (max-width:560px){ .ms-cat-lbl { display:none; } }
-.ms-foot-catalog { display:inline-flex; align-items:center; gap:9px; margin:26px auto 0; padding:12px 26px; background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.5); color:#fff; border-radius:999px; font-size:14px; font-weight:800; text-decoration:none; cursor:pointer; transition:background .15s; }
+.ms-foot-catalog { display:inline-flex; align-items:center; justify-content:center; gap:9px; margin:26px auto 0; padding:12px 26px; background:rgba(255,255,255,.16); border:1.5px solid rgba(255,255,255,.5); color:#fff; border-radius:999px; font-size:14px; font-weight:800; text-decoration:none; cursor:pointer; transition:background .15s; white-space:nowrap; line-height:1.2; }
 .ms-foot-catalog:hover { background:rgba(255,255,255,.28); }
+button.ms-foot-catalog { font-family:inherit; appearance:none; box-shadow:none; }
+button.ms-foot-catalog:hover { transform:none; }
 .ms-foot-actions { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; margin-top:26px; }
 .ms-foot-actions .ms-foot-catalog { margin:0; }
 .ms-foot-refer { display:inline-flex; align-items:center; gap:9px; padding:12px 26px; background:#fff; color:var(--ms-primary); border:none; border-radius:999px; font-size:14px; font-weight:800; cursor:pointer; font-family:inherit; box-shadow:0 4px 18px rgba(0,0,0,.15); transition:transform .12s, box-shadow .12s; }
