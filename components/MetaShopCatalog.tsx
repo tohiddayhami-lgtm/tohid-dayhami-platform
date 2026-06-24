@@ -14,8 +14,8 @@ interface Props {
 
 // Products per A4 page. Real-estate cards need room for full specs → 2 per page (1 row × 2 cols).
 const perPageFor = (re: boolean) => (re ? 2 : 4);
-// TOC rows per A4 page (header + footer reserved; ~11mm per category row).
-const TOC_PER_PAGE = 17;
+// TOC rows per A4 page — conservative count so the last row never sits under the page footer.
+const TOC_PER_PAGE = 13;
 
 const chunk = <T,>(arr: T[], n: number): T[][] => {
   const out: T[][] = [];
@@ -396,17 +396,19 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
               </h2>
               <span>{coverTitle}</span>
             </div>
-            <ul className="msc-toc-list">
-              {tocChunk.map((e, i) => (
-                <li key={i}>
-                  <span className="msc-toc-name">{e.label}</span>
-                  <span className="msc-toc-count">{e.count} {s('items_col')}</span>
-                  <span className="msc-toc-dots" />
-                  <span className="msc-toc-pg">{e.pageStart}</span>
-                </li>
-              ))}
-            </ul>
-            <footer className="msc-run-foot">
+            <div className="msc-toc-body">
+              <ul className="msc-toc-list">
+                {tocChunk.map((e, i) => (
+                  <li key={i}>
+                    <span className="msc-toc-name">{e.label}</span>
+                    <span className="msc-toc-count">{e.count} {s('items_col')}</span>
+                    <span className="msc-toc-dots" />
+                    <span className="msc-toc-pg">{e.pageStart}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <footer className="msc-run-foot msc-toc-foot">
               <span>{shop.website || shop.name}</span>
               <span>{s('page')} {coverPages + tocIdx + 1} / {totalPages}</span>
             </footer>
@@ -531,17 +533,19 @@ const MSC_CSS = `
   border-top:1px solid rgba(0,0,0,.08); padding-top:6mm; }
 
 /* ── Table of contents ── */
-.msc-toc{ padding:20mm 18mm 16mm; display:flex; flex-direction:column; }
-.msc-toc-head{ flex:none; display:flex; align-items:baseline; justify-content:space-between; border-bottom:3px solid var(--c-primary); padding-bottom:6mm; margin-bottom:8mm; }
+.msc-toc{ padding:18mm 18mm 14mm; display:flex; flex-direction:column; min-height:297mm; }
+.msc-toc-head{ flex:none; display:flex; align-items:baseline; justify-content:space-between; border-bottom:3px solid var(--c-primary); padding-bottom:5mm; margin-bottom:6mm; }
 .msc-toc-head h2{ font-size:26pt; font-weight:900; color:var(--c-heading); margin:0; }
 .msc-toc-part{ font-size:16pt; font-weight:700; color:var(--c-primary); opacity:.85; }
 .msc-toc-head span{ font-size:12pt; font-weight:600; color:var(--c-text); opacity:.7; }
-.msc-toc-list{ list-style:none; margin:0; padding:0; flex:1; min-height:0; display:flex; flex-direction:column; gap:0; overflow:hidden; }
-.msc-toc-list li{ display:flex; align-items:center; gap:8px; padding:4.2mm 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:12.5pt; }
+.msc-toc-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:flex-start; }
+.msc-toc-list{ list-style:none; margin:0; padding:0 0 2mm; flex:none; display:flex; flex-direction:column; gap:0; }
+.msc-toc-list li{ display:flex; align-items:center; gap:8px; padding:3.6mm 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:12.5pt; line-height:1.25; }
 .msc-toc-name{ font-weight:700; color:var(--c-heading); min-width:0; }
 .msc-toc-count{ flex-shrink:0; font-size:9.5pt; font-weight:600; color:#fff; background:var(--c-primary); border-radius:20px; padding:2px 10px; opacity:.9; }
 .msc-toc-dots{ flex:1; border-bottom:2px dotted rgba(0,0,0,.22); margin:0 4px; align-self:flex-end; transform:translateY(-4px); }
 .msc-toc-pg{ flex-shrink:0; font-weight:800; color:var(--c-primary); font-size:13pt; min-width:10mm; text-align:center; }
+.msc-toc-foot{ flex:none; margin-top:auto; padding-top:5mm; }
 
 /* ── Running header / footer on product pages ── */
 .msc-catalog-page{ padding:11mm 13mm 9mm; }
@@ -575,8 +579,8 @@ const MSC_CSS = `
 .msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
 .msc-tag.origin{ display:inline-flex; align-items:center; gap:4px; }
 .msc-tag.origin img{ height:9pt; width:auto; border-radius:1px; }
-.msc-prod-desc{ flex:1 1 auto; min-height:0; font-size:9.4pt; line-height:1.48; color:var(--c-text); margin:0 0 2mm;
-  overflow:hidden; word-break:break-word; }
+.msc-prod-desc{ flex:1 1 auto; min-height:0; font-size:9.4pt; line-height:1.5; color:var(--c-text); margin:0 0 2mm;
+  overflow:hidden; word-break:break-word; text-align:justify; text-justify:inter-word; hyphens:auto; }
 .msc-prod-specs{ flex:none; font-size:8.8pt; line-height:1.4; color:var(--c-text); margin:0 0 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .msc-prod-specs b{ color:var(--c-heading); font-weight:700; }
 /* flex-wrap + a real min-width on the meta column: when the price block is wide (long incoterm/rate
@@ -600,7 +604,7 @@ const MSC_CSS = `
 /* ── Real-estate cards: taller single-row grid, full spec block fills the card ── */
 .msc-grid-re{ grid-template-rows:1fr; }
 .msc-prod-re .msc-prod-media{ height:40mm; }
-.msc-prod-re .msc-prod-desc.msc-re-desc{ -webkit-line-clamp:3; flex:none; }
+.msc-prod-re .msc-prod-desc.msc-re-desc{ flex:none; max-height:22mm; text-align:justify; text-justify:inter-word; hyphens:auto; }
 .msc-re-chips{ flex:none; display:flex; flex-wrap:wrap; gap:1.5mm; margin-bottom:2.5mm; }
 .msc-re-chip{ font-size:8pt; font-weight:800; color:var(--c-heading); background:#f1f5f9;
   border:1px solid #e2e8f0; border-radius:4px; padding:1.5px 7px; white-space:nowrap; }
