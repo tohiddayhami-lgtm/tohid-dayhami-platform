@@ -923,7 +923,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const basePack = p.packPrice;
     const hidden = priceHidden(p);
     return (
-      <div className="ms-buy">
+      <div className={`ms-buy${big ? ' ms-buy-detail' : ''}`}>
         {opts.length > 0 && (
           <div className="ms-opts">
             {opts.map(o => (
@@ -978,7 +978,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             )}
           </>
         ) : (
-          <button className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>{t.add}</button>
+          <button type="button" className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>
+            <CartIcon s={big ? 18 : 16} /><span>{t.add}</span>
+          </button>
         )}
       </div>
     );
@@ -1056,8 +1058,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               <PdfIcon s={16} /><span className="ms-cat-lbl">{t.catalog}</span>
             </a>
             {!isRealEstate && (
-            <button className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))}>
-              <CartIcon s={16} /><span>{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
+            <button type="button" className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))} aria-label={t.cartBtn}>
+              <CartIcon s={18} /><span className="ms-cart-lbl">{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
             </button>
             )}
           </div>
@@ -1188,6 +1190,17 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         </div>
         {footText && <p className="ms-foot-text">{footText}</p>}
       </footer>
+
+      {/* Mobile: sticky bar when cart has items */}
+      {!isRealEstate && cartCount > 0 && tab === 'products' && !cartOpen && !detail && (
+        <div className="ms-mobile-cart-bar">
+          <button type="button" className="ms-mobile-cart-btn" onClick={() => { setStep('cart'); setCartOpen(true); }}>
+            <span className="ms-mobile-cart-left"><CartIcon s={18} /><span className="ms-mobile-cart-count">{cartCount}</span></span>
+            <span className="ms-mobile-cart-label">{t.cartBtn}</span>
+            <span className="ms-mobile-cart-arrow" aria-hidden>›</span>
+          </button>
+        </div>
+      )}
 
       {/* Product detail modal */}
       {detail && (
@@ -1776,7 +1789,8 @@ const MS_CSS = `
 .ms-logo { max-height:34px; width:auto; object-fit:contain; }
 .ms-name { font-size:15px; font-weight:800; color:var(--ms-heading,#1f2a18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ms-code { font-size:10px; font-family:ui-monospace,monospace; font-weight:800; letter-spacing:.08em; background:var(--ms-primary); color:#fff; padding:2px 7px; border-radius:6px; flex-shrink:0; }
-.ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; }
+.ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; flex-shrink:0; }
+.ms-cart-btn.has { box-shadow:0 4px 16px color-mix(in srgb, var(--ms-primary) 45%, transparent); }
 .ms-cat-btn { display:inline-flex; align-items:center; gap:7px; background:#fff; color:var(--ms-primary); border:1.5px solid var(--ms-primary); padding:7.5px 14px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; white-space:nowrap; transition:background .15s,color .15s; }
 .ms-cat-btn:hover { background:var(--ms-primary); color:#fff; }
 .ms-embed .ms-cat-lbl { display:none; }
@@ -1936,10 +1950,11 @@ button.ms-foot-catalog:hover { transform:none; }
 @media (min-width:640px){ .ms-featured-grid { grid-template-columns:repeat(2,1fr); } }
 @media (min-width:1000px){ .ms-featured-grid { grid-template-columns:repeat(3,1fr); } }
 .ms-card-feat { border-color:#fcd34d; box-shadow:0 4px 16px rgba(245,158,11,.18); }
-.ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+.ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); display:inline-flex; align-items:center; justify-content:center; gap:8px; line-height:1.2; min-height:44px; -webkit-tap-highlight-color:transparent; }
 .ms-add.in { background:#10b981; }
-.ms-add.lg { margin-top:8px; padding:13px; font-size:14px; }
+.ms-add.lg { margin-top:8px; padding:13px 16px; font-size:15px; min-height:48px; border-radius:12px; box-shadow:0 4px 14px color-mix(in srgb, var(--ms-primary) 35%, transparent); }
 .ms-add:active { transform:scale(.98); }
+.ms-buy-detail { margin-top:12px; padding-top:12px; border-top:1px solid #eef0f3; }
 .ms-card-qty { margin-top:10px; display:flex; align-items:center; gap:8px; }
 .ms-card-qty.big { margin-top:8px; }
 .ms-card-qty > button { width:34px; height:34px; border:1.5px solid var(--ms-primary); background:#fff; color:var(--ms-primary); border-radius:9px; font-size:18px; font-weight:700; cursor:pointer; line-height:1; }
@@ -2065,7 +2080,31 @@ button.ms-foot-catalog:hover { transform:none; }
   .ms-modal-info h2 { font-size:18px; }
   .ms-modal-x { top:max(10px, env(safe-area-inset-top, 0px)); background:rgba(255,255,255,.94); box-shadow:0 2px 10px rgba(0,0,0,.12); }
   .ms-cart-ov { backdrop-filter:none; -webkit-backdrop-filter:none; }
+  .ms-buy-detail { position:sticky; bottom:0; z-index:3; margin:0 -16px -20px; padding:14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); background:linear-gradient(180deg, rgba(255,255,255,0) 0%, #fff 18%); border-top:1px solid #e2e8f0; box-shadow:0 -10px 28px rgba(15,23,42,.08); }
+  .ms-grid { grid-template-columns:1fr; padding-bottom:calc(56px + env(safe-area-inset-bottom, 0px)); }
+  .ms-topbar-inner { padding:0 12px; height:54px; gap:8px; }
+  .ms-name { max-width:38vw; font-size:13px; }
+  .ms-code { display:none; }
+  .ms-top-actions { gap:6px; }
+  .ms-cart-btn { min-width:44px; min-height:44px; padding:10px 14px; justify-content:center; }
+  .ms-cart-lbl { display:none; }
+  .ms-cat-btn { padding:8px 12px; min-height:44px; }
+  .ms-card-body { padding:12px; }
+  .ms-add { font-size:14px; font-weight:800; }
+  .ms-card-qty { gap:6px; }
+  .ms-card-qty > button { width:40px; height:40px; }
 }
+/* floating cart bar (mobile) — element only mounted when cart has items */
+@media (max-width:600px){
+  .ms-mobile-cart-bar { position:fixed; left:0; right:0; bottom:0; z-index:800; padding:10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background:linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.92) 24%, #fff 100%); pointer-events:none; }
+}
+@media (min-width:601px){ .ms-mobile-cart-bar { display:none !important; } }
+.ms-mobile-cart-btn { pointer-events:auto; width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 16px; background:var(--ms-primary); color:#fff; border:none; border-radius:14px; font-family:inherit; font-size:15px; font-weight:800; cursor:pointer; box-shadow:0 8px 28px color-mix(in srgb, var(--ms-primary) 40%, transparent); -webkit-tap-highlight-color:transparent; }
+.ms-mobile-cart-left { display:flex; align-items:center; gap:8px; }
+.ms-mobile-cart-count { min-width:24px; height:24px; padding:0 7px; border-radius:999px; background:rgba(255,255,255,.22); font-size:13px; font-weight:900; display:inline-flex; align-items:center; justify-content:center; }
+.ms-mobile-cart-label { flex:1; text-align:center; }
+.ms-mobile-cart-arrow { font-size:22px; line-height:1; opacity:.85; }
+.ms-root[dir="rtl"] .ms-mobile-cart-arrow { transform:scaleX(-1); }
 /* drawer */
 .ms-cart-ov { position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(4px); z-index:1100; opacity:0; pointer-events:none; transition:opacity .25s; }
 .ms-cart-ov.open { opacity:1; pointer-events:auto; }
