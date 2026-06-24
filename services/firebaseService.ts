@@ -7,6 +7,7 @@ import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, Pe
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
+import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
 export const firebaseConfig = {
@@ -1043,8 +1044,9 @@ export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSect
 
 // ── Meta Shops (online catalogs/shops) ──
 export const saveMetaShopToCloud = async (shop: MetaShop) => {
-    await setDocCloud('metaShops', shop.id, shop);
-    logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shop.name} ذخیره شد`, 'Master', shop.id);
+    const payload = normalizeMetaShopForCloud(shop);
+    await setDocCloud('metaShops', payload.id, payload);
+    logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${payload.name} ذخیره شد`, 'Master', payload.id);
 };
 export const deleteMetaShopFromCloud = async (id: string) => {
     const proxy = await checkProxyMode();

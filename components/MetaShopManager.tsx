@@ -14,6 +14,7 @@ import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
+import { normalizeMetaShopForCloud, metaShopPayloadBytes, META_SHOP_FIRESTORE_MAX_BYTES } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
 
@@ -61,13 +62,13 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
       images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
       active: p.active !== false,
     }));
-    return {
+    return normalizeMetaShopForCloud({
       ...base, ...clean,
       id: base.id, createdAt: base.createdAt,
       theme: { ...DEFAULT_THEME, ...(json.theme || {}) },
       type: (['services', 'realestate'].includes(json.type) ? json.type : 'products') as MetaShopType,
       products,
-    };
+    } as MetaShop);
   }
   const data = json.data || json;
   const cc = data.catalogConfig || {};
@@ -536,7 +537,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     // ensure a unique shop code exists
     const code = (draft.code && draft.code.trim()) ? draft.code.trim().toUpperCase() : uniqueShopCode(metaShops);
     setSaving(true);
-    try { await onSaveMetaShop({ ...draft, slug, code }); setMode('list'); setDraft(null); }
+    try {
+      const payload = normalizeMetaShopForCloud({ ...draft, slug, code });
+      const bytes = metaShopPayloadBytes(payload);
+      if (bytes > META_SHOP_FIRESTORE_MAX_BYTES) {
+        alert(T
+          ? `حجم فروشگاه (${Math.round(bytes / 1024)}KB) از حد Firebase (${Math.round(META_SHOP_FIRESTORE_MAX_BYTES / 1024)}KB) بیشتر است. تعداد محصولات یا توضیحات را کم کنید.`
+          : `Shop size (${Math.round(bytes / 1024)}KB) exceeds Firebase limit (${Math.round(META_SHOP_FIRESTORE_MAX_BYTES / 1024)}KB). Reduce products or descriptions.`);
+        return;
+      }
+      await onSaveMetaShop(payload);
+      setMode('list'); setDraft(null);
+    }
     catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); }
     finally { setSaving(false); }
   };
