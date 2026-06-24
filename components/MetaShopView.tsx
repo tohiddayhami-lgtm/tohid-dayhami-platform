@@ -168,6 +168,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
   useEffect(() => { setGalIdx(0); }, [detail]);
+  useEffect(() => {
+    if (!detail) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [detail]);
   // Record a visit (once per session per shop) for the shop's visit report.
   useEffect(() => { logMetaShopEvent('visit', { id: shop.id, name: shop.name }, { via: embed ? 'gsite' : 'shop' }); }, [shop.id]);
 
@@ -1048,14 +1054,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 return (
                   <>
                     <div className="ms-gal-main">
-                      {main ? <img src={main} alt={pName(detail)} /> : <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>}
+                      {main ? <img src={main} alt={pName(detail)} decoding="async" /> : <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>}
                       {imgs.length > 1 && <>
                         <button className="ms-gal-nav prev" onClick={() => setGalIdx((galIdx - 1 + imgs.length) % imgs.length)}>‹</button>
                         <button className="ms-gal-nav next" onClick={() => setGalIdx((galIdx + 1) % imgs.length)}>›</button>
                       </>}
                     </div>
                     {imgs.length > 1 && (
-                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" /></button>)}</div>
+                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" loading="lazy" decoding="async" /></button>)}</div>
                     )}
                   </>
                 );
@@ -1635,7 +1641,8 @@ const MS_CSS = `
 .ms-grid { display:grid; gap:16px; grid-template-columns:repeat(2,1fr); padding:14px 0 56px; }
 @media (min-width:768px){ .ms-grid { grid-template-columns:repeat(3,1fr); } }
 @media (min-width:1100px){ .ms-grid { grid-template-columns:repeat(4,1fr); } }
-.ms-card { background:#fff; border:1px solid #eef0f3; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; transition:box-shadow .2s, transform .2s; }
+.ms-card { background:#fff; border:1px solid #eef0f3; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; transition:box-shadow .2s, transform .2s; content-visibility:auto; contain-intrinsic-size:auto 300px; }
+@media (hover:none) and (pointer:coarse){ .ms-card { transition:none; } }
 .ms-card:hover { box-shadow:0 12px 32px rgba(0,0,0,.13); transform:translateY(-4px); }
 .ms-card-img { position:relative; aspect-ratio:4/3; background:#f8fafc; cursor:zoom-in; overflow:hidden; }
 .ms-card-img img { width:100%; height:100%; object-fit:cover; }
@@ -1784,15 +1791,15 @@ const MS_CSS = `
 .ms-foot-grid b { font-size:13px; opacity:.85; }
 .ms-foot-text { font-size:12px; opacity:.6; margin-top:20px; }
 /* modal */
-.ms-modal-ov { position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:16px; }
-.ms-modal { background:#fff; border-radius:20px; width:100%; max-width:820px; max-height:90vh; display:flex; overflow:hidden; position:relative; }
+.ms-modal-ov { position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:16px; overscroll-behavior:contain; }
+.ms-modal { background:#fff; border-radius:20px; width:100%; max-width:820px; max-height:90vh; display:flex; overflow:hidden; position:relative; min-height:0; }
 .ms-modal-x { position:absolute; top:12px; inset-inline-end:12px; z-index:10; width:36px; height:36px; border-radius:50%; border:none; background:rgba(15,23,42,.08); color:#475569; cursor:pointer; font-size:14px; }
-.ms-modal-gal { width:46%; background:#f8fafc; display:flex; flex-direction:column; }
-.ms-gal-main { position:relative; flex:1; min-height:240px; display:flex; align-items:center; justify-content:center; background:#f8fafc; }
-.ms-gal-main img { width:100%; height:100%; max-height:62vh; object-fit:contain; }
+.ms-modal-gal { width:46%; background:#f8fafc; display:flex; flex-direction:column; flex-shrink:0; min-height:0; overflow:hidden; }
+.ms-gal-main { position:relative; flex:1; min-height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; overflow:hidden; }
+.ms-gal-main img { width:100%; height:100%; max-height:62vh; object-fit:contain; display:block; }
 .ms-gal-nav { position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; border:none; background:rgba(255,255,255,.9); color:#334155; font-size:22px; line-height:1; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center; }
 .ms-gal-nav.prev { inset-inline-start:8px; } .ms-gal-nav.next { inset-inline-end:8px; }
-.ms-thumbs { display:flex; gap:6px; padding:8px; overflow-x:auto; background:#fff; border-top:1px solid #eef0f3; scrollbar-width:none; }
+.ms-thumbs { display:flex; gap:6px; padding:8px; overflow-x:auto; background:#fff; border-top:1px solid #eef0f3; scrollbar-width:none; flex-shrink:0; }
 .ms-thumbs::-webkit-scrollbar { display:none; }
 .ms-thumb { flex-shrink:0; width:48px; height:48px; border-radius:8px; overflow:hidden; border:2px solid transparent; background:#f1f5f9; cursor:pointer; padding:0; }
 .ms-thumb.on { border-color:var(--ms-primary); }
@@ -1802,10 +1809,21 @@ const MS_CSS = `
 .ms-video-link { display:inline-flex; align-items:center; gap:6px; color:var(--ms-primary); font-weight:700; font-size:13px; text-decoration:underline; }
 .ms-media-badges { position:absolute; bottom:8px; inset-inline-end:8px; display:flex; gap:5px; }
 .ms-media-badge { background:rgba(15,23,42,.7); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; backdrop-filter:blur(4px); }
-.ms-modal-info { flex:1; overflow-y:auto; padding:28px 24px; display:flex; flex-direction:column; gap:12px; }
+.ms-modal-info { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; padding:28px 24px; display:flex; flex-direction:column; gap:12px; }
 .ms-modal-info h2 { font-size:22px; font-weight:800; color:var(--ms-heading,#1f2a18); }
 .ms-modal-desc { font-size:14px; line-height:1.75; color:var(--ms-text); white-space:pre-line; }
-@media (max-width:600px){ .ms-modal { flex-direction:column; } .ms-modal-gal { width:100%; height:200px; } }
+@media (max-width:600px){
+  .ms-modal-ov { padding:0; align-items:stretch; backdrop-filter:none; -webkit-backdrop-filter:none; background:rgba(0,0,0,.55); }
+  .ms-modal { flex-direction:column; max-height:100dvh; height:100dvh; border-radius:0; width:100%; }
+  .ms-modal-gal { width:100%; flex:0 0 auto; max-height:min(44dvh, 300px); }
+  .ms-gal-main { flex:0 0 auto; min-height:0; max-height:min(38dvh, 260px); }
+  .ms-gal-main img { max-height:min(38dvh, 260px); height:auto; width:100%; }
+  .ms-noimg.lg { max-height:min(38dvh, 260px); font-size:56px; }
+  .ms-modal-info { flex:1 1 auto; padding:18px 16px calc(20px + env(safe-area-inset-bottom, 0px)); }
+  .ms-modal-info h2 { font-size:18px; }
+  .ms-modal-x { top:max(10px, env(safe-area-inset-top, 0px)); background:rgba(255,255,255,.94); box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  .ms-cart-ov { backdrop-filter:none; -webkit-backdrop-filter:none; }
+}
 /* drawer */
 .ms-cart-ov { position:fixed; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(4px); z-index:1100; opacity:0; pointer-events:none; transition:opacity .25s; }
 .ms-cart-ov.open { opacity:1; pointer-events:auto; }
