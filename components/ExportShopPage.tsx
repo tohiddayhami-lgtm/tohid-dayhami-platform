@@ -3,11 +3,10 @@ import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types'
 import { shopCodeOf } from './shopCode';
 import { IconSearch, IconBriefcase } from './Icons';
 import { Language } from '../App';
-import { categoryKey, categoryLabel } from '../utils/metaShopCategories';
 
 interface Props {
   shops: MetaShop[];
-  bazaars?: MetaBazaar[];
+  bazaar: MetaBazaar | null;
   lang: Language;
   onBack: () => void;
   onOpenShop: (slug: string) => void;
@@ -15,45 +14,9 @@ interface Props {
   isLoading?: boolean;
 }
 
-type Bilingual = { key: string; fa: string; en: string };
-
 const PAGE_SIZE = 9;
 const ALL = '__all__';
-
-const nz = (s?: string) => (s || '').trim();
-const mkPair = (fa?: string, en?: string): Bilingual | null => {
-  const f = nz(fa), e = nz(en);
-  if (!f && !e) return null;
-  return { key: (e || f).toLowerCase(), fa: f || e, en: e || f };
-};
-
-const lbl = (p: Bilingual, fa: boolean) => (fa ? p.fa : p.en);
-
-const catPairsOf = (s: MetaShop): Bilingual[] => {
-  let pairs: (Bilingual | null)[] = [];
-  if (s.directoryCats?.length) pairs = s.directoryCats.map(c => mkPair(c.fa, c.en));
-  else if (s.directoryCategories?.length) pairs = s.directoryCategories.map(c => mkPair(c, c));
-  else if (s.directoryCategory) pairs = [mkPair(s.directoryCategory, s.directoryCategory)];
-  const out = pairs.filter(Boolean) as Bilingual[];
-  return out.length ? out : [{ key: '__other__', fa: 'سایر', en: 'Other' }];
-};
-
-const subPairOf = (s: MetaShop): Bilingual | null => {
-  if (s.directorySub) return mkPair(s.directorySub.fa, s.directorySub.en);
-  if (s.directorySubcategory) return mkPair(s.directorySubcategory, s.directorySubcategory);
-  return null;
-};
-
-const pickExportBazaar = (bazaars: MetaBazaar[]): MetaBazaar | null => {
-  const active = bazaars.filter(b => b.isActive !== false && (b.tree?.length || 0) > 0);
-  const withCountry = active.find(b =>
-    (b.levelLabels || []).some(l =>
-      (l.fa || '').includes('کشور') || (l.en || '').toLowerCase().includes('country'),
-    ),
-  );
-  if (withCountry) return withCountry;
-  return active.sort((a, b) => (b.tree?.length || 0) - (a.tree?.length || 0))[0] || null;
-};
+const MIN_SEARCH = 2;
 
 const collectShopsFromNode = (node: MetaBazaarNode, shopBySlug: Record<string, MetaShop>): MetaShop[] => {
   const acc: MetaShop[] = [];
@@ -61,11 +24,20 @@ const collectShopsFromNode = (node: MetaBazaarNode, shopBySlug: Record<string, M
   const walk = (n: MetaBazaarNode) => {
     (n.shopSlugs || []).forEach(sl => {
       const s = shopBySlug[sl];
-      if (s && !seen.has(s.id)) { seen.add(s.id); acc.push(s); }
+      if (s && s.isActive !== false && !seen.has(s.id)) { seen.add(s.id); acc.push(s); }
     });
     (n.children || []).forEach(walk);
   };
   walk(node);
+  return acc;
+};
+
+const collectAllBazaarShops = (bazaar: MetaBazaar, shopBySlug: Record<string, MetaShop>): MetaShop[] => {
+  const acc: MetaShop[] = [];
+  const seen = new Set<string>();
+  (bazaar.tree || []).forEach(n => collectShopsFromNode(n, shopBySlug).forEach(s => {
+    if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); }
+  }));
   return acc;
 };
 
@@ -86,60 +58,60 @@ const shopHaystack = (shop: MetaShop): string => {
 };
 
 const matchingProducts = (shop: MetaShop, q: string): MetaShopProduct[] => {
-  if (!q) return [];
+  if (!q || q.length < MIN_SEARCH) return [];
   return (shop.products || []).filter(p => p.active !== false).filter(p => {
-    const hay = [
-      p.name, p.sku, p.description, p.group, p.subcategory, p.hsCode,
-      ...(p.images || []),
-    ].filter(Boolean).join(' ').toLowerCase();
+    const hay = [p.name, p.sku, p.description, p.group, p.subcategory, p.hsCode].filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);
-  }).slice(0, 4);
+  }).slice(0, 3);
 };
 
+const bLbl = (c: { fa?: string; en?: string } | undefined, fa: boolean) =>
+  fa ? (c?.fa || c?.en || '') : (c?.en || c?.fa || '');
+
 export const ExportShopPage: React.FC<Props> = ({
-  shops, bazaars = [], lang, onBack, onOpenShop, onOpenProduct, isLoading = false,
+  shops, bazaar, lang, onBack, onOpenShop, onOpenProduct, isLoading = false,
 }) => {
   const fa = lang === 'fa';
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [countryKey, setCountryKey] = useState(ALL);
-  const [cityKey, setCityKey] = useState(ALL);
-  const [groupKey, setGroupKey] = useState(ALL);
   const [bazaarPath, setBazaarPath] = useState<string[]>([]);
 
-  const exportBazaar = useMemo(() => pickExportBazaar(bazaars), [bazaars]);
-  const live = useMemo(() => shops.filter(s => s.isActive !== false), [shops]);
   const shopBySlug = useMemo(() => {
     const m: Record<string, MetaShop> = {};
-    live.forEach(s => { m[s.slug] = s; });
+    shops.filter(s => s.isActive !== false).forEach(s => { m[s.slug] = s; });
     return m;
-  }, [live]);
+  }, [shops]);
+
+  const bazaarShopPool = useMemo(() => {
+    if (!bazaar) return [];
+    return collectAllBazaarShops(bazaar, shopBySlug);
+  }, [bazaar, shopBySlug]);
 
   const t = {
     title: fa ? 'فروشگاه صادراتی' : 'Export Shop',
-    subtitle: fa ? 'فروشگاه‌ها و محصولات صادراتی بر اساس کشور، شهر و گروه کالایی' : 'Export shops and products by country, city and category',
-    searchPh: fa ? 'جستجو در فروشگاه، برند، محصول، کد، گروه کالایی...' : 'Search shops, brands, products, codes, categories...',
+    subtitle: bazaar
+      ? (fa ? `فروشگاه‌های ${bazaar.name}` : `Shops in ${bazaar.name}`)
+      : (fa ? 'فروشگاه‌ها و محصولات صادراتی' : 'Export shops and products'),
+    searchPh: fa ? 'جستجو در فروشگاه، برند، محصول، کد...' : 'Search shops, brands, products, codes...',
     all: fa ? 'همه' : 'All',
-    country: fa ? 'کشور' : 'Country',
-    city: fa ? 'شهر' : 'City',
-    group: fa ? 'گروه کالایی' : 'Product group',
     empty: fa ? 'فروشگاهی یافت نشد.' : 'No shops found.',
+    noBazaar: fa
+      ? 'بازارچه‌ای برای این صفحه انتخاب نشده. از تنظیمات سیستم → عمومی، بازارچه «فروشگاه صادراتی» را مشخص کنید.'
+      : 'No bazaar is linked to this page. Choose one in System Settings → General.',
     products: fa ? 'محصول' : 'products',
     services: fa ? 'خدمات' : 'Services',
     realestate: fa ? 'املاک' : 'Real Estate',
-    enter: fa ? 'ورود به فروشگاه' : 'Open shop',
     matches: fa ? 'محصولات مرتبط' : 'Matching products',
     count: (n: number) => fa ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
   };
 
-  // ── Bazaar tree filters (country → city → group) ──
   const bazaarLevels = useMemo(() => {
-    if (!exportBazaar?.tree?.length) return null;
+    if (!bazaar?.tree?.length) return null;
     const levels: { depth: number; label: string; nodes: MetaBazaarNode[]; selectedId?: string }[] = [];
-    let cursor: MetaBazaarNode[] = exportBazaar.tree;
+    let cursor: MetaBazaarNode[] = bazaar.tree;
     for (let depth = 0; cursor?.length; depth++) {
       const explicit = bazaarPath[depth] && cursor.some(n => n.id === bazaarPath[depth]) ? bazaarPath[depth] : undefined;
-      const levelLbl = exportBazaar.levelLabels?.[depth];
+      const levelLbl = bazaar.levelLabels?.[depth];
       const label = fa ? (levelLbl?.fa || levelLbl?.en || '') : (levelLbl?.en || levelLbl?.fa || '');
       levels.push({ depth, label, nodes: cursor, selectedId: explicit });
       if (!explicit) break;
@@ -147,94 +119,41 @@ export const ExportShopPage: React.FC<Props> = ({
       cursor = node?.children || [];
     }
     return levels;
-  }, [exportBazaar, bazaarPath, fa]);
-
-  const bazaarPool = useMemo(() => {
-    if (!exportBazaar?.tree?.length) return live;
-    const q = search.trim().toLowerCase();
-    if (q) return live.filter(s => shopHaystack(s).includes(q));
-    let activeNode: MetaBazaarNode | undefined;
-    let cursor = exportBazaar.tree;
-    for (let depth = 0; cursor?.length; depth++) {
-      const id = bazaarPath[depth];
-      if (!id || !cursor.some(n => n.id === id)) break;
-      activeNode = cursor.find(n => n.id === id);
-      cursor = activeNode?.children || [];
-    }
-    if (activeNode) return collectShopsFromNode(activeNode, shopBySlug);
-    const all: MetaShop[] = [];
-    const seen = new Set<string>();
-    exportBazaar.tree.forEach(n => collectShopsFromNode(n, shopBySlug).forEach(s => {
-      if (!seen.has(s.id)) { seen.add(s.id); all.push(s); }
-    }));
-    return all.length ? all : live;
-  }, [exportBazaar, bazaarPath, live, shopBySlug, search]);
-
-  // ── Fallback filters from shop metadata ──
-  const countries = useMemo(() => {
-    const m: Record<string, Bilingual> = {};
-    live.forEach(s => catPairsOf(s).forEach(p => { if (!m[p.key]) m[p.key] = p; }));
-    return Object.values(m).sort((a, b) => lbl(a, fa).localeCompare(lbl(b, fa)));
-  }, [live, fa]);
-
-  const cities = useMemo(() => {
-    const m: Record<string, Bilingual> = {};
-    live.forEach(s => {
-      if (countryKey !== ALL && !catPairsOf(s).some(p => p.key === countryKey)) return;
-      const sp = subPairOf(s);
-      if (sp && !m[sp.key]) m[sp.key] = sp;
-    });
-    return Object.values(m).sort((a, b) => lbl(a, fa).localeCompare(lbl(b, fa)));
-  }, [live, countryKey, fa]);
-
-  const productGroups = useMemo(() => {
-    const m = new Map<string, string>();
-    live.forEach(s => {
-      if (countryKey !== ALL && !catPairsOf(s).some(p => p.key === countryKey)) return;
-      const sp = subPairOf(s);
-      if (cityKey !== ALL && (!sp || sp.key !== cityKey)) return;
-      (s.products || []).forEach(p => {
-        if (p.active === false || !p.group) return;
-        const k = categoryKey(p.group);
-        if (k && !m.has(k)) m.set(k, categoryLabel(p.group, lang, s));
-      });
-      (s.categories || []).forEach(c => {
-        const k = categoryKey(c);
-        if (k && !m.has(k)) m.set(k, categoryLabel(c, lang, s));
-      });
-    });
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([key, label]) => ({ key, label }));
-  }, [live, countryKey, cityKey, lang]);
+  }, [bazaar, bazaarPath, fa]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const pool = exportBazaar ? bazaarPool : live;
+    if (!bazaar || !bazaarShopPool.length) return [];
 
-    return pool.filter(s => {
-      if (!exportBazaar) {
-        if (countryKey !== ALL && !catPairsOf(s).some(p => p.key === countryKey)) return false;
-        const sp = subPairOf(s);
-        if (cityKey !== ALL && (!sp || sp.key !== cityKey)) return false;
-        if (groupKey !== ALL) {
-          const hasGroup = (s.products || []).some(p => p.active !== false && categoryKey(p.group) === groupKey);
-          if (!hasGroup) return false;
-        }
+    let pool = bazaarShopPool;
+    const q = search.trim().toLowerCase();
+
+    // Drill-down filters (hidden while searching to reduce clutter)
+    if (!q && bazaar.tree?.length) {
+      let activeNode: MetaBazaarNode | undefined;
+      let cursor = bazaar.tree;
+      for (let depth = 0; cursor?.length; depth++) {
+        const id = bazaarPath[depth];
+        if (!id || !cursor.some(n => n.id === id)) break;
+        activeNode = cursor.find(n => n.id === id);
+        cursor = activeNode?.children || [];
       }
-      if (!q) return true;
-      return shopHaystack(s).includes(q);
-    });
-  }, [exportBazaar, bazaarPool, live, countryKey, cityKey, groupKey, search]);
+      if (activeNode) pool = collectShopsFromNode(activeNode, shopBySlug);
+    }
+
+    if (!q) return pool;
+    if (q.length < MIN_SEARCH) return pool;
+
+    return pool.filter(s => shopHaystack(s).includes(q));
+  }, [bazaar, bazaarShopPool, bazaarPath, shopBySlug, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const qLower = search.trim().toLowerCase();
+  const showProductHits = qLower.length >= MIN_SEARCH;
 
   const selectBazaarAt = (depth: number, id: string) => {
-    setBazaarPath(prev => {
-      const next = prev[depth] === id ? prev.slice(0, depth) : [...prev.slice(0, depth), id];
-      return next;
-    });
+    setBazaarPath(prev => (prev[depth] === id ? prev.slice(0, depth) : [...prev.slice(0, depth), id]));
     setPage(1);
   };
 
@@ -244,7 +163,7 @@ export const ExportShopPage: React.FC<Props> = ({
     onChange: (k: string) => void;
     options: { key: string; label: string; count?: number }[];
   }) => {
-    if (options.length <= 1 && value === ALL) return null;
+    if (!options.length) return null;
     return (
       <div className="flex flex-col gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{title}</span>
@@ -274,6 +193,25 @@ export const ExportShopPage: React.FC<Props> = ({
   const typeLabel = (s: MetaShop) =>
     s.type === 'services' ? t.services : s.type === 'realestate' ? t.realestate : t.products;
 
+  if (!bazaar) {
+    return (
+      <div className="animate-fade-in py-2">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{t.title}</h1>
+          </div>
+          <button type="button" onClick={onBack} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+            {fa ? 'بازگشت' : 'Back'}
+          </button>
+        </div>
+        <div className="text-center py-16 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+          <IconBriefcase className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm max-w-md mx-auto leading-relaxed">{t.noBazaar}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in py-2">
       <div className="flex items-center justify-between mb-6">
@@ -296,12 +234,12 @@ export const ExportShopPage: React.FC<Props> = ({
         />
       </div>
 
-      <div className="flex flex-col gap-4 mb-6">
-        {exportBazaar && bazaarLevels && !qLower ? (
-          bazaarLevels.map(lvl => (
+      {!qLower && bazaarLevels && (
+        <div className="flex flex-col gap-4 mb-6">
+          {bazaarLevels.map(lvl => (
             <FilterRow
               key={lvl.depth}
-              title={lvl.label || [t.country, t.city, t.group][lvl.depth] || t.group}
+              title={lvl.label || [fa ? 'کشور' : 'Country', fa ? 'شهر' : 'City', fa ? 'گروه کالایی' : 'Group'][lvl.depth] || ''}
               value={lvl.selectedId || ALL}
               onChange={id => {
                 if (id === ALL) setBazaarPath(prev => prev.slice(0, lvl.depth));
@@ -310,34 +248,13 @@ export const ExportShopPage: React.FC<Props> = ({
               }}
               options={lvl.nodes.map(n => ({
                 key: n.id,
-                label: fa ? (n.label?.fa || n.label?.en || '') : (n.label?.en || n.label?.fa || ''),
+                label: bLbl(n.label, fa),
                 count: collectShopsFromNode(n, shopBySlug).length,
               }))}
             />
-          ))
-        ) : (
-          <>
-            <FilterRow
-              title={t.country}
-              value={countryKey}
-              onChange={k => { setCountryKey(k); setCityKey(ALL); setGroupKey(ALL); }}
-              options={countries.map(c => ({ key: c.key, label: lbl(c, fa) }))}
-            />
-            <FilterRow
-              title={t.city}
-              value={cityKey}
-              onChange={k => { setCityKey(k); setGroupKey(ALL); }}
-              options={cities.map(c => ({ key: c.key, label: lbl(c, fa) }))}
-            />
-            <FilterRow
-              title={t.group}
-              value={groupKey}
-              onChange={setGroupKey}
-              options={productGroups.map(g => ({ key: g.key, label: g.label }))}
-            />
-          </>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -347,7 +264,6 @@ export const ExportShopPage: React.FC<Props> = ({
               <div className="p-4 space-y-2">
                 <div className="h-2.5 bg-gray-100 rounded w-1/3" />
                 <div className="h-4 bg-gray-100 rounded w-4/5" />
-                <div className="h-3 bg-gray-100 rounded w-full" />
               </div>
             </div>
           ))}
@@ -363,13 +279,14 @@ export const ExportShopPage: React.FC<Props> = ({
             {fa
               ? `${t.count(filtered.length)} — صفحه ${safePage} از ${totalPages}`
               : `${t.count(filtered.length)} — page ${safePage} of ${totalPages}`}
+            {qLower.length > 0 && qLower.length < MIN_SEARCH && (
+              <span className="text-gray-300"> · {fa ? `حداقل ${MIN_SEARCH} حرف` : `min ${MIN_SEARCH} chars`}</span>
+            )}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {paginated.map(shop => {
-              const hits = matchingProducts(shop, qLower);
+              const hits = showProductHits ? matchingProducts(shop, qLower) : [];
               const cover = shop.coverImage || shop.logo;
-              const countriesLbl = catPairsOf(shop).map(c => lbl(c, fa)).join(' · ');
-              const cityLbl = subPairOf(shop) ? lbl(subPairOf(shop)!, fa) : '';
               const prodCount = (shop.products || []).filter(p => p.active !== false).length;
 
               return (
@@ -377,11 +294,7 @@ export const ExportShopPage: React.FC<Props> = ({
                   key={shop.id}
                   className="text-start border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:shadow-sm transition-all bg-white flex flex-col"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onOpenShop(shop.slug)}
-                    className="text-start w-full group"
-                  >
+                  <button type="button" onClick={() => onOpenShop(shop.slug)} className="text-start w-full group">
                     {cover ? (
                       <div className="w-full h-40 bg-gray-100 overflow-hidden">
                         <img src={cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -401,17 +314,10 @@ export const ExportShopPage: React.FC<Props> = ({
                       <h3 className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2 group-hover:text-gray-700">
                         {shop.title || shop.name}
                       </h3>
-                      {(countriesLbl || cityLbl) && (
-                        <p className="text-[11px] text-gray-400 mt-1 line-clamp-1">
-                          {[countriesLbl, cityLbl].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
                       {shop.subtitle && (
                         <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed mt-2">{shop.subtitle}</p>
                       )}
-                      <p className="text-[11px] text-gray-400 mt-2">
-                        {prodCount} {t.products}
-                      </p>
+                      <p className="text-[11px] text-gray-400 mt-2">{prodCount} {t.products}</p>
                     </div>
                   </button>
 

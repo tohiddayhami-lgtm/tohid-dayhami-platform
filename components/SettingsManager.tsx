@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode, AssignmentConfig, SocialLink, SocialPlatform } from '../types';
+import { AppConfig, FormField, FormFieldType, InvoiceTemplate, CustomForm, Personnel, FeaturedBusiness, AssignmentMode, AssignmentConfig, SocialLink, SocialPlatform, MetaBazaar } from '../types';
 import { IconSettings, IconPlus, IconTrash, IconEdit, IconCheck, IconLayout, IconInvoice, IconUpload, IconDatabase, IconShield, IconBulb, IconMagic, IconClipboard, IconFolder, IconBriefcase, IconStar, IconLink, IconCopy, IconUsers } from './Icons';
 import { compressImage, backupSystemData, clearSystemData, saveCustomFormToCloud, deleteCustomFormFromCloud, subscribeToCustomForms, updateCustomFormInCloud, firebaseConfig, subscribeToSettings } from '../services/firebaseService';
 import { generateFormFields } from '../services/geminiService';
@@ -9,6 +9,7 @@ import { formatPersonnelLabel } from '../services/staffId';
 interface Props {
   config: AppConfig;
   personnel: Personnel[];
+  metaBazaars?: MetaBazaar[];
   onUpdate: (newConfig: AppConfig) => void;
   isMaster?: boolean;
 }
@@ -28,7 +29,7 @@ const normalizeAssignmentConfig = (assignmentConfig?: AssignmentConfig): Assignm
   servicePersonnelMap: assignmentConfig?.servicePersonnelMap || {},
 });
 
-export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, isMaster = false }) => {
+export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaars = [], onUpdate, isMaster = false }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'form' | 'custom_forms' | 'invoice' | 'maintenance' | 'daily' | 'businesses' | 'google_forms' | 'assignment'>('general');
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [customForms, setCustomForms] = useState<CustomForm[]>([]);
@@ -71,6 +72,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
 
   // Social Links State
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>(config.socialLinks || []);
+  const [exportShopBazaarId, setExportShopBazaarId] = useState<string>(config.exportShopBazaarId || '');
 
   // Google Form Integration State
   const [selectedServiceForScript, setSelectedServiceForScript] = useState('');
@@ -111,6 +113,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
     setFeaturedBusinesses(config.featuredBusinesses || []);
     setAssignmentConfig(normalizeAssignmentConfig(config.assignmentConfig));
     setSocialLinks(config.socialLinks || []);
+    setExportShopBazaarId(config.exportShopBazaarId || '');
     if (config.invoiceTemplate) {
         setInvoiceTemplate(config.invoiceTemplate);
     }
@@ -138,6 +141,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, onUpdate, 
       featuredBusinesses: featuredBusinesses,
       assignmentConfig: assignmentConfig,
       socialLinks: socialLinks,
+      exportShopBazaarId: exportShopBazaarId || undefined,
     });
     
     setTimeout(() => {
@@ -558,6 +562,21 @@ function onFormSubmit(e) {
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">تیتر اصلی بزرگ (Hero Title)</label><input className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.landingHeroTitle} onChange={(e) => handleGeneralChange('landingHeroTitle', e.target.value)} placeholder="مثال: مسیر جهانی شدن کسب‌وکار شما" /></div>
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">توضیحات زیر تیتر (Hero Subtitle)</label><textarea className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.landingHeroSubtitle} onChange={(e) => handleGeneralChange('landingHeroSubtitle', e.target.value)} rows={2} placeholder="مثال: اولین و بزرگترین پلتفرم هوشمند..." /></div>
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">متن کپی‌رایت فوتر</label><input className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.footerText} onChange={(e) => handleGeneralChange('footerText', e.target.value)} placeholder="© 1403 پلتفرم جامع..." /></div>
+              <div className="md:col-span-2 border-t border-gray-100 pt-6 mt-2">
+                <h4 className="font-bold text-indigo-800 mb-2">صفحه فروشگاه صادراتی</h4>
+                <p className="text-xs text-gray-500 mb-3">فقط فروشگاه‌های بازارچه انتخاب‌شده در تب «فروشگاه صادراتی» نمایش داده می‌شوند. جستجو نیز محدود به همین بازارچه است.</p>
+                <label className="block text-sm font-bold text-gray-700 mb-2">بازارچه مرتبط</label>
+                <select
+                  className="w-full max-w-md px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  value={exportShopBazaarId}
+                  onChange={e => { setExportShopBazaarId(e.target.value); setSaveSuccess(false); }}
+                >
+                  <option value="">— انتخاب نشده (صفحه خالی) —</option>
+                  {metaBazaars.filter(b => b.isActive !== false).map(b => (
+                    <option key={b.id} value={b.id}>{b.name}{b.slug ? ` (${b.slug})` : ''}</option>
+                  ))}
+                </select>
+              </div>
            </div>
 
            {/* ── Social Links ── */}

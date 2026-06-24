@@ -2052,10 +2052,14 @@ const App: React.FC = () => {
             {view === 'export-shops' && (
               <ExportShopPage
                 shops={metaShops}
-                bazaars={metaBazaars}
+                bazaar={
+                  appConfig.exportShopBazaarId
+                    ? metaBazaars.find(b => b.id === appConfig.exportShopBazaarId && b.isActive !== false) || null
+                    : null
+                }
                 lang={lang}
                 onBack={() => setView('landing')}
-                isLoading={metaShops.length === 0}
+                isLoading={metaShops.length === 0 || metaBazaars.length === 0}
                 onOpenShop={(slug) => {
                   history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`);
                   setShopSlug(slug);

@@ -2294,7 +2294,7 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} config={config} />}
         {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} metaShops={metaShops} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
-        {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} onUpdate={onUpdateConfig} isMaster={isMaster} />}
+        {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} metaBazaars={metaBazaars} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'notifications' && isMaster && <NotificationCenter config={config} personnel={personnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}

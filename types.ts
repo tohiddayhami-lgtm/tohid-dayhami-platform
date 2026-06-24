@@ -1549,6 +1549,8 @@ export interface AppConfig {
   ogImage?: string;
   metaPortUrl?: string;
   heroBgImage?: string;
+  /** MetaBazaar id whose tree powers the public «فروشگاه صادراتی» page (?page=export-shops). */
+  exportShopBazaarId?: string;
   labels?: TicketLabel[];
 }
 
