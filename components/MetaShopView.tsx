@@ -44,11 +44,27 @@ export interface MetaShopReferralSubmit {
   images: string[];
 }
 
+export interface MetaShopSupplierSubmit {
+  supplierName: string;
+  supplierPhone: string;
+  supplierEmail?: string;
+  brandName: string;
+  companyName?: string;
+  country?: string;
+  city?: string;
+  description?: string;
+  notes?: string;
+  images: string[];
+  catalogPdfUrl?: string;
+  catalogPdfName?: string;
+}
+
 interface Props {
   shop: MetaShop;
   lang: Language;
   onSubmitOrder: (data: OrderData) => Promise<string>; // returns tracking code
   onSubmitReferral?: (data: MetaShopReferralSubmit) => Promise<string>;
+  onSubmitSupplierCollaboration?: (data: MetaShopSupplierSubmit) => Promise<string>;
   onLookup?: (criteria: { phone?: string; trackingCode?: string; name?: string }) => Promise<MetaShopOrder[]>;
   embed?: boolean; // rendered inside an iframe (Google Sites / external site embed) — slightly compacts chrome
 }
@@ -59,6 +75,8 @@ const CartIcon = ({ s = 18 }: { s?: number }) => (
 const PdfIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
 );
+
+const SUPPLIER_CATALOG_PDF_MAX_BYTES = 50 * 1024 * 1024;
 
 const ChevronIcon = ({ dir }: { dir: 'prev' | 'next' }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -147,9 +165,10 @@ const ScrollPillRow: React.FC<{
   );
 };
 
-export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSubmitReferral, onLookup, embed }) => {
+export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSubmitReferral, onSubmitSupplierCollaboration, onLookup, embed }) => {
   const isServices = shop.type === 'services';
   const isRealEstate = shop.type === 'realestate';
+  const isProducts = shop.type === 'products';
   const [cart, setCart] = useState<Record<string, { qty: number; optionId?: string }>>({});
   const [activeCat, setActiveCat] = useState<string>('all');
   const [activeSub, setActiveSub] = useState<string>('all');
@@ -207,13 +226,27 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [referImages, setReferImages] = useState<string[]>([]);
   const [referUploading, setReferUploading] = useState(false);
   const referFileRef = useRef<HTMLInputElement>(null);
+  const [supplierOpen, setSupplierOpen] = useState(false);
+  const [supplierTracking, setSupplierTracking] = useState<string | null>(null);
+  const [supplierImages, setSupplierImages] = useState<string[]>([]);
+  const [supplierUploading, setSupplierUploading] = useState(false);
+  const [supplierPdfUrl, setSupplierPdfUrl] = useState<string | null>(null);
+  const [supplierPdfName, setSupplierPdfName] = useState('');
+  const [supplierPdfUploading, setSupplierPdfUploading] = useState(false);
+  const supplierFileRef = useRef<HTMLInputElement>(null);
+  const supplierPdfRef = useRef<HTMLInputElement>(null);
   const emptyReferForm = () => ({
     referrerName: '', referrerPhone: '', referrerEmail: '', relation: 'owner',
     propertyTitle: '', dealType: 'sale', propertyType: 'apartment',
     city: '', district: '', areaSqm: '', bedrooms: '', bathrooms: '',
     price: '', monthlyRent: '', deposit: '', description: '', notes: '',
   });
+  const emptySupplierForm = () => ({
+    supplierName: '', supplierPhone: '', supplierEmail: '', brandName: '', companyName: '',
+    country: '', city: '', description: '', notes: '',
+  });
   const [referForm, setReferForm] = useState(emptyReferForm);
+  const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
   const [inquiryTracking, setInquiryTracking] = useState<string | null>(null);
   // Supported languages — whatever is configured on the shop (defaults only when empty)
   const langs = resolveShopLanguages(shop);
@@ -273,6 +306,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       propertyTitle: 'Property title (optional)', dealType: 'Deal type', propertyType: 'Property type', district: 'District / area',
       areaSqm: 'Area (m²)', bedrooms: 'Bedrooms', bathrooms: 'Bathrooms', price: 'Sale price (if known)', addPhotos: 'Add photos',
       uploading: 'Uploading…', photoLimit: 'Up to 8 photos', referNotes: 'Anything else you know',
+      supplierCollabBtn: 'Supply partnership', supplierCollabTitle: 'Become a supplier',
+      supplierCollabHint: 'Introduce your brand and the products you can supply — our team will review and contact you.',
+      supplierCollabSubmit: 'Submit partnership request', supplierCollabThanks: 'Thank you!',
+      supplierCollabThanksDesc: 'Your request was received. Keep the tracking code below — we will contact you after review.',
+      brandName: 'Brand name', supplyDesc: 'Products you can supply', companyOptional: 'Company (optional)',
+      supplierPhotos: 'Photos of products you can supply', supplierIncomplete: 'Please enter your name, phone and brand name.',
+      supplierNeedMedia: 'Add at least one product photo or upload a PDF catalog.',
+      supplierCatalogPdf: 'Supply catalog (PDF)', supplierCatalogPdfHint: 'Optional — PDF up to 50 MB',
+      supplierPdfTooBig: 'PDF file must be 50 MB or smaller.', supplierPdfInvalid: 'Please choose a PDF file.',
+      supplierPdfRemove: 'Remove PDF',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -311,6 +354,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       propertyTitle: 'عنوان ملک (اختیاری)', dealType: 'نوع معامله', propertyType: 'نوع ملک', district: 'منطقه / محله',
       areaSqm: 'متراژ (م²)', bedrooms: 'خواب', bathrooms: 'حمام', price: 'قیمت فروش (در صورت اطلاع)', addPhotos: 'افزودن عکس',
       uploading: 'در حال آپلود…', photoLimit: 'حداکثر ۸ عکس', referNotes: 'هر نکته دیگری که می‌دانید',
+      supplierCollabBtn: 'همکاری تأمین', supplierCollabTitle: 'همکاری به‌عنوان تأمین‌کننده',
+      supplierCollabHint: 'برند خود و محصولاتی که می‌توانید تأمین کنید را معرفی کنید — پس از بررسی با شما تماس می‌گیریم.',
+      supplierCollabSubmit: 'ثبت درخواست همکاری', supplierCollabThanks: 'متشکریم!',
+      supplierCollabThanksDesc: 'درخواست شما ثبت شد. کد رهگیری را نگه دارید — پس از بررسی با شما تماس می‌گیریم.',
+      brandName: 'نام برند', supplyDesc: 'محصولاتی که می‌توانید تأمین کنید', companyOptional: 'شرکت (اختیاری)',
+      supplierPhotos: 'عکس محصولاتی که می‌توانید تأمین کنید', supplierIncomplete: 'لطفاً نام، موبایل و نام برند را وارد کنید.',
+      supplierNeedMedia: 'حداقل یک عکس محصول یا کاتالوگ PDF بارگذاری کنید.',
+      supplierCatalogPdf: 'کاتالوگ تأمین (PDF)', supplierCatalogPdfHint: 'اختیاری — حداکثر ۵۰ مگابایت',
+      supplierPdfTooBig: 'حجم فایل PDF باید حداکثر ۵۰ مگابایت باشد.', supplierPdfInvalid: 'لطفاً یک فایل PDF انتخاب کنید.',
+      supplierPdfRemove: 'حذف PDF',
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
@@ -349,6 +402,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       propertyTitle: 'عنوان العقار (اختياري)', dealType: 'نوع الصفقة', propertyType: 'نوع العقار', district: 'المنطقة / الحي',
       areaSqm: 'المساحة (م²)', bedrooms: 'غرف النوم', bathrooms: 'الحمامات', price: 'سعر البيع (إن وُجد)', addPhotos: 'إضافة صور',
       uploading: 'جارٍ الرفع…', photoLimit: 'حتى ٨ صور', referNotes: 'أي معلومات إضافية',
+      supplierCollabBtn: 'شراكة توريد', supplierCollabTitle: 'كن مورّداً',
+      supplierCollabHint: 'عرّف علامتك التجارية والمنتجات التي يمكنك توريدها — سنتواصل معك بعد المراجعة.',
+      supplierCollabSubmit: 'إرسال طلب الشراكة', supplierCollabThanks: 'شكراً لك!',
+      supplierCollabThanksDesc: 'تم استلام طلبك. احتفظ برمز التتبع — سنتواصل معك بعد المراجعة.',
+      brandName: 'اسم العلامة التجارية', supplyDesc: 'المنتجات التي يمكنك توريدها', companyOptional: 'الشركة (اختياري)',
+      supplierPhotos: 'صور المنتجات التي يمكنك توريدها', supplierIncomplete: 'يرجى إدخال الاسم والجوال واسم العلامة.',
+      supplierNeedMedia: 'أضف صورة منتج واحدة على الأقل أو ارفع كتالوج PDF.',
+      supplierCatalogPdf: 'كتالوج التوريد (PDF)', supplierCatalogPdfHint: 'اختياري — حتى ٥٠ ميغابايت',
+      supplierPdfTooBig: 'يجب ألا يتجاوز ملف PDF ٥٠ ميغابايت.', supplierPdfInvalid: 'يرجى اختيار ملف PDF.',
+      supplierPdfRemove: 'إزالة PDF',
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
@@ -387,6 +450,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   }
   if (shop.searchPlaceholder) t.searchPh = TR(shop.i18n, 'searchPlaceholder', shop.searchPlaceholder);
   if (shop.orderThankYouText) t.thanksDesc = TR(shop.i18n, 'orderThankYouText', shop.orderThankYouText);
+  if (isProducts && shop.supplierCollaborationEnabled) {
+    t.supplierCollabBtn = TR(shop.i18n, 'supplierCollabBtn', S('supplierCollabBtn'));
+  }
 
   // Content helpers (use per-product/shop i18n with legacy fallback)
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
@@ -615,6 +681,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     setError('');
   };
 
+  const openSupplierCollab = () => {
+    setSupplierOpen(true);
+    setSupplierTracking(null);
+    setSupplierImages([]);
+    setSupplierPdfUrl(null);
+    setSupplierPdfName('');
+    setSupplierForm(emptySupplierForm());
+    setError('');
+  };
+
   const uploadReferPhotos = (files: FileList | null) => {
     if (!files?.length) return;
     const remain = 8 - referImages.length;
@@ -631,6 +707,41 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       }
     };
     batch.forEach(f => uploadFileWithProgress(f, () => {}, u => { urls.push(u); tick(); }, () => tick(), 'images'));
+  };
+
+  const uploadSupplierPhotos = (files: FileList | null) => {
+    if (!files?.length) return;
+    const remain = 8 - supplierImages.length;
+    if (remain <= 0) return;
+    const batch = Array.from(files).slice(0, remain);
+    setSupplierUploading(true);
+    let done = 0;
+    const urls: string[] = [];
+    const tick = () => {
+      done++;
+      if (done >= batch.length) {
+        setSupplierImages(prev => [...prev, ...urls].slice(0, 8));
+        setSupplierUploading(false);
+      }
+    };
+    batch.forEach(f => uploadFileWithProgress(f, () => {}, u => { urls.push(u); tick(); }, () => tick(), 'images'));
+  };
+
+  const uploadSupplierPdf = (file: File | null) => {
+    if (!file) return;
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isPdf) { setError(S('supplierPdfInvalid')); return; }
+    if (file.size > SUPPLIER_CATALOG_PDF_MAX_BYTES) { setError(S('supplierPdfTooBig')); return; }
+    setSupplierPdfUploading(true);
+    setError('');
+    uploadFileWithProgress(
+      file,
+      () => {},
+      url => { setSupplierPdfUrl(url); setSupplierPdfName(file.name); setSupplierPdfUploading(false); },
+      () => { setError(t.err); setSupplierPdfUploading(false); },
+      'documents',
+      'application/pdf',
+    );
   };
 
   const submitReferral = async () => {
@@ -660,6 +771,34 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         images: referImages,
       });
       setReferTracking(code);
+    } catch { setError(t.err); }
+    finally { setSubmitting(false); }
+  };
+
+  const submitSupplierCollab = async () => {
+    if (!onSubmitSupplierCollaboration) return;
+    if (!supplierForm.supplierName.trim() || !supplierForm.supplierPhone.trim() || !supplierForm.brandName.trim()) {
+      setError(S('supplierIncomplete'));
+      return;
+    }
+    if (supplierImages.length === 0 && !supplierPdfUrl) { setError(S('supplierNeedMedia')); return; }
+    setSubmitting(true); setError('');
+    try {
+      const code = await onSubmitSupplierCollaboration({
+        supplierName: supplierForm.supplierName.trim(),
+        supplierPhone: supplierForm.supplierPhone.trim(),
+        supplierEmail: supplierForm.supplierEmail.trim() || undefined,
+        brandName: supplierForm.brandName.trim(),
+        companyName: supplierForm.companyName.trim() || undefined,
+        country: supplierForm.country.trim() || undefined,
+        city: supplierForm.city.trim() || undefined,
+        description: supplierForm.description.trim() || undefined,
+        notes: supplierForm.notes.trim() || undefined,
+        images: supplierImages,
+        catalogPdfUrl: supplierPdfUrl || undefined,
+        catalogPdfName: supplierPdfName || undefined,
+      });
+      setSupplierTracking(code);
     } catch { setError(t.err); }
     finally { setSubmitting(false); }
   };
@@ -1038,6 +1177,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               <span>🏠</span><span>{S('referProperty')}</span>
             </button>
           )}
+          {isProducts && shop.supplierCollaborationEnabled && onSubmitSupplierCollaboration && (
+            <button type="button" className="ms-foot-refer" onClick={openSupplierCollab}>
+              <span>🤝</span><span>{t.supplierCollabBtn || S('supplierCollabBtn')}</span>
+            </button>
+          )}
         </div>
         {footText && <p className="ms-foot-text">{footText}</p>}
       </footer>
@@ -1319,6 +1463,94 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         </div>
       )}
 
+      {/* Supplier collaboration modal — product shops (optional) */}
+      {supplierOpen && onSubmitSupplierCollaboration && (
+        <div className="ms-modal-ov" onClick={() => !submitting && !supplierUploading && !supplierPdfUploading && setSupplierOpen(false)}>
+          <div className="ms-refer-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <button type="button" className="ms-inq-close" onClick={() => setSupplierOpen(false)} disabled={submitting || supplierUploading || supplierPdfUploading} aria-label={t.close}>✕</button>
+            {supplierTracking ? (
+              <div className="ms-inq-success">
+                <div className="ms-inq-success-ic">✓</div>
+                <h2>{S('supplierCollabThanks')}</h2>
+                <p>{S('supplierCollabThanksDesc')}</p>
+                <div className="ms-track-code">
+                  <span className="ms-track-label">{t.trackingCode}</span>
+                  <div className="ms-track-val"><b dir="ltr">{supplierTracking}</b>
+                    <button type="button" onClick={() => { navigator.clipboard.writeText(supplierTracking); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>{copied ? t.copied : t.copy}</button>
+                  </div>
+                </div>
+                <button type="button" className="ms-inq-submit" onClick={() => setSupplierOpen(false)}>{t.close}</button>
+              </div>
+            ) : (
+              <div className="ms-refer-body">
+                <header className="ms-inq-head">
+                  <h2>{S('supplierCollabTitle')}</h2>
+                  <p>{S('supplierCollabHint')}</p>
+                </header>
+                <div className="ms-refer-form">
+                  <div className="ms-refer-section">
+                    <h4>{t.yourInfo}</h4>
+                    <div className="ms-refer-grid">
+                      <label className="ms-inq-field"><span>{t.name} <em>*</em></span><input value={supplierForm.supplierName} onChange={e => setSupplierForm(f => ({ ...f, supplierName: e.target.value }))} autoComplete="name" /></label>
+                      <label className="ms-inq-field"><span>{t.phone} <em>*</em></span><input value={supplierForm.supplierPhone} onChange={e => setSupplierForm(f => ({ ...f, supplierPhone: e.target.value }))} dir="ltr" autoComplete="tel" /></label>
+                      <label className="ms-inq-field"><span>{t.email}</span><input type="email" value={supplierForm.supplierEmail} onChange={e => setSupplierForm(f => ({ ...f, supplierEmail: e.target.value }))} dir="ltr" /></label>
+                    </div>
+                  </div>
+                  <div className="ms-refer-section">
+                    <h4>{S('brandName')}</h4>
+                    <div className="ms-refer-grid">
+                      <label className="ms-inq-field"><span>{S('brandName')} <em>*</em></span><input value={supplierForm.brandName} onChange={e => setSupplierForm(f => ({ ...f, brandName: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{S('companyOptional')}</span><input value={supplierForm.companyName} onChange={e => setSupplierForm(f => ({ ...f, companyName: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{t.country}</span><input value={supplierForm.country} onChange={e => setSupplierForm(f => ({ ...f, country: e.target.value }))} /></label>
+                      <label className="ms-inq-field"><span>{t.city}</span><input value={supplierForm.city} onChange={e => setSupplierForm(f => ({ ...f, city: e.target.value }))} /></label>
+                      <label className="ms-inq-field ms-inq-field-full"><span>{S('supplyDesc')}</span><textarea rows={3} value={supplierForm.description} onChange={e => setSupplierForm(f => ({ ...f, description: e.target.value }))} /></label>
+                      <label className="ms-inq-field ms-inq-field-full"><span>{t.notes}</span><textarea rows={2} value={supplierForm.notes} onChange={e => setSupplierForm(f => ({ ...f, notes: e.target.value }))} /></label>
+                    </div>
+                  </div>
+                  <div className="ms-refer-section">
+                    <h4>{S('supplierPhotos')} <span className="ms-refer-ph-limit">({S('photoLimit')})</span></h4>
+                    <div className="ms-refer-photos">
+                      {supplierImages.map((url, i) => (
+                        <div key={i} className="ms-refer-ph"><img src={url} alt="" /><button type="button" onClick={() => setSupplierImages(im => im.filter((_, j) => j !== i))}>✕</button></div>
+                      ))}
+                      {supplierImages.length < 8 && (
+                        <button type="button" className="ms-refer-ph-add" onClick={() => supplierFileRef.current?.click()} disabled={supplierUploading || supplierPdfUploading}>
+                          {supplierUploading ? S('uploading') : '+'}
+                        </button>
+                      )}
+                    </div>
+                    <input type="file" ref={supplierFileRef} className="hidden" accept="image/*" multiple onChange={e => { uploadSupplierPhotos(e.target.files); e.target.value = ''; }} />
+                  </div>
+                  <div className="ms-refer-section">
+                    <h4>{S('supplierCatalogPdf')} <span className="ms-refer-ph-limit">({S('supplierCatalogPdfHint')})</span></h4>
+                    {supplierPdfUrl ? (
+                      <div className="ms-supplier-pdf">
+                        <PdfIcon s={20} />
+                        <a href={supplierPdfUrl} target="_blank" rel="noreferrer" className="ms-supplier-pdf-name" dir="ltr">{supplierPdfName || 'catalog.pdf'}</a>
+                        <button type="button" className="ms-supplier-pdf-rm" onClick={() => { setSupplierPdfUrl(null); setSupplierPdfName(''); }}>{S('supplierPdfRemove')}</button>
+                      </div>
+                    ) : (
+                      <button type="button" className="ms-supplier-pdf-add" onClick={() => supplierPdfRef.current?.click()} disabled={supplierPdfUploading || supplierUploading}>
+                        <PdfIcon s={18} />
+                        <span>{supplierPdfUploading ? S('uploading') : S('supplierCatalogPdf')}</span>
+                      </button>
+                    )}
+                    <input type="file" ref={supplierPdfRef} className="hidden" accept="application/pdf,.pdf" onChange={e => { uploadSupplierPdf(e.target.files?.[0] || null); e.target.value = ''; }} />
+                    <p className="ms-supplier-media-hint">{S('supplierNeedMedia')}</p>
+                  </div>
+                </div>
+                <footer className="ms-inq-foot">
+                  {error && <p className="ms-err">{error}</p>}
+                  <button type="button" className="ms-inq-submit" onClick={submitSupplierCollab} disabled={submitting || supplierUploading || supplierPdfUploading}>
+                    {submitting ? t.submitting : S('supplierCollabSubmit')}
+                  </button>
+                </footer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Cart drawer — products & services only */}
       {!isRealEstate && (
       <>
@@ -1568,6 +1800,12 @@ const MS_CSS = `
 .ms-refer-ph button { position:absolute; top:2px; inset-inline-end:2px; width:22px; height:22px; border:none; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:11px; cursor:pointer; }
 .ms-refer-ph-add { width:72px; height:72px; border:2px dashed #cbd5e1; border-radius:10px; background:#f8fafc; color:#64748b; font-size:28px; font-weight:300; cursor:pointer; }
 .ms-refer-ph-add:disabled { opacity:.5; cursor:default; }
+.ms-supplier-pdf-add { display:inline-flex; align-items:center; gap:10px; padding:12px 16px; border:2px dashed #cbd5e1; border-radius:12px; background:#f8fafc; color:#334155; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+.ms-supplier-pdf-add:disabled { opacity:.55; cursor:default; }
+.ms-supplier-pdf { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 14px; border:1px solid #e2e8f0; border-radius:12px; background:#f8fafc; }
+.ms-supplier-pdf-name { flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--ms-primary); text-decoration:underline; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ms-supplier-pdf-rm { border:none; background:transparent; color:#ef4444; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+.ms-supplier-media-hint { margin-top:10px; font-size:11px; color:#94a3b8; line-height:1.5; }
 .hidden { display:none !important; }
 .ms-badge { background:rgba(255,255,255,.25); border-radius:999px; padding:1px 7px; font-size:11px; font-weight:800; }
 .ms-top-actions { display:flex; align-items:center; gap:10px; }

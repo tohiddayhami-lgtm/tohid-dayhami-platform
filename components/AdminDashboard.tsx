@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, TeamBrainstormPost, ConsultantCategory } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, TeamBrainstormPost, ConsultantCategory } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -70,10 +70,12 @@ interface Props {
   metaShops?: MetaShop[];
   metaShopOrders?: MetaShopOrder[];
   metaShopReferrals?: MetaShopPropertyReferral[];
+  metaShopSupplierCollaborations?: MetaShopSupplierCollaboration[];
   onSaveMetaShop?: (shop: MetaShop) => Promise<void>;
   onDeleteMetaShop?: (id: string) => Promise<void>;
   onUpdateMetaShopOrder?: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
+  onUpdateMetaShopSupplierCollaboration?: (id: string, updates: Partial<MetaShopSupplierCollaboration>) => Promise<void>;
   shopBaseUrl?: string;
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
@@ -119,10 +121,12 @@ export const AdminDashboard: React.FC<Props> = ({
   metaShops = [],
   metaShopOrders = [],
   metaShopReferrals = [],
+  metaShopSupplierCollaborations = [],
   onSaveMetaShop,
   onDeleteMetaShop,
   onUpdateMetaShopOrder,
   onUpdateMetaShopPropertyReferral,
+  onUpdateMetaShopSupplierCollaboration,
   shopBaseUrl = '',
   metaBazaars = [],
   onSaveMetaBazaar,
@@ -153,6 +157,10 @@ export const AdminDashboard: React.FC<Props> = ({
     const ids = new Set(visibleMetaShops.map(s => s.id));
     return metaShopReferrals.filter(r => ids.has(r.shopId));
   }, [visibleMetaShops, metaShopReferrals]);
+  const visibleMetaShopSupplierCollaborations = useMemo(() => {
+    const ids = new Set(visibleMetaShops.map(s => s.id));
+    return metaShopSupplierCollaborations.filter(r => ids.has(r.shopId));
+  }, [visibleMetaShops, metaShopSupplierCollaborations]);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
   const [meetingSubTab, setMeetingSubTab] = useState<'staff' | 'public'>('staff');
@@ -1928,7 +1936,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
+          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} metaShopSupplierCollaborations={visibleMetaShopSupplierCollaborations} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} onUpdateMetaShopSupplierCollaboration={onUpdateMetaShopSupplierCollaboration} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />

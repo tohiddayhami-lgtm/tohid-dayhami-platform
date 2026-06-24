@@ -1289,6 +1289,8 @@ export interface MetaShop {
   searchPlaceholder?: string;
   /** Extra search terms for this shop (comma-separated in admin) — site & international shop search. */
   searchKeywords?: string[];
+  /** Product shops: show public supplier partnership form in footer (next to PDF catalog). */
+  supplierCollaborationEnabled?: boolean;
   createdAt?: string;
 }
 
@@ -1362,6 +1364,34 @@ export interface MetaShopPropertyReferral {
   description?: string;
   notes?: string;
   images: string[];
+  productId?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectReason?: string;
+  createdAt: string;
+  via?: 'shop' | 'gsite';
+}
+
+/** Public submission: supplier offers products / brand for a product MetaShop */
+export interface MetaShopSupplierCollaboration {
+  id: string;
+  shopId: string;
+  shopName: string;
+  shopSlug: string;
+  trackingCode: string;
+  status: 'pending' | 'approved' | 'rejected';
+  supplierName: string;
+  supplierPhone: string;
+  supplierEmail?: string;
+  brandName: string;
+  companyName?: string;
+  country?: string;
+  city?: string;
+  description?: string;
+  notes?: string;
+  images: string[];
+  catalogPdfUrl?: string;
+  catalogPdfName?: string;
   productId?: string;
   reviewedAt?: string;
   reviewedBy?: string;

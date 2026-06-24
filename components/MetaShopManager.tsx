@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
-import { referralToProduct } from '../utils/metaShopReferral';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
+import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebaseService';
 import { downloadSample } from './metaShopSamples';
@@ -19,6 +19,7 @@ interface Props {
   metaShops: MetaShop[];
   metaShopOrders: MetaShopOrder[];
   metaShopReferrals?: MetaShopPropertyReferral[];
+  metaShopSupplierCollaborations?: MetaShopSupplierCollaboration[];
   personnel: Personnel[];
   config: AppConfig;
   lang: Language;
@@ -27,6 +28,7 @@ interface Props {
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
+  onUpdateMetaShopSupplierCollaboration?: (id: string, updates: Partial<MetaShopSupplierCollaboration>) => Promise<void>;
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
@@ -138,16 +140,17 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'analytics' | 'keywords'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [keywordEdits, setKeywordEdits] = useState<Record<string, string>>({});
   const [keywordSearch, setKeywordSearch] = useState('');
   const [keywordSaving, setKeywordSaving] = useState(false);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
   const [referralsShopId, setReferralsShopId] = useState<string | null>(null);
+  const [supplierCollabShopId, setSupplierCollabShopId] = useState<string | null>(null);
   const [analyticsShopId, setAnalyticsShopId] = useState<string | null>(null);
   const [analyticsEvents, setAnalyticsEvents] = useState<MetaShopEvent[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -329,6 +332,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     referrals: T ? 'معرفی ملک' : 'Property referrals',
     referralsTitle: T ? 'معرفی‌های ملک' : 'Property referrals',
     noReferrals: T ? 'معرفی ملکی ثبت نشده است.' : 'No property referrals yet.',
+    supplierCollab: T ? 'همکاری تأمین' : 'Supplier collab',
+    supplierCollabTitle: T ? 'درخواست‌های همکاری تأمین' : 'Supplier collaboration requests',
+    noSupplierCollab: T ? 'درخواست همکاری تأمینی ثبت نشده است.' : 'No supplier collaboration requests yet.',
+    supplierCollabEnable: T ? 'دکمه همکاری تأمین در فوتر' : 'Supplier collab button in footer',
+    supplierCollabHint: T ? 'بازدیدکنندگان می‌توانند برند و عکس محصولات قابل تأمین خود را ارسال کنند (کنار دانلود کاتالوگ).' : 'Visitors can submit their brand and supplyable product photos (next to PDF catalog).',
     refPending: T ? 'در انتظار' : 'Pending', refApproved: T ? 'تأیید شده' : 'Approved', refRejected: T ? 'رد شده' : 'Rejected',
     refApprove: T ? 'تأیید و افزودن به فروشگاه' : 'Approve & add listing',
     refReject: T ? 'رد' : 'Reject',
@@ -372,6 +380,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     metaShopReferrals.forEach(r => { (m[r.shopId] = m[r.shopId] || []).push(r); });
     return m;
   }, [metaShopReferrals]);
+  const supplierCollabsByShop = useMemo(() => {
+    const m: Record<string, MetaShopSupplierCollaboration[]> = {};
+    metaShopSupplierCollaborations.forEach(r => { (m[r.shopId] = m[r.shopId] || []).push(r); });
+    return m;
+  }, [metaShopSupplierCollaborations]);
 
   const shopUrl = (shop: MetaShop) => `${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`;
   const copyLink = (shop: MetaShop) => { navigator.clipboard.writeText(shopUrl(shop)); setCopiedId(shop.id); setTimeout(() => setCopiedId(null), 1800); };
@@ -431,6 +444,26 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (readonly || !onUpdateMetaShopPropertyReferral) return;
     const reason = prompt(t.refRejectReason) || undefined;
     await onUpdateMetaShopPropertyReferral(ref.id, { status: 'rejected', rejectReason: reason, reviewedAt: new Date().toISOString() });
+  };
+
+  const approveSupplierCollab = async (sub: MetaShopSupplierCollaboration) => {
+    if (readonly || !onUpdateMetaShopSupplierCollaboration) return;
+    const shop = metaShops.find(s => s.id === sub.shopId);
+    if (!shop) return;
+    if (!confirm(T ? 'این تأمین‌کننده به لیست فروشگاه اضافه شود؟ (ابتدا غیرفعال است)' : 'Add this supplier as a draft product? (starts inactive)')) return;
+    const productId = `p-${Date.now()}`;
+    const product = supplierCollaborationToProduct(sub, shop, productId);
+    const updated: MetaShop = { ...shop, products: [...(shop.products || []), product] };
+    await onSaveMetaShop(updated);
+    await onUpdateMetaShopSupplierCollaboration(sub.id, { status: 'approved', productId, reviewedAt: new Date().toISOString() });
+    if (draft?.id === shop.id) setDraft(updated);
+    alert(t.refApproveOk);
+  };
+
+  const rejectSupplierCollab = async (sub: MetaShopSupplierCollaboration) => {
+    if (readonly || !onUpdateMetaShopSupplierCollaboration) return;
+    const reason = prompt(t.refRejectReason) || undefined;
+    await onUpdateMetaShopSupplierCollaboration(sub.id, { status: 'rejected', rejectReason: reason, reviewedAt: new Date().toISOString() });
   };
 
   const refStatusLabel = (s: MetaShopPropertyReferral['status']) => s === 'approved' ? t.refApproved : s === 'rejected' ? t.refRejected : t.refPending;
@@ -787,6 +820,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               const orders = ordersByShop[s.id] || [];
               const refs = referralsByShop[s.id] || [];
               const pendingRefs = refs.filter(r => r.status === 'pending').length;
+              const collabs = supplierCollabsByShop[s.id] || [];
+              const pendingCollabs = collabs.filter(r => r.status === 'pending').length;
               return (
                 <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                   <div className="h-20 flex items-center justify-center text-white font-bold relative" style={{ background: s.theme?.cover || '#334155', backgroundImage: s.coverImage ? `linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.45)), url(${s.coverImage})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -813,6 +848,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <button onClick={() => { setOrdersShopId(s.id); setMode('orders'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.orders}{orders.filter(o => o.status === 'new').length > 0 && <span className="ml-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{orders.filter(o => o.status === 'new').length}</span>}</button>
                       {s.type === 'realestate' && (
                         <button onClick={() => { setReferralsShopId(s.id); setMode('referrals'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50">{t.referrals}{pendingRefs > 0 && <span className="ml-1 bg-teal-600 text-white rounded-full px-1.5 text-[10px]">{pendingRefs}</span>}</button>
+                      )}
+                      {s.type === 'products' && s.supplierCollaborationEnabled && (
+                        <button onClick={() => { setSupplierCollabShopId(s.id); setMode('supplier-collab'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50">{t.supplierCollab}{pendingCollabs > 0 && <span className="ml-1 bg-violet-600 text-white rounded-full px-1.5 text-[10px]">{pendingCollabs}</span>}</button>
                       )}
                       <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
@@ -922,6 +960,65 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <button onClick={() => { const s = metaShops.find(x => x.id === shop.id); if (s) startEdit(s); }} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">{t.refEditShop}</button>
                   )}
                   {ref.status === 'rejected' && ref.rejectReason && <span className="text-xs text-red-500 italic">{ref.rejectReason}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ════════════ SUPPLIER COLLABORATION (product shops) ════════════
+  if (mode === 'supplier-collab') {
+    const shop = metaShops.find(s => s.id === supplierCollabShopId);
+    const subs = supplierCollabShopId ? (supplierCollabsByShop[supplierCollabShopId] || []) : [];
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+        <h3 className="text-lg font-bold text-gray-800">{t.supplierCollabTitle} — {shop?.name}</h3>
+        {subs.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noSupplierCollab}</div> : (
+          <div className="space-y-4">
+            {subs.map(sub => (
+              <div key={sub.id} className={card + ' p-4'}>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-bold text-gray-800">{sub.brandName}{sub.companyName ? <span className="text-gray-400 font-normal"> · {sub.companyName}</span> : null}</div>
+                    <div className="text-xs text-gray-400 font-mono" dir="ltr">{sub.trackingCode} · {new Date(sub.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</div>
+                  </div>
+                  <span className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${refStatusCls(sub.status)}`}>{refStatusLabel(sub.status)}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-3">
+                  <div><span className="text-gray-500">{t.refReferrer}:</span> <b>{sub.supplierName}</b> <span dir="ltr" className="text-gray-400">({sub.supplierPhone})</span></div>
+                  {sub.supplierEmail && <div><span className="text-gray-500">{T ? 'ایمیل' : 'Email'}:</span> <span dir="ltr">{sub.supplierEmail}</span></div>}
+                  {(sub.country || sub.city) && <div><span className="text-gray-500">{T ? 'موقعیت' : 'Location'}:</span> {[sub.country, sub.city].filter(Boolean).join(' · ')}</div>}
+                </div>
+                {(sub.description || sub.notes) && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 mb-3 whitespace-pre-wrap">{[sub.description, sub.notes].filter(Boolean).join('\n\n')}</p>}
+                {sub.images?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="text-xs font-bold text-gray-500 mb-2">{t.refPhotos}</div>
+                    <div className="flex flex-wrap gap-2">{sub.images.map((url, i) => <a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" /></a>)}</div>
+                  </div>
+                )}
+                {sub.catalogPdfUrl && (
+                  <div className="mb-3">
+                    <div className="text-xs font-bold text-gray-500 mb-2">{T ? 'کاتالوگ PDF' : 'PDF catalog'}</div>
+                    <a href={sub.catalogPdfUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 hover:bg-violet-100" dir="ltr">
+                      📄 {sub.catalogPdfName || 'catalog.pdf'}
+                    </a>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                  {sub.status === 'pending' && !readonly && onUpdateMetaShopSupplierCollaboration && (
+                    <>
+                      <button onClick={() => approveSupplierCollab(sub)} className="text-xs px-3 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700">{t.refApprove}</button>
+                      <button onClick={() => rejectSupplierCollab(sub)} className="text-xs px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">{t.refReject}</button>
+                    </>
+                  )}
+                  {sub.status === 'approved' && sub.productId && shop && (
+                    <button onClick={() => { const s = metaShops.find(x => x.id === shop.id); if (s) startEdit(s); }} className="text-xs px-3 py-2 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50">{t.refEditShop}</button>
+                  )}
+                  {sub.status === 'rejected' && sub.rejectReason && <span className="text-xs text-red-500 italic">{sub.rejectReason}</span>}
                 </div>
               </div>
             ))}
@@ -1145,6 +1242,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
         </div>
         <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
+        {draft.type === 'products' && (
+          <div className="mt-4 p-3 rounded-xl border border-violet-100 bg-violet-50/50">
+            <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-violet-600" checked={!!draft.supplierCollaborationEnabled} onChange={e => upd({ supplierCollaborationEnabled: e.target.checked })} />{t.supplierCollabEnable}</label>
+            <p className="text-xs text-gray-500 mt-1.5">{t.supplierCollabHint}</p>
+          </div>
+        )}
         <div className="mt-4">
           <label className={lbl}>{t.searchKeywords}</label>
           <textarea

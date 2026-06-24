@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -1117,6 +1117,20 @@ export const updateMetaShopPropertyReferralInCloud = async (id: string, updates:
 };
 export const subscribeToMetaShopPropertyReferrals = (callback: (refs: MetaShopPropertyReferral[]) => void) =>
   subscribeCollection<MetaShopPropertyReferral>('metaShopPropertyReferrals', callback, {
+    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    intervalMs: 8_000,
+  });
+
+// ── Meta Shop supplier collaborations (product shops) ──
+export const saveMetaShopSupplierCollaborationToCloud = async (sub: MetaShopSupplierCollaboration) => {
+    await setDocCloud('metaShopSupplierCollaborations', sub.id, sub);
+    logSystemAction('CREATE', 'MetaShop', `درخواست همکاری تأمین از ${sub.supplierName} (${sub.shopName})`, sub.supplierName, sub.id);
+};
+export const updateMetaShopSupplierCollaborationInCloud = async (id: string, updates: Partial<MetaShopSupplierCollaboration>) => {
+    await updateDocCloud('metaShopSupplierCollaborations', id, updates as Record<string, unknown>);
+};
+export const subscribeToMetaShopSupplierCollaborations = (callback: (subs: MetaShopSupplierCollaboration[]) => void) =>
+  subscribeCollection<MetaShopSupplierCollaboration>('metaShopSupplierCollaborations', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     intervalMs: 8_000,
   });
