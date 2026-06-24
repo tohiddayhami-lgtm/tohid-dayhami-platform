@@ -3,6 +3,7 @@ import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types'
 import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { IconSearch, IconBriefcase } from './Icons';
+import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
 
 interface Props {
@@ -78,8 +79,8 @@ export const ExportShopPage: React.FC<Props> = ({
     all: fa ? 'همه' : 'All',
     empty: fa ? 'فروشگاهی یافت نشد.' : 'No shops found.',
     noBazaar: fa
-      ? 'بازارچه‌ای برای این صفحه انتخاب نشده. از تنظیمات سیستم → عمومی، بازارچه «فروشگاه صادراتی» را مشخص کنید.'
-      : 'No bazaar is linked to this page. Choose one in System Settings → General.',
+      ? 'بازارچه‌ای برای «فروشگاه بین‌المللی» انتخاب نشده. از تنظیمات سیستم → عمومی، بازارچه مرتبط را مشخص کنید.'
+      : 'No bazaar is linked to the International Shop page. Choose one in System Settings → General.',
     products: fa ? 'محصول' : 'products',
     services: fa ? 'خدمات' : 'Services',
     realestate: fa ? 'املاک' : 'Real Estate',
@@ -182,6 +183,17 @@ export const ExportShopPage: React.FC<Props> = ({
     ? `linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.68)), url(${bazaar.coverImage}) center/cover no-repeat`
     : `linear-gradient(135deg, ${accentCover}, #374151)`;
 
+  if (isLoading) {
+    return (
+      <BazaarPassageLoader
+        lang={lang}
+        title={t.title}
+        primary={bazaar?.theme?.cover || '#5b6472'}
+        accent={bazaar?.theme?.coverText || '#cbd5e1'}
+      />
+    );
+  }
+
   if (!bazaar) {
     return (
       <div className="animate-fade-in py-2">
@@ -266,19 +278,7 @@ export const ExportShopPage: React.FC<Props> = ({
         </div>
       )}
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="border border-gray-100 rounded-xl overflow-hidden bg-white animate-pulse">
-              <div className="w-full h-40 bg-gray-100" />
-              <div className="p-4 space-y-2">
-                <div className="h-2.5 bg-gray-100 rounded w-1/3" />
-                <div className="h-4 bg-gray-100 rounded w-4/5" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <IconBriefcase className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t.empty}</p>

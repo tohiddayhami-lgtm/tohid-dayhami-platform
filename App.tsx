@@ -341,6 +341,7 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
+  const [metaShopsReady, setMetaShopsReady] = useState(false);
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
   const [metaShopReferrals, setMetaShopReferrals] = useState<MetaShopPropertyReferral[]>([]);
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
@@ -349,6 +350,7 @@ const App: React.FC = () => {
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
+  const [metaBazaarsReady, setMetaBazaarsReady] = useState(false);
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
   const [publicBazaar, setPublicBazaar] = useState<MetaBazaar | null>(null);
   const [bazaarLoading, setBazaarLoading] = useState(false);
@@ -652,10 +654,10 @@ const App: React.FC = () => {
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
     const unsubProcesses = subscribeToProcesses(setProcesses);
     const unsubInvoices = subscribeToInvoices(setInvoices);
-    const unsubMetaShops = subscribeToMetaShops(setMetaShops);
+    const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
-    const unsubMetaBazaars = subscribeToMetaBazaars(setMetaBazaars);
+    const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
     return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaBazaars(); };
   }, []);
 
@@ -2065,7 +2067,7 @@ const App: React.FC = () => {
                 }
                 lang={lang}
                 onBack={() => setView('landing')}
-                isLoading={metaShops.length === 0 || metaBazaars.length === 0}
+                isLoading={!metaShopsReady || !metaBazaarsReady}
                 onOpenShop={(slug) => {
                   history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`);
                   setShopSlug(slug);
