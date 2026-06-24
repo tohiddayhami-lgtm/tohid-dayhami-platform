@@ -1,0 +1,29 @@
+{
+  "domain": "tohiddayhami.com",
+  "origins": [
+    "https://www.tohiddayhami.com",
+    "https://tohiddayhami.com"
+  ],
+  "crawledAt": "2026-06-24T05:51:28.790Z",
+  "excluded": [
+    "admin",
+    "dashboard",
+    "personnel",
+    "customers",
+    "tickets",
+    "invoices",
+    "internal CRM"
+  ],
+  "stats": {
+    "urls": 846,
+    "posts": 41,
+    "products": 466,
+    "metaShops": 18,
+    "bazaars": 7,
+    "forms": 4,
+    "media": 441,
+    "categories": 140,
+    "tags": 163,
+    "httpCrawled": 500
+  }
+}
