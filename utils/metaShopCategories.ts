@@ -25,6 +25,17 @@ export const categoryKey = (entry: CatEntry): string => {
   return (o.fa || o.name || o.en || '').trim();
 };
 
+/** Label from a bilingual category object only — no i18n map / recursion. */
+const labelFromCategoryObject = (entry: CatEntry, uiLang: string): string | undefined => {
+  if (!entry || typeof entry === 'string') return undefined;
+  const o = entry as MetaShopDirCat & { name?: string; nameEn?: string; nameAr?: string };
+  if (uiLang === 'fa') return (o.fa || o.name || '').trim() || undefined;
+  if (uiLang === 'ar') return (o.ar || o.nameAr || '').trim() || undefined;
+  if (uiLang === 'en') return (o.en || o.nameEn || '').trim() || undefined;
+  const mapped = (o as Record<string, string | undefined>)[uiLang];
+  return mapped?.trim() || undefined;
+};
+
 /** Display label for a category pill / heading */
 export const categoryLabel = (
   entry: CatEntry,
@@ -33,13 +44,8 @@ export const categoryLabel = (
 ): string => {
   const key = categoryKey(entry);
   if (!key) return '';
-  if (typeof entry === 'string') return translateProductGroup(shop || {}, key, uiLang);
-  const o = entry as MetaShopDirCat & { name?: string; nameEn?: string; nameAr?: string };
-  if (uiLang === 'fa') return (o.fa || o.name || '').trim() || translateProductGroup(shop || {}, key, uiLang);
-  if (uiLang === 'ar') return (o.ar || o.nameAr || o.fa || o.name || '').trim() || translateProductGroup(shop || {}, key, uiLang);
-  if (uiLang === 'en') return (o.en || o.nameEn || '').trim() || translateProductGroup(shop || {}, key, uiLang);
-  const mapped = (o as Record<string, string | undefined>)[uiLang];
-  if (mapped?.trim()) return mapped.trim();
+  const fromObject = labelFromCategoryObject(entry, uiLang);
+  if (fromObject) return fromObject;
   return translateProductGroup(shop || {}, key, uiLang);
 };
 
@@ -86,9 +92,9 @@ export const translateProductGroup = (
   const labels = map?.[groupKey];
   if (labels?.[uiLang]?.trim()) return labels[uiLang].trim();
 
-  const fromCat = categoryLabel(findCategoryEntry(shop.categories, groupKey), uiLang, shop);
-  if (fromCat && fromCat !== groupKey) return fromCat;
-  if (fromCat && textMatchesLang(fromCat, uiLang)) return fromCat;
+  const catEntry = findCategoryEntry(shop.categories, groupKey);
+  const fromCat = labelFromCategoryObject(catEntry, uiLang);
+  if (fromCat) return fromCat;
 
   const fromPeer = peerGroupLabel(shop.products, groupKey, uiLang);
   if (fromPeer) return fromPeer;
