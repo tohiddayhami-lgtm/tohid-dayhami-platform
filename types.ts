@@ -1069,33 +1069,17 @@ export interface MetaShopDisplayCurrency {
   rate: number;
 }
 
-/** Smart shipping rules shown on the checkout invoice. */
-export interface MetaShopShipping {
-  enabled?: boolean;
-  label?: string;
-  labelEn?: string;
-  flatAmount?: number;
-  /** Free shipping when items subtotal (before fees) is at or above this amount. */
-  freeAbove?: number;
-  freeLabel?: string;
-  freeLabelEn?: string;
-  /** Cities / regions we deliver to (e.g. Muscat, مسقط). Empty = all regions. */
-  coveredRegions?: string[];
-  regionsNote?: string;
-  regionsNoteEn?: string;
-  /** When customer city is outside coveredRegions */
-  outsideMode?: 'contact' | 'fee';
-  outsideFee?: number;
-  outsideNote?: string;
-  outsideNoteEn?: string;
-}
-
 // A predefined extra fee added at checkout (shipping, packaging, ...)
 export interface MetaShopFee {
   id: string;
   label: string;            // e.g. "هزینه ارسال"
   labelEn?: string;
-  amount: number;           // in the shop currency
+  amount: number;
+  /** Currency for this fee (defaults to shop.currency). */
+  currency?: string;
+  /** Shown under the fee line at checkout — e.g. free-shipping rules, delivery areas. */
+  description?: string;
+  descriptionEn?: string;
   required?: boolean;       // always applied (customer cannot remove)
   defaultOn?: boolean;      // optional fees: pre-checked at checkout
 }
@@ -1304,7 +1288,6 @@ export interface MetaShop {
   hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
-  shipping?: MetaShopShipping;
   discounts?: MetaShopDiscount[]; // discount codes
   taxRate?: number;          // VAT/tax percentage (0 or undefined = no tax)
   taxInclusive?: boolean;    // true = tax already included in prices; false = added on top
@@ -1362,7 +1345,7 @@ export interface MetaShopOrder {
   city?: string;
   notes?: string;
   items: MetaShopOrderItem[];
-  fees?: { label: string; amount: number }[]; // applied extra fees (shipping, packaging, ...)
+  fees?: { label: string; amount: number; currency?: string; description?: string }[]; // applied extra fees
   itemsTotal?: number;                          // sum of line items before discount/fees
   discountCode?: string;                        // applied discount code
   discountAmount?: number;                      // discount value subtracted

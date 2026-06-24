@@ -129,3 +129,17 @@ export const writeViewCurrencyToUrl = (code: string) => {
     history.replaceState(null, '', url.toString());
   } catch {}
 };
+
+export const feeCurrency = (fee: { currency?: string }, shop: MetaShop): string =>
+  (fee.currency || shop.currency || 'USD').trim().toUpperCase();
+
+/** Convert a fee amount into the shop base currency (for order totals / tax). */
+export const feeAmountInBase = (fee: { amount?: number; currency?: string }, shop: MetaShop): number => {
+  const base = shopBaseCurrency(shop);
+  const amount = fee.amount || 0;
+  const cur = feeCurrency(fee, shop);
+  if (cur === base || amount === 0) return amount;
+  const rate = rateTo(shop, cur);
+  if (rate <= 0) return amount;
+  return Math.round((amount / rate) * 100) / 100;
+};

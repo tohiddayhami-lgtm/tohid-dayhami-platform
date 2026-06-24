@@ -8,14 +8,13 @@ import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDeta
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
-import { computeShippingQuote } from '../utils/metaShopShipping';
-import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
   country?: string; city?: string; notes?: string;
   items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number; currency?: string; optionLabel?: string }[];
-  fees?: { label: string; amount: number }[];
+  fees?: { label: string; amount: number; currency?: string; description?: string }[];
   itemsTotal?: number;
   discountCode?: string;
   discountAmount?: number;
@@ -624,12 +623,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const fmtTotals = (extra = 0) => currencyList.map((cur, i) => money(totalsByCurrency[cur] + (i === 0 ? extra : 0), cur)).join('  ·  ');
   const shopFees = shop.extraFees || [];
   const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
-  const feesTotal = activeFees.reduce((a, f) => a + (f.amount || 0), 0);
-  const shippingQuote = useMemo(() => {
-    if (multiCur || isRealEstate) return null;
-    return computeShippingQuote(shop.shipping, grandTotal, form.city, L);
-  }, [shop.shipping, grandTotal, form.city, multiCur, isRealEstate, uiLang]);
-  const shippingAmount = shippingQuote?.amount ?? 0;
+  const feesTotal = activeFees.reduce((a, f) => a + feeAmountInBase(f, shop), 0);
   const toggleFee = (id: string) => setSelectedFees(s => ({ ...s, [id]: !s[id] }));
 
   // ── Discount code ──
@@ -648,7 +642,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const discountAmount = computeDiscount(appliedDiscount);
   // ── Tax (inclusive or exclusive) ──
   const taxRate = shop.taxRate || 0;
-  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal + shippingAmount;
+  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
   const taxInclusive = !!shop.taxInclusive;
   const taxAmount = taxRate > 0 ? (taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * taxRate / 100) : 0;
   const finalTotal = taxInclusive ? taxBase : taxBase + taxAmount;
@@ -854,10 +848,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
         items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.hidden ? undefined : c.rate, lineTotal: c.hidden ? undefined : c.line, currency: c.cur, optionLabel: c.optionText || undefined, priceHidden: c.hidden || undefined })),
-        fees: [
-          ...(shippingQuote && (shippingAmount > 0 || shippingQuote.isFree) ? [{ label: shippingQuote.label, amount: shippingAmount }] : []),
-          ...activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
-        ],
+        fees: activeFees.map(f => ({
+          label: L(f.label, f.labelEn),
+          amount: f.amount,
+          currency: feeCurrency(f, shop),
+          description: L(f.description, f.descriptionEn) || undefined,
+        })),
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
@@ -1665,16 +1661,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                     })}
                   </tbody>
                 </table>
-                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0 || shippingQuote) ? (
+                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
                   <>
                     <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal, displayCur)}</b></div>
-                    {shippingQuote && (
-                      <div className={`ms-inv-ship${shippingQuote.isFree ? ' free' : ''}`}>
-                        <span>{shippingQuote.label}</span>
-                        <b>{shippingQuote.contactRequired ? S('shipContact') : shippingQuote.isFree ? S('shipFree') : money(shippingAmount, displayCur)}</b>
-                      </div>
-                    )}
-                    {shippingQuote?.note && <p className="ms-ship-note">{shippingQuote.note}</p>}
                     {(shop.discounts || []).length > 0 && (
                       <div className="ms-disc">
                         <div className="ms-disc-title">{t.discountTitle}</div>
@@ -1698,14 +1687,19 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                         <div className="ms-fees-title">{t.feesLabel}</div>
                         {shopFees.map(f => {
                           const on = f.required || selectedFees[f.id];
+                          const fCur = feeCurrency(f, shop);
+                          const fDesc = L(f.description, f.descriptionEn);
                           return (
-                            <label key={f.id} className={`ms-fee ${on ? 'on' : ''} ${f.required ? 'req' : ''}`}>
-                              <span className="ms-fee-left">
-                                {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
-                                <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
-                              </span>
-                              <span className="ms-fee-amt">+ {money(f.amount, displayCur)}</span>
-                            </label>
+                            <div key={f.id} className="ms-fee-block">
+                              <label className={`ms-fee ${on ? 'on' : ''} ${f.required ? 'req' : ''}`}>
+                                <span className="ms-fee-left">
+                                  {!f.required && <input type="checkbox" checked={!!selectedFees[f.id]} onChange={() => toggleFee(f.id)} />}
+                                  <span>{L(f.label, f.labelEn)} {!f.required && <em>{t.optionalFee}</em>}</span>
+                                </span>
+                                <span className="ms-fee-amt">+ {money(f.amount, fCur)}</span>
+                              </label>
+                              {on && fDesc && <p className="ms-fee-desc">{fDesc}</p>}
+                            </div>
                           );
                         })}
                       </div>
@@ -1734,11 +1728,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 </div>
                 <div className="ms-grid2">
                   <input placeholder={t.country} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
-                  <input placeholder={`${t.city}${shop.shipping?.enabled ? ' *' : ''}`} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
+                  <input placeholder={t.city} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
                 </div>
-                {shop.shipping?.enabled && (shop.shipping.regionsNote || shop.shipping.regionsNoteEn) && (
-                  <p className="ms-ship-hint">{L(shop.shipping.regionsNote, shop.shipping.regionsNoteEn)}</p>
-                )}
                 <textarea rows={2} placeholder={t.notes} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
                 {error && <p className="ms-err">{error}</p>}
               </div>
@@ -1874,9 +1865,6 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-lang button { padding:5px 9px; font-size:11px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; }
 .ms-lang button.on { background:var(--ms-primary); color:#fff; }
 .ms-cur-select { padding:5px 24px 5px 8px; font-size:11px; font-weight:700; font-family:inherit; border:1px solid #e2e8f0; border-radius:8px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%2364748b' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 7px center; color:#334155; cursor:pointer; max-width:76px; appearance:none; }
-.ms-inv-ship { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:#475569; padding:6px 0; border-top:1px dashed #e2e8f0; margin-top:4px; }
-.ms-inv-ship.free b { color:#059669; }
-.ms-ship-note, .ms-ship-hint { font-size:11px; color:#64748b; line-height:1.45; margin:4px 0 0; }
 .ms-cover { background:var(--ms-cover,#2d4a1a); color:var(--ms-cover-text,#fff); padding:64px 24px; text-align:center; background-size:cover; background-position:center; min-height:240px; display:flex; align-items:center; justify-content:center; }
 .ms-cover-inner { max-width:740px; }
 .ms-collection { font-size:13px; letter-spacing:.35em; text-transform:uppercase; opacity:.8; margin-bottom:18px; }
@@ -2209,6 +2197,8 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-fee-left input { width:15px; height:15px; accent-color:var(--ms-primary); }
 .ms-fee em { font-style:normal; font-size:10px; color:#94a3b8; }
 .ms-fee.on { color:#0f172a; }
+.ms-fee-block { margin-bottom:4px; }
+.ms-fee-desc { font-size:10px; color:#64748b; line-height:1.45; margin:2px 0 6px 22px; }
 .ms-fee-amt { font-weight:700; color:#334155; white-space:nowrap; }
 .ms-disc { margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px; }
 .ms-disc-title { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; margin-bottom:5px; }

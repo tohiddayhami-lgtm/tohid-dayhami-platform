@@ -13,7 +13,6 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
-import { parseRegionList } from '../utils/metaShopShipping';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
@@ -273,21 +272,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     productsTabI18n: T ? 'عنوان تب محصولات به زبان‌های دیگر' : 'Products tab label — other languages',
     productsTabI18nHint: T ? 'مثلاً برای عربی، چینی و… — در فروشگاه وقتی مشتری آن زبان را انتخاب کند این عنوان نمایش داده می‌شود.' : 'e.g. Arabic, Chinese… — shown when the customer switches to that language.',
     moveUp: T ? 'بالا' : 'Up', moveDown: T ? 'پایین' : 'Down',
-    feesT: T ? 'هزینه‌های پیش‌فرض (ارسال، بسته‌بندی، ...)' : 'Default fees (shipping, packaging, ...)',
-    feesHint: T ? 'این هزینه‌ها در صفحه سفارش به مشتری نشان داده می‌شوند. اگر «الزامی» باشد همیشه به جمع اضافه می‌شود؛ در غیر این صورت مشتری انتخاب می‌کند.' : 'Shown to the customer at checkout. If "required" it is always added; otherwise the customer chooses.',
+    feesT: T ? 'هزینه‌های اضافی (ارسال، بسته‌بندی، ...)' : 'Extra fees (shipping, packaging, ...)',
+    feesHint: T ? 'در صفحه سفارش نمایش داده می‌شوند. برای هر مورد ارز، مبلغ و توضیحات (مثلاً شرایط ارسال رایگان) را وارد کنید.' : 'Shown at checkout. Set currency, amount and notes per fee (e.g. free-shipping rules).',
     addFee: T ? 'افزودن هزینه' : 'Add fee', feeLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', feeLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', feeAmount: T ? 'مبلغ' : 'Amount',
+    feeCurrency: T ? 'ارز' : 'Currency', feeDesc: T ? 'توضیحات (فارسی)' : 'Notes (FA)', feeDescEn: T ? 'توضیحات (انگلیسی)' : 'Notes (EN)',
+    feeDescPh: T ? 'مثلاً: خرید بالای ۲۰ ریال در شهر مسقط رایگان است. برای سایر شهرها هزینه جداگانه محاسبه می‌شود.' : 'e.g. Free shipping above 20 OMR in Muscat. Other cities quoted separately.',
     feeRequired: T ? 'الزامی' : 'Required', feeDefaultOn: T ? 'پیش‌فعال' : 'Pre-checked', noFees: T ? 'هزینه‌ای تعریف نشده است.' : 'No fees defined.',
-    shipT: T ? 'هزینه ارسال (هوشمند)' : 'Smart shipping',
-    shipHint: T ? 'اختیاری — در فاکتور پیش‌نمایش محاسبه می‌شود. می‌توانی آستانه ارسال رایگان و مناطق تحت پوشش را تعیین کنی.' : 'Optional — calculated on the invoice preview. Set free-shipping threshold and covered regions.',
-    shipEnable: T ? 'فعال‌سازی هزینه ارسال' : 'Enable shipping fee',
-    shipLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', shipLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)',
-    shipFlat: T ? 'هزینه ارسال (زیر آستانه)' : 'Shipping cost (below threshold)', shipFreeAbove: T ? 'ارسال رایگان از مبلغ' : 'Free shipping above',
-    shipFreeLabel: T ? 'متن ارسال رایگان' : 'Free shipping label', shipRegions: T ? 'مناطق تحت پوشش' : 'Covered regions',
-    shipRegionsPh: T ? 'مثلاً مسقط، Muscat — با کاما یا خط جدید' : 'e.g. Muscat — comma or new line',
-    shipRegionsNote: T ? 'یادداشت مناطق (نمایش به مشتری)' : 'Regions note (shown to customer)',
-    shipOutside: T ? 'سایر شهرها' : 'Other cities', shipOutsideContact: T ? 'تماس برای محاسبه' : 'Contact for quote',
-    shipOutsideFee: T ? 'هزینه ثابت' : 'Fixed fee', shipOutsideFeeAmt: T ? 'مبلغ سایر شهرها' : 'Other cities fee',
-    shipOutsideNote: T ? 'یادداشت سایر شهرها' : 'Other cities note',
     dispCurT: T ? 'ارزهای نمایشی در وب‌سایت' : 'Storefront display currencies',
     dispCurHint: T ? 'ارز پایه فروشگاه بالا است. نرخ = چند واحد از این ارز معادل ۱ واحد ارز پایه (مثلاً ۱ ریال عمان = ۲٫۶ دلار → نرخ USD برابر ۲٫۶).' : 'Base currency is above. Rate = units of this currency per 1 base unit (e.g. 1 OMR = 2.6 USD → USD rate 2.6).',
     dispCurAdd: T ? 'افزودن ارز' : 'Add currency', dispCurCode: T ? 'کد ارز' : 'Code', dispCurName: T ? 'نام (فارسی)' : 'Name (FA)',
@@ -595,11 +585,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   // ── Default checkout fees ──
   const fees = () => draft?.extraFees || [];
-  const addFee = () => upd({ extraFees: [...fees(), { id: `fee-${Date.now()}`, label: '', amount: 0 }] });
+  const feeCurrencyOptions = (): string[] => {
+    const base = (draft?.currency || 'OMR').trim().toUpperCase();
+    const set = new Set<string>([base]);
+    (draft?.displayCurrencies || []).forEach(c => { if (c.code?.trim()) set.add(c.code.trim().toUpperCase()); });
+    return [...set];
+  };
+  const addFee = () => upd({ extraFees: [...fees(), { id: `fee-${Date.now()}`, label: '', amount: 0, currency: draft!.currency || 'OMR' }] });
   const updFee = (idx: number, patch: Partial<import('../types').MetaShopFee>) => setDraft(d => { if (!d) return d; const fs = [...(d.extraFees || [])]; fs[idx] = { ...fs[idx], ...patch }; return { ...d, extraFees: fs }; });
   const removeFee = (idx: number) => setDraft(d => d ? { ...d, extraFees: (d.extraFees || []).filter((_, i) => i !== idx) } : d);
-  const shipping = () => draft?.shipping || {};
-  const updShipping = (patch: Partial<import('../types').MetaShopShipping>) => upd({ shipping: { ...(draft?.shipping || {}), ...patch } });
   const dispCurrencies = () => draft?.displayCurrencies || [];
   const updDispCurrency = (idx: number, patch: Partial<import('../types').MetaShopDisplayCurrency>) => setDraft(d => {
     if (!d) return d;
@@ -1660,46 +1654,25 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         </div>
         <p className="text-xs text-gray-500 mb-3">{t.feesHint}</p>
 
-        <div className="border border-emerald-100 rounded-xl p-3 mb-4 bg-emerald-50/40">
-          <h5 className="text-sm font-bold text-gray-700 mb-1">{t.shipT}</h5>
-          <p className="text-xs text-gray-500 mb-3">{t.shipHint}</p>
-          <label className="flex items-center gap-2 text-sm text-gray-700 mb-3 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={!!shipping().enabled} onChange={e => updShipping({ enabled: e.target.checked })} />
-            {t.shipEnable}
-          </label>
-          {shipping().enabled && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div><label className={lbl}>{t.shipLabel}</label><input className={fld} value={shipping().label || ''} onChange={e => updShipping({ label: e.target.value })} placeholder={T ? 'هزینه ارسال' : 'Shipping'} /></div>
-              <div><label className={lbl}>{t.shipLabelEn}</label><input className={fld + ' dir-ltr'} value={shipping().labelEn || ''} onChange={e => updShipping({ labelEn: e.target.value })} placeholder="Shipping" /></div>
-              <div><label className={lbl}>{t.shipFlat}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().flatAmount ?? ''} onChange={e => updShipping({ flatAmount: parseFloat(e.target.value) || 0 })} placeholder="2" /></div>
-              <div><label className={lbl}>{t.shipFreeAbove}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().freeAbove ?? ''} onChange={e => updShipping({ freeAbove: parseFloat(e.target.value) || undefined })} placeholder="20" /></div>
-              <div><label className={lbl}>{t.shipFreeLabel}</label><input className={fld} value={shipping().freeLabel || ''} onChange={e => updShipping({ freeLabel: e.target.value })} placeholder={T ? 'ارسال رایگان' : 'Free shipping'} /></div>
-              <div><label className={lbl}>{t.shipRegions}</label><textarea rows={2} className={fld} value={(shipping().coveredRegions || []).join(', ')} onChange={e => updShipping({ coveredRegions: parseRegionList(e.target.value) })} placeholder={t.shipRegionsPh} /></div>
-              <div className="md:col-span-2"><label className={lbl}>{t.shipRegionsNote}</label><input className={fld} value={shipping().regionsNote || ''} onChange={e => updShipping({ regionsNote: e.target.value })} placeholder={T ? 'مثلاً: فقط ارسال به شهر مسقط' : 'e.g. Delivery only in Muscat city'} /></div>
-              <div><label className={lbl}>{t.shipOutside}</label>
-                <select className={fld + ' bg-white'} value={shipping().outsideMode || 'contact'} onChange={e => updShipping({ outsideMode: e.target.value as 'contact' | 'fee' })}>
-                  <option value="contact">{t.shipOutsideContact}</option>
-                  <option value="fee">{t.shipOutsideFee}</option>
-                </select>
-              </div>
-              {shipping().outsideMode === 'fee' && (
-                <div><label className={lbl}>{t.shipOutsideFeeAmt}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().outsideFee ?? ''} onChange={e => updShipping({ outsideFee: parseFloat(e.target.value) || 0 })} /></div>
-              )}
-              <div className="md:col-span-2"><label className={lbl}>{t.shipOutsideNote}</label><input className={fld} value={shipping().outsideNote || ''} onChange={e => updShipping({ outsideNote: e.target.value })} placeholder={T ? 'برای سایر شهرها با ما تماس بگیرید' : 'Contact us for other cities'} /></div>
-            </div>
-          )}
-        </div>
-
         {fees().length === 0 ? <p className="text-sm text-gray-400 text-center py-3">{t.noFees}</p> : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {fees().map((f, idx) => (
-              <div key={f.id} className="flex items-center gap-2 flex-wrap border border-gray-100 rounded-lg p-2 bg-gray-50/50">
-                <input className={fld + ' flex-1 min-w-[120px]'} placeholder={t.feeLabel} value={f.label} onChange={e => updFee(idx, { label: e.target.value })} />
-                <input className={fld + ' flex-1 min-w-[120px] dir-ltr'} placeholder={t.feeLabelEn} value={f.labelEn || ''} onChange={e => updFee(idx, { labelEn: e.target.value })} />
-                <input className={fld + ' w-28'} type="number" placeholder={t.feeAmount} value={f.amount ?? ''} onChange={e => updFee(idx, { amount: parseFloat(e.target.value) || 0 })} />
-                <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" className="accent-indigo-600" checked={!!f.required} onChange={e => updFee(idx, { required: e.target.checked })} />{t.feeRequired}</label>
-                <label className={`flex items-center gap-1 text-xs text-gray-600 ${f.required ? 'opacity-40 pointer-events-none' : ''}`}><input type="checkbox" className="accent-indigo-600" checked={!!f.defaultOn} onChange={e => updFee(idx, { defaultOn: e.target.checked })} />{t.feeDefaultOn}</label>
-                <button onClick={() => removeFee(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+              <div key={f.id} className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input className={fld + ' flex-1 min-w-[120px]'} placeholder={t.feeLabel} value={f.label} onChange={e => updFee(idx, { label: e.target.value })} />
+                  <input className={fld + ' flex-1 min-w-[120px] dir-ltr'} placeholder={t.feeLabelEn} value={f.labelEn || ''} onChange={e => updFee(idx, { labelEn: e.target.value })} />
+                  <input className={fld + ' w-24'} type="number" step="any" placeholder={t.feeAmount} value={f.amount ?? ''} onChange={e => updFee(idx, { amount: parseFloat(e.target.value) || 0 })} />
+                  <select className={fld + ' w-24 bg-white dir-ltr'} value={(f.currency || draft.currency || 'OMR').trim().toUpperCase()} onChange={e => updFee(idx, { currency: e.target.value.toUpperCase() })}>
+                    {feeCurrencyOptions().map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" className="accent-indigo-600" checked={!!f.required} onChange={e => updFee(idx, { required: e.target.checked })} />{t.feeRequired}</label>
+                  <label className={`flex items-center gap-1 text-xs text-gray-600 ${f.required ? 'opacity-40 pointer-events-none' : ''}`}><input type="checkbox" className="accent-indigo-600" checked={!!f.defaultOn} onChange={e => updFee(idx, { defaultOn: e.target.checked })} />{t.feeDefaultOn}</label>
+                  <button onClick={() => removeFee(idx)} className="text-red-400 hover:text-red-600"><IconTrash className="w-4 h-4" /></button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div><label className={lbl}>{t.feeDesc}</label><textarea rows={2} className={fld} value={f.description || ''} onChange={e => updFee(idx, { description: e.target.value })} placeholder={t.feeDescPh} /></div>
+                  <div><label className={lbl}>{t.feeDescEn}</label><textarea rows={2} className={fld + ' dir-ltr'} value={f.descriptionEn || ''} onChange={e => updFee(idx, { descriptionEn: e.target.value })} placeholder={t.feeDescPh} /></div>
+                </div>
               </div>
             ))}
           </div>
