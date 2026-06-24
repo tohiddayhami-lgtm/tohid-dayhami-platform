@@ -97,9 +97,10 @@ function _fsFields(fields: Record<string, Record<string, unknown>>): Record<stri
   return o;
 }
 
-const proxyGet = async <T>(col: string, opts: { doc?: string; orderField?: string; dir?: 'asc' | 'desc' } = {}): Promise<T> => {
+const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; orderField?: string; dir?: 'asc' | 'desc' } = {}): Promise<T> => {
   const p = new URLSearchParams({ col });
   if (opts.doc) p.set('doc', opts.doc);
+  if (opts.slug) p.set('slug', opts.slug);
   if (opts.orderField) p.set('orderField', opts.orderField);
   if (opts.dir) p.set('dir', opts.dir);
   const controller = new AbortController();
@@ -1067,8 +1068,8 @@ export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> 
     try {
         const proxy = await checkProxyMode();
         if (proxy) {
-            const all = await proxyGet<MetaShop[]>('metaShops');
-            return (all || []).find(s => s.slug === slug) || null;
+            const shop = await proxyGet<MetaShop | null>('metaShops', { slug });
+            return shop || null;
         }
         const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
         const snap = await getDocs(q);
@@ -1161,8 +1162,8 @@ export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | nu
     try {
         const proxy = await checkProxyMode();
         if (proxy) {
-            const all = await proxyGet<MetaBazaar[]>('metaBazaars');
-            return (all || []).find(b => b.slug === slug) || null;
+            const bazaar = await proxyGet<MetaBazaar | null>('metaBazaars', { slug });
+            return bazaar || null;
         }
         const q = query(collection(db, "metaBazaars"), where("slug", "==", slug), limit(1));
         const snap = await getDocs(q);

@@ -352,6 +352,7 @@ const App: React.FC = () => {
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
   const [shopLoading, setShopLoading] = useState(false);
   const [shopResolved, setShopResolved] = useState(false);
+  const shopFetchSlugRef = useRef<string | null>(null);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
   const [metaBazaarsReady, setMetaBazaarsReady] = useState(false);
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
@@ -1311,27 +1312,32 @@ const App: React.FC = () => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
-  // ── Meta Shop: resolve public shop by slug (from subscription, else direct fetch) ──
+  // ── Meta Shop: sync from subscription cache when available ──
   useEffect(() => {
-    if (view !== 'metashop' || !shopSlug) {
-      setPublicShop(null);
-      setShopLoading(false);
-      setShopResolved(false);
-      return;
-    }
+    if (view !== 'metashop' || !shopSlug) return;
     const local = metaShops.find(s => s.slug === shopSlug);
     if (local) {
       setPublicShop(local);
       setShopLoading(false);
       setShopResolved(true);
-      return;
+      shopFetchSlugRef.current = shopSlug;
     }
-    if (!metaShopsReady) {
-      setShopLoading(true);
+  }, [view, shopSlug, metaShops]);
+
+  // ── Meta Shop: fetch single shop by slug (don't wait for full collection) ──
+  useEffect(() => {
+    if (view !== 'metashop' || !shopSlug) {
+      setPublicShop(null);
+      setShopLoading(false);
       setShopResolved(false);
+      shopFetchSlugRef.current = null;
       return;
     }
+    if (metaShops.some(s => s.slug === shopSlug)) return;
+    if (shopFetchSlugRef.current === shopSlug) return;
+
     let cancelled = false;
+    shopFetchSlugRef.current = shopSlug;
     setShopLoading(true);
     setShopResolved(false);
     setPublicShop(null);
@@ -1343,7 +1349,7 @@ const App: React.FC = () => {
       }
     });
     return () => { cancelled = true; };
-  }, [view, shopSlug, metaShops, metaShopsReady]);
+  }, [view, shopSlug, metaShops]);
 
   // ── Meta Bazaar: resolve public bazaar by slug ──
   useEffect(() => {
@@ -1758,7 +1764,7 @@ const App: React.FC = () => {
       return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
     // Still resolving — shutter loader (never flash "not found" while loading)
-    if (shopSlug && (shopLoading || !metaShopsReady || !shopResolved)) {
+    if (shopSlug && (shopLoading || !shopResolved)) {
       return <ShopShutterLoader lang={lang} />;
     }
     return (

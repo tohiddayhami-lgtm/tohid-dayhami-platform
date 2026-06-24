@@ -69,6 +69,30 @@ function toValue(v) {
   return { stringValue: String(v) };
 }
 
+async function queryByField(col, field, value) {
+  const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: col }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: field },
+            op: 'EQUAL',
+            value: { stringValue: value },
+          },
+        },
+        limit: 1,
+      },
+    }),
+  });
+  if (!r.ok) return null;
+  const rows = await r.json();
+  const doc = rows?.[0]?.document;
+  return doc?.fields ? parseDoc(doc) : null;
+}
+
 // ── Handler ────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -78,7 +102,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { col, doc: docId, orderField, dir, lim } = req.query;
+  const { col, doc: docId, orderField, dir, lim, slug, whereField, whereEq } = req.query;
   if (!col) return res.status(400).json({ error: 'col required' });
 
   try {
@@ -90,6 +114,14 @@ export default async function handler(req, res) {
         if (!r.ok) return res.status(r.status).json(null);
         const d = await r.json();
         return res.json(d.fields ? parseDoc(d) : null);
+      }
+
+      // Single-doc lookup by field (e.g. metaShops?slug=shiraz-sweets-nuts) — avoids downloading the whole collection.
+      const field = slug ? 'slug' : whereField;
+      const value = slug || whereEq;
+      if (field && value) {
+        const one = await queryByField(col, String(field), String(value));
+        return res.json(one);
       }
 
       // Firestore caps pageSize at 300, so we MUST follow nextPageToken to return the
