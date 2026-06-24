@@ -439,9 +439,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const t: Record<string, string> = {};
   Object.keys(STRINGS.en).forEach(k => { t[k] = S(k); });
   t.add = isRealEstate ? S('inquiryBtn') : isServices ? S('addService') : S('addProduct');
-  t.productsTab = isRealEstate
-    ? (TR(shop.i18n, 'productsTabLabel', L(shop.productsTabLabel, shop.productsTabLabelEn)) || S('tabRealEstate'))
-    : isServices ? S('tabServices') : S('tabProducts');
+  t.productsTab = (() => {
+    const custom = TR(shop.i18n, 'productsTabLabel', L(shop.productsTabLabel, shop.productsTabLabelEn));
+    if (custom) return custom;
+    return isRealEstate ? S('tabRealEstate') : isServices ? S('tabServices') : S('tabProducts');
+  })();
   if (isRealEstate) {
     t.featuredTitle = S('featuredProperties');
     t.trackMy = S('trackInquiries');
@@ -1079,7 +1081,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         {/* Tabs (Product List + custom pages) */}
         {pages.length > 0 && (
           <nav className="ms-tabs">
-            <button className={`ms-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>{L(shop.productsTabLabel, shop.productsTabLabelEn) || t.productsTab}</button>
+            <button className={`ms-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>{t.productsTab}</button>
             {pages.map(pg => <button key={pg.id} className={`ms-tab ${tab === pg.id ? 'active' : ''}`} onClick={() => setTab(pg.id)}>{TR(pg.i18n, 'label', L(pg.label, pg.labelEn))}</button>)}
           </nav>
         )}

@@ -267,7 +267,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     pgBody: T ? 'متن (فارسی)' : 'Body (FA)', pgBodyEn: T ? 'متن (انگلیسی)' : 'Body (EN)', pgDesc: T ? 'توضیح (فارسی)' : 'Description (FA)', pgDescEn: T ? 'توضیح (انگلیسی)' : 'Description (EN)',
     pgImages: T ? 'تصاویر' : 'Images', pgAddImg: T ? 'افزودن تصویر' : 'Add image', pgCardsList: T ? 'کارت‌ها' : 'Cards', pgAddCard: T ? 'افزودن کارت' : 'Add card',
     cardName: T ? 'عنوان (فارسی)' : 'Name (FA)', cardNameEn: T ? 'عنوان (انگلیسی)' : 'Name (EN)', cardDesc: T ? 'توضیح (فارسی)' : 'Desc (FA)', cardDescEn: T ? 'توضیح (انگلیسی)' : 'Desc (EN)',
-    productsTabLabel: T ? 'عنوان تب محصولات (فارسی)' : 'Products tab label (FA)', productsTabLabelEn: T ? 'عنوان تب محصولات (انگلیسی)' : 'Products tab label (EN)',
+    productsTabLabel: T ? 'عنوان تب محصولات (پیش‌فرض فارسی)' : 'Products tab label (default FA)',
+    productsTabI18n: T ? 'عنوان تب محصولات به زبان‌های دیگر' : 'Products tab label — other languages',
+    productsTabI18nHint: T ? 'مثلاً برای عربی، چینی و… — در فروشگاه وقتی مشتری آن زبان را انتخاب کند این عنوان نمایش داده می‌شود.' : 'e.g. Arabic, Chinese… — shown when the customer switches to that language.',
     moveUp: T ? 'بالا' : 'Up', moveDown: T ? 'پایین' : 'Down',
     feesT: T ? 'هزینه‌های پیش‌فرض (ارسال، بسته‌بندی، ...)' : 'Default fees (shipping, packaging, ...)',
     feesHint: T ? 'این هزینه‌ها در صفحه سفارش به مشتری نشان داده می‌شوند. اگر «الزامی» باشد همیشه به جمع اضافه می‌شود؛ در غیر این صورت مشتری انتخاب می‌کند.' : 'Shown to the customer at checkout. If "required" it is always added; otherwise the customer chooses.',
@@ -636,6 +638,28 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (code === 'fa') patch[field === 'name' ? 'name' : 'desc'] = val;
     else if (code === 'en') patch[field === 'name' ? 'nameEn' : 'descEn'] = val;
     updCard(idx, cIdx, patch);
+  };
+
+  const setProductsTabLangField = (code: string, val: string) => {
+    const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), productsTabLabel: val };
+    const patch: Partial<MetaShop> = { i18n };
+    if (code === 'fa') patch.productsTabLabel = val;
+    else if (code === 'en') patch.productsTabLabelEn = val;
+    upd(patch);
+  };
+  const productsTabLangField = (code: string): string => {
+    const fromI18n = draft?.i18n?.[code]?.productsTabLabel;
+    if (fromI18n != null && fromI18n !== '') return fromI18n;
+    if (code === 'fa') return draft?.productsTabLabel || '';
+    if (code === 'en') return draft?.productsTabLabelEn || '';
+    return '';
+  };
+  const productsTabPlaceholder = (code: string) => {
+    const isAr = code === 'ar';
+    if (draft?.type === 'services') return isAr ? 'خدمات' : code === 'en' ? 'Services' : 'خدمات';
+    if (draft?.type === 'realestate') return isAr ? 'عقارات' : code === 'en' ? 'Properties' : 'املاک';
+    return isAr ? 'منتجات' : code === 'en' ? 'Product List' : 'محصولات';
   };
 
   const doImport = () => {
@@ -1266,8 +1290,24 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option><option value="realestate">{t.typeRealEstate}</option></select></div>
           <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
-          <div><label className={lbl}>{t.productsTabLabel}</label><input className={fld} value={draft.productsTabLabel || ''} onChange={e => upd({ productsTabLabel: e.target.value })} placeholder={draft.type === 'services' ? 'خدمات' : draft.type === 'realestate' ? 'املاک' : 'محصولات'} /></div>
-          <div><label className={lbl}>{t.productsTabLabelEn}</label><input className={fld + ' dir-ltr'} value={draft.productsTabLabelEn || ''} onChange={e => upd({ productsTabLabelEn: e.target.value })} placeholder={draft.type === 'services' ? 'Services' : draft.type === 'realestate' ? 'Properties' : 'Product List'} /></div>
+          <div className="md:col-span-2">
+            <label className={lbl}>{t.productsTabLabel}</label>
+            <input className={fld} value={productsTabLangField('fa')} onChange={e => setProductsTabLangField('fa', e.target.value)} placeholder={productsTabPlaceholder('fa')} />
+          </div>
+          {pageEditorLangs().length > 0 && (
+            <div className="md:col-span-2 p-3 rounded-xl bg-sky-50/60 border border-sky-100">
+              <h5 className="text-sm font-bold text-gray-700 mb-1">{t.productsTabI18n}</h5>
+              <p className="text-xs text-gray-500 mb-3">{t.productsTabI18nHint}</p>
+              <div className="space-y-3">
+                {pageEditorLangs().map(lg => (
+                  <div key={lg.code}>
+                    <label className={lbl}>{lg.name || lg.code}</label>
+                    <input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={productsTabLangField(lg.code)} onChange={e => setProductsTabLangField(lg.code, e.target.value)} placeholder={productsTabPlaceholder(lg.code)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="border-t border-gray-100 pt-4 mt-4">
           <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dirT}</h5>
