@@ -141,8 +141,11 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'analytics'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'analytics' | 'keywords'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
+  const [keywordEdits, setKeywordEdits] = useState<Record<string, string>>({});
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [keywordSaving, setKeywordSaving] = useState(false);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
   const [referralsShopId, setReferralsShopId] = useState<string | null>(null);
   const [analyticsShopId, setAnalyticsShopId] = useState<string | null>(null);
@@ -165,6 +168,34 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [transOpen, setTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
+
+  const startKeywordsBulk = () => {
+    const map: Record<string, string> = {};
+    metaShops.forEach(s => { map[s.id] = formatSearchKeywordsForInput(s.searchKeywords); });
+    setKeywordEdits(map);
+    setKeywordSearch('');
+    setMode('keywords');
+  };
+
+  const saveKeywordsBulk = async () => {
+    if (readonly) return;
+    setKeywordSaving(true);
+    try {
+      const tasks = metaShops.map(async shop => {
+        const raw = keywordEdits[shop.id] ?? '';
+        const next = parseSearchKeywords(raw);
+        const prev = shop.searchKeywords || [];
+        if (next.join('|') === prev.join('|')) return;
+        await onSaveMetaShop({ ...shop, searchKeywords: next.length ? next : undefined });
+      });
+      await Promise.all(tasks);
+      alert(T ? 'کلمات کلیدی ذخیره شد.' : 'Keywords saved.');
+    } finally {
+      setKeywordSaving(false);
+    }
+  };
+
+  const updKeywordEdit = (shopId: string, val: string) => setKeywordEdits(prev => ({ ...prev, [shopId]: val }));
 
   const openAnalytics = async (shop: MetaShop) => {
     setAnalyticsShopId(shop.id); setAnalyticsEvents([]); setAnalyticsLoading(true); setMode('analytics');
@@ -267,6 +298,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     pKeywordsHint: T ? 'با ویرگول جدا کنید — در جستجوی سایت و فروشگاه بین‌المللی' : 'Comma-separated — used in site & international shop search',
     searchKeywords: T ? 'کلمات کلیدی فروشگاه' : 'Shop search keywords',
     searchKeywordsHint: T ? 'هر چند کلمه که می‌خواهید با ویرگول یا خط جدید جدا کنید. مشتری با جستجوی این کلمات فروشگاه و محصولاتش را پیدا می‌کند.' : 'Add as many terms as you like, separated by commas or new lines. Customers find this shop and its products when searching these terms.',
+    keywordsBulk: T ? 'کلمات کلیدی (کلی)' : 'Keywords (bulk)',
+    keywordsBulkTitle: T ? 'مدیریت کلمات کلیدی فروشگاه‌ها' : 'Shop keywords — bulk edit',
+    keywordsBulkHint: T ? 'کلمات هر فروشگاه را اینجا یکجا ویرایش کنید. با ویرگول یا خط جدید جدا کنید. در جستجوی سایت و فروشگاه بین‌المللی استفاده می‌شود.' : 'Edit keywords for all shops in one place. Separate with commas or new lines. Used in site search and the international shop page.',
+    keywordsBulkSearch: T ? 'جستجو در فروشگاه‌ها...' : 'Search shops...',
+    keywordsBulkSave: T ? 'ذخیره همه' : 'Save all',
+    keywordsBulkSaved: T ? 'ذخیره شد' : 'Saved',
+    keywordsBulkEmpty: T ? 'فروشگاهی یافت نشد.' : 'No shops found.',
+    keywordsBulkCount: (n: number) => T ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
     pVideo: T ? 'لینک ویدئو (YouTube / Vimeo / mp4)' : 'Video link (YouTube / Vimeo / mp4)',
     rateOptions: T ? 'نرخ‌های چندگانه (حداکثر ۳)' : 'Rate options (max 3)',
     pDiscount: T ? 'تخفیف' : 'Discount', pDiscNone: T ? 'بدون تخفیف' : 'No discount', pDiscPercent: T ? 'درصدی (٪)' : 'Percent (%)', pDiscAmount: T ? 'مبلغی' : 'Amount',
@@ -640,6 +679,76 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     );
   }
 
+  if (mode === 'keywords') {
+    const q = keywordSearch.trim().toLowerCase();
+    const rows = metaShops.filter(s => {
+      if (!q) return true;
+      const hay = `${s.name} ${s.title || ''} ${s.slug} ${shopCodeOf(s)} ${formatSearchKeywordsForInput(s.searchKeywords)}`.toLowerCase();
+      return hay.includes(q);
+    });
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><IconSearch className="w-5 h-5 text-indigo-500" />{t.keywordsBulkTitle}</h3>
+            <p className="text-xs text-gray-500 mt-1 max-w-2xl">{t.keywordsBulkHint}</p>
+            <p className="text-[11px] text-gray-400 mt-1">{t.keywordsBulkCount(rows.length)}</p>
+          </div>
+          {!readonly && (
+            <button onClick={saveKeywordsBulk} disabled={keywordSaving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5">
+              <IconCheck className="w-4 h-4" />{keywordSaving ? '...' : t.keywordsBulkSave}
+            </button>
+          )}
+        </div>
+        <div className="relative max-w-md">
+          <IconSearch className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3" />
+          <input className="w-full ps-9 pe-3 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-indigo-500" value={keywordSearch} onChange={e => setKeywordSearch(e.target.value)} placeholder={t.keywordsBulkSearch} />
+        </div>
+        {rows.length === 0 ? (
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.keywordsBulkEmpty}</div>
+        ) : (
+          <div className={card + ' p-0 overflow-hidden'}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-xs">
+                  <tr>
+                    <th className="px-4 py-3 text-start w-[28%]">{T ? 'فروشگاه' : 'Shop'}</th>
+                    <th className="px-4 py-3 text-start">{t.searchKeywords}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {rows.map(s => (
+                    <tr key={s.id} className="hover:bg-gray-50/50 align-top">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-gray-800 text-sm">{s.name}</div>
+                        <div className="text-[11px] text-gray-400 truncate">{s.title || '—'}</div>
+                        <div className="text-[10px] font-mono text-gray-400 mt-0.5" dir="ltr">?shop={s.slug} · {shopCodeOf(s)}</div>
+                        {!readonly && (
+                          <button type="button" onClick={() => startEdit(s)} className="text-[11px] text-indigo-500 hover:underline mt-1">{t.edit}</button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <textarea
+                          className={fld + ' min-h-[64px] text-xs'}
+                          value={keywordEdits[s.id] ?? ''}
+                          onChange={e => updKeywordEdit(s.id, e.target.value)}
+                          placeholder={T ? 'زعفران، saffron، export' : 'saffron, pistachio, export'}
+                          disabled={readonly}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (mode === 'list') {
     return (
       <div className="space-y-5 animate-fade-in">
@@ -651,6 +760,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <a href={`${shopBaseUrl}?shops=1`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconGlobe className="w-4 h-4" />{t.openBazaar}</a>
+            <button onClick={startKeywordsBulk} className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5"><IconSearch className="w-4 h-4" />{t.keywordsBulk}</button>
             <button onClick={() => { navigator.clipboard.writeText(`${shopBaseUrl}?shops=1`); setCopiedId('__bazaar__'); setTimeout(() => setCopiedId(null), 1800); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5">{copiedId === '__bazaar__' ? t.allShopsCopied : <><IconLink className="w-4 h-4" />{t.allShopsLink}</>}</button>
           {!readonly && <>
             <button onClick={() => { setImportOpen(true); setImportText(''); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconUpload className="w-4 h-4" />{t.importJson}</button>
@@ -689,6 +799,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
                     <div className="text-[11px] text-gray-400">{(s.products || []).length} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
+                    {(s.searchKeywords?.length || 0) > 0 && (
+                      <div className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 line-clamp-2" title={formatSearchKeywordsForInput(s.searchKeywords)}>
+                        🔍 {formatSearchKeywordsForInput(s.searchKeywords)}
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px] text-gray-500 truncate" dir="ltr"><IconLink className="w-3 h-3 shrink-0" /><span className="truncate">?shop={s.slug}</span></div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <a href={shopUrl(s)} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1"><IconGlobe className="w-3.5 h-3.5" />{t.open}</a>
