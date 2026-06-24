@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NewsArticle, ServiceOption, MetaShop } from '../types';
 import { IconSearch, IconNewspaper, IconBriefcase, IconTag } from './Icons';
 import { shopCodeOf } from './shopCode';
-import { shopSearchHaystack, productSearchHaystack } from '../utils/metaShopSearch';
+import { shopSearchHaystack, productSearchHaystack, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -56,20 +56,20 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
     // News (published only)
     news.filter(n => n.isPublished !== false).forEach(n => {
       const hay = `${n.title} ${n.titleEn || ''} ${n.summary || ''} ${n.summaryEn || ''} ${(n.tags || []).join(' ')} ${n.category || ''}`.toLowerCase();
-      if (hay.includes(term)) out.push({ kind: 'news', id: n.id, title: (T ? n.title : (n.titleEn || n.title)), sub: (T ? n.summary : (n.summaryEn || n.summary)) || n.category || '' });
+      if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'news', id: n.id, title: (T ? n.title : (n.titleEn || n.title)), sub: (T ? n.summary : (n.summaryEn || n.summary)) || n.category || '' });
     });
 
     // Services (active only)
     services.filter(s => s.isActive !== false).forEach(s => {
       const hay = `${s.title} ${s.titleEn || ''} ${s.description || ''} ${s.descriptionEn || ''}`.toLowerCase();
-      if (hay.includes(term)) out.push({ kind: 'service', id: s.id, title: (T && s.title) ? s.title : (s.titleEn || s.title), sub: (T ? s.description : (s.descriptionEn || s.description)) || '' });
+      if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'service', id: s.id, title: (T && s.title) ? s.title : (s.titleEn || s.title), sub: (T ? s.description : (s.descriptionEn || s.description)) || '' });
     });
 
     // Shops (active only) — name, title, code, custom keywords, products
     shops.filter(s => s.isActive !== false).forEach(s => {
       const code = shopCodeOf(s);
       const hay = `${shopSearchHaystack(s)} ${code}`.toLowerCase();
-      if (hay.includes(term)) out.push({ kind: 'shop', slug: s.slug, title: s.title || s.name, sub: s.name, code });
+      if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'shop', slug: s.slug, title: s.title || s.name, sub: s.name, code });
     });
 
     // Products across shops (name, sku, group, product & shop keywords)
@@ -77,7 +77,7 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
       (s.products || []).forEach(p => {
         if (p.active === false) return;
         const hay = productSearchHaystack(s, p);
-        if (hay.includes(term)) out.push({ kind: 'product', slug: s.slug, productId: p.id, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
+        if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'product', slug: s.slug, productId: p.id, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
       });
     });
 

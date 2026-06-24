@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
-import { productSearchHaystack } from '../utils/metaShopSearch';
+import { productMatchesSearch } from '../utils/metaShopSearch';
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
@@ -458,15 +458,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   }, [products, activeCat]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     return products.filter(p => {
       const matchCat = activeCat === 'all' || p.group === activeCat;
       const matchSub = activeSub === 'all' || p.subcategory === activeSub;
-      const hay = productSearchHaystack(shop, p);
-      const matchSearch = !q || hay.includes(q);
+      const matchSearch = !q || productMatchesSearch(shop, p, q);
       return (q ? matchSearch : matchCat && matchSub && matchSearch);
     });
-  }, [products, activeCat, activeSub, search]);
+  }, [products, activeCat, activeSub, search, shop]);
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
 

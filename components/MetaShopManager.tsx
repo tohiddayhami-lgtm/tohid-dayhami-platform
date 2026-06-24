@@ -12,7 +12,7 @@ import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
-import { parseSearchKeywords, formatSearchKeywordsForInput } from '../utils/metaShopSearch';
+import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -680,11 +680,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   }
 
   if (mode === 'keywords') {
-    const q = keywordSearch.trim().toLowerCase();
+    const q = keywordSearch.trim();
     const rows = metaShops.filter(s => {
       if (!q) return true;
-      const hay = `${s.name} ${s.title || ''} ${s.slug} ${shopCodeOf(s)} ${formatSearchKeywordsForInput(s.searchKeywords)}`.toLowerCase();
-      return hay.includes(q);
+      const hay = `${s.name} ${s.title || ''} ${s.slug} ${shopCodeOf(s)} ${formatSearchKeywordsForInput(s.searchKeywords)}`;
+      return textMatchesSearchQuery(hay, q);
     });
     return (
       <div className="space-y-4 animate-fade-in">
