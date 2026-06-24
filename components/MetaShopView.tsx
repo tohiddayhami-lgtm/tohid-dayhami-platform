@@ -5,7 +5,7 @@ import { productSearchHaystack } from '../utils/metaShopSearch';
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
-import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 
@@ -385,6 +385,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   // Content helpers (use per-product/shop i18n with legacy fallback)
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
+  const pStock = (p: MetaShopProduct) => translateStockLabel(p.stockLabel, uiLang, p.i18n);
   const pGroup = (p: MetaShopProduct) => translateProductGroup(shop, p.group || '', uiLang, p.i18n);
   const pSubcategory = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n, products);
   const catLabel = (key: string) => categoryLabel(findCategoryEntry(shop.categories, key), uiLang, shop);
@@ -841,6 +842,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
+    const stock = pStock(p);
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className="ms-card-img" onClick={() => openDetail(p)}>
@@ -861,7 +863,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             {p.sku && <span className="ms-sku">{p.sku}</span>}
             {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, reLang())}</span>}
             {p.subcategory && <span className="ms-subcat-badge">{pSubcategory(p)}</span>}
-            {p.stockLabel && <span className="ms-stock">{p.stockLabel}</span>}
+            {stock && <span className="ms-stock">{stock}</span>}
           </div>
           {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
           {reSummary.length > 0 && (
@@ -1062,7 +1064,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             </div>
             <div className="ms-modal-info">
               <h2>{pName(detail)}</h2>
-              <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{detail.stockLabel && <span className="ms-stock">{detail.stockLabel}</span>}</div>
+              <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{pStock(detail) && <span className="ms-stock">{pStock(detail)}</span>}</div>
               {pDesc(detail) && <p className="ms-modal-desc">{pDesc(detail)}</p>}
               {(() => {
                 const v = videoEmbed(detail.videoUrl);

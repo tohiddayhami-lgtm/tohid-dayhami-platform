@@ -1463,6 +1463,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                         <input className={fld} placeholder={t.pName} value={p.i18n?.[lg.code]?.name || ''} onChange={e => updProductI18n(idx, lg.code, 'name', e.target.value)} />
                         <input className={fld} placeholder={t.pGroup} value={p.i18n?.[lg.code]?.group || ''} onChange={e => updProductI18n(idx, lg.code, 'group', e.target.value)} />
                         <input className={fld} placeholder={t.pSubcat} value={p.i18n?.[lg.code]?.subcategory || ''} onChange={e => updProductI18n(idx, lg.code, 'subcategory', e.target.value)} />
+                        <input className={fld} placeholder={t.pStock} value={p.i18n?.[lg.code]?.stockLabel || ''} onChange={e => updProductI18n(idx, lg.code, 'stockLabel', e.target.value)} />
                         <input className={fld + ' col-span-2'} placeholder={t.pDesc} value={p.i18n?.[lg.code]?.description || ''} onChange={e => updProductI18n(idx, lg.code, 'description', e.target.value)} />
                       </div>
                     ))}
