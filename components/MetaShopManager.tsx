@@ -13,6 +13,8 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { parseRegionList } from '../utils/metaShopShipping';
+import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
 
@@ -275,6 +277,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     feesHint: T ? 'این هزینه‌ها در صفحه سفارش به مشتری نشان داده می‌شوند. اگر «الزامی» باشد همیشه به جمع اضافه می‌شود؛ در غیر این صورت مشتری انتخاب می‌کند.' : 'Shown to the customer at checkout. If "required" it is always added; otherwise the customer chooses.',
     addFee: T ? 'افزودن هزینه' : 'Add fee', feeLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', feeLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', feeAmount: T ? 'مبلغ' : 'Amount',
     feeRequired: T ? 'الزامی' : 'Required', feeDefaultOn: T ? 'پیش‌فعال' : 'Pre-checked', noFees: T ? 'هزینه‌ای تعریف نشده است.' : 'No fees defined.',
+    shipT: T ? 'هزینه ارسال (هوشمند)' : 'Smart shipping',
+    shipHint: T ? 'اختیاری — در فاکتور پیش‌نمایش محاسبه می‌شود. می‌توانی آستانه ارسال رایگان و مناطق تحت پوشش را تعیین کنی.' : 'Optional — calculated on the invoice preview. Set free-shipping threshold and covered regions.',
+    shipEnable: T ? 'فعال‌سازی هزینه ارسال' : 'Enable shipping fee',
+    shipLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', shipLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)',
+    shipFlat: T ? 'هزینه ارسال (زیر آستانه)' : 'Shipping cost (below threshold)', shipFreeAbove: T ? 'ارسال رایگان از مبلغ' : 'Free shipping above',
+    shipFreeLabel: T ? 'متن ارسال رایگان' : 'Free shipping label', shipRegions: T ? 'مناطق تحت پوشش' : 'Covered regions',
+    shipRegionsPh: T ? 'مثلاً مسقط، Muscat — با کاما یا خط جدید' : 'e.g. Muscat — comma or new line',
+    shipRegionsNote: T ? 'یادداشت مناطق (نمایش به مشتری)' : 'Regions note (shown to customer)',
+    shipOutside: T ? 'سایر شهرها' : 'Other cities', shipOutsideContact: T ? 'تماس برای محاسبه' : 'Contact for quote',
+    shipOutsideFee: T ? 'هزینه ثابت' : 'Fixed fee', shipOutsideFeeAmt: T ? 'مبلغ سایر شهرها' : 'Other cities fee',
+    shipOutsideNote: T ? 'یادداشت سایر شهرها' : 'Other cities note',
+    dispCurT: T ? 'ارزهای نمایشی در وب‌سایت' : 'Storefront display currencies',
+    dispCurHint: T ? 'ارز پایه فروشگاه بالا است. نرخ = چند واحد از این ارز معادل ۱ واحد ارز پایه (مثلاً ۱ ریال عمان = ۲٫۶ دلار → نرخ USD برابر ۲٫۶).' : 'Base currency is above. Rate = units of this currency per 1 base unit (e.g. 1 OMR = 2.6 USD → USD rate 2.6).',
+    dispCurAdd: T ? 'افزودن ارز' : 'Add currency', dispCurCode: T ? 'کد ارز' : 'Code', dispCurName: T ? 'نام (فارسی)' : 'Name (FA)',
+    dispCurNameEn: T ? 'نام (انگلیسی)' : 'Name (EN)', dispCurRate: T ? 'نرخ تبدیل' : 'Exchange rate',
     taxT: T ? 'مالیات (VAT)' : 'Tax (VAT)', taxRate: T ? 'درصد مالیات' : 'Tax rate (%)', taxMode: T ? 'حالت' : 'Mode',
     taxIncl: T ? 'تجمیعی (داخل قیمت) — Inclusive' : 'Inclusive (in prices)', taxExcl: T ? 'افزوده به جمع — Exclusive' : 'Exclusive (added on top)',
     taxLabelF: T ? 'عنوان مالیات (فارسی)' : 'Tax label (FA)', taxLabelEnF: T ? 'عنوان مالیات (انگلیسی)' : 'Tax label (EN)',
@@ -581,6 +598,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const addFee = () => upd({ extraFees: [...fees(), { id: `fee-${Date.now()}`, label: '', amount: 0 }] });
   const updFee = (idx: number, patch: Partial<import('../types').MetaShopFee>) => setDraft(d => { if (!d) return d; const fs = [...(d.extraFees || [])]; fs[idx] = { ...fs[idx], ...patch }; return { ...d, extraFees: fs }; });
   const removeFee = (idx: number) => setDraft(d => d ? { ...d, extraFees: (d.extraFees || []).filter((_, i) => i !== idx) } : d);
+  const shipping = () => draft?.shipping || {};
+  const updShipping = (patch: Partial<import('../types').MetaShopShipping>) => upd({ shipping: { ...(draft?.shipping || {}), ...patch } });
+  const dispCurrencies = () => draft?.displayCurrencies || [];
+  const updDispCurrency = (idx: number, patch: Partial<import('../types').MetaShopDisplayCurrency>) => setDraft(d => {
+    if (!d) return d;
+    const list = [...(d.displayCurrencies || [])];
+    list[idx] = { ...list[idx], ...patch };
+    return { ...d, displayCurrencies: list };
+  });
+  const addDispCurrency = (code: string) => {
+    const c = code.trim().toUpperCase();
+    if (!c || dispCurrencies().some(x => x.code.trim().toUpperCase() === c)) return;
+    upd({ displayCurrencies: [...dispCurrencies(), suggestDisplayCurrency(draft!.currency || 'OMR', c)] });
+  };
+  const removeDispCurrency = (idx: number) => upd({ displayCurrencies: dispCurrencies().filter((_, i) => i !== idx) });
 
   // ── Pages editing ──
   const pages = () => draft?.pages || [];
@@ -1309,7 +1341,31 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             </div>
           </div>
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option><option value="realestate">{t.typeRealEstate}</option></select></div>
-          <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value })} placeholder="USD / OMR / IRR" /></div>
+          <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value.toUpperCase() })} placeholder="OMR / USD / AED" /></div>
+          <div className="md:col-span-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+            <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dispCurT}</h5>
+            <p className="text-xs text-gray-500 mb-3">{t.dispCurHint}</p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {['OMR', 'USD', 'AED', 'IRR', 'EUR', 'SAR'].map(code => (
+                <button key={code} type="button" onClick={() => addDispCurrency(code)} className="px-2 py-1 rounded-lg text-[11px] border border-gray-200 bg-white hover:bg-indigo-50 text-gray-600">{code}</button>
+              ))}
+            </div>
+            {dispCurrencies().length === 0 ? (
+              <p className="text-xs text-gray-400">{T ? 'فقط ارز پایه نمایش داده می‌شود. برای سوئیچر ارز، ارز اضافه کنید.' : 'Only the base currency is shown. Add currencies for a storefront switcher.'}</p>
+            ) : (
+              <div className="space-y-2">
+                {dispCurrencies().map((dc, idx) => (
+                  <div key={`${dc.code}-${idx}`} className="flex flex-wrap items-end gap-2 border border-gray-100 rounded-lg p-2 bg-white">
+                    <div className="w-20"><label className={lbl}>{t.dispCurCode}</label><input className={fld + ' dir-ltr font-mono'} value={dc.code} onChange={e => updDispCurrency(idx, { code: e.target.value.toUpperCase() })} /></div>
+                    <div className="flex-1 min-w-[100px]"><label className={lbl}>{t.dispCurName}</label><input className={fld} value={dc.label || ''} onChange={e => updDispCurrency(idx, { label: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'fa')} /></div>
+                    <div className="flex-1 min-w-[100px]"><label className={lbl}>{t.dispCurNameEn}</label><input className={fld + ' dir-ltr'} value={dc.labelEn || ''} onChange={e => updDispCurrency(idx, { labelEn: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'en')} /></div>
+                    <div className="w-28"><label className={lbl}>{t.dispCurRate}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={dc.rate ?? ''} onChange={e => updDispCurrency(idx, { rate: parseFloat(e.target.value) || 0 })} /></div>
+                    <button type="button" onClick={() => removeDispCurrency(idx)} className="text-red-400 hover:text-red-600 pb-2"><IconTrash className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
           <div className="md:col-span-2">
             <label className={lbl}>{t.productsTabLabel}</label>
@@ -1603,6 +1659,37 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <button onClick={addFee} className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.addFee}</button>
         </div>
         <p className="text-xs text-gray-500 mb-3">{t.feesHint}</p>
+
+        <div className="border border-emerald-100 rounded-xl p-3 mb-4 bg-emerald-50/40">
+          <h5 className="text-sm font-bold text-gray-700 mb-1">{t.shipT}</h5>
+          <p className="text-xs text-gray-500 mb-3">{t.shipHint}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-700 mb-3 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={!!shipping().enabled} onChange={e => updShipping({ enabled: e.target.checked })} />
+            {t.shipEnable}
+          </label>
+          {shipping().enabled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div><label className={lbl}>{t.shipLabel}</label><input className={fld} value={shipping().label || ''} onChange={e => updShipping({ label: e.target.value })} placeholder={T ? 'هزینه ارسال' : 'Shipping'} /></div>
+              <div><label className={lbl}>{t.shipLabelEn}</label><input className={fld + ' dir-ltr'} value={shipping().labelEn || ''} onChange={e => updShipping({ labelEn: e.target.value })} placeholder="Shipping" /></div>
+              <div><label className={lbl}>{t.shipFlat}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().flatAmount ?? ''} onChange={e => updShipping({ flatAmount: parseFloat(e.target.value) || 0 })} placeholder="2" /></div>
+              <div><label className={lbl}>{t.shipFreeAbove}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().freeAbove ?? ''} onChange={e => updShipping({ freeAbove: parseFloat(e.target.value) || undefined })} placeholder="20" /></div>
+              <div><label className={lbl}>{t.shipFreeLabel}</label><input className={fld} value={shipping().freeLabel || ''} onChange={e => updShipping({ freeLabel: e.target.value })} placeholder={T ? 'ارسال رایگان' : 'Free shipping'} /></div>
+              <div><label className={lbl}>{t.shipRegions}</label><textarea rows={2} className={fld} value={(shipping().coveredRegions || []).join(', ')} onChange={e => updShipping({ coveredRegions: parseRegionList(e.target.value) })} placeholder={t.shipRegionsPh} /></div>
+              <div className="md:col-span-2"><label className={lbl}>{t.shipRegionsNote}</label><input className={fld} value={shipping().regionsNote || ''} onChange={e => updShipping({ regionsNote: e.target.value })} placeholder={T ? 'مثلاً: فقط ارسال به شهر مسقط' : 'e.g. Delivery only in Muscat city'} /></div>
+              <div><label className={lbl}>{t.shipOutside}</label>
+                <select className={fld + ' bg-white'} value={shipping().outsideMode || 'contact'} onChange={e => updShipping({ outsideMode: e.target.value as 'contact' | 'fee' })}>
+                  <option value="contact">{t.shipOutsideContact}</option>
+                  <option value="fee">{t.shipOutsideFee}</option>
+                </select>
+              </div>
+              {shipping().outsideMode === 'fee' && (
+                <div><label className={lbl}>{t.shipOutsideFeeAmt}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={shipping().outsideFee ?? ''} onChange={e => updShipping({ outsideFee: parseFloat(e.target.value) || 0 })} /></div>
+              )}
+              <div className="md:col-span-2"><label className={lbl}>{t.shipOutsideNote}</label><input className={fld} value={shipping().outsideNote || ''} onChange={e => updShipping({ outsideNote: e.target.value })} placeholder={T ? 'برای سایر شهرها با ما تماس بگیرید' : 'Contact us for other cities'} /></div>
+            </div>
+          )}
+        </div>
+
         {fees().length === 0 ? <p className="text-sm text-gray-400 text-center py-3">{t.noFees}</p> : (
           <div className="space-y-2">
             {fees().map((f, idx) => (

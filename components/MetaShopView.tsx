@@ -8,6 +8,8 @@ import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDeta
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
+import { computeShippingQuote } from '../utils/metaShopShipping';
+import { shopDisplayCurrencies, formatShopAmount, displayCurrencyLabel } from '../utils/metaShopCurrency';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -258,6 +260,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const preferred = shop.defaultLang || langs[0]?.code || lang;
     return langs.some(l => l.code === preferred) ? preferred : (langs[0]?.code || lang);
   });
+  const displayCurrencies = useMemo(() => shopDisplayCurrencies(shop), [shop]);
+  const [viewCur, setViewCur] = useState(() => (shop.currency || 'USD').trim().toUpperCase());
+  useEffect(() => { setViewCur((shop.currency || 'USD').trim().toUpperCase()); }, [shop.id, shop.currency]);
   const [tab, setTab] = useState<string>('products');
 
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
@@ -288,6 +293,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       colItem: 'Item', colQty: 'Qty', colUnit: 'Unit price', colLine: 'Amount', invHint: 'This is a proforma preview; the final amount is confirmed after review.',
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
+      shipFree: 'Free', shipContact: 'Contact us', currency: 'Currency',
       discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
       catalog: 'PDF Catalog', downloadCatalog: 'Download PDF Catalog',
       addProperty: 'Request viewing', tabRealEstate: 'Properties', monthlyRent: 'Monthly rent', deposit: 'Deposit',
@@ -336,6 +342,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       colItem: 'شرح', colQty: 'تعداد', colUnit: 'قیمت واحد', colLine: 'مبلغ', invHint: 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.',
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
+      shipFree: 'رایگان', shipContact: 'تماس بگیرید', currency: 'ارز',
       discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
       catalog: 'کاتالوگ PDF', downloadCatalog: 'دانلود کاتالوگ PDF',
       addProperty: 'درخواست بازدید', tabRealEstate: 'املاک', monthlyRent: 'اجاره ماهانه', deposit: 'ودیعه',
@@ -384,6 +391,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       colItem: 'البند', colQty: 'الكمية', colUnit: 'سعر الوحدة', colLine: 'المبلغ', invHint: 'هذه معاينة أولية؛ يُؤكد المبلغ النهائي بعد المراجعة.',
       confirm: 'تأكيد وإرسال الطلب', tabProducts: 'قائمة المنتجات', tabServices: 'الخدمات', subtotalLabel: 'مجموع البنود',
       feesLabel: 'رسوم إضافية', optionalFee: '(اختياري)', discountTitle: 'رمز الخصم', discountPh: 'أدخل رمز الخصم', apply: 'تطبيق',
+      shipFree: 'مجاني', shipContact: 'اتصل بنا', currency: 'العملة',
       discountLine: 'خصم', taxIncl: 'شامل الضريبة', taxExcl: 'الضريبة', footPhone: 'الهاتف:', footEmail: 'البريد:', footWebsite: 'الموقع:',
       catalog: 'كتالوج PDF', downloadCatalog: 'تحميل كتالوج PDF',
       addProperty: 'طلب معاينة', tabRealEstate: 'العقارات', monthlyRent: 'الإيجار الشهري', deposit: 'التأمين',
@@ -432,6 +440,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       colItem: '项目', colQty: '数量', colUnit: '单价', colLine: '金额', invHint: '这是形式发票预览；最终金额将在审核后确认。',
       confirm: '确认并提交订单', tabProducts: '产品列表', tabServices: '服务', subtotalLabel: '商品小计',
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
+      shipFree: '免费', shipContact: '请联系我们', currency: '货币',
       discountLine: '折扣', taxIncl: '含税', taxExcl: '税', footPhone: '电话：', footEmail: '邮箱：', footWebsite: '网站：',
     },
   };
@@ -484,7 +493,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   };
 
   const theme = shop.theme;
-  const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
+  const money = (n?: number, sourceCur?: string) => {
+    if (n == null) return '';
+    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, locale);
+  };
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   // Deep link: ?shop=<slug>&product=<id> — indexable per-product URLs
@@ -611,6 +623,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const shopFees = shop.extraFees || [];
   const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
   const feesTotal = activeFees.reduce((a, f) => a + (f.amount || 0), 0);
+  const shippingQuote = useMemo(() => {
+    if (multiCur || isRealEstate) return null;
+    return computeShippingQuote(shop.shipping, grandTotal, form.city, L);
+  }, [shop.shipping, grandTotal, form.city, multiCur, isRealEstate, uiLang]);
+  const shippingAmount = shippingQuote?.amount ?? 0;
   const toggleFee = (id: string) => setSelectedFees(s => ({ ...s, [id]: !s[id] }));
 
   // ── Discount code ──
@@ -629,7 +646,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const discountAmount = computeDiscount(appliedDiscount);
   // ── Tax (inclusive or exclusive) ──
   const taxRate = shop.taxRate || 0;
-  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
+  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal + shippingAmount;
   const taxInclusive = !!shop.taxInclusive;
   const taxAmount = taxRate > 0 ? (taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * taxRate / 100) : 0;
   const finalTotal = taxInclusive ? taxBase : taxBase + taxAmount;
@@ -835,7 +852,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
         items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.hidden ? undefined : c.rate, lineTotal: c.hidden ? undefined : c.line, currency: c.cur, optionLabel: c.optionText || undefined, priceHidden: c.hidden || undefined })),
-        fees: activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
+        fees: [
+          ...(shippingQuote && (shippingAmount > 0 || shippingQuote.isFree) ? [{ label: shippingQuote.label, amount: shippingAmount }] : []),
+          ...activeFees.map(f => ({ label: L(f.label, f.labelEn), amount: f.amount })),
+        ],
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
@@ -1052,6 +1072,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             <span className="ms-code" dir="ltr">{shopCodeOf(shop)}</span>
           </div>
           <div className="ms-top-actions">
+            {displayCurrencies.length > 1 && (
+              <div className="ms-cur" title={S('currency')}>
+                {displayCurrencies.map(dc => (
+                  <button key={dc.code} type="button" className={viewCur === dc.code.trim().toUpperCase() ? 'on' : ''} onClick={() => setViewCur(dc.code.trim().toUpperCase())}>
+                    {displayCurrencyLabel(dc, uiLang)}
+                  </button>
+                ))}
+              </div>
+            )}
             {langs.length > 1 && (
               <div className="ms-lang">
                 {langs.map(lg => <button key={lg.code} className={uiLang === lg.code ? 'on' : ''} onClick={() => setUiLang(lg.code)}>{lg.name}</button>)}
@@ -1635,9 +1664,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                     })}
                   </tbody>
                 </table>
-                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
+                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0 || shippingQuote) ? (
                   <>
                     <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal, displayCur)}</b></div>
+                    {shippingQuote && (
+                      <div className={`ms-inv-ship${shippingQuote.isFree ? ' free' : ''}`}>
+                        <span>{shippingQuote.label}</span>
+                        <b>{shippingQuote.contactRequired ? S('shipContact') : shippingQuote.isFree ? S('shipFree') : money(shippingAmount, displayCur)}</b>
+                      </div>
+                    )}
+                    {shippingQuote?.note && <p className="ms-ship-note">{shippingQuote.note}</p>}
                     {(shop.discounts || []).length > 0 && (
                       <div className="ms-disc">
                         <div className="ms-disc-title">{t.discountTitle}</div>
@@ -1697,8 +1733,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 </div>
                 <div className="ms-grid2">
                   <input placeholder={t.country} value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
-                  <input placeholder={t.city} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
+                  <input placeholder={`${t.city}${shop.shipping?.enabled ? ' *' : ''}`} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
                 </div>
+                {shop.shipping?.enabled && (shop.shipping.regionsNote || shop.shipping.regionsNoteEn) && (
+                  <p className="ms-ship-hint">{L(shop.shipping.regionsNote, shop.shipping.regionsNoteEn)}</p>
+                )}
                 <textarea rows={2} placeholder={t.notes} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
                 {error && <p className="ms-err">{error}</p>}
               </div>
@@ -1833,6 +1872,12 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-lang { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
 .ms-lang button { padding:5px 9px; font-size:11px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; }
 .ms-lang button.on { background:var(--ms-primary); color:#fff; }
+.ms-cur { display:flex; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; max-width:min(220px, 42vw); flex-wrap:wrap; }
+.ms-cur button { padding:5px 8px; font-size:10px; font-weight:700; background:#fff; color:#64748b; border:none; cursor:pointer; white-space:nowrap; }
+.ms-cur button.on { background:#0f766e; color:#fff; }
+.ms-inv-ship { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:#475569; padding:6px 0; border-top:1px dashed #e2e8f0; margin-top:4px; }
+.ms-inv-ship.free b { color:#059669; }
+.ms-ship-note, .ms-ship-hint { font-size:11px; color:#64748b; line-height:1.45; margin:4px 0 0; }
 .ms-cover { background:var(--ms-cover,#2d4a1a); color:var(--ms-cover-text,#fff); padding:64px 24px; text-align:center; background-size:cover; background-position:center; min-height:240px; display:flex; align-items:center; justify-content:center; }
 .ms-cover-inner { max-width:740px; }
 .ms-collection { font-size:13px; letter-spacing:.35em; text-transform:uppercase; opacity:.8; margin-bottom:18px; }

@@ -1060,6 +1060,36 @@ export interface MetaShopDiscount {
   minOrder?: number;                     // optional minimum items subtotal to qualify
 }
 
+/** Visitor-facing currency with rate relative to shop.currency (1 base = rate × this currency). */
+export interface MetaShopDisplayCurrency {
+  code: string;
+  label?: string;
+  labelEn?: string;
+  /** Multiply a base-currency amount by this to show in `code`. */
+  rate: number;
+}
+
+/** Smart shipping rules shown on the checkout invoice. */
+export interface MetaShopShipping {
+  enabled?: boolean;
+  label?: string;
+  labelEn?: string;
+  flatAmount?: number;
+  /** Free shipping when items subtotal (before fees) is at or above this amount. */
+  freeAbove?: number;
+  freeLabel?: string;
+  freeLabelEn?: string;
+  /** Cities / regions we deliver to (e.g. Muscat, مسقط). Empty = all regions. */
+  coveredRegions?: string[];
+  regionsNote?: string;
+  regionsNoteEn?: string;
+  /** When customer city is outside coveredRegions */
+  outsideMode?: 'contact' | 'fee';
+  outsideFee?: number;
+  outsideNote?: string;
+  outsideNoteEn?: string;
+}
+
 // A predefined extra fee added at checkout (shipping, packaging, ...)
 export interface MetaShopFee {
   id: string;
@@ -1257,6 +1287,8 @@ export interface MetaShop {
   coverImage?: string;
   logo?: string;
   currency: string;
+  /** Extra currencies visitors can switch to; rates are vs `currency` (base). */
+  displayCurrencies?: MetaShopDisplayCurrency[];
   // contact / footer
   phone?: string;
   whatsapp?: string;   // default WhatsApp for all properties (per-property override in realEstate.agentWhatsapp)
@@ -1272,6 +1304,7 @@ export interface MetaShop {
   hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
+  shipping?: MetaShopShipping;
   discounts?: MetaShopDiscount[]; // discount codes
   taxRate?: number;          // VAT/tax percentage (0 or undefined = no tax)
   taxInclusive?: boolean;    // true = tax already included in prices; false = added on top
