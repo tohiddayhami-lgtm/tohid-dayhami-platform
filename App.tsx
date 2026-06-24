@@ -7,6 +7,7 @@ import { LoginView } from './components/LoginView';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
+import { ExportShopPage } from './components/ExportShopPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
 import { ConsultationTrackingView } from './components/ConsultationTrackingView';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaBazaar, CustomForm, TeamBrainstormPost, ConsultantCategory } from './types';
@@ -287,6 +288,7 @@ const parseUrl = (search: string, hash: string): ViewState | null => {
     if (page === 'form')     return 'new-ticket';
     if (page === 'tracking') return 'tracking';
     if (page === 'news')     return 'news';
+    if (page === 'export-shops') return 'export-shops';
     if (page === 'booking') return 'booking';
     if (page === 'consultation-track') return 'consultation-track';
     if (p.get('form'))       return 'custom-form';
@@ -378,7 +380,7 @@ const App: React.FC = () => {
   // All public views use query params — survive Instagram/WhatsApp/Telegram link sharing.
   const VIEW_URL: Record<ViewState, string> = {
     landing: '/', 'new-ticket': '?page=form', tracking: '?page=tracking',
-    news: '?page=news', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=', booking: '?page=booking', 'consultation-track': '?page=consultation-track',
+    news: '?page=news', 'export-shops': '?page=export-shops', admin: '#/admin', 'custom-form': '?form=', metashop: '?shop=', shopsdir: '?shops=1', bazaar: '?bazaar=', expo: '?expo=', 'expo-map': '?expo-map=', booking: '?page=booking', 'consultation-track': '?page=consultation-track',
   };
 
   // Public "ثبت درخواست" entry point. If an external URL is configured (e.g. a Google
@@ -492,7 +494,7 @@ const App: React.FC = () => {
     const lastActive = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
     const now = Date.now();
 
-    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map' || initialView === 'booking' || initialView === 'consultation-track';
+    const isPublicView = initialView === 'new-ticket' || initialView === 'tracking' || initialView === 'custom-form' || initialView === 'metashop' || initialView === 'shopsdir' || initialView === 'export-shops' || initialView === 'bazaar' || initialView === 'expo' || initialView === 'expo-map' || initialView === 'booking' || initialView === 'consultation-track';
 
     if (storedUser && lastActive && !isPublicView) {
       if (now - parseInt(lastActive) > INACTIVITY_TIMEOUT) {
@@ -1713,6 +1715,7 @@ const App: React.FC = () => {
             {[
               { id: 'new-ticket', label: t.newTicket,                           icon: <IconPlus      className="w-3.5 h-3.5" /> },
               { id: 'tracking',   label: t.tracking,                            icon: <IconSearch    className="w-3.5 h-3.5" /> },
+              { id: 'export-shops', label: lang === 'fa' ? 'فروشگاه صادراتی' : 'Export Shop', icon: <IconBriefcase className="w-3.5 h-3.5" /> },
               { id: 'news',       label: lang === 'fa' ? 'اخبار صادراتی' : 'Export News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
@@ -2046,6 +2049,28 @@ const App: React.FC = () => {
                   </div>
             )}
 
+            {view === 'export-shops' && (
+              <ExportShopPage
+                shops={metaShops}
+                bazaars={metaBazaars}
+                lang={lang}
+                onBack={() => setView('landing')}
+                isLoading={metaShops.length === 0}
+                onOpenShop={(slug) => {
+                  history.pushState(null, '', `?shop=${encodeURIComponent(slug)}`);
+                  setShopSlug(slug);
+                  setViewState('metashop');
+                  window.scrollTo(0, 0);
+                }}
+                onOpenProduct={(slug, productId) => {
+                  history.pushState(null, '', `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`);
+                  setShopSlug(slug);
+                  setViewState('metashop');
+                  window.scrollTo(0, 0);
+                }}
+              />
+            )}
+
             {view === 'news' && (
               <NewsPage
                 articles={news}
@@ -2135,7 +2160,8 @@ const App: React.FC = () => {
         {[
           { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />,      label: t.newTicket },
           { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />,     label: t.tracking },
-          { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار صادراتی' : 'Export News' },
+          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'فروشگاه' : 'Shop' },
+          { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار' : 'News' },
           { id: 'admin',      icon: <IconLock className="w-5 h-5" />,       label: t.expertPanel },
         ].map(item => (
           <button

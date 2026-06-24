@@ -672,7 +672,7 @@ export interface FeaturedBusiness {
   isGold: boolean;
 }
 
-export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking' | 'consultation-track';
+export type ViewState = 'landing' | 'new-ticket' | 'tracking' | 'admin' | 'export-shops' | 'news' | 'custom-form' | 'metashop' | 'shopsdir' | 'bazaar' | 'expo' | 'expo-map' | 'booking' | 'consultation-track';
 
 // ═══════════════════ META SHOP (online catalogs / shops) ═══════════════════
 export type MetaShopType = 'products' | 'services' | 'realestate';
