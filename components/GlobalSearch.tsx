@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NewsArticle, ServiceOption, MetaShop } from '../types';
 import { IconSearch, IconNewspaper, IconBriefcase, IconTag } from './Icons';
 import { shopCodeOf } from './shopCode';
-import { shopSearchHaystack, productSearchHaystack, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { shopSearchHaystack, textMatchesSearchQuery, buildProductSearchIndex, matchesNormalizedHaystack } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -26,7 +26,24 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
   const T = lang === 'fa';
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [query, setQuery] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const composingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const commitQuery = (value: string) => {
+    composingRef.current = false;
+    setIsComposing(false);
+    setQ(value);
+    setQuery(value.trim());
+  };
+
+  const onQueryChange = (value: string) => {
+    setQ(value);
+    if (!composingRef.current) setQuery(value.trim());
+  };
+
+  const searchBusy = isComposing || (!!q.trim() && q.trim() !== query);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 30);
@@ -44,45 +61,53 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
     placeholder: T ? 'جستجو در اخبار، خدمات، فروشگاه‌ها و محصولات...' : 'Search news, services, shops & products...',
     hint: T ? 'برای جستجو تایپ کنید' : 'Type to search',
     empty: T ? 'نتیجه‌ای یافت نشد.' : 'No results found.',
+    pending: T ? 'در حال جستجو…' : 'Searching…',
     news: T ? 'اخبار' : 'News', services: T ? 'خدمات' : 'Services', shops: T ? 'فروشگاه‌ها' : 'Shops', products: T ? 'محصولات' : 'Products',
     search: T ? 'جستجو' : 'Search',
   };
 
+  const productIndex = useMemo(() => {
+    const rows: { shop: MetaShop; hay: string; product: import('../types').MetaShopProduct }[] = [];
+    shops.filter(s => s.isActive !== false).forEach(s => {
+      const index = buildProductSearchIndex(s, (s.products || []).filter(p => p.active !== false));
+      index.forEach(e => rows.push({ shop: s, hay: e.hay, product: e.product }));
+    });
+    return rows;
+  }, [shops]);
+
   const results = useMemo<Result[]>(() => {
-    const term = q.trim().toLowerCase();
+    const term = query.trim();
     if (!term) return [];
     const out: Result[] = [];
 
     // News (published only)
     news.filter(n => n.isPublished !== false).forEach(n => {
-      const hay = `${n.title} ${n.titleEn || ''} ${n.summary || ''} ${n.summaryEn || ''} ${(n.tags || []).join(' ')} ${n.category || ''}`.toLowerCase();
+      const hay = `${n.title} ${n.titleEn || ''} ${n.summary || ''} ${n.summaryEn || ''} ${(n.tags || []).join(' ')} ${n.category || ''}`;
       if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'news', id: n.id, title: (T ? n.title : (n.titleEn || n.title)), sub: (T ? n.summary : (n.summaryEn || n.summary)) || n.category || '' });
     });
 
     // Services (active only)
     services.filter(s => s.isActive !== false).forEach(s => {
-      const hay = `${s.title} ${s.titleEn || ''} ${s.description || ''} ${s.descriptionEn || ''}`.toLowerCase();
+      const hay = `${s.title} ${s.titleEn || ''} ${s.description || ''} ${s.descriptionEn || ''}`;
       if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'service', id: s.id, title: (T && s.title) ? s.title : (s.titleEn || s.title), sub: (T ? s.description : (s.descriptionEn || s.description)) || '' });
     });
 
     // Shops (active only) — name, title, code, custom keywords, products
     shops.filter(s => s.isActive !== false).forEach(s => {
       const code = shopCodeOf(s);
-      const hay = `${shopSearchHaystack(s)} ${code}`.toLowerCase();
+      const hay = `${shopSearchHaystack(s)} ${code}`;
       if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'shop', slug: s.slug, title: s.title || s.name, sub: s.name, code });
     });
 
-    // Products across shops (name, sku, group, product & shop keywords)
-    shops.filter(s => s.isActive !== false).forEach(s => {
-      (s.products || []).forEach(p => {
-        if (p.active === false) return;
-        const hay = productSearchHaystack(s, p);
-        if (textMatchesSearchQuery(hay, term)) out.push({ kind: 'product', slug: s.slug, productId: p.id, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
-      });
+    // Products across shops (pre-indexed haystacks)
+    productIndex.forEach(({ shop: s, hay, product: p }) => {
+      if (matchesNormalizedHaystack(hay, term)) {
+        out.push({ kind: 'product', slug: s.slug, productId: p.id, title: p.name, sub: `${s.name}${p.sku ? ` · ${p.sku}` : ''}`, code: shopCodeOf(s) });
+      }
     });
 
     return out.slice(0, 40);
-  }, [q, news, services, shops, T]);
+  }, [query, news, services, shops, productIndex, T]);
 
   const grouped = useMemo(() => {
     const g: Record<string, Result[]> = { news: [], service: [], shop: [], product: [] };
@@ -91,7 +116,7 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
   }, [results]);
 
   const pick = (r: Result) => {
-    setOpen(false); setQ('');
+    setOpen(false); commitQuery('');
     if (r.kind === 'news') onOpenNews(r.id);
     else if (r.kind === 'service') onOpenService(r.id);
     else if (r.kind === 'product') onOpenProduct(r.slug, r.productId);
@@ -126,12 +151,29 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
           <div className="gs-panel" onClick={e => e.stopPropagation()}>
             <div className="gs-input-wrap">
               <IconSearch className="w-5 h-5 text-gray-400 shrink-0" />
-              <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder={t.placeholder} className="gs-input" />
+              <input
+                ref={inputRef}
+                type="search"
+                value={q}
+                onChange={e => onQueryChange(e.target.value)}
+                onCompositionStart={() => { composingRef.current = true; setIsComposing(true); }}
+                onCompositionEnd={e => requestAnimationFrame(() => commitQuery(e.currentTarget.value))}
+                onBlur={e => commitQuery(e.currentTarget.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitQuery((e.currentTarget as HTMLInputElement).value); } }}
+                placeholder={t.placeholder}
+                className="gs-input"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
               <button onClick={() => setOpen(false)} className="gs-close">Esc</button>
             </div>
             <div className="gs-body">
               {!q.trim() ? (
                 <p className="gs-hint">{t.hint}</p>
+              ) : searchBusy ? (
+                <p className="gs-hint">{t.pending}</p>
               ) : results.length === 0 ? (
                 <p className="gs-hint">{t.empty}</p>
               ) : (

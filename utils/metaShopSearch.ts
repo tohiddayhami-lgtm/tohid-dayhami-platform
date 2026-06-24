@@ -23,9 +23,10 @@ const I18N_FLAT = (i18n?: Record<string, Record<string, string>>): string[] => {
   return Object.values(i18n).flatMap(lang => Object.values(lang || {}));
 };
 
-/** Normalize text for fuzzy search — Persian variants, case, ZWNJ, diacritics. */
+/** Normalize text for fuzzy search — Persian variants, case, ZWNJ, diacritics, digits. */
 export function normalizeSearchText(text: string): string {
   return String(text)
+    .normalize('NFKC')
     .toLowerCase()
     .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
     .replace(/[\u200c\u200d\uFEFF]/g, ' ')
@@ -33,6 +34,8 @@ export function normalizeSearchText(text: string): string {
     .replace(/ي/g, 'ی')
     .replace(/ك/g, 'ک')
     .replace(/ة/g, 'ه')
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -53,16 +56,31 @@ export function searchQueryTokens(query: string): string[] {
  * - every query token must appear somewhere in haystack (order-independent, gaps allowed).
  */
 export function textMatchesSearchQuery(haystack: string, query: string): boolean {
+  const hay = normalizeSearchText(haystack);
+  return matchesNormalizedHaystack(hay, query);
+}
+
+/** Fast path when haystack is already normalized. */
+export function matchesNormalizedHaystack(normalizedHay: string, query: string): boolean {
   const q = query.trim();
   if (!q) return true;
-  const hay = normalizeSearchText(haystack);
   const phrase = normalizeSearchText(q);
   if (!phrase) return true;
-  if (hay.includes(phrase)) return true;
+  if (normalizedHay.includes(phrase)) return true;
   const tokens = searchQueryTokens(q);
   if (tokens.length === 0) return true;
-  if (tokens.length === 1) return hay.includes(tokens[0]);
-  return tokens.every(tok => hay.includes(tok));
+  if (tokens.length === 1) return normalizedHay.includes(tokens[0]);
+  return tokens.every(tok => normalizedHay.includes(tok));
+}
+
+export type ProductSearchIndexEntry = { product: MetaShopProduct; hay: string };
+
+/** Pre-normalize product haystacks once — avoids rebuilding on every keystroke (mobile perf). */
+export function buildProductSearchIndex(shop: MetaShop, products: MetaShopProduct[]): ProductSearchIndexEntry[] {
+  return products.map(product => ({
+    product,
+    hay: normalizeSearchText(productSearchHaystack(shop, product)),
+  }));
 }
 
 export function shopSearchHaystack(shop: MetaShop): string {
@@ -105,4 +123,19 @@ export function shopMatchesSearch(shop: MetaShop, q: string): boolean {
 export function productMatchesSearch(shop: MetaShop, p: MetaShopProduct, q: string): boolean {
   if (!q.trim()) return true;
   return textMatchesSearchQuery(productSearchHaystack(shop, p), q);
+}
+
+export function filterProductsBySearch(
+  index: ProductSearchIndexEntry[],
+  query: string,
+  activeCat: string,
+  activeSub: string,
+): MetaShopProduct[] {
+  const q = query.trim();
+  if (!q) {
+    return index
+      .map(e => e.product)
+      .filter(p => (activeCat === 'all' || p.group === activeCat) && (activeSub === 'all' || p.subcategory === activeSub));
+  }
+  return index.filter(e => matchesNormalizedHaystack(e.hay, q)).map(e => e.product);
 }

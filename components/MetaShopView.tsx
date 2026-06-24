@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
-import { productMatchesSearch } from '../utils/metaShopSearch';
+import { buildProductSearchIndex, filterProductsBySearch } from '../utils/metaShopSearch';
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
@@ -177,6 +177,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [activeCat, setActiveCat] = useState<string>('all');
   const [activeSub, setActiveSub] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const composingRef = useRef(false);
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
   const [galIdx, setGalIdx] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
@@ -279,7 +282,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const STRINGS: Record<string, Record<string, string>> = {
     en: {
       cartBtn: 'Place Order', addProduct: 'Add to cart', addService: 'Add to request', added: 'Added ✓', all: 'All',
-      searchPh: 'Search products...', empty: 'No items found.', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
+      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
       qty: 'Qty', remove: 'Remove', total: 'Total', yourInfo: 'Your Information', name: 'Full Name', company: 'Company',
       phone: 'Mobile / WhatsApp', email: 'Email', country: 'Country', city: 'City / Destination', notes: 'Notes / Special requests',
       submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
@@ -328,7 +331,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
-      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
+      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
       qty: 'تعداد', remove: 'حذف', total: 'جمع کل', yourInfo: 'اطلاعات شما', name: 'نام و نام خانوادگی', company: 'شرکت',
       phone: 'موبایل / واتس‌اپ', email: 'ایمیل', country: 'کشور', city: 'شهر / مقصد', notes: 'توضیحات و درخواست‌های ویژه',
       submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
@@ -377,7 +380,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
-      searchPh: 'بحث في العقارات...', empty: 'لا توجد نتائج.', cartTitle: 'طلبك', cartEmpty: 'لا توجد عناصر بعد.',
+      searchPh: 'بحث في العقارات...', empty: 'لا توجد نتائج.', searchPending: 'جارٍ البحث…', cartTitle: 'طلبك', cartEmpty: 'لا توجد عناصر بعد.',
       qty: 'الكمية', remove: 'حذف', total: 'الإجمالي', yourInfo: 'معلوماتك', name: 'الاسم الكامل', company: 'الشركة',
       phone: 'الجوال / واتساب', email: 'البريد الإلكتروني', country: 'الدولة', city: 'المدينة / الوجهة', notes: 'ملاحظات / طلبات خاصة',
       submit: 'إرسال الطلب', submitting: 'جارٍ الإرسال...', incomplete: 'يرجى إدخال الاسم ورقم الجوال.', err: 'فشل الإرسال. حاول مرة أخرى.',
@@ -426,7 +429,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
-      searchPh: '搜索商品...', empty: '未找到商品。', cartTitle: '您的订单', cartEmpty: '购物车为空。',
+      searchPh: '搜索商品...', empty: '未找到商品。', searchPending: '搜索中…', cartTitle: '您的订单', cartEmpty: '购物车为空。',
       qty: '数量', remove: '移除', total: '合计', yourInfo: '您的信息', name: '姓名', company: '公司',
       phone: '手机 / WhatsApp', email: '邮箱', country: '国家', city: '城市 / 目的地', notes: '备注 / 特殊要求',
       submit: '提交订单', submitting: '提交中...', incomplete: '请填写姓名和电话。', err: '提交失败，请重试。',
@@ -500,6 +503,29 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+  const searchIndex = useMemo(() => buildProductSearchIndex(shop, products), [shop.id, shop.searchKeywords, products]);
+
+  const commitSearch = useCallback((value: string) => {
+    composingRef.current = false;
+    setIsComposing(false);
+    setSearch(value);
+    setSearchQuery(value.trim());
+  }, []);
+
+  const onSearchChange = (value: string) => {
+    setSearch(value);
+    if (!composingRef.current) setSearchQuery(value.trim());
+  };
+
+  useEffect(() => {
+    setSearch('');
+    setSearchQuery('');
+    composingRef.current = false;
+    setIsComposing(false);
+  }, [shop.id]);
+
+  const searchOutOfSync = !!search.trim() && search.trim() !== searchQuery;
+  const searchBusy = isComposing || searchOutOfSync;
   // Deep link: ?shop=<slug>&product=<id> — indexable per-product URLs
   const readProductParam = () => {
     try {
@@ -548,15 +574,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     return set;
   }, [products, activeCat]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim();
-    return products.filter(p => {
-      const matchCat = activeCat === 'all' || p.group === activeCat;
-      const matchSub = activeSub === 'all' || p.subcategory === activeSub;
-      const matchSearch = !q || productMatchesSearch(shop, p, q);
-      return (q ? matchSearch : matchCat && matchSub && matchSearch);
-    });
-  }, [products, activeCat, activeSub, search, shop]);
+  const filtered = useMemo(
+    () => filterProductsBySearch(searchIndex, searchQuery, activeCat, activeSub),
+    [searchIndex, searchQuery, activeCat, activeSub],
+  );
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
 
@@ -1117,7 +1138,31 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         {/* Search */}
         <div className="ms-tools">
           <div className="ms-search">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.searchPh} />
+            <input
+              type="search"
+              value={search}
+              onChange={e => onSearchChange(e.target.value)}
+              onCompositionStart={() => { composingRef.current = true; setIsComposing(true); }}
+              onCompositionEnd={e => {
+                const v = e.currentTarget.value;
+                requestAnimationFrame(() => commitSearch(v));
+              }}
+              onBlur={e => commitSearch(e.currentTarget.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitSearch((e.currentTarget as HTMLInputElement).value);
+                  (e.currentTarget as HTMLInputElement).blur();
+                }
+              }}
+              placeholder={t.searchPh}
+              enterKeyHint="search"
+              inputMode="search"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
           </div>
         </div>
@@ -1157,7 +1202,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         )}
 
         {/* Grid */}
-        {filtered.length === 0 ? <p className="ms-empty">{t.empty}</p> : (
+        {searchBusy ? (
+          <p className="ms-empty ms-search-pending">{S('searchPending')}</p>
+        ) : filtered.length === 0 ? (
+          <p className="ms-empty">{t.empty}</p>
+        ) : (
           <div className="ms-grid">
             {filtered.map(p => productCard(p))}
           </div>
@@ -1905,6 +1954,7 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-search { position:relative; }
 .ms-search input { width:100%; border:1.5px solid #e2e8f0; border-radius:999px; padding:11px 42px 11px 16px; font-size:13px; outline:none; box-shadow:0 8px 26px rgba(15,23,42,.06); }
 .ms-search input:focus { border-color:var(--ms-primary); }
+.ms-search-pending { opacity:.65; font-style:normal; }
 .ms-search svg { position:absolute; inset-inline-end:15px; top:50%; transform:translateY(-50%); color:#94a3b8; }
 .ms-filter-bar { display:flex; gap:8px; overflow-x:auto; padding:14px 2px 4px; scrollbar-width:none; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
 .ms-filter-bar::-webkit-scrollbar { display:none; }
