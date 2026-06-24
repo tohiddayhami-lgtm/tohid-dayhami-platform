@@ -46,16 +46,20 @@ const shopTr = (shop: MetaShop, key: string, legacy: string | undefined, lang: s
 
 export const metaFromMetaShop = (shop: MetaShop, origin = '', queryLang?: string | null): PageMeta => {
   const lang = pickShopOgLang(shop, queryLang);
-  const title = shopTr(shop, 'title', shop.title?.trim() || shop.name?.trim(), lang) || shop.slug;
+  const name = shopTr(shop, 'name', shop.name?.trim(), lang) || shop.name || shop.slug;
+  const seoTitle = shopTr(shop, 'seoTitle', shop.seoTitle?.trim(), lang);
+  const seoDescription = shopTr(shop, 'seoDescription', shop.seoDescription?.trim(), lang);
+  const heroTitle = shopTr(shop, 'title', shop.title?.trim(), lang);
   const subtitle = shopTr(shop, 'subtitle', shop.subtitle?.trim(), lang);
   const collection = shopTr(shop, 'collectionText', shop.collectionText?.trim(), lang);
-  const description = collection || subtitle
-    || (shop.type === 'services' ? `Services — ${shop.name}` : shop.type === 'realestate' ? `Real Estate — ${shop.name}` : shop.name);
-  const siteName = shopTr(shop, 'name', shop.name?.trim(), lang) || shop.name;
+  const title = seoTitle || name || heroTitle || shop.slug;
+  const description = seoDescription || collection || subtitle
+    || (shop.type === 'services' ? `Services — ${name}` : shop.type === 'realestate' ? `Real Estate — ${name}` : name);
+  const siteName = name;
   return {
     title,
     description: truncate(description, 160),
-    image: absUrl(origin, shop.coverImage || shop.logo),
+    image: absUrl(origin, shop.seoImage || shop.logo || shop.coverImage),
     type: 'website',
     siteName,
   };
@@ -76,7 +80,7 @@ export const metaFromMetaShopProduct = (
   return {
     title: `${pName}${group} | ${shopName}`,
     description: truncate(pDesc || `${pName} — ${shopName}`, 160),
-    image: absUrl(origin, product.images?.[0] || shop.coverImage || shop.logo),
+    image: absUrl(origin, product.images?.[0] || shop.seoImage || shop.logo || shop.coverImage),
     type: 'product',
     siteName: shopName,
   };

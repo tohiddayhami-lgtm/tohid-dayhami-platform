@@ -1291,6 +1291,10 @@ export interface MetaShop {
   searchKeywords?: string[];
   /** Product shops: show public supplier partnership form in footer (next to PDF catalog). */
   supplierCollaborationEnabled?: boolean;
+  /** Link-share / Open Graph (WhatsApp, Telegram, …) — overrides defaults when set. */
+  seoTitle?: string;
+  seoDescription?: string;
+  seoImage?: string;
   createdAt?: string;
 }
 

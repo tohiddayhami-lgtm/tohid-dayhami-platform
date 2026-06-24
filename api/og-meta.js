@@ -64,6 +64,30 @@ async function queryByField(col, field, value) {
   return doc?.fields ? parseDoc(doc) : null;
 }
 
+async function listCollection(col) {
+  const docs = [];
+  let pageToken;
+  do {
+    const qs = new URLSearchParams({ pageSize: '200', key: API_KEY });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const r = await fetch(`${BASE}/${col}?${qs}`);
+    if (!r.ok) break;
+    const data = await r.json();
+    for (const doc of data.documents || []) docs.push(parseDoc(doc));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return docs;
+}
+
+async function loadShopBySlug(slug) {
+  let shop = await queryByField('metaShops', 'slug', slug);
+  if (!shop) {
+    const all = await listCollection('metaShops');
+    shop = all.find(s => s.slug === slug) || null;
+  }
+  return shop;
+}
+
 function truncate(s, max = 160) {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
   if (!t) return '';
@@ -114,17 +138,20 @@ function pickShopOgLang(shop, queryLang) {
 
 function metaFromShopDoc(shop, origin, queryLang) {
   const lang = pickShopOgLang(shop, queryLang);
-  const title = translateField(shop.i18n, 'title', (shop.title || shop.name || shop.slug || '').trim(), lang);
+  const name = translateField(shop.i18n, 'name', (shop.name || '').trim(), lang) || shop.name || shop.slug;
+  const seoTitle = translateField(shop.i18n, 'seoTitle', (shop.seoTitle || '').trim(), lang);
+  const seoDescription = translateField(shop.i18n, 'seoDescription', (shop.seoDescription || '').trim(), lang);
+  const heroTitle = translateField(shop.i18n, 'title', (shop.title || '').trim(), lang);
   const subtitle = translateField(shop.i18n, 'subtitle', (shop.subtitle || '').trim(), lang);
   const collection = translateField(shop.i18n, 'collectionText', (shop.collectionText || '').trim(), lang);
-  const description = collection || subtitle
-    || (shop.type === 'services' ? `Services — ${shop.name}` : shop.type === 'realestate' ? `Real Estate — ${shop.name}` : shop.name);
-  const siteName = translateField(shop.i18n, 'name', (shop.name || '').trim(), lang) || shop.name;
+  const title = seoTitle || name || heroTitle || shop.slug;
+  const description = seoDescription || collection || subtitle
+    || (shop.type === 'services' ? `Services — ${name}` : shop.type === 'realestate' ? `Real Estate — ${name}` : name);
   return {
     title,
     description: truncate(description),
-    image: absUrl(origin, shop.coverImage || shop.logo),
-    siteName: siteName || shop.name,
+    image: absUrl(origin, shop.seoImage || shop.logo || shop.coverImage),
+    siteName: name,
     type: 'website',
   };
 }
@@ -149,7 +176,7 @@ async function resolveMeta(searchOrParams, origin) {
 
   const shopSlug = p.get('shop') || p.get('c');
   if (shopSlug) {
-    const shop = await queryByField('metaShops', 'slug', shopSlug);
+    const shop = await loadShopBySlug(shopSlug);
     if (shop && shop.isActive !== false) {
       const productId = p.get('product') || p.get('p');
       if (productId) {
@@ -162,7 +189,7 @@ async function resolveMeta(searchOrParams, origin) {
           return {
             title: `${pName} | ${shopName}`,
             description: truncate(pDesc || `${pName} — ${shopName}`),
-            image: absUrl(origin, product.images?.[0] || shop.coverImage || shop.logo),
+            image: absUrl(origin, product.images?.[0] || shop.seoImage || shop.logo || shop.coverImage),
             siteName: shopName,
             type: 'product',
           };

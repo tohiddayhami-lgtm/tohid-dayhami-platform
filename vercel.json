@@ -16,12 +16,17 @@
     { "source": "/sitemap.xml",           "destination": "/sitemap.xml" },
     { "source": "/robots.txt",            "destination": "/robots.txt"  },
     {
+      "source": "/((?!api/|assets/).*)",
+      "missing": [{ "type": "header", "key": "Sec-Fetch-User" }],
+      "destination": "/api/og-meta"
+    },
+    {
       "source": "/:path*",
       "has": [
         {
           "type": "header",
           "key": "user-agent",
-          "value": "(?i).*(whatsapp|facebookexternalhit|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|facebot|ia_archiver).*"
+          "value": "(?i).*(whatsapp|facebookexternalhit|meta-externalagent|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|facebot|ia_archiver|embedly|quora link preview|showyoubot|outbrain|pinterest|vkshare|w3c_validator).*"
         }
       ],
       "destination": "/api/og-meta"

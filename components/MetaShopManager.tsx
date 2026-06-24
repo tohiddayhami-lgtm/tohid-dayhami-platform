@@ -12,7 +12,7 @@ import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
-import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
 
 interface Props {
@@ -163,6 +163,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [importText, setImportText] = useState('');
   const coverInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const seoImageInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
@@ -364,6 +365,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     gsiteStep2: T ? 'تب «Embed code» را انتخاب کن و کد iframe بالا را بچسبان (یا تب «By URL» و لینک تعبیه را بگذار).' : 'Pick the "Embed code" tab and paste the iframe code above (or use "By URL" with the embed URL).',
     gsiteStep3: T ? 'روی «Next ← Insert» بزن و اندازه‌ی قاب را روی صفحه تنظیم کن. تمام؛ فروشگاه داخل سایت زنده است.' : 'Click "Next → Insert" and resize the frame on the page. Done — the shop is live inside your site.',
     gsiteNote: T ? 'نکته: سفارش‌های ثبت‌شده از داخل گوگل‌سایت در بخش «سفارش‌ها» با برچسب 🌐 گوگل‌سایت مشخص می‌شوند.' : 'Note: orders placed from inside the Google Site are marked with a 🌐 Google Site badge in the Orders tab.',
+    seoT: T ? 'اشتراک‌گذاری لینک (واتس‌اپ، تلگرام، …)' : 'Link sharing (WhatsApp, Telegram, …)',
+    seoHint: T ? 'وقتی لینک فروشگاه را در پیام‌رسان می‌فرستید، این عنوان، توضیح و تصویر در پیش‌نمایش نمایش داده می‌شود. اگر خالی بماند از نام فروشگاه، لوگو و متن معرفی استفاده می‌شود.' : 'When you share the shop link in a messenger, this title, description and image appear in the preview. Empty fields fall back to shop name, logo and intro text.',
+    seoTitle: T ? 'عنوان پیش‌نمایش' : 'Preview title',
+    seoTitlePh: T ? 'مثلا: شیراز سوئیتس و آجیل' : 'e.g. Shiraz Sweets & Nuts',
+    seoDesc: T ? 'توضیح کوتاه' : 'Short description',
+    seoDescPh: T ? 'مثلا: صادرات آجیل و شیرینی‌جات با کیفیت صادراتی' : 'e.g. Export-grade nuts and sweets',
+    seoImage: T ? 'تصویر پیش‌نمایش' : 'Preview image',
+    seoImageHint: T ? 'ترجیحاً لوگو یا تصویر مربع/افقی — اگر خالی باشد از لوگو و سپس کاور استفاده می‌شود.' : 'Prefer logo or a square/landscape image — falls back to logo then cover.',
+    seoPreview: T ? 'پیش‌نمایش' : 'Preview',
+    seoI18n: T ? 'عنوان و توضیح به زبان‌های دیگر' : 'Title & description per language',
+    seoI18nHint: T ? 'برای هر زبان جداگانه — اگر خالی باشد از فیلدهای بالا یا پیش‌فرض فروشگاه استفاده می‌شود.' : 'Per language — empty fields fall back to the defaults above.',
+    seoRefreshHint: T ? 'پس از ذخیره، واتس‌اپ ممکن است تا چند ساعت پیش‌نمایش قبلی را نشان دهد. برای تست سریع از ابزار Facebook Sharing Debugger استفاده کنید.' : 'After saving, WhatsApp may cache the old preview for a while. Use Facebook Sharing Debugger for a quick test.',
   };
 
   const shopTypeBadge = (type: MetaShopType) => type === 'services' ? t.typeServices : type === 'realestate' ? t.typeRealEstate : t.typeProducts;
@@ -1309,6 +1322,62 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             </div>
           </div>
         </div>
+      </div>
+
+      {/* SEO / link sharing */}
+      <div className={card}>
+        <h4 className="font-bold text-gray-700 mb-1 flex items-center gap-2"><IconLink className="w-4 h-4 text-sky-500" />{t.seoT}</h4>
+        <p className="text-xs text-gray-500 mb-4">{t.seoHint}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label className={lbl}>{t.seoTitle}</label><input className={fld} value={draft.seoTitle || ''} onChange={e => upd({ seoTitle: e.target.value })} placeholder={draft.name || t.seoTitlePh} /></div>
+          <div className="md:col-span-2"><label className={lbl}>{t.seoDesc}</label><textarea rows={2} className={fld} value={draft.seoDescription || ''} onChange={e => upd({ seoDescription: e.target.value })} placeholder={draft.collectionText || draft.subtitle || t.seoDescPh} /></div>
+          <div className="md:col-span-2">
+            <label className={lbl}>{t.seoImage}</label>
+            <div className="flex items-center gap-2 mb-2">
+              {(draft.seoImage || draft.logo) && <img src={draft.seoImage || draft.logo} className="w-12 h-12 object-contain rounded border bg-white" alt="" />}
+              <button type="button" onClick={() => seoImageInputRef.current?.click()} className="px-3 py-2 rounded-lg border border-gray-300 text-sm flex items-center gap-1"><IconUpload className="w-4 h-4" />{t.upload}</button>
+              {draft.seoImage && <button type="button" onClick={() => upd({ seoImage: '' })} className="text-red-400"><IconTrash className="w-4 h-4" /></button>}
+              {!draft.seoImage && draft.logo && <button type="button" onClick={() => upd({ seoImage: draft.logo })} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'استفاده از لوگو' : 'Use logo'}</button>}
+              <input type="file" ref={seoImageInputRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ seoImage: url })); }} />
+            </div>
+            <input className={fld + ' dir-ltr text-xs'} placeholder={t.orLink} value={draft.seoImage || ''} onChange={e => upd({ seoImage: e.target.value })} />
+            <p className="text-[11px] text-gray-400 mt-1">{t.seoImageHint}</p>
+          </div>
+        </div>
+        {shopLangs().length > 0 && (
+          <div className="border-t border-gray-100 mt-4 pt-4">
+            <h5 className="text-sm font-bold text-gray-700 mb-1">{t.seoI18n}</h5>
+            <p className="text-xs text-gray-500 mb-3">{t.seoI18nHint}</p>
+            <div className="space-y-3">
+              {shopLangs().map(lg => (
+                <div key={lg.code} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-xl bg-gray-50/80 border border-gray-100">
+                  <div className="md:col-span-2 text-xs font-bold text-sky-700">{lg.name || lg.code}</div>
+                  <div><label className={lbl}>{t.seoTitle}</label><input className={fld} value={draft.i18n?.[lg.code]?.seoTitle || ''} onChange={e => updShopI18n(lg.code, 'seoTitle', e.target.value)} /></div>
+                  <div className="md:col-span-2"><label className={lbl}>{t.seoDesc}</label><textarea rows={2} className={fld} value={draft.i18n?.[lg.code]?.seoDescription || ''} onChange={e => updShopI18n(lg.code, 'seoDescription', e.target.value)} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {draft.slug && (
+          <div className="mt-4 p-3 rounded-xl border border-sky-100 bg-sky-50/50">
+            <div className="text-xs font-bold text-gray-600 mb-2">{t.seoPreview}</div>
+            {(() => {
+              const preview = metaFromMetaShop(draft, shopBaseUrl.replace(/\?.*$/, '').replace(/\/$/, '') || 'https://www.tohiddayhami.com');
+              return (
+                <div className="flex gap-3 items-start">
+                  {preview.image && <img src={preview.image} className="w-16 h-16 rounded-lg object-cover border bg-white shrink-0" alt="" />}
+                  <div className="min-w-0">
+                    <div className="font-bold text-gray-800 text-sm truncate">{preview.title}</div>
+                    {preview.description && <div className="text-xs text-gray-600 mt-0.5 line-clamp-2">{preview.description}</div>}
+                    <div className="text-[10px] text-gray-400 mt-1 dir-ltr truncate">{shopUrl(draft)}</div>
+                  </div>
+                </div>
+              );
+            })()}
+            <p className="text-[10px] text-gray-400 mt-2">{t.seoRefreshHint}</p>
+          </div>
+        )}
       </div>
 
       {/* Contact */}
