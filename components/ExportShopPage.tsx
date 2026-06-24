@@ -193,6 +193,13 @@ export const ExportShopPage: React.FC<Props> = ({
   const typeLabel = (s: MetaShop) =>
     s.type === 'services' ? t.services : s.type === 'realestate' ? t.realestate : t.products;
 
+  const bazaarTitle = bazaar ? (bLbl(bazaar.title, fa) || bazaar.name) : '';
+  const bazaarSubtitle = bazaar ? bLbl(bazaar.subtitle, fa) : '';
+  const accentCover = bazaar?.theme?.cover || '#111827';
+  const heroBackground = bazaar?.coverImage
+    ? `linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.68)), url(${bazaar.coverImage}) center/cover no-repeat`
+    : `linear-gradient(135deg, ${accentCover}, #374151)`;
+
   if (!bazaar) {
     return (
       <div className="animate-fade-in py-2">
@@ -213,26 +220,47 @@ export const ExportShopPage: React.FC<Props> = ({
   }
 
   return (
-    <div className="animate-fade-in py-2">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{t.subtitle}</p>
-        </div>
-        <button type="button" onClick={onBack} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
+    <div className="animate-fade-in -mx-5">
+      {/* Hero — بازارچه انتخاب‌شده */}
+      <header
+        className="relative overflow-hidden rounded-b-2xl text-white text-center"
+        style={{ background: heroBackground, minHeight: bazaar.coverImage ? '220px' : '180px' }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" aria-hidden />
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute top-4 start-5 z-10 text-xs text-white/80 hover:text-white border border-white/25 rounded-lg px-3 py-1.5 backdrop-blur-sm bg-black/20 transition-colors"
+        >
           {fa ? 'بازگشت' : 'Back'}
         </button>
-      </div>
+        <div className="relative z-[1] px-5 pt-12 pb-14 md:pt-14 md:pb-16 max-w-2xl mx-auto">
+          {bazaar.logo ? (
+            <img src={bazaar.logo} alt="" className="h-12 md:h-14 mx-auto mb-4 object-contain drop-shadow-md" />
+          ) : (
+            <div className="text-3xl mb-3 opacity-90" aria-hidden>🏪</div>
+          )}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 mb-2">{t.title}</p>
+          <h1 className="text-2xl md:text-3xl font-bold leading-tight drop-shadow-sm">{bazaarTitle}</h1>
+          {bazaarSubtitle && (
+            <p className="text-sm text-white/85 mt-2 leading-relaxed max-w-lg mx-auto">{bazaarSubtitle}</p>
+          )}
+          <span className="inline-block mt-4 text-xs font-semibold bg-white/15 border border-white/25 rounded-full px-4 py-1.5 backdrop-blur-sm">
+            {t.count(bazaarShopPool.length)}
+          </span>
+        </div>
+      </header>
 
-      <div className="relative mb-5">
-        <IconSearch className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder={t.searchPh}
-          className="w-full ps-9 pe-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-gray-400"
-        />
-      </div>
+      <div className="px-5 pt-0">
+        <div className="relative -mt-5 mb-6 z-10">
+          <IconSearch className="absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder={t.searchPh}
+            className="w-full ps-9 pe-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white shadow-md focus:outline-none focus:border-gray-400"
+          />
+        </div>
 
       {!qLower && bazaarLevels && (
         <div className="flex flex-col gap-4 mb-6">
@@ -375,6 +403,7 @@ export const ExportShopPage: React.FC<Props> = ({
           )}
         </>
       )}
+      </div>
     </div>
   );
 };
