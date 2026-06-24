@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
-import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber } from '../utils/metaShopLang';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString } from '../utils/metaShopLang';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
+import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
 
 interface Props {
@@ -70,6 +71,9 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     return langsList.some(l => l.code === preferred) ? preferred : (langsList[0]?.code || lang);
   })();
   const [uiLang, setUiLang] = useState<string>(initialLang);
+  const displayCurrencies = useMemo(() => shopDisplayCurrencies(shop), [shop]);
+  const [viewCur, setViewCur] = useState(() => readViewCurrencyFromUrl(shop));
+  const pickViewCurrency = (code: string) => { setViewCur(code); writeViewCurrencyToUrl(code); };
 
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
   const locale = localeForLang(uiLang);
@@ -81,7 +85,12 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
   const pStock = (p: MetaShopProduct) => translateStockLabel(p.stockLabel, uiLang, p.i18n);
-  const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${formatMetaShopNumber(Math.round(n * 100) / 100)}`;
+  const curOf = (p: MetaShopProduct, optCur?: string) =>
+    (optCur?.trim()) || (p.currency?.trim()) || shop.currency;
+  const money = (n?: number, sourceCur?: string) => {
+    if (n == null) return '';
+    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop);
+  };
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   const pGroup = (p: MetaShopProduct) => translateProductGroup(shop, p.group || '', uiLang, p.i18n);
@@ -135,7 +144,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const totalPages = coverPages + tocPages + pages.length + 1; // + back cover
 
   // ── Public links ──
-  const shopLink = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}`;
+  const shopLink = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}&lang=${uiLang}${displayCurrencies.length > 1 && viewCur !== shopBaseCurrency(shop) ? `&cur=${encodeURIComponent(viewCur)}` : ''}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&qzone=1&data=${encodeURIComponent(shopLink)}`;
 
   // ── Dates ──
@@ -202,7 +211,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
       return (
         <div className="msc-price-opts">
           {opts.slice(0, 4).map(o => (
-            <span key={o.id} className="msc-price-opt"><b>{L(o.label, o.labelEn)}</b> {money(o.price, o.currency || p.currency)}</span>
+            <span key={o.id} className="msc-price-opt"><b>{L(o.label, o.labelEn)}</b> {money(o.price, curOf(p, o.currency))}</span>
           ))}
         </div>
       );
@@ -210,9 +219,9 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     if (p.price != null && p.price > 0) {
       return (
         <div className="msc-price-main">
-          {money(p.price, p.currency)}
+          {money(p.price, curOf(p))}
           <span className="msc-price-unit">{p.priceUnit ? ` ${p.priceUnit}` : (p.unit ? ` / ${p.unit}` : '')}</span>
-          {p.packPrice ? <span className="msc-price-pack"> · {s('pack')}: {money(p.packPrice, p.currency)}</span> : null}
+          {p.packPrice ? <span className="msc-price-pack"> · {s('pack')}: {money(p.packPrice, curOf(p))}</span> : null}
         </div>
       );
     }
@@ -332,6 +341,14 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
           <span>{shop.name}</span>
           <span className="msc-tb-meta">· {totalPages} {s('pages')}</span>
         </div>
+        {displayCurrencies.length > 1 && (
+          <select className="msc-cur-select" dir="ltr" value={viewCur} onChange={e => pickViewCurrency(e.target.value)} aria-label="Currency">
+            {displayCurrencies.map(dc => {
+              const code = dc.code.trim().toUpperCase();
+              return <option key={code} value={code}>{code}</option>;
+            })}
+          </select>
+        )}
         {langsList.length > 1 && (
           <div className="msc-langsw">
             {langsList.map(lg => (
@@ -486,6 +503,9 @@ const MSC_CSS = `
 .msc-langsw button{ border:none; background:transparent; color:#cbd5e1; font-family:inherit; font-size:12px; font-weight:700;
   padding:5px 11px; border-radius:6px; cursor:pointer; }
 .msc-langsw button.on{ background:#fff; color:#111827; }
+.msc-cur-select{ padding:6px 24px 6px 10px; font-size:12px; font-weight:700; font-family:inherit; border:1px solid rgba(255,255,255,.2);
+  border-radius:9px; background:rgba(255,255,255,.08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23cbd5e1' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 8px center;
+  color:#f8fafc; cursor:pointer; appearance:none; max-width:76px; }
 .msc-btn{ border:none; cursor:pointer; font-family:inherit; font-weight:800; font-size:13px; padding:9px 16px; border-radius:10px;
   display:inline-flex; align-items:center; gap:7px; transition:transform .1s; }
 .msc-btn:active{ transform:translateY(1px); }

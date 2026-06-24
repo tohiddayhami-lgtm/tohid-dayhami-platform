@@ -9,7 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { computeShippingQuote } from '../utils/metaShopShipping';
-import { shopDisplayCurrencies, formatShopAmount } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -261,8 +261,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     return langs.some(l => l.code === preferred) ? preferred : (langs[0]?.code || lang);
   });
   const displayCurrencies = useMemo(() => shopDisplayCurrencies(shop), [shop]);
-  const [viewCur, setViewCur] = useState(() => (shop.currency || 'USD').trim().toUpperCase());
-  useEffect(() => { setViewCur((shop.currency || 'USD').trim().toUpperCase()); }, [shop.id, shop.currency]);
+  const [viewCur, setViewCur] = useState(() => readViewCurrencyFromUrl(shop));
+  useEffect(() => { setViewCur(readViewCurrencyFromUrl(shop)); }, [shop.id, shop.currency]);
+  const pickViewCurrency = (code: string) => { setViewCur(code); writeViewCurrencyToUrl(code); };
   const [tab, setTab] = useState<string>('products');
 
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';
@@ -1058,7 +1059,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const footAddress = TR(shop.i18n, 'address', shop.address || '');
 
   // Printable A4 PDF catalog of this shop — same link with ?catalog=1 (+ current language). Opens in a new tab.
-  const catalogHref = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}&catalog=1&lang=${uiLang}`;
+  const catalogHref = `${window.location.origin}${window.location.pathname}?shop=${encodeURIComponent(shop.slug)}&catalog=1&lang=${uiLang}${displayCurrencies.length > 1 ? `&cur=${encodeURIComponent(viewCur)}` : ''}`;
 
   return (
     <div className={`ms-root ${embed ? 'ms-embed' : ''}`} dir={dir} style={cssVars}>
@@ -1074,7 +1075,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           </div>
           <div className="ms-top-actions">
             {displayCurrencies.length > 1 && (
-              <select className="ms-cur-select" dir="ltr" value={viewCur} onChange={e => setViewCur(e.target.value)} aria-label={S('currency')} title={S('currency')}>
+              <select className="ms-cur-select" dir="ltr" value={viewCur} onChange={e => pickViewCurrency(e.target.value)} aria-label={S('currency')} title={S('currency')}>
                 {displayCurrencies.map(dc => {
                   const code = dc.code.trim().toUpperCase();
                   return <option key={code} value={code}>{code}</option>;

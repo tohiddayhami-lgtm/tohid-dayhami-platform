@@ -102,3 +102,30 @@ export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisp
     rate: c === b ? 1 : rate,
   };
 };
+
+export const shopBaseCurrency = (shop: MetaShop): string =>
+  (shop.currency || 'USD').trim().toUpperCase();
+
+export const resolveViewCurrency = (shop: MetaShop, fromUrl?: string | null): string => {
+  const base = shopBaseCurrency(shop);
+  const list = shopDisplayCurrencies(shop);
+  const code = (fromUrl || '').trim().toUpperCase();
+  if (code && list.some(c => c.code.trim().toUpperCase() === code)) return code;
+  return base;
+};
+
+export const readViewCurrencyFromUrl = (shop: MetaShop): string => {
+  try {
+    return resolveViewCurrency(shop, new URLSearchParams(window.location.search).get('cur'));
+  } catch {
+    return shopBaseCurrency(shop);
+  }
+};
+
+export const writeViewCurrencyToUrl = (code: string) => {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('cur', code.trim().toUpperCase());
+    history.replaceState(null, '', url.toString());
+  } catch {}
+};
