@@ -386,7 +386,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const pName = (p: MetaShopProduct) => TR(p.i18n, 'name', p.name);
   const pDesc = (p: MetaShopProduct) => TR(p.i18n, 'description', p.description || '');
   const pGroup = (p: MetaShopProduct) => translateProductGroup(shop, p.group || '', uiLang, p.i18n);
-  const pSubcategory = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n);
+  const pSubcategory = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n, products);
   const catLabel = (key: string) => categoryLabel(findCategoryEntry(shop.categories, key), uiLang, shop);
 
   const rePriceLabel = (p: MetaShopProduct): string | null => {
@@ -958,7 +958,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             <button type="button" data-pill-id="all" className={`ms-subpill ${activeSub === 'all' ? 'active' : ''}`} onClick={() => setActiveSub('all')}>{t.all}</button>
             {subcategories.map(s => {
               const sample = products.find(p => p.group === activeCat && p.subcategory === s);
-              const label = sample ? pSubcategory(sample) : translateProductSubcategory(s, uiLang);
+              const label = sample ? pSubcategory(sample) : translateProductSubcategory(s, uiLang, undefined, products);
               return (
                 <button type="button" key={s} data-pill-id={s} className={`ms-subpill ${activeSub === s ? 'active' : ''}`} onClick={() => setActiveSub(s)}>{label}</button>
               );

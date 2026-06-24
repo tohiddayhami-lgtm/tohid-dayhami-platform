@@ -1,8 +1,23 @@
-import type { MetaShop, MetaShopDirCat } from '../types';
+import type { MetaShop, MetaShopDirCat, MetaShopProduct } from '../types';
 
 type CatEntry = string | MetaShopDirCat | null | undefined;
 
-/** Stable key for filtering — matches product.group (usually Persian / fa) */
+type ShopGroupCtx = Pick<MetaShop, 'groupI18n' | 'groupLabels' | 'categories' | 'defaultLang' | 'products'>;
+
+const RTL_LANGS = new Set(['fa', 'ar', 'he', 'ur']);
+
+/** True when the visible text is appropriate for the active UI language (script heuristic). */
+export const textMatchesLang = (text: string, lang: string): boolean => {
+  if (!text?.trim()) return false;
+  const rtl = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
+  const latin = /[A-Za-z]/.test(text);
+  const rtlLang = RTL_LANGS.has(lang) || lang.startsWith('fa') || lang.startsWith('ar');
+  if (rtlLang) return rtl || (!latin && !rtl);
+  if (lang === 'en' || lang.startsWith('en')) return latin && !rtl;
+  return true;
+};
+
+/** Stable key for filtering — matches product.group */
 export const categoryKey = (entry: CatEntry): string => {
   if (!entry) return '';
   if (typeof entry === 'string') return entry.trim();
@@ -14,18 +29,18 @@ export const categoryKey = (entry: CatEntry): string => {
 export const categoryLabel = (
   entry: CatEntry,
   uiLang: string,
-  shop?: Pick<MetaShop, 'groupI18n' | 'groupLabels'>,
+  shop?: ShopGroupCtx,
 ): string => {
   const key = categoryKey(entry);
   if (!key) return '';
   if (typeof entry === 'string') return translateProductGroup(shop || {}, key, uiLang);
   const o = entry as MetaShopDirCat & { name?: string; nameEn?: string; nameAr?: string };
-  if (uiLang === 'fa') return o.fa || o.name || key;
-  if (uiLang === 'ar') return o.ar || o.nameAr || o.en || o.nameEn || translateProductGroup(shop || {}, key, uiLang);
-  if (uiLang === 'en') return o.en || o.nameEn || translateProductGroup(shop || {}, key, uiLang);
-  const fromMap = translateProductGroup(shop || {}, key, uiLang);
-  if (fromMap !== key) return fromMap;
-  return o.en || o.nameEn || o.fa || key;
+  if (uiLang === 'fa') return (o.fa || o.name || '').trim() || translateProductGroup(shop || {}, key, uiLang);
+  if (uiLang === 'ar') return (o.ar || o.nameAr || o.fa || o.name || '').trim() || translateProductGroup(shop || {}, key, uiLang);
+  if (uiLang === 'en') return (o.en || o.nameEn || '').trim() || translateProductGroup(shop || {}, key, uiLang);
+  const mapped = (o as Record<string, string | undefined>)[uiLang];
+  if (mapped?.trim()) return mapped.trim();
+  return translateProductGroup(shop || {}, key, uiLang);
 };
 
 /** Ordered unique category keys from shop.categories or product groups */
@@ -46,21 +61,53 @@ export const normalizeShopCategories = (raw: unknown, products?: { group?: strin
   return keys;
 };
 
+const peerGroupLabel = (products: MetaShopProduct[] | undefined, groupKey: string, uiLang: string): string | undefined => {
+  const hit = products?.find(p => p.group === groupKey && p.i18n?.[uiLang]?.group?.trim());
+  return hit?.i18n?.[uiLang]?.group?.trim();
+};
+
+const peerSubLabel = (products: MetaShopProduct[] | undefined, subKey: string, uiLang: string): string | undefined => {
+  const hit = products?.find(p => p.subcategory === subKey && p.i18n?.[uiLang]?.subcategory?.trim());
+  return hit?.i18n?.[uiLang]?.subcategory?.trim();
+};
+
 export const translateProductGroup = (
-  shop: Pick<MetaShop, 'groupI18n' | 'groupLabels'>,
+  shop: ShopGroupCtx,
   groupKey: string,
   uiLang: string,
   productI18n?: Record<string, Record<string, string>>,
 ): string => {
   if (!groupKey) return '';
-  const fromProduct = productI18n?.[uiLang]?.group;
+
+  const fromProduct = productI18n?.[uiLang]?.group?.trim();
   if (fromProduct) return fromProduct;
-  if (uiLang === 'fa') return groupKey;
+
   const map = shop.groupI18n || shop.groupLabels;
   const labels = map?.[groupKey];
-  if (labels?.[uiLang]) return labels[uiLang];
-  if (labels?.en) return labels.en;
-  if (productI18n?.en?.group) return productI18n.en.group;
+  if (labels?.[uiLang]?.trim()) return labels[uiLang].trim();
+
+  const fromCat = categoryLabel(findCategoryEntry(shop.categories, groupKey), uiLang, shop);
+  if (fromCat && fromCat !== groupKey) return fromCat;
+  if (fromCat && textMatchesLang(fromCat, uiLang)) return fromCat;
+
+  const fromPeer = peerGroupLabel(shop.products, groupKey, uiLang);
+  if (fromPeer) return fromPeer;
+
+  if (textMatchesLang(groupKey, uiLang)) return groupKey;
+
+  if (labels) {
+    const def = shop.defaultLang || 'fa';
+    if (labels[def]?.trim()) return labels[def].trim();
+    if (RTL_LANGS.has(uiLang) && labels.fa?.trim()) return labels.fa.trim();
+    if (labels.en?.trim()) return labels.en.trim();
+    const any = Object.values(labels).find(v => v?.trim());
+    if (any?.trim()) return any.trim();
+  }
+
+  const def = shop.defaultLang || 'fa';
+  const fromPeerDef = peerGroupLabel(shop.products, groupKey, def);
+  if (fromPeerDef && textMatchesLang(fromPeerDef, uiLang)) return fromPeerDef;
+
   return groupKey;
 };
 
@@ -68,12 +115,28 @@ export const translateProductSubcategory = (
   subKey: string,
   uiLang: string,
   productI18n?: Record<string, Record<string, string>>,
+  products?: MetaShopProduct[],
 ): string => {
   if (!subKey) return '';
-  const fromProduct = productI18n?.[uiLang]?.subcategory;
+
+  const fromProduct = productI18n?.[uiLang]?.subcategory?.trim();
   if (fromProduct) return fromProduct;
-  if (uiLang === 'fa') return subKey;
-  if (productI18n?.en?.subcategory) return productI18n.en.subcategory;
+
+  const fromPeer = peerSubLabel(products, subKey, uiLang);
+  if (fromPeer) return fromPeer;
+
+  if (textMatchesLang(subKey, uiLang)) return subKey;
+
+  if (productI18n) {
+    const def = Object.keys(productI18n).find(l => productI18n[l]?.subcategory?.trim());
+    const alt = def ? productI18n[def]?.subcategory?.trim() : undefined;
+    if (alt && textMatchesLang(alt, uiLang)) return alt;
+  }
+
+  const peerDef = products?.find(p => p.subcategory === subKey);
+  const defLabel = peerDef?.i18n?.en?.subcategory?.trim() || peerDef?.i18n?.fa?.subcategory?.trim();
+  if (defLabel && textMatchesLang(defLabel, uiLang)) return defLabel;
+
   return subKey;
 };
 

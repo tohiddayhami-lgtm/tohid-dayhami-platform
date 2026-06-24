@@ -3,7 +3,7 @@ import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, uiString } from '../utils/metaShopLang';
-import { normalizeShopCategories, categoryLabel, findCategoryEntry } from '../utils/metaShopCategories';
+import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
 
 interface Props {
@@ -83,6 +83,8 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const money = (n?: number, cur?: string) => n == null ? '' : `${cur || shop.currency} ${(Math.round(n * 100) / 100).toLocaleString()}`;
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+  const pGroup = (p: MetaShopProduct) => translateProductGroup(shop, p.group || '', uiLang, p.i18n);
+  const pSubcat = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n, products);
 
   // ── Group products by category (explicit order first, then discovered), keeping a flat fallback bucket ──
   const UNCAT = '__uncat__';
@@ -286,7 +288,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
           <div className="msc-prod-tags">
             {p.sku && <span className="msc-tag">{s('sku')}: {p.sku}</span>}
             {p.hsCode && <span className="msc-tag">HS {p.hsCode}</span>}
-            {p.subcategory && <span className="msc-tag soft">{p.subcategory}</span>}
+            {p.subcategory && <span className="msc-tag soft">{pSubcat(p)}</span>}
             {p.origin?.name && (
               <span className="msc-tag origin">
                 {p.origin.flagUrl && <img src={p.origin.flagUrl} alt="" />}{p.origin.name}

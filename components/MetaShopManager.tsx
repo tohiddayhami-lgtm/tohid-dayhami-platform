@@ -1461,7 +1461,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <div key={lg.code} className="flex items-center gap-2">
                         <span className="text-[11px] font-bold text-gray-500 w-20 shrink-0">{t.transFor} {lg.name || lg.code}</span>
                         <input className={fld} placeholder={t.pName} value={p.i18n?.[lg.code]?.name || ''} onChange={e => updProductI18n(idx, lg.code, 'name', e.target.value)} />
-                        <input className={fld} placeholder={t.pDesc} value={p.i18n?.[lg.code]?.description || ''} onChange={e => updProductI18n(idx, lg.code, 'description', e.target.value)} />
+                        <input className={fld} placeholder={t.pGroup} value={p.i18n?.[lg.code]?.group || ''} onChange={e => updProductI18n(idx, lg.code, 'group', e.target.value)} />
+                        <input className={fld} placeholder={t.pSubcat} value={p.i18n?.[lg.code]?.subcategory || ''} onChange={e => updProductI18n(idx, lg.code, 'subcategory', e.target.value)} />
+                        <input className={fld + ' col-span-2'} placeholder={t.pDesc} value={p.i18n?.[lg.code]?.description || ''} onChange={e => updProductI18n(idx, lg.code, 'description', e.target.value)} />
                       </div>
                     ))}
                   </div>
