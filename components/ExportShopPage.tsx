@@ -88,7 +88,7 @@ export const ExportShopPage: React.FC<Props> = ({
   }, [bazaar, shopBySlug]);
 
   const t = {
-    title: fa ? 'فروشگاه صادراتی' : 'Export Shop',
+    title: fa ? 'فروشگاه بین المللی' : 'International Shop',
     subtitle: bazaar
       ? (fa ? `فروشگاه‌های ${bazaar.name}` : `Shops in ${bazaar.name}`)
       : (fa ? 'فروشگاه‌ها و محصولات صادراتی' : 'Export shops and products'),

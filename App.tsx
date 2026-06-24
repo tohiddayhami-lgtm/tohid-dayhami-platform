@@ -1715,7 +1715,7 @@ const App: React.FC = () => {
             {[
               { id: 'new-ticket', label: t.newTicket,                           icon: <IconPlus      className="w-3.5 h-3.5" /> },
               { id: 'tracking',   label: t.tracking,                            icon: <IconSearch    className="w-3.5 h-3.5" /> },
-              { id: 'export-shops', label: lang === 'fa' ? 'فروشگاه صادراتی' : 'Export Shop', icon: <IconBriefcase className="w-3.5 h-3.5" /> },
+              { id: 'export-shops', label: lang === 'fa' ? 'فروشگاه بین المللی' : 'International Shop', icon: <IconBriefcase className="w-3.5 h-3.5" /> },
               { id: 'news',       label: lang === 'fa' ? 'اخبار صادراتی' : 'Export News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
@@ -2164,7 +2164,7 @@ const App: React.FC = () => {
         {[
           { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />,      label: t.newTicket },
           { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />,     label: t.tracking },
-          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'فروشگاه' : 'Shop' },
+          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'بین المللی' : 'Intl. Shop' },
           { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار' : 'News' },
           { id: 'admin',      icon: <IconLock className="w-5 h-5" />,       label: t.expertPanel },
         ].map(item => (
