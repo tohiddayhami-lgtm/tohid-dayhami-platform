@@ -14,6 +14,8 @@ interface Props {
 
 // Products per A4 page. Real-estate cards need room for full specs → 2 per page (1 row × 2 cols).
 const perPageFor = (re: boolean) => (re ? 2 : 4);
+// TOC rows per A4 page (header + footer reserved; ~11mm per category row).
+const TOC_PER_PAGE = 17;
 
 const chunk = <T,>(arr: T[], n: number): T[][] => {
   const out: T[][] = [];
@@ -108,10 +110,10 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const perPage = perPageFor(isRealEstate);
   const showToc = grouped.length > 1 && products.length > perPage;
   const coverPages = 1;
-  const tocPages = showToc ? 1 : 0;
+  const tocPages = showToc ? Math.ceil(grouped.length / TOC_PER_PAGE) : 0;
 
   // ── Paginate each category into A4 pages; number items sequentially; record per-category start page for the TOC ──
-  const { pages, toc } = useMemo(() => {
+  const { pages, tocPageChunks } = useMemo(() => {
     const pgs: { cat: string; label: string; items: MetaShopProduct[]; part: number; parts: number; startNo: number }[] = [];
     const tocEntries: { label: string; count: number; pageStart: number }[] = [];
     let globalNo = 0;
@@ -124,7 +126,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
         globalNo += items.length;
       });
     });
-    return { pages: pgs, toc: tocEntries };
+    return { pages: pgs, tocPageChunks: chunk(tocEntries, TOC_PER_PAGE) };
   }, [grouped, tocPages, perPage]);
 
   const totalPages = coverPages + tocPages + pages.length + 1; // + back cover
@@ -382,15 +384,20 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
           </div>
         </section>
 
-        {/* ════ TABLE OF CONTENTS ════ */}
-        {showToc && (
-          <section className="msc-page msc-toc">
+        {/* ════ TABLE OF CONTENTS (may span multiple A4 pages) ════ */}
+        {showToc && tocPageChunks.map((tocChunk, tocIdx) => (
+          <section className="msc-page msc-toc" key={`toc-${tocIdx}`}>
             <div className="msc-toc-head">
-              <h2>{s('index')}</h2>
+              <h2>
+                {s('index')}
+                {tocPageChunks.length > 1 && (
+                  <span className="msc-toc-part"> ({tocIdx + 1}/{tocPageChunks.length})</span>
+                )}
+              </h2>
               <span>{coverTitle}</span>
             </div>
             <ul className="msc-toc-list">
-              {toc.map((e, i) => (
+              {tocChunk.map((e, i) => (
                 <li key={i}>
                   <span className="msc-toc-name">{e.label}</span>
                   <span className="msc-toc-count">{e.count} {s('items_col')}</span>
@@ -401,10 +408,10 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
             </ul>
             <footer className="msc-run-foot">
               <span>{shop.website || shop.name}</span>
-              <span>{s('page')} {coverPages + 1} / {totalPages}</span>
+              <span>{s('page')} {coverPages + tocIdx + 1} / {totalPages}</span>
             </footer>
           </section>
-        )}
+        ))}
 
         {/* ════ PRODUCT PAGES ════ */}
         {pages.map((pg, idx) => {
@@ -524,16 +531,17 @@ const MSC_CSS = `
   border-top:1px solid rgba(0,0,0,.08); padding-top:6mm; }
 
 /* ── Table of contents ── */
-.msc-toc{ padding:20mm 18mm 16mm; }
-.msc-toc-head{ display:flex; align-items:baseline; justify-content:space-between; border-bottom:3px solid var(--c-primary); padding-bottom:6mm; margin-bottom:8mm; }
+.msc-toc{ padding:20mm 18mm 16mm; display:flex; flex-direction:column; }
+.msc-toc-head{ flex:none; display:flex; align-items:baseline; justify-content:space-between; border-bottom:3px solid var(--c-primary); padding-bottom:6mm; margin-bottom:8mm; }
 .msc-toc-head h2{ font-size:26pt; font-weight:900; color:var(--c-heading); margin:0; }
+.msc-toc-part{ font-size:16pt; font-weight:700; color:var(--c-primary); opacity:.85; }
 .msc-toc-head span{ font-size:12pt; font-weight:600; color:var(--c-text); opacity:.7; }
-.msc-toc-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0; }
-.msc-toc-list li{ display:flex; align-items:center; gap:8px; padding:5mm 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:13pt; }
-.msc-toc-name{ font-weight:700; color:var(--c-heading); }
-.msc-toc-count{ font-size:9.5pt; font-weight:600; color:#fff; background:var(--c-primary); border-radius:20px; padding:2px 10px; opacity:.9; }
+.msc-toc-list{ list-style:none; margin:0; padding:0; flex:1; min-height:0; display:flex; flex-direction:column; gap:0; overflow:hidden; }
+.msc-toc-list li{ display:flex; align-items:center; gap:8px; padding:4.2mm 0; border-bottom:1px solid rgba(0,0,0,.07); font-size:12.5pt; }
+.msc-toc-name{ font-weight:700; color:var(--c-heading); min-width:0; }
+.msc-toc-count{ flex-shrink:0; font-size:9.5pt; font-weight:600; color:#fff; background:var(--c-primary); border-radius:20px; padding:2px 10px; opacity:.9; }
 .msc-toc-dots{ flex:1; border-bottom:2px dotted rgba(0,0,0,.22); margin:0 4px; align-self:flex-end; transform:translateY(-4px); }
-.msc-toc-pg{ font-weight:800; color:var(--c-primary); font-size:13pt; min-width:10mm; text-align:center; }
+.msc-toc-pg{ flex-shrink:0; font-weight:800; color:var(--c-primary); font-size:13pt; min-width:10mm; text-align:center; }
 
 /* ── Running header / footer on product pages ── */
 .msc-catalog-page{ padding:11mm 13mm 9mm; }
@@ -558,8 +566,7 @@ const MSC_CSS = `
 .msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:10.5pt; font-weight:800;
   min-width:10mm; height:9mm; padding:0 3mm; display:flex; align-items:center; justify-content:center; border-end-end-radius:3.5mm; box-shadow:0 2px 7px rgba(0,0,0,.22); }
 .msc-prod-info{ flex:1; display:flex; flex-direction:column; padding:4mm 4.5mm 3.8mm; min-height:0; overflow:hidden; }
-/* name + price are flex:none → ALWAYS fully shown; the description is the only flexible block (clamps if a
-   card is unusually tall, e.g. 3 incoterm prices), so nothing important is ever clipped mid-word. */
+/* name + price are flex:none; description grows to fill remaining card height (clipped at bottom, not after 2 lines). */
 .msc-prod-name{ flex:none; font-size:13pt; line-height:1.22; font-weight:800; color:var(--c-heading); margin:0 0 2mm;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .msc-prod-tags{ flex:none; display:flex; flex-wrap:wrap; gap:2mm; margin-bottom:2mm; }
@@ -568,8 +575,8 @@ const MSC_CSS = `
 .msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
 .msc-tag.origin{ display:inline-flex; align-items:center; gap:4px; }
 .msc-tag.origin img{ height:9pt; width:auto; border-radius:1px; }
-.msc-prod-desc{ flex:0 1 auto; min-height:0; font-size:9.4pt; line-height:1.5; color:var(--c-text); margin:0 0 2mm;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.msc-prod-desc{ flex:1 1 auto; min-height:0; font-size:9.4pt; line-height:1.48; color:var(--c-text); margin:0 0 2mm;
+  overflow:hidden; word-break:break-word; }
 .msc-prod-specs{ flex:none; font-size:8.8pt; line-height:1.4; color:var(--c-text); margin:0 0 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .msc-prod-specs b{ color:var(--c-heading); font-weight:700; }
 /* flex-wrap + a real min-width on the meta column: when the price block is wide (long incoterm/rate
