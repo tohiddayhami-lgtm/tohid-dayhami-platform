@@ -7,7 +7,22 @@ const PROJECT_ID = 'company-crm-103aa';
 const API_KEY = 'AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
-const BOT_UA = /whatsapp|facebookexternalhit|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot/i;
+const BOT_UA = /facebookexternalhit|facebot|meta-externalagent|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|ia_archiver/i;
+
+function isBrowserNavigation(req) {
+  const mode = req.headers['sec-fetch-mode'];
+  const dest = req.headers['sec-fetch-dest'];
+  const user = req.headers['sec-fetch-user'];
+  if (mode === 'navigate' || dest === 'document' || user === '?1') return true;
+  return false;
+}
+
+function isPreviewCrawler(req) {
+  const ua = String(req.headers['user-agent'] || '');
+  if (BOT_UA.test(ua)) return true;
+  if (/^WhatsApp\/\d/i.test(ua) && !isBrowserNavigation(req)) return true;
+  return false;
+}
 
 function parseFields(fields) {
   const obj = {};
@@ -261,8 +276,15 @@ async function resolveMeta(searchOrParams, origin) {
   };
 }
 
-function renderHtml(meta, canonicalUrl) {
+function humanAppUrl(canonicalUrl) {
+  const u = new URL(canonicalUrl);
+  u.searchParams.set('_p', '1');
+  return u.toString();
+}
+
+function renderHtml(meta, canonicalUrl, forCrawler = true) {
   const { title, description, image, siteName, type } = meta;
+  const appUrl = humanAppUrl(canonicalUrl);
   return `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -281,10 +303,11 @@ function renderHtml(meta, canonicalUrl) {
   ${description ? `<meta name="twitter:description" content="${esc(description)}" />` : ''}
   ${image ? `<meta name="twitter:image" content="${esc(image)}" />` : ''}
   <link rel="canonical" href="${esc(canonicalUrl)}" />
+  ${forCrawler ? '' : `<meta http-equiv="refresh" content="0;url=${esc(appUrl)}" />`}
 </head>
 <body>
-  <p><a href="${esc(canonicalUrl)}">${esc(title)}</a></p>
-  <script>location.replace(${JSON.stringify(canonicalUrl)});</script>
+  <p><a href="${esc(appUrl)}">${esc(title)}</a></p>
+  ${forCrawler ? '' : `<script>location.replace(${JSON.stringify(appUrl)});</script>`}
 </body>
 </html>`;
 }
@@ -299,7 +322,8 @@ export default async function handler(req, res) {
 
   try {
     const meta = await resolveMeta(params, origin);
-    const html = renderHtml(meta, canonicalUrl);
+    const forCrawler = isPreviewCrawler(req);
+    const html = renderHtml(meta, canonicalUrl, forCrawler);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
     return res.status(200).send(html);
