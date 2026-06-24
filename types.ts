@@ -1286,6 +1286,8 @@ export interface MetaShop {
   // labels
   cartButtonText?: string;
   orderThankYouText?: string;
+  /** Footnote on checkout proforma / invoice preview (per shop). */
+  invoiceHintText?: string;
   searchPlaceholder?: string;
   /** Extra search terms for this shop (comma-separated in admin) — site & international shop search. */
   searchKeywords?: string[];

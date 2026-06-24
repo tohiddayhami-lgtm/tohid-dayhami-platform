@@ -455,6 +455,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   }
   if (shop.searchPlaceholder) t.searchPh = TR(shop.i18n, 'searchPlaceholder', shop.searchPlaceholder);
   if (shop.orderThankYouText) t.thanksDesc = TR(shop.i18n, 'orderThankYouText', shop.orderThankYouText);
+  t.invHint = TR(shop.i18n, 'invoiceHintText', shop.invoiceHintText || '') || S('invHint');
   if (isProducts && shop.supplierCollaborationEnabled) {
     t.supplierCollabBtn = TR(shop.i18n, 'supplierCollabBtn', S('supplierCollabBtn'));
   }

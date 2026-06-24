@@ -299,6 +299,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     agentName: T ? 'نام مشاور' : 'Agent name', agentPhone: T ? 'تلفن مشاور' : 'Agent phone', agentWhatsapp: T ? 'واتس‌اپ مشاور' : 'Agent WhatsApp',
     agentHint: T ? 'خالی = استفاده از شماره پیش‌فرض فروشگاه (بخش تماس و فوتر)' : 'Leave empty to use the shop default (Contact & footer section)',
     thanksTxt: T ? 'متن تشکر پس از سفارش' : 'Order thank-you text', cartBtn: T ? 'متن دکمه سفارش' : 'Order button text',
+    invoiceHint: T ? 'متن پایین پیش‌فاکتور' : 'Proforma invoice footnote',
+    invoiceHintHint: T ? 'در پیش‌نمایش فاکتور (قبل از ثبت نهایی) زیر جمع نمایش داده می‌شود. اگر خالی بماند از متن پیش‌فرض استفاده می‌شود.' : 'Shown below the total on the invoice preview before submit. Leave empty for the default text.',
+    invoiceHintI18n: T ? 'متن پیش‌فاکتور به زبان‌های دیگر' : 'Proforma footnote — other languages',
     routeHint: T ? 'سفارش‌های این فروشگاه به کارتابل چه کسانی برود؟' : 'Whose cartable should orders go to?',
     routePersonnel: T ? 'پرسنل مشخص' : 'Specific personnel', routeDept: T ? 'یک دپارتمان' : 'A department', routeNone: T ? 'پیش‌فرض (مستر)' : 'Default (master)',
     editorAccess: T ? 'دسترسی ویرایش در پنل' : 'Panel edit access',
@@ -661,6 +664,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (draft?.type === 'realestate') return isAr ? 'عقارات' : code === 'en' ? 'Properties' : 'املاک';
     return isAr ? 'منتجات' : code === 'en' ? 'Product List' : 'محصولات';
   };
+  const setInvoiceHintLangField = (code: string, val: string) => {
+    const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), invoiceHintText: val };
+    const patch: Partial<MetaShop> = { i18n };
+    if (code === 'fa') patch.invoiceHintText = val;
+    upd(patch);
+  };
+  const invoiceHintLangField = (code: string): string => {
+    const fromI18n = draft?.i18n?.[code]?.invoiceHintText;
+    if (fromI18n != null && fromI18n !== '') return fromI18n;
+    if (code === 'fa') return draft?.invoiceHintText || '';
+    return '';
+  };
+  const defaultInvoiceHintPh = T
+    ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.'
+    : 'This is a proforma preview; the final amount is confirmed after review.';
 
   const doImport = () => {
     try { const shop = importFromJson(importText, blankShop()); if (!shop.code) shop.code = uniqueShopCode(metaShops); setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor'); }
@@ -1408,6 +1427,24 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
           <div><label className={lbl}>{t.cartBtn}</label><input className={fld} value={draft.cartButtonText || ''} onChange={e => upd({ cartButtonText: e.target.value })} placeholder={isRealEstate ? (T ? 'درخواست بازدید' : 'Request viewing') : isServices ? (T ? 'ثبت درخواست' : 'Request') : (T ? 'ثبت سفارش' : 'Place Order')} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld} value={draft.orderThankYouText || ''} onChange={e => upd({ orderThankYouText: e.target.value })} /></div>
+          <div className="md:col-span-2">
+            <label className={lbl}>{t.invoiceHint}</label>
+            <textarea rows={2} className={fld} value={invoiceHintLangField('fa')} onChange={e => setInvoiceHintLangField('fa', e.target.value)} placeholder={defaultInvoiceHintPh} />
+            <p className="text-[11px] text-gray-400 mt-1">{t.invoiceHintHint}</p>
+          </div>
+          {pageEditorLangs().length > 0 && (
+            <div className="md:col-span-2 p-3 rounded-xl bg-amber-50/60 border border-amber-100">
+              <h5 className="text-sm font-bold text-gray-700 mb-2">{t.invoiceHintI18n}</h5>
+              <div className="space-y-3">
+                {pageEditorLangs().map(lg => (
+                  <div key={lg.code}>
+                    <label className={lbl}>{lg.name || lg.code}</label>
+                    <textarea rows={2} className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={invoiceHintLangField(lg.code)} onChange={e => setInvoiceHintLangField(lg.code, e.target.value)} placeholder={lg.code === 'en' ? 'This is a proforma preview; the final amount is confirmed after review.' : defaultInvoiceHintPh} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Storefront banner (bazaar lists) — optional */}
           <div><label className={lbl}>{t.sfTagFa}</label><input className={fld} value={draft.storefrontTagline || ''} onChange={e => upd({ storefrontTagline: e.target.value })} placeholder={T ? 'مثلا: 🔥 جدید / تخفیف ویژه' : 'e.g. 🔥 New / Special offer'} /></div>
