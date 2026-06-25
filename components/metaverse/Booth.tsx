@@ -12,7 +12,7 @@ import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
-import { useSlideshowActivation, slideshowBitmapMaxPx, slideshowCanvasWidth } from './slideshowActivation';
+import { slideshowBitmapMaxPx, slideshowCanvasWidth } from './slideshowActivation';
 import type { BoothFace } from '../../types';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -511,7 +511,7 @@ const loadSlideBitmap = (url: string, maxPx: number, inXR: boolean): Promise<Ima
 const slidePrefetchIndexes = (index: number, count: number, inXR: boolean): number[] => {
   if (count <= 0) return [];
   if (count === 1) return [0];
-  if (inXR) return [index, (index + 1) % count];
+  if (inXR) return [index];
   const set = new Set([index, (index + 1) % count, (index - 1 + count) % count]);
   return [...set];
 };
@@ -560,12 +560,10 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = React.memo(({ panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = React.memo(({ panelId: _panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
-  const active = useSlideshowActivation(panelId, rootRef);
-  const live = !inXR || active;
   const bitmapMax = slideshowBitmapMaxPx(inXR);
   const canvasW = slideshowCanvasWidth(inXR);
   const totalCount = products.length;
@@ -633,15 +631,7 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
-    if (!live) {
-      bitmapRef.current.clear();
-      return;
-    }
-    setBitmapTick(t => t + 1);
-  }, [live]);
-
-  useEffect(() => {
-    if (!live || !count) return;
+    if (!count) return;
     let cancelled = false;
     const loadNearby = async () => {
       const keep = new Set(slidePrefetchIndexes(index, count, inXR));
@@ -660,7 +650,7 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey, urls, live, bitmapMax, inXR]);
+  }, [index, count, urlsKey, urls, bitmapMax, inXR]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -713,9 +703,9 @@ const ProductSlideshowPanel: React.FC<{
   }, [pageProducts, tex, canvasW]);
 
   useEffect(() => {
-    if (!live || !count) return;
+    if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, live]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
@@ -743,7 +733,6 @@ const ProductSlideshowPanel: React.FC<{
   advanceRef.current = advanceSlide;
 
   useFrame((_, dt) => {
-    if (!live) return;
     nearCheck.current += 1;
     if (nearCheck.current % 24 === 0) {
       const g = rootRef.current;
@@ -807,17 +796,10 @@ const ProductSlideshowPanel: React.FC<{
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {totalCount > 0 ? (
-        live ? (
-          <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
-            <planeGeometry args={[width, viewH]} />
-            <meshBasicMaterial map={tex} toneMapped={false} />
-          </mesh>
-        ) : (
-          <mesh position={[0, ctrlH / 2, 0.006]}>
-            <planeGeometry args={[width, viewH]} />
-            <meshBasicMaterial color="#0a0f1a" toneMapped={false} />
-          </mesh>
-        )
+        <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
+          <planeGeometry args={[width, viewH]} />
+          <meshBasicMaterial map={tex} toneMapped={false} />
+        </mesh>
       ) : (
         <CanvasLabel
           text={displayLang === 'fa' || displayLang === 'ar' ? 'بدون محصول' : 'No products'}

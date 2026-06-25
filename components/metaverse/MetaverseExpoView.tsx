@@ -10,7 +10,6 @@ import { hydrateMetaShop } from '../../services/firebaseService';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
-import { SlideshowActivationManager } from './slideshowActivation';
 import { Player } from './Player';
 import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
@@ -212,25 +211,23 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     let cancelled = false;
     (async () => {
       const next: Record<string, MetaShopProduct[]> = {};
-      await Promise.all(slideshowSlugs.map(async slug => {
+      for (const slug of slideshowSlugs) {
+        if (cancelled) break;
         const shell = shops.find(s => s.slug === slug);
-        if (!shell) return;
+        if (!shell) continue;
         try {
-          const shellList = shell.products || [];
-          const hasSlideImages = shellList.some(
-            p => p.active !== false && (p.images || []).some(u => !!String(u || '').trim()),
-          );
-          const full = shellList.length && hasSlideImages
-            ? shell
-            : await hydrateMetaShop(shell);
+          const full = await hydrateMetaShop(shell);
           const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
-          if (list.length) next[slug] = list;
-        } catch { /* skip */ }
-      }));
-      if (!cancelled) setSlideshowProducts(next);
+          if (list.length) {
+            next[slug] = list;
+            if (!cancelled) setSlideshowProducts({ ...next });
+          }
+        } catch { /* skip slug */ }
+      }
+      if (!cancelled) setSlideshowProducts({ ...next });
     })();
     return () => { cancelled = true; };
-  }, [slideshowSlugs.join('|'), shops]);
+  }, [slideshowSlugs.join('|'), shops, expo.booths]);
 
   const shopsForScene = useMemo(() => shops.map(s => {
     const hydrated = slideshowProducts[s.slug];
@@ -515,7 +512,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       >
         <XR store={store}>
           <EnvironmentCollisionProvider>
-          <SlideshowActivationManager>
           <VrPerformanceTune />
           <Suspense fallback={null}>
             <ExpoScene
@@ -551,7 +547,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           {mode === 'fp' && <VrFlyModeToggle onToggle={() => setFlyMode(f => !f)} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
-          </SlideshowActivationManager>
           </EnvironmentCollisionProvider>
         </XR>
       </Canvas>
