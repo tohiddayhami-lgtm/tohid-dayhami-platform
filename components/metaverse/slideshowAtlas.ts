@@ -85,10 +85,11 @@ export const createSlideshowAtlasPlaneGeometry = (
   const vTop = 1 - row / rows;
   const geo = new THREE.PlaneGeometry(planeW, planeH);
   const uv = geo.attributes.uv as THREE.BufferAttribute;
-  uv.setXY(0, u0, vBottom);
-  uv.setXY(1, u1, vBottom);
-  uv.setXY(2, u0, vTop);
-  uv.setXY(3, u1, vTop);
+  // PlaneGeometry: indices 0,1 = top (+y); 2,3 = bottom (-y). CanvasTexture flipY aligns canvas top → vTop.
+  uv.setXY(0, u0, vTop);
+  uv.setXY(1, u1, vTop);
+  uv.setXY(2, u0, vBottom);
+  uv.setXY(3, u1, vBottom);
   uv.needsUpdate = true;
   return geo;
 };
