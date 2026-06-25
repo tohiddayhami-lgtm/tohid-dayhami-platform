@@ -100,9 +100,9 @@ const getPdfjs = () => {
   return pdfjsPromise;
 };
 
-const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean }> = ({ x, glyph, onClick, color, compact }) => {
-  const w = compact ? 0.28 : 0.34;
-  const h = compact ? 0.2 : 0.26;
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean; btnW?: number; btnH?: number }> = ({ x, glyph, onClick, color, compact, btnW, btnH }) => {
+  const w = btnW ?? (compact ? 0.28 : 0.34);
+  const h = btnH ?? (compact ? 0.2 : 0.26);
   const fire = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); };
   return (
   <group position={[x, 0, 0]}>
@@ -112,7 +112,7 @@ const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; col
       <planeGeometry args={[w, h]} />
       <meshStandardMaterial color={color} />
     </mesh>
-    <CanvasLabel text={glyph} width={w - 0.04} height={h - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    <CanvasLabel text={glyph} width={Math.max(0.12, w - 0.04)} height={Math.max(0.1, h - 0.04)} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
   </group>
   );
 };
@@ -495,6 +495,38 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   return [...set];
 };
 
+/** Fit slideshow transport buttons inside panel width: ▶ « ‹ | counter | › » FA */
+const slideshowControlLayout = (panelW: number, multiPage: boolean, showLang: boolean) => {
+  const span = Math.max(0.55, panelW * 0.94);
+  let btnW = Math.min(0.24, span * 0.1);
+  let counterW = Math.min(multiPage ? 0.38 : 0.28, span * 0.24);
+  const slots: { key: string; w: number }[] = [
+    { key: 'play', w: btnW },
+    ...(multiPage ? [{ key: 'pagePrev', w: btnW }] : []),
+    { key: 'slidePrev', w: btnW },
+    { key: 'counter', w: counterW },
+    { key: 'slideNext', w: btnW },
+    ...(multiPage ? [{ key: 'pageNext', w: btnW }] : []),
+    ...(showLang ? [{ key: 'lang', w: btnW }] : []),
+  ];
+  let total = slots.reduce((s, i) => s + i.w, 0);
+  if (total > span) {
+    const scale = span / total;
+    btnW *= scale;
+    counterW *= scale;
+    slots.forEach(s => { s.w *= scale; });
+    total = span;
+  }
+  let x = -total / 2;
+  const pos: Record<string, number> = {};
+  for (const s of slots) {
+    pos[s.key] = x + s.w / 2;
+    x += s.w;
+  }
+  const btnH = Math.max(0.14, btnW * 0.72);
+  return { pos, btnW, btnH, counterW: slots.find(s => s.key === 'counter')?.w ?? counterW };
+};
+
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
   products: MetaShopProduct[];
@@ -722,18 +754,13 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const btnHalf = 0.14;
-  const counterHalf = multiPage ? 0.26 : 0.2;
-  const gap = Math.min(0.42, Math.max(0.34, width * 0.11));
-  const step = gap + btnHalf * 2;
-  const slidePrevX = -(counterHalf + step);
-  const slideNextX = counterHalf + step;
-  const pagePrevX = slidePrevX - step;
-  const pageNextX = slideNextX + step;
-  const playX = (multiPage ? pagePrevX : slidePrevX) - step;
-  const langX = (multiPage ? pageNextX : slideNextX) + step;
+  const ctrl = useMemo(
+    () => slideshowControlLayout(width, multiPage, showLang),
+    [width, multiPage, showLang],
+  );
+  const { pos, btnW, btnH, counterW } = ctrl;
   const counterLabel = totalCount
-    ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
+    ? (multiPage ? `${globalIndex + 1}/${totalCount}·${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
 
   return (
@@ -760,37 +787,37 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn compact x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.play} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
         {multiPage && (
-          <PdfArrowBtn compact x={pagePrevX} glyph="«" onClick={pagePrev} color="#475569" />
+          <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.pagePrev} glyph="«" onClick={pagePrev} color="#475569" />
         )}
-        <PdfArrowBtn compact x={slidePrevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.slidePrev} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
           text={counterLabel}
-          width={multiPage ? 0.48 : 0.36}
-          height={0.16}
-          position={[0, 0, 0]}
+          width={counterW}
+          height={btnH}
+          position={[pos.counter, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn compact x={slideNextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.slideNext} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         {multiPage && (
-          <PdfArrowBtn compact x={pageNextX} glyph="»" onClick={pageNext} color="#475569" />
+          <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.pageNext} glyph="»" onClick={pageNext} color="#475569" />
         )}
         {showLang && (
-          <group position={[langX, 0, 0]}>
+          <group position={[pos.lang, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); cycleLang(); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
-              <planeGeometry args={[0.3, 0.2]} />
+              <planeGeometry args={[btnW, btnH]} />
               <meshStandardMaterial color="#334155" />
             </mesh>
             <CanvasLabel
               text={displayLang.toUpperCase()}
-              width={0.24}
-              height={0.15}
+              width={Math.max(0.12, btnW - 0.04)}
+              height={Math.max(0.1, btnH - 0.04)}
               position={[0, 0, 0.01]}
               color="#f8fafc"
               onClick={cycleLang}
