@@ -4,10 +4,11 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaShopProduct, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaShop, MetaShopProduct, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { boothIsReservable, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
-import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts, SLIDESHOW_PAGE_SIZE, slideshowPageCount, slideshowPageSlice } from './expoUtils';
+import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts, SLIDESHOW_PAGE_SIZE, slideshowPageCount, slideshowPageSlice, boothNeedsSlideshowProducts, filterProductsForSlideshowHydrate } from './expoUtils';
+import { loadSlideshowProductsForShop } from '../../services/firebaseService';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
@@ -31,6 +32,8 @@ interface Props {
   boothSummary?: BoothReservationSummary | null;
   onReserveBooth?: (b: MetaverseBooth) => void;
   shopProducts?: MetaShopProduct[];
+  linkedShop?: MetaShop | null;
+  expoBooths?: MetaverseBooth[];
   /** Default language for slideshow product text (expo / shop). */
   slideshowDefaultLang?: string;
   slideshowLangOptions?: string[];
@@ -854,6 +857,67 @@ const ProductSlideshowPanel: React.FC<{
   );
 };
 
+type SlideshowPanelSpec = {
+  face: BoothFace;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  w: number;
+  h: number;
+};
+
+const buildSupermarketSlideshowSpecs = (shelfW: number, shelfH: number, shelfD: number): SlideshowPanelSpec[] => {
+  const ssW = shelfW * 0.58;
+  const ssH = ssW * 0.72;
+  const sideW = shelfD * 0.75;
+  const sideH = sideW * 0.72;
+  return [
+    { face: 'innerBack', position: [0, shelfH * 0.38, -shelfD / 2 - 0.1], rotation: [0, 0, 0], w: ssW, h: ssH },
+    { face: 'outerBack', position: [0, shelfH * 0.38, shelfD / 2 + 0.1], rotation: [0, Math.PI, 0], w: ssW, h: ssH },
+    { face: 'innerLeft', position: [-shelfW / 2 - 0.1, shelfH * 0.35, 0], rotation: [0, Math.PI / 2, 0], w: sideW, h: sideH },
+    { face: 'outerLeft', position: [-shelfW / 2 - 0.22, shelfH * 0.35, 0], rotation: [0, -Math.PI / 2, 0], w: sideW, h: sideH },
+    { face: 'innerRight', position: [shelfW / 2 + 0.1, shelfH * 0.35, 0], rotation: [0, -Math.PI / 2, 0], w: sideW, h: sideH },
+    { face: 'outerRight', position: [shelfW / 2 + 0.22, shelfH * 0.35, 0], rotation: [0, Math.PI / 2, 0], w: sideW, h: sideH },
+  ];
+};
+
+const BoothSlideshowPanels: React.FC<{
+  booth: MetaverseBooth;
+  specs: SlideshowPanelSpec[];
+  slideshowProductsByFace: Map<BoothFace, MetaShopProduct[]>;
+  slideshowLoading: boolean;
+  slideshowDefaultLang: string;
+  slideshowLangOptions: string[];
+  trackBase: { boothId: string; boothName: string; boothIndex?: number };
+  onTrack?: Props['onTrack'];
+}> = ({ booth, specs, slideshowProductsByFace, slideshowLoading, slideshowDefaultLang, slideshowLangOptions, trackBase, onTrack }) => (
+  <>
+    {specs.map(s => {
+      const slideshow = booth.productSlideshows?.[s.face];
+      if (!slideshow?.enabled) return null;
+      const slides = slideshowProductsByFace.get(s.face) || [];
+      return (
+        <ProductSlideshowPanel
+          key={`ss-${s.face}`}
+          panelId={`${booth.id}-${s.face}`}
+          products={slides}
+          loading={slideshowLoading && !slides.length && !!booth.shopSlug}
+          width={s.w}
+          height={s.h}
+          position={s.position}
+          rotation={s.rotation}
+          autoPlaySec={slideshow.autoPlaySec ?? 5}
+          defaultLang={slideshowDefaultLang}
+          langOptions={slideshowLangOptions}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTrack?.('booth_panel_click', { ...trackBase, targetType: 'product_slideshow', targetId: s.face, side: s.face });
+          }}
+        />
+      );
+    })}
+  </>
+);
+
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
 // video → LCD screen, anything else → a static image panel.
 const PanelMedia: React.FC<MediaProps> = (props) =>
@@ -1340,12 +1404,30 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], linkedShop, expoBooths, slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
   const { products: slideshowShopProducts, loading: slideshowLoading } = useSlideshowShopProducts(booth.shopSlug);
+  const [fallbackProducts, setFallbackProducts] = useState<MetaShopProduct[]>([]);
+  useEffect(() => {
+    if (!booth.shopSlug || !boothNeedsSlideshowProducts(booth)) return;
+    if (slideshowShopProducts.length) return;
+    const shell = linkedShop;
+    if (!shell) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await loadSlideshowProductsForShop(shell);
+        const list = filterProductsForSlideshowHydrate(raw, expoBooths, booth.shopSlug!);
+        if (!cancelled && list.length) setFallbackProducts(list);
+      } catch { /* context or retry */ }
+    })();
+    return () => { cancelled = true; };
+  }, [booth.shopSlug, booth.productSlideshows, linkedShop?.id, linkedShop?.productChunkCount, expoBooths, slideshowShopProducts.length]);
   const effectiveShopProducts = useMemo(() => {
     if (slideshowShopProducts.length) return slideshowShopProducts;
+    if (fallbackProducts.length) return fallbackProducts;
     return shopProducts;
-  }, [slideshowShopProducts, shopProducts]);
+  }, [slideshowShopProducts, fallbackProducts, shopProducts]);
+  const slideshowPanelsLoading = slideshowLoading && !effectiveShopProducts.length && !!booth.shopSlug;
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -1619,6 +1701,16 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
             }}
           />
         ))}
+        <BoothSlideshowPanels
+          booth={booth}
+          specs={buildSupermarketSlideshowSpecs(shelfW, shelfH, shelfD)}
+          slideshowProductsByFace={slideshowProductsByFace}
+          slideshowLoading={slideshowPanelsLoading}
+          slideshowDefaultLang={slideshowDefaultLang}
+          slideshowLangOptions={slideshowLangOptions}
+          trackBase={trackBase}
+          onTrack={onTrack}
+        />
         {whatsappBadgeEl(shelfW, shelfD, { y: shelfH * 0.46, frontZ: shelfD / 2 + 0.28 })}
         </group>
       </group>
@@ -1774,30 +1866,18 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       )}
 
       {/* Configurable overlays — panels, shop entry, logo, managers, hotspots (procedural & GLB). */}
+      <BoothSlideshowPanels
+        booth={booth}
+        specs={PANEL_SPECS}
+        slideshowProductsByFace={slideshowProductsByFace}
+        slideshowLoading={slideshowPanelsLoading}
+        slideshowDefaultLang={slideshowDefaultLang}
+        slideshowLangOptions={slideshowLangOptions}
+        trackBase={trackBase}
+        onTrack={onTrack}
+      />
       {PANEL_SPECS.map(s => {
-        const slideshow = booth.productSlideshows?.[s.face];
-        if (slideshow?.enabled) {
-          const slides = slideshowProductsByFace.get(s.face) || [];
-          return (
-            <ProductSlideshowPanel
-              key={`ss-${s.face}`}
-              panelId={`${booth.id}-${s.face}`}
-              products={slides}
-              loading={slideshowLoading && !slides.length && !!booth.shopSlug}
-              width={s.w}
-              height={s.h}
-              position={s.position}
-              rotation={s.rotation}
-              autoPlaySec={slideshow.autoPlaySec ?? 5}
-              defaultLang={slideshowDefaultLang}
-              langOptions={slideshowLangOptions}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrack?.('booth_panel_click', { ...trackBase, targetType: 'product_slideshow', targetId: s.face, side: s.face });
-              }}
-            />
-          );
-        }
+        if (booth.productSlideshows?.[s.face]?.enabled) return null;
         const u = panelUrl(s.face);
         return u ? (
           <PanelMedia

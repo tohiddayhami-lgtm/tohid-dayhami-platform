@@ -217,6 +217,8 @@ export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
     .filter(([, cfg]) => cfg?.enabled)
     .map(([face]) => face);
 
+export const normShopSlug = (slug?: string) => (slug || '').trim().toLowerCase();
+
 export const boothNeedsSlideshowProducts = (booth: MetaverseBooth): boolean =>
   boothSlideshowFaces(booth).length > 0 && !!booth.shopSlug;
 
@@ -231,7 +233,7 @@ export const collectSlideshowProductIdsForShop = (
   const explicitIds = new Set<string>();
   let hasOpenList = false;
   for (const b of booths || []) {
-    if (b.shopSlug !== shopSlug) continue;
+    if (normShopSlug(b.shopSlug) !== normShopSlug(shopSlug)) continue;
     for (const cfg of Object.values(b.productSlideshows || {})) {
       if (!cfg?.enabled) continue;
       if (cfg.productIds?.length) cfg.productIds.forEach(id => explicitIds.add(id));
