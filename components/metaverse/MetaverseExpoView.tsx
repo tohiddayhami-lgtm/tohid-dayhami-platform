@@ -5,7 +5,7 @@ import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaShopProduct, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { Language } from '../../App';
-import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase, collectExpoSlideshowShopSlugs } from './expoUtils';
+import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase, collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate } from './expoUtils';
 import { hydrateMetaShop } from '../../services/firebaseService';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
@@ -208,7 +208,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         if (!shell) return;
         try {
           const full = (shell.products || []).length ? shell : await hydrateMetaShop(shell);
-          const list = (full?.products || []).filter(p => p.active !== false);
+          const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
           if (list.length) next[slug] = list;
         } catch { /* skip */ }
       }));

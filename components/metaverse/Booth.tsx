@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
@@ -446,6 +446,35 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
   return lines.slice(0, maxLines);
 };
 
+const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
+
+const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
+  const key = url.trim();
+  if (!key) return Promise.resolve(null);
+  let pending = SLIDE_BITMAP_CACHE.get(key);
+  if (!pending) {
+    pending = new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try { resolve(await createImageBitmap(img)); }
+        catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = key;
+    });
+    SLIDE_BITMAP_CACHE.set(key, pending);
+  }
+  return pending;
+};
+
+const nearbySlideIndexes = (index: number, count: number): number[] => {
+  if (count <= 0) return [];
+  if (count === 1) return [0];
+  const set = new Set([index, (index + 1) % count, (index - 1 + count) % count]);
+  return [...set];
+};
+
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
   products: MetaShopProduct[];
@@ -463,130 +492,123 @@ const ProductSlideshowPanel: React.FC<{
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
-  const acc = useRef(0);
+  const [bitmapTick, setBitmapTick] = useState(0);
+  const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
   const [tex] = useState(() => {
     const c = document.createElement('canvas');
     c.width = 8; c.height = 8;
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
+    t.anisotropy = 2;
     return t;
   });
-  const cacheRef = useRef<{ url: string; bmp: ImageBitmap | null; failed: boolean }[]>([]);
-  const [readyCount, setReadyCount] = useState(0);
 
   const urls = useMemo(
     () => products.map(p => String((p.images || []).find(Boolean) || '')),
     [products],
   );
+  const urlsKey = urls.join('|');
 
   useEffect(() => {
-    let cancelled = false;
     setIndex(0);
     setPlaying(true);
-    setReadyCount(0);
-    cacheRef.current.forEach(c => c.bmp?.close?.());
-    cacheRef.current = urls.map(url => ({ url, bmp: null, failed: false }));
-    urls.forEach((url, i) => {
-      if (!url) { if (!cancelled) setReadyCount(n => n + 1); return; }
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = async () => {
-        if (cancelled) return;
-        try {
-          const bmp = await createImageBitmap(img);
-          cacheRef.current[i] = { url, bmp, failed: false };
-        } catch {
-          cacheRef.current[i] = { url, bmp: null, failed: true };
-        }
-        if (!cancelled) setReadyCount(n => n + 1);
-      };
-      img.onerror = () => {
-        if (cancelled) return;
-        cacheRef.current[i] = { url, bmp: null, failed: true };
-        setReadyCount(n => n + 1);
-      };
-      img.src = url;
-    });
-    return () => {
-      cancelled = true;
-      cacheRef.current.forEach(c => c.bmp?.close?.());
-      cacheRef.current = [];
-    };
-  }, [urls.join('|')]);
+    bitmapRef.current.clear();
+    setBitmapTick(t => t + 1);
+  }, [urlsKey]);
 
   useEffect(() => {
     setDisplayLang(defaultLang || langs[0] || 'fa');
   }, [defaultLang, langs.join('|')]);
 
-  const paintSlide = (idx: number, code: string) => {
+  useEffect(() => {
+    if (!count) return;
+    let cancelled = false;
+    const loadNearby = async () => {
+      const keep = new Set(nearbySlideIndexes(index, count));
+      for (const i of bitmapRef.current.keys()) {
+        if (!keep.has(i)) bitmapRef.current.delete(i);
+      }
+      await Promise.all([...keep].map(async i => {
+        if (bitmapRef.current.has(i)) return;
+        const url = urls[i];
+        if (!url) { bitmapRef.current.set(i, null); return; }
+        const bmp = await loadSlideBitmap(url);
+        if (cancelled) return;
+        bitmapRef.current.set(i, bmp);
+      }));
+      if (!cancelled) setBitmapTick(t => t + 1);
+    };
+    loadNearby();
+    return () => { cancelled = true; };
+  }, [index, count, urlsKey]);
+
+  useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
+
+  const paintSlide = useCallback((idx: number, code: string) => {
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = 1100;
-    const ch = Math.round(cw * 0.78);
+    const cw = 800;
+    const ch = Math.round(cw * 0.75);
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
     ctx.fillStyle = '#0a0f1a';
     ctx.fillRect(0, 0, cw, ch);
-    const footerH = 168;
-    const imgMaxH = ch - footerH - 16;
-    const entry = cacheRef.current[idx];
+    const footerH = 148;
+    const imgMaxH = ch - footerH - 12;
+    const bmp = bitmapRef.current.get(idx) ?? null;
     const p = products[idx];
-    if (entry?.bmp) {
-      const ar = entry.bmp.width / entry.bmp.height;
+    if (bmp) {
+      const ar = bmp.width / bmp.height;
       let dw = cw * 0.98;
       let dh = dw / ar;
       if (dh > imgMaxH * 0.98) { dh = imgMaxH * 0.98; dw = dh * ar; }
       const dx = (cw - dw) / 2;
-      const dy = Math.max(8, (imgMaxH - dh) / 2);
-      ctx.drawImage(entry.bmp, dx, dy, dw, dh);
+      const dy = Math.max(6, (imgMaxH - dh) / 2);
+      ctx.drawImage(bmp, dx, dy, dw, dh);
     }
     if (p) {
       const rtl = isRtlCode(code);
-      const pad = 28;
+      const pad = 22;
       const maxW = cw - pad * 2;
       ctx.fillStyle = 'rgba(8,12,24,.94)';
       ctx.fillRect(0, ch - footerH, cw, footerH);
       const name = productLabel(p, code);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 30px Vazirmatn, Tahoma, sans-serif';
+      ctx.font = 'bold 26px Vazirmatn, Tahoma, sans-serif';
       ctx.textAlign = rtl ? 'right' : 'left';
       ctx.textBaseline = 'top';
       ctx.direction = rtl ? 'rtl' : 'ltr';
       const nameLine = name.length > 48 ? `${name.slice(0, 46)}…` : name;
-      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 14);
+      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 12);
       const desc = productDesc(p, code);
       ctx.fillStyle = '#cbd5e1';
-      ctx.font = '22px Vazirmatn, Tahoma, sans-serif';
-      const descLines = wrapCanvasLines(ctx, desc, maxW, 3);
-      descLines.forEach((ln, i) => {
-        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 52 + i * 30);
+      ctx.font = '20px Vazirmatn, Tahoma, sans-serif';
+      wrapCanvasLines(ctx, desc, maxW, 3).forEach((ln, i) => {
+        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 46 + i * 26);
       });
       ctx.direction = 'ltr';
     }
     tex.needsUpdate = true;
-  };
+  }, [products, tex]);
 
   useEffect(() => {
     if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, readyCount, count, displayLang]);
+  }, [index, count, displayLang, bitmapTick, paintSlide]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
-  useFrame((_, dt) => {
-    if (!playing || !count || count < 2) return;
-    acc.current += dt;
-    if (acc.current >= Math.max(2, autoPlaySec)) {
-      acc.current = 0;
-      setIndex(i => (i + 1) % count);
-    }
-  });
+  useEffect(() => {
+    if (!playing || count < 2) return;
+    const ms = Math.max(2000, autoPlaySec * 1000);
+    const id = window.setInterval(() => setIndex(i => (i + 1) % count), ms);
+    return () => window.clearInterval(id);
+  }, [playing, count, autoPlaySec]);
 
-  const prev = () => { setPlaying(false); setIndex(i => (i - 1 + count) % count); acc.current = 0; };
-  const next = () => { setPlaying(false); setIndex(i => (i + 1) % count); acc.current = 0; };
-  const togglePlay = () => { setPlaying(p => !p); acc.current = 0; };
+  const prev = () => { setPlaying(false); setIndex(i => (i - 1 + count) % count); };
+  const next = () => { setPlaying(false); setIndex(i => (i + 1) % count); };
+  const togglePlay = () => setPlaying(p => !p);
   const cycleLang = () => {
     if (langs.length < 2) return;
     setDisplayLang(prev => langs[(langs.indexOf(prev) + 1) % langs.length] || prev);
@@ -595,6 +617,11 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
+  const step = Math.max(0.34, width * 0.13);
+  const playX = -step * 2.15;
+  const prevX = -step;
+  const nextX = step;
+  const langX = step * 2.15;
 
   return (
     <group position={position} rotation={rotation}>
@@ -620,31 +647,31 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn x={-0.62} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
-        <PdfArrowBtn x={-0.22} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={count > 1 ? '#0f766e' : '#94a3b8'} />
+        <PdfArrowBtn x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={count > 1 ? '#0f766e' : '#94a3b8'} />
+        <PdfArrowBtn x={prevX} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
           text={count ? `${index + 1}/${count}` : '—'}
-          width={0.42}
+          width={0.38}
           height={0.18}
-          position={[0.08, 0, 0]}
+          position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn x={0.42} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn x={nextX} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
         {langs.length > 1 && (
-          <group position={[0.72, 0, 0]}>
+          <group position={[langX, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); cycleLang(); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
-              <planeGeometry args={[0.34, 0.24]} />
+              <planeGeometry args={[0.32, 0.22]} />
               <meshStandardMaterial color="#334155" />
             </mesh>
             <CanvasLabel
               text={displayLang.toUpperCase()}
-              width={0.28}
-              height={0.18}
+              width={0.26}
+              height={0.16}
               position={[0, 0, 0.01]}
               color="#f8fafc"
               onClick={cycleLang}
@@ -1200,6 +1227,14 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     { face: 'innerRight', position: [W / 2 - 0.09, sideY, -D / 6], rotation: [0, -Math.PI / 2, 0],  w: sideW, h: sideH },
     { face: 'outerRight', position: [W / 2 + 0.09, sideY, -D / 6], rotation: [0, Math.PI / 2, 0],   w: sideW, h: sideH },
   ];
+  const slideshowProductsByFace = useMemo(() => {
+    const out = new Map<BoothFace, MetaShopProduct[]>();
+    for (const s of PANEL_SPECS) {
+      const cfg = booth.productSlideshows?.[s.face];
+      if (cfg?.enabled) out.set(s.face, resolveSlideshowProducts(shopProducts, cfg));
+    }
+    return out;
+  }, [booth.productSlideshows, shopProducts]);
   const managerSlots = [0, 1, 2, 3, 4];
   const managerPngs = managerSlots.map(i => booth.managerPngs?.[i] || '');
   const managerVisible = managerSlots.map(i => booth.managerEnabled?.[i] !== false);
@@ -1566,7 +1601,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
       {PANEL_SPECS.map(s => {
         const slideshow = booth.productSlideshows?.[s.face];
         if (slideshow?.enabled) {
-          const slides = resolveSlideshowProducts(shopProducts, slideshow);
+          const slides = slideshowProductsByFace.get(s.face) || [];
           return (
             <ProductSlideshowPanel
               key={`ss-${s.face}`}

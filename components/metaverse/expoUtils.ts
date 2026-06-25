@@ -220,6 +220,42 @@ export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
 export const boothNeedsSlideshowProducts = (booth: MetaverseBooth): boolean =>
   boothSlideshowFaces(booth).length > 0 && !!booth.shopSlug;
 
+/** Cap auto slideshow lists so large shops do not load thousands of textures. */
+export const SLIDESHOW_MAX_AUTO_PRODUCTS = 32;
+
+/** Product ids explicitly referenced on booth slideshow configs for a shop slug. */
+export const collectSlideshowProductIdsForShop = (
+  booths: MetaverseBooth[] | undefined,
+  shopSlug: string,
+): { explicitIds: string[]; hasOpenList: boolean } => {
+  const explicitIds = new Set<string>();
+  let hasOpenList = false;
+  for (const b of booths || []) {
+    if (b.shopSlug !== shopSlug) continue;
+    for (const cfg of Object.values(b.productSlideshows || {})) {
+      if (!cfg?.enabled) continue;
+      if (cfg.productIds?.length) cfg.productIds.forEach(id => explicitIds.add(id));
+      else hasOpenList = true;
+    }
+  }
+  return { explicitIds: [...explicitIds], hasOpenList };
+};
+
+export const filterProductsForSlideshowHydrate = (
+  products: MetaShopProduct[],
+  booths: MetaverseBooth[] | undefined,
+  shopSlug: string,
+): MetaShopProduct[] => {
+  const active = products.filter(p => p.active !== false);
+  const { explicitIds, hasOpenList } = collectSlideshowProductIdsForShop(booths, shopSlug);
+  if (explicitIds.length) {
+    const pick = new Set(explicitIds);
+    return active.filter(p => pick.has(p.id));
+  }
+  if (!hasOpenList) return [];
+  return active.slice(0, SLIDESHOW_MAX_AUTO_PRODUCTS);
+};
+
 export const resolveSlideshowProducts = (
   products: MetaShopProduct[] | undefined,
   config?: BoothProductSlideshow,
@@ -229,6 +265,8 @@ export const resolveSlideshowProducts = (
   if (ids?.length) {
     const pick = new Set(ids);
     list = list.filter(p => pick.has(p.id));
+  } else if (list.length > SLIDESHOW_MAX_AUTO_PRODUCTS) {
+    list = list.slice(0, SLIDESHOW_MAX_AUTO_PRODUCTS);
   }
   return list.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
 };
