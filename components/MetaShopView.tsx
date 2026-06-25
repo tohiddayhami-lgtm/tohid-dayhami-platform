@@ -80,6 +80,8 @@ const HandshakeIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
+const PRODUCT_GRID_PAGE_SIZE = 24;
+
 const SUPPLIER_CATALOG_PDF_MAX_BYTES = 50 * 1024 * 1024;
 
 const ChevronIcon = ({ dir }: { dir: 'prev' | 'next' }) => (
@@ -179,6 +181,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [search, setSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isComposing, setIsComposing] = useState(false);
+  const [gridShown, setGridShown] = useState(PRODUCT_GRID_PAGE_SIZE);
   const composingRef = useRef(false);
   const [detail, setDetail] = useState<MetaShopProduct | null>(null);
   const [galIdx, setGalIdx] = useState(0);
@@ -282,7 +285,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const STRINGS: Record<string, Record<string, string>> = {
     en: {
       cartBtn: 'Place Order', addProduct: 'Add to cart', addService: 'Add to request', added: 'Added ✓', all: 'All',
-      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
+      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', loadMore: 'Load more', showingProducts: 'Showing {shown} of {total}', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
       qty: 'Qty', remove: 'Remove', total: 'Total', yourInfo: 'Your Information', name: 'Full Name', company: 'Company',
       phone: 'Mobile / WhatsApp', email: 'Email', country: 'Country', city: 'City / Destination', notes: 'Notes / Special requests',
       submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
@@ -331,7 +334,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
-      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
+      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', loadMore: 'مشاهده بیشتر', showingProducts: 'نمایش {shown} از {total}', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
       qty: 'تعداد', remove: 'حذف', total: 'جمع کل', yourInfo: 'اطلاعات شما', name: 'نام و نام خانوادگی', company: 'شرکت',
       phone: 'موبایل / واتس‌اپ', email: 'ایمیل', country: 'کشور', city: 'شهر / مقصد', notes: 'توضیحات و درخواست‌های ویژه',
       submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
@@ -380,7 +383,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
-      searchPh: 'بحث في العقارات...', empty: 'لا توجد نتائج.', searchPending: 'جارٍ البحث…', cartTitle: 'طلبك', cartEmpty: 'لا توجد عناصر بعد.',
+      searchPh: 'بحث في العقارات...', empty: 'لا توجد نتائج.', searchPending: 'جارٍ البحث…', loadMore: 'عرض المزيد', showingProducts: 'عرض {shown} من {total}', cartTitle: 'طلبك', cartEmpty: 'لا توجد عناصر بعد.',
       qty: 'الكمية', remove: 'حذف', total: 'الإجمالي', yourInfo: 'معلوماتك', name: 'الاسم الكامل', company: 'الشركة',
       phone: 'الجوال / واتساب', email: 'البريد الإلكتروني', country: 'الدولة', city: 'المدينة / الوجهة', notes: 'ملاحظات / طلبات خاصة',
       submit: 'إرسال الطلب', submitting: 'جارٍ الإرسال...', incomplete: 'يرجى إدخال الاسم ورقم الجوال.', err: 'فشل الإرسال. حاول مرة أخرى.',
@@ -429,7 +432,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     zh: {
       cartBtn: '下单', addProduct: '加入购物车', addService: '加入询价', added: '已添加 ✓', all: '全部',
-      searchPh: '搜索商品...', empty: '未找到商品。', searchPending: '搜索中…', cartTitle: '您的订单', cartEmpty: '购物车为空。',
+      searchPh: '搜索商品...', empty: '未找到商品。', searchPending: '搜索中…', loadMore: '加载更多', showingProducts: '显示 {shown} / {total}', cartTitle: '您的订单', cartEmpty: '购物车为空。',
       qty: '数量', remove: '移除', total: '合计', yourInfo: '您的信息', name: '姓名', company: '公司',
       phone: '手机 / WhatsApp', email: '邮箱', country: '国家', city: '城市 / 目的地', notes: '备注 / 特殊要求',
       submit: '提交订单', submitting: '提交中...', incomplete: '请填写姓名和电话。', err: '提交失败，请重试。',
@@ -577,6 +580,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const filtered = useMemo(
     () => filterProductsBySearch(searchIndex, searchQuery, activeCat, activeSub),
     [searchIndex, searchQuery, activeCat, activeSub],
+  );
+
+  useEffect(() => {
+    setGridShown(PRODUCT_GRID_PAGE_SIZE);
+  }, [searchQuery, activeCat, activeSub, shop.id]);
+
+  const visibleFiltered = useMemo(
+    () => filtered.slice(0, gridShown),
+    [filtered, gridShown],
   );
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
@@ -1207,9 +1219,27 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         ) : filtered.length === 0 ? (
           <p className="ms-empty">{t.empty}</p>
         ) : (
-          <div className="ms-grid">
-            {filtered.map(p => productCard(p))}
-          </div>
+          <>
+            <div className="ms-grid">
+              {visibleFiltered.map(p => productCard(p))}
+            </div>
+            {filtered.length > gridShown && (
+              <div className="ms-load-more-wrap">
+                <p className="ms-load-more-count">
+                  {S('showingProducts')
+                    .replace('{shown}', String(Math.min(gridShown, filtered.length)))
+                    .replace('{total}', String(filtered.length))}
+                </p>
+                <button
+                  type="button"
+                  className="ms-load-more-btn"
+                  onClick={() => setGridShown(n => Math.min(n + PRODUCT_GRID_PAGE_SIZE, filtered.length))}
+                >
+                  {S('loadMore')}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {onLookup && (
@@ -1980,6 +2010,10 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-subcat-badge { display:inline-block; font-size:10px; font-weight:800; padding:2px 7px; background:#ecfeff; color:#0e7490; border:1px solid #cffafe; border-radius:999px; }
 .ms-empty { text-align:center; color:#94a3b8; padding:40px; font-size:14px; }
 .ms-grid { display:grid; gap:16px; grid-template-columns:repeat(2,1fr); padding:14px 0 56px; }
+.ms-load-more-wrap { text-align:center; padding:0 14px 48px; margin-top:-32px; }
+.ms-load-more-count { font-size:13px; color:#64748b; margin-bottom:10px; }
+.ms-load-more-btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 22px; border-radius:10px; border:none; background:var(--ms-accent,#4f46e5); color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
+.ms-load-more-btn:hover { filter:brightness(1.08); }
 @media (min-width:768px){ .ms-grid { grid-template-columns:repeat(3,1fr); } }
 @media (min-width:1100px){ .ms-grid { grid-template-columns:repeat(4,1fr); } }
 .ms-card { background:#fff; border:1px solid #eef0f3; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; transition:box-shadow .2s, transform .2s; content-visibility:auto; contain-intrinsic-size:auto 300px; }

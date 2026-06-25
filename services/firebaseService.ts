@@ -1058,22 +1058,22 @@ export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSect
 // ── Meta Shops (online catalogs/shops) ──
 const META_SHOP_CHUNKS_COL = 'metaShopChunks';
 
-const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): Promise<MetaShopProductChunk[]> => {
-  const loadOne = async (id: string): Promise<MetaShopProductChunk | null> => {
-    try {
-      const proxy = await checkProxyMode();
-      if (proxy) return await proxyGet<MetaShopProductChunk | null>(META_SHOP_CHUNKS_COL, { doc: id });
-      const snap = await getDoc(doc(db, META_SHOP_CHUNKS_COL, id));
-      return snap.exists() ? (snap.data() as MetaShopProductChunk) : null;
-    } catch {
-      return null;
-    }
-  };
+const loadOneMetaShopChunk = async (chunkDocId: string): Promise<MetaShopProductChunk | null> => {
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) return await proxyGet<MetaShopProductChunk | null>(META_SHOP_CHUNKS_COL, { doc: chunkDocId });
+    const snap = await getDoc(doc(db, META_SHOP_CHUNKS_COL, chunkDocId));
+    return snap.exists() ? (snap.data() as MetaShopProductChunk) : null;
+  } catch {
+    return null;
+  }
+};
 
+const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): Promise<MetaShopProductChunk[]> => {
   if (chunkCount && chunkCount > 0) {
     const chunks: MetaShopProductChunk[] = [];
     for (let i = 0; i < chunkCount; i++) {
-      const c = await loadOne(`${shopId}_${i}`);
+      const c = await loadOneMetaShopChunk(`${shopId}_${i}`);
       if (c) chunks.push(c);
     }
     return chunks;
@@ -1115,6 +1115,26 @@ export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop |
   }
   const chunks = await loadMetaShopProductChunks(shop.id, shop.productChunkCount);
   return { ...shop, products: mergeProductChunks(chunks) };
+};
+
+/** Load product chunks one-by-one so the UI can render the first batch immediately. */
+export const hydrateMetaShopProgressive = async (
+  shop: MetaShop,
+  onProgress?: (products: MetaShopProduct[], loadedChunks: number, totalChunks: number) => void,
+): Promise<MetaShop> => {
+  if (!shopNeedsProductHydration(shop)) {
+    const products = shop.products || [];
+    onProgress?.(products, 1, 1);
+    return { ...shop, products };
+  }
+  const total = shop.productChunkCount || 0;
+  let all: MetaShopProduct[] = [];
+  for (let i = 0; i < total; i++) {
+    const chunk = await loadOneMetaShopChunk(`${shop.id}_${i}`);
+    if (chunk?.products?.length) all = all.concat(chunk.products);
+    onProgress?.(all, i + 1, total);
+  }
+  return { ...shop, products: all };
 };
 
 export const saveMetaShopToCloud = async (shop: MetaShop) => {

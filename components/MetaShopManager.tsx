@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShop } from '../services/firebaseService';
+import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive } from '../services/firebaseService';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -19,6 +19,8 @@ import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCu
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
+
+const EDITOR_PRODUCT_PAGE_SIZE = 25;
 
 interface Props {
   metaShops: MetaShop[];
@@ -165,6 +167,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [embedHeight, setEmbedHeight] = useState(1200);
   const [saving, setSaving] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [productsSyncing, setProductsSyncing] = useState(false);
+  const [editorProductShown, setEditorProductShown] = useState(EDITOR_PRODUCT_PAGE_SIZE);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -463,14 +467,27 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => {
-    setDraft(JSON.parse(JSON.stringify({ ...s, products: s.products || [] })));
+    setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
+    setProductsSyncing(false);
     setMode('editor');
+    setDraft({ ...s, products: [...(s.products || [])] });
     if (!shopNeedsProductHydration(s) && (s.products || []).length > 0) return;
     setProductsLoading(true);
-    hydrateMetaShop(s)
-      .then(full => { if (full) setDraft(JSON.parse(JSON.stringify(full))); })
-      .finally(() => setProductsLoading(false));
+    const shopId = s.id;
+    hydrateMetaShopProgressive(s, (products, loaded, total) => {
+      setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
+      if (loaded >= 1) setProductsLoading(false);
+      setProductsSyncing(loaded < total);
+    }).catch(() => {
+      setProductsLoading(false);
+      setProductsSyncing(false);
+    });
   };
+
+  const draftProductGroups = useMemo(
+    () => Array.from(new Set((draft?.products || []).map(p => p.group).filter(Boolean))) as string[],
+    [draft?.products],
+  );
 
   const approveReferral = async (ref: MetaShopPropertyReferral) => {
     if (readonly || !onUpdateMetaShopPropertyReferral) return;
@@ -1326,6 +1343,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           {T ? 'در حال بارگذاری محصولات…' : 'Loading products…'}
         </div>
       )}
+      {productsSyncing && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm px-4 py-3">
+          {T
+            ? `در حال بارگذاری بقیه محصولات… (${draft.products.length}${draft.productCount ? ` / ${draft.productCount}` : ''})`
+            : `Loading remaining products… (${draft.products.length}${draft.productCount ? ` / ${draft.productCount}` : ''})`}
+        </div>
+      )}
 
       {/* Basics */}
       <div className={card}>
@@ -1757,7 +1781,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
       {/* Products */}
       <div className={card}>
         <datalist id={`ms-cats-${draft.id}`}>
-          {Array.from(new Set(draft.products.map(p => p.group).filter(Boolean))).map(g => <option key={g} value={g as string} />)}
+          {draftProductGroups.map(g => <option key={g} value={g} />)}
         </datalist>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-bold text-gray-700">{isRealEstate ? (T ? 'املاک / آگهی‌ها' : 'Properties / Listings') : t.productsT} <span className="text-xs text-gray-400">({draft.products.length})</span></h4>
@@ -1786,7 +1810,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         )}
         {draft.products.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">{t.noProducts}</p> : (
           <div className="space-y-3">
-            {draft.products.map((p, idx) => (
+            {draft.products.slice(0, editorProductShown).map((p, idx) => (
               <div key={p.id} className="border border-gray-200 rounded-xl p-3">
                 <div className="flex items-start gap-3">
                   <ProductGallery images={p.images || []} onChange={imgs => updProduct(idx, { images: imgs })} lang={lang} />
@@ -1892,6 +1916,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 </div>
               </div>
             ))}
+            {draft.products.length > editorProductShown && (
+              <div className="flex flex-col items-center gap-2 pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500">
+                  {T
+                    ? `نمایش ${editorProductShown} از ${draft.products.length} محصول`
+                    : `Showing ${editorProductShown} of ${draft.products.length} products`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setEditorProductShown(n => Math.min(n + EDITOR_PRODUCT_PAGE_SIZE, draft.products.length))}
+                  className="text-sm px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  {T ? 'بارگذاری بیشتر' : 'Load more'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
