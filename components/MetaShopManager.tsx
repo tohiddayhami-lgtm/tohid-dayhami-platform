@@ -13,6 +13,7 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { AppModal } from './AppModal';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { normalizeMetaShopForCloud, metaShopPayloadBytes, META_SHOP_FIRESTORE_MAX_BYTES } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
@@ -739,55 +740,40 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     r.readAsText(f); e.target.value = '';
   };
 
-  // Reusable import dialog (file upload + sample downloads + optional paste)
-  const importModalEl = () => importOpen ? (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setImportOpen(false)}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
-        <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconUpload className="w-4 h-4" />{t.importJson}</h3>
-        <p className="text-xs text-gray-500 mb-3">{t.importHint}</p>
-
-        {/* Sample downloads */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <span className="text-xs text-gray-400 self-center">{T ? 'نمونه:' : 'Samples:'}</span>
-          <button onClick={() => downloadSample('products')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه محصولات' : 'Products sample'}</button>
-          <button onClick={() => downloadSample('services')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه خدمات' : 'Services sample'}</button>
-          <button onClick={() => downloadSample('realestate')} className="text-xs px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50">{T ? 'دانلود نمونه املاک' : 'Real estate sample'}</button>
-        </div>
-
-        {/* File upload (primary) */}
-        <button onClick={() => jsonFileRef.current?.click()} className="w-full py-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-700 font-bold text-sm hover:bg-indigo-50 flex items-center justify-center gap-2">
-          <IconUpload className="w-5 h-5" />{T ? 'انتخاب فایل JSON و ساخت فروشگاه' : 'Choose JSON file & build shop'}
-        </button>
-        <input type="file" ref={jsonFileRef} className="hidden" accept=".json,application/json" onChange={handleJsonFile} />
-
-        {/* Optional paste */}
-        <details className="mt-3">
-          <summary className="text-xs text-gray-500 cursor-pointer">{T ? 'یا چسباندن متن JSON' : 'or paste JSON text'}</summary>
-          <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={6} className={fld + ' font-mono text-xs mt-2'} placeholder='{ "type": "products", "products": [ ... ] }' />
-          <div className="flex justify-end gap-2 mt-2">
-            <button onClick={() => setImportOpen(false)} className="px-3 py-2 text-sm text-gray-500">{t.cancel}</button>
-            <button onClick={doImport} disabled={!importText.trim()} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-lg disabled:opacity-50">{t.importBtn}</button>
-          </div>
-        </details>
+  // Portaled modals — fixed inside animate-fade-in parents breaks viewport centering on long lists.
+  const importModalEl = () => (
+    <AppModal open={importOpen} onClose={() => setImportOpen(false)} title={t.importJson} dir={T ? 'rtl' : 'ltr'}>
+      <p className="text-xs text-gray-500 mb-3">{t.importHint}</p>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <span className="text-xs text-gray-400 self-center">{T ? 'نمونه:' : 'Samples:'}</span>
+        <button type="button" onClick={() => downloadSample('products')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه محصولات' : 'Products sample'}</button>
+        <button type="button" onClick={() => downloadSample('services')} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{T ? 'دانلود نمونه خدمات' : 'Services sample'}</button>
+        <button type="button" onClick={() => downloadSample('realestate')} className="text-xs px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 hover:bg-amber-50">{T ? 'دانلود نمونه املاک' : 'Real estate sample'}</button>
       </div>
-    </div>
-  ) : null;
+      <button type="button" onClick={() => jsonFileRef.current?.click()} className="w-full py-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/50 text-indigo-700 font-bold text-sm hover:bg-indigo-50 flex items-center justify-center gap-2">
+        <IconUpload className="w-5 h-5" />{T ? 'انتخاب فایل JSON و ساخت فروشگاه' : 'Choose JSON file & build shop'}
+      </button>
+      <input type="file" ref={jsonFileRef} className="hidden" accept=".json,application/json" onChange={handleJsonFile} />
+      <details className="mt-3">
+        <summary className="text-xs text-gray-500 cursor-pointer">{T ? 'یا چسباندن متن JSON' : 'or paste JSON text'}</summary>
+        <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={6} className={fld + ' font-mono text-xs mt-2'} placeholder='{ "type": "products", "products": [ ... ] }' />
+        <div className="flex justify-end gap-2 mt-2">
+          <button type="button" onClick={() => setImportOpen(false)} className="px-3 py-2 text-sm text-gray-500">{t.cancel}</button>
+          <button type="button" onClick={doImport} disabled={!importText.trim()} className="px-4 py-2 text-sm font-bold bg-indigo-600 text-white rounded-lg disabled:opacity-50">{t.importBtn}</button>
+        </div>
+      </details>
+    </AppModal>
+  );
 
-  // ── Google Site / website embed export modal ──
-  const embedModalEl = () => embedShop ? (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setEmbedShop(null)}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><IconGlobe className="w-4 h-4 text-indigo-500" />{t.gsiteTitle}</h3>
+  const embedModalEl = () => (
+    <AppModal open={!!embedShop} onClose={() => setEmbedShop(null)} title={t.gsiteTitle} dir={T ? 'rtl' : 'ltr'} size="lg">
+      {embedShop && (<>
         <p className="text-xs text-gray-500 leading-relaxed mb-4">{t.gsiteIntro}</p>
-
-        {/* Embed URL */}
         <label className={lbl}>{t.gsiteEmbedUrl}</label>
         <div className="flex items-center gap-2 mb-3">
           <input readOnly value={embedUrl(embedShop)} dir="ltr" onFocus={e => e.currentTarget.select()} className={fld + ' font-mono text-[11px] bg-gray-50'} />
-          <button onClick={() => copyText(embedUrl(embedShop), '__embed_url__')} className="shrink-0 text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === '__embed_url__' ? <><IconCheck className="w-3.5 h-3.5 text-emerald-500" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyUrl}</>}</button>
+          <button type="button" onClick={() => copyText(embedUrl(embedShop), '__embed_url__')} className="shrink-0 text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">{copiedId === '__embed_url__' ? <><IconCheck className="w-3.5 h-3.5 text-emerald-500" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyUrl}</>}</button>
         </div>
-
-        {/* Height + iframe code */}
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <label className={lbl + ' mb-0'}>{t.gsiteEmbedCode}</label>
           <div className="flex items-center gap-1.5">
@@ -796,12 +782,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
         </div>
         <textarea readOnly rows={3} value={embedCode(embedShop, embedHeight)} dir="ltr" onFocus={e => e.currentTarget.select()} className={fld + ' font-mono text-[11px] bg-gray-50 resize-none'} />
-        <div className="flex items-center gap-2 mt-2 mb-4">
-          <button onClick={() => copyText(embedCode(embedShop, embedHeight), '__embed_code__')} className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex items-center gap-1.5">{copiedId === '__embed_code__' ? <><IconCheck className="w-3.5 h-3.5" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyCode}</>}</button>
+        <div className="flex items-center gap-2 mt-2 mb-4 flex-wrap">
+          <button type="button" onClick={() => copyText(embedCode(embedShop, embedHeight), '__embed_code__')} className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 flex items-center gap-1.5">{copiedId === '__embed_code__' ? <><IconCheck className="w-3.5 h-3.5" />{t.copied}</> : <><IconCopy className="w-3.5 h-3.5" />{t.gsiteCopyCode}</>}</button>
           <a href={embedUrl(embedShop)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1.5"><IconGlobe className="w-3.5 h-3.5" />{t.gsiteOpen}</a>
         </div>
-
-        {/* Step-by-step instructions */}
         <div className="rounded-xl bg-gray-50 border border-gray-100 p-3.5">
           <div className="text-[13px] font-semibold text-gray-700 mb-2">{t.gsiteStepsTitle}</div>
           <ol className="text-xs text-gray-600 leading-relaxed space-y-1.5 list-decimal ps-4">
@@ -811,13 +795,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </ol>
           <p className="text-[11px] text-gray-400 mt-2.5">{t.gsiteNote}</p>
         </div>
-
-        <div className="flex justify-end mt-4">
-          <button onClick={() => setEmbedShop(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800">{t.cancel}</button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+      </>)}
+    </AppModal>
+  );
 
   const statusLabel = (s: MetaShopOrder['status']) => s === 'done' ? t.sDone : s === 'in_progress' ? t.sProg : s === 'cancelled' ? t.sCanc : t.sNew;
   const statusCls = (s: MetaShopOrder['status']) => s === 'done' ? 'bg-emerald-100 text-emerald-700' : s === 'in_progress' ? 'bg-blue-100 text-blue-700' : s === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
