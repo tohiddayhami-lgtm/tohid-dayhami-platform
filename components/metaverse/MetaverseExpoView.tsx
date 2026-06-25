@@ -201,33 +201,43 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     () => collectExpoSlideshowShopSlugs(expo.booths),
     [expo.booths],
   );
+  const slideshowHydrateKey = useMemo(
+    () => slideshowSlugs.map(slug => {
+      const s = shops.find(sh => sh.slug === slug);
+      return `${slug}:${s?.id || ''}:${s?.productCount ?? 0}:${s?.productChunkCount ?? 0}`;
+    }).join('|'),
+    [slideshowSlugs, shops],
+  );
   const [slideshowProducts, setSlideshowProducts] = useState<Record<string, MetaShopProduct[]>>({});
+  const slideshowLoadedRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (!slideshowSlugs.length) {
       setSlideshowProducts({});
+      slideshowLoadedRef.current = {};
       return;
     }
     let cancelled = false;
     (async () => {
-      const next: Record<string, MetaShopProduct[]> = {};
       for (const slug of slideshowSlugs) {
         if (cancelled) break;
         const shell = shops.find(s => s.slug === slug);
         if (!shell) continue;
+        const version = `${shell.productCount ?? 0}:${shell.productChunkCount ?? 0}`;
+        if (slideshowLoadedRef.current[slug] === version) continue;
         try {
           const full = await hydrateMetaShop(shell);
           const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
-          if (list.length) {
-            next[slug] = list;
-            if (!cancelled) setSlideshowProducts({ ...next });
+          if (!list.length) continue;
+          slideshowLoadedRef.current[slug] = version;
+          if (!cancelled) {
+            setSlideshowProducts(prev => ({ ...prev, [slug]: list }));
           }
         } catch { /* skip slug */ }
       }
-      if (!cancelled) setSlideshowProducts({ ...next });
     })();
     return () => { cancelled = true; };
-  }, [slideshowSlugs.join('|'), shops, expo.booths]);
+  }, [slideshowHydrateKey, slideshowSlugs, expo.booths, shops]);
 
   const shopsForScene = useMemo(() => shops.map(s => {
     const hydrated = slideshowProducts[s.slug];

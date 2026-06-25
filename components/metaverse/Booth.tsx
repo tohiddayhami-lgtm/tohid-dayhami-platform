@@ -453,28 +453,8 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 };
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
-const SLIDE_CACHE_ORDER: string[] = [];
-const SLIDE_CACHE_MAX_DESKTOP = 56;
-const SLIDE_CACHE_MAX_VR = 20;
-const SLIDESHOW_NEAR_DIST = 28;
 
-const trimSlideCache = (inXR: boolean) => {
-  const max = inXR ? SLIDE_CACHE_MAX_VR : SLIDE_CACHE_MAX_DESKTOP;
-  while (SLIDE_CACHE_ORDER.length > max) {
-    const key = SLIDE_CACHE_ORDER.shift();
-    if (key) SLIDE_BITMAP_CACHE.delete(key);
-  }
-};
-
-const touchSlideCache = (key: string) => {
-  const i = SLIDE_CACHE_ORDER.indexOf(key);
-  if (i >= 0) SLIDE_CACHE_ORDER.splice(i, 1);
-  SLIDE_CACHE_ORDER.push(key);
-};
-
-const loadSlideBitmap = (url: string, maxPx: number, inXR: boolean): Promise<ImageBitmap | null> => {
-  const raw = url.trim();
-  if (!raw) return Promise.resolve(null);
+const loadSlideBitmapOnce = (raw: string, maxPx: number): Promise<ImageBitmap | null> => {
   const key = `${maxPx}|${raw}`;
   let pending = SLIDE_BITMAP_CACHE.get(key);
   if (!pending) {
@@ -503,10 +483,23 @@ const loadSlideBitmap = (url: string, maxPx: number, inXR: boolean): Promise<Ima
     });
     SLIDE_BITMAP_CACHE.set(key, pending);
   }
-  touchSlideCache(key);
-  trimSlideCache(inXR);
   return pending;
 };
+
+const loadSlideBitmap = async (url: string, maxPx: number): Promise<ImageBitmap | null> => {
+  const raw = url.trim();
+  if (!raw) return null;
+  const key = `${maxPx}|${raw}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) SLIDE_BITMAP_CACHE.delete(key);
+    const bmp = await loadSlideBitmapOnce(raw, maxPx);
+    if (bmp) return bmp;
+    await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
+  }
+  return null;
+};
+
+const SLIDESHOW_NEAR_DIST = 28;
 
 const slidePrefetchIndexes = (index: number, count: number, inXR: boolean): number[] => {
   if (count <= 0) return [];
@@ -560,7 +553,7 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = React.memo(({ panelId: _panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = ({ panelId: _panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
@@ -622,37 +615,11 @@ const ProductSlideshowPanel: React.FC<{
 
   useEffect(() => {
     setIndex(i => Math.min(i, Math.max(0, count - 1)));
-    bitmapRef.current.clear();
-    setBitmapTick(t => t + 1);
   }, [page, count]);
 
   useEffect(() => {
     setDisplayLang(defaultLang || langs[0] || 'fa');
   }, [defaultLang, langs.join('|')]);
-
-  useEffect(() => {
-    if (!count) return;
-    let cancelled = false;
-    const loadNearby = async () => {
-      const keep = new Set(slidePrefetchIndexes(index, count, inXR));
-      for (const i of bitmapRef.current.keys()) {
-        if (!keep.has(i)) bitmapRef.current.delete(i);
-      }
-      await Promise.all([...keep].map(async i => {
-        if (bitmapRef.current.has(i)) return;
-        const url = urls[i];
-        if (!url) { bitmapRef.current.set(i, null); return; }
-        const bmp = await loadSlideBitmap(url, bitmapMax, inXR);
-        if (cancelled) return;
-        bitmapRef.current.set(i, bmp);
-      }));
-      if (!cancelled) setBitmapTick(t => t + 1);
-    };
-    loadNearby();
-    return () => { cancelled = true; };
-  }, [index, count, urlsKey, urls, bitmapMax, inXR]);
-
-  useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
   const paintSlide = useCallback((idx: number, code: string) => {
     const canvas = tex.image as HTMLCanvasElement;
@@ -701,6 +668,35 @@ const ProductSlideshowPanel: React.FC<{
     }
     tex.needsUpdate = true;
   }, [pageProducts, tex, canvasW]);
+
+  const paintRef = useRef(paintSlide);
+  paintRef.current = paintSlide;
+
+  useEffect(() => {
+    if (!count) return;
+    paintRef.current(Math.min(index, count - 1), displayLang);
+    let cancelled = false;
+    const loadNearby = async () => {
+      const keep = new Set(slidePrefetchIndexes(index, count, inXR));
+      await Promise.all([...keep].map(async i => {
+        const url = urls[i];
+        if (!url) {
+          bitmapRef.current.set(i, null);
+          return;
+        }
+        if (bitmapRef.current.get(i)) return;
+        const bmp = await loadSlideBitmap(url, bitmapMax);
+        if (cancelled) return;
+        bitmapRef.current.set(i, bmp);
+      }));
+      if (!cancelled) {
+        paintRef.current(Math.min(index, count - 1), displayLang);
+        setBitmapTick(t => t + 1);
+      }
+    };
+    loadNearby();
+    return () => { cancelled = true; };
+  }, [index, count, urlsKey, urls, bitmapMax, inXR, displayLang]);
 
   useEffect(() => {
     if (!count) return;
@@ -850,7 +846,7 @@ const ProductSlideshowPanel: React.FC<{
       </group>
     </group>
   );
-});
+};
 
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
 // video → LCD screen, anything else → a static image panel.
