@@ -1,0 +1,40 @@
+[
+  {
+    "id": "news_001",
+    "slug": "راهنمای-صادرات-به-عمان",
+    "title": "راهنمای کامل صادرات به کشور عمان در سال ۱۴۰۳",
+    "titleEn": "Complete Guide to Exporting to Oman in 2024",
+    "summary": "در این مقاله با مراحل کامل صادرات کالا به کشور عمان، مدارک لازم، مقررات گمرکی و فرصت‌های تجاری آشنا می‌شوید.",
+    "summaryEn": "This article covers the full process of exporting goods to Oman, including required documents, customs regulations, and trade opportunities.",
+    "content": "عمان یکی از مهم‌ترین بازارهای هدف برای صادرکنندگان ایرانی است...\n\nمراحل صادرات:\n۱. دریافت کارت بازرگانی\n۲. ثبت سفارش صادراتی\n۳. تهیه مدارک گمرکی\n\nمدارک لازم:\n- فاکتور تجاری (Commercial Invoice)\n- بارنامه (Bill of Lading)\n- گواهی مبدأ (Certificate of Origin)\n\nفرصت‌های تجاری:\nبازار عمان ظرفیت بالایی برای محصولات غذایی، مواد ساختمانی و کالاهای مصرفی دارد.",
+    "contentEn": "",
+    "category": "راهنما و آموزش",
+    "tags": ["عمان", "صادرات", "گمرک", "مدارک"],
+    "author": "تیم توحید دیهمی",
+    "publishedAt": "2024-03-15T10:00:00.000Z",
+    "isPublished": true,
+    "coverImage": "",
+    "viewCount": 0,
+    "metaDescription": "راهنمای جامع صادرات به عمان - مراحل، مدارک و مقررات گمرکی برای صادرکنندگان ایرانی",
+    "metaKeywords": "صادرات به عمان، گمرک عمان، تجارت با عمان"
+  },
+  {
+    "id": "news_002",
+    "slug": "بسته-بندی-استاندارد-صادراتی",
+    "title": "استانداردهای بسته‌بندی برای ورود به بازارهای اروپایی",
+    "titleEn": "Packaging Standards for European Market Entry",
+    "summary": "بسته‌بندی مناسب یکی از کلیدی‌ترین عوامل موفقیت در صادرات است. در این مقاله استانداردهای لازم را مرور می‌کنیم.",
+    "summaryEn": "Proper packaging is one of the key success factors in exports. This article reviews the required standards.",
+    "content": "بازارهای اروپایی دارای استانداردهای سختگیرانه‌ای برای بسته‌بندی هستند...\n\nالزامات اصلی:\n- برچسب‌گذاری به زبان کشور مقصد\n- درج تاریخ انقضا و کد تولید\n- رعایت استانداردهای زیست‌محیطی\n\nگواهینامه‌های مورد نیاز:\n- CE Marking\n- ISO 22000 برای مواد غذایی\n- REACH برای محصولات شیمیایی",
+    "contentEn": "",
+    "category": "قوانین و مقررات",
+    "tags": ["بسته‌بندی", "اروپا", "استاندارد", "برچسب"],
+    "author": "تیم توحید دیهمی",
+    "publishedAt": "2024-03-20T08:00:00.000Z",
+    "isPublished": true,
+    "coverImage": "",
+    "viewCount": 0,
+    "metaDescription": "استانداردهای بسته‌بندی صادراتی برای بازارهای اروپایی",
+    "metaKeywords": "بسته‌بندی صادراتی، استاندارد اروپا، CE"
+  }
+]

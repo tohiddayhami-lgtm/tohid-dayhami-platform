@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>پلتفرم توحید دیهمی</title>
+    <meta name="description" content="پلتفرم جامع صادراتی و بازرگانی توحید دیهمی" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="پلتفرم توحید دیهمی" />
+    <meta property="og:title" content="پلتفرم توحید دیهمی" />
+    <meta property="og:description" content="پلتفرم جامع صادراتی و بازرگانی توحید دیهمی" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Vazirmatn', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.25s ease-out forwards',
+              'slide-in': 'slideIn 0.25s ease-out forwards',
+            },
+            keyframes: {
+              fadeIn: { '0%': { opacity: '0', transform: 'translateY(6px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+              slideIn: { '0%': { transform: 'translateY(8px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+            },
+            letterSpacing: {
+              widest: '0.15em',
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+      body {
+        font-family: 'Vazirmatn', sans-serif;
+        background-color: #ffffff;
+        color: #1d1d1f;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+      ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+      .dir-ltr { direction: ltr !important; text-align: left !important; }
+      .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

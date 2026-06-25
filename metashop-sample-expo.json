@@ -1,0 +1,73 @@
+{
+  "_instructions": {
+    "fa": "نمونه نمایشگاه چندزبانه. این فایل را در بخش بازارچه‌ها با «به‌روزرسانی از JSON» روی بازارچه هدف آپلود کنید یا فقط بخش expo را در ویرایشگر کپی کنید.",
+    "en": "Multilingual exhibition sample. Upload via Bazaars > Update from JSON, or copy the expo block into the editor.",
+    "ar": "نموذج معرض متعدد اللغات. ارفع الملف عبر تحديث JSON أو انسخ قسم expo."
+  },
+  "expo": {
+    "enabled": true,
+    "defaultLang": "en",
+    "languages": [
+      { "code": "en", "name": "English" },
+      { "code": "fa", "name": "فارسی", "rtl": true },
+      { "code": "ar", "name": "العربية", "rtl": true }
+    ],
+    "visualStyle": "exhibition",
+    "title": {
+      "en": "International Trade Expo 2026",
+      "fa": "نمایشگاه تجاری بین‌المللی ۱۴۰۵",
+      "ar": "معرض التجارة الدولي ٢٠٢٦"
+    },
+    "subtitle": {
+      "en": "Walk the 3D hall in English, Persian or Arabic",
+      "fa": "سالن سه‌بعدی — فارسی، انگلیسی و عربی",
+      "ar": "قاعة ثلاثية الأبعاد — عربي، فارسي وإنجليزي"
+    },
+    "entranceEnabled": true,
+    "entranceOrganizer": {
+      "en": "Tohid Dayhami Business Solutions",
+      "fa": "توحید دیهمی بیزینس سولوشنز",
+      "ar": "توحيد ديهامي لحلول الأعمال"
+    },
+    "entranceRegistration": {
+      "enabled": true,
+      "title": {
+        "en": "Visitor registration",
+        "fa": "ثبت اطلاعات بازدیدکننده",
+        "ar": "تسجيل الزائر"
+      }
+    },
+    "width": 30,
+    "depth": 30,
+    "height": 9,
+    "spawn": { "x": 0, "y": 0, "z": 8 },
+    "booths": [
+      {
+        "id": "booth-sample-1",
+        "name": {
+          "en": "Iranian Fresh Produce",
+          "fa": "محصولات تازه ایرانی",
+          "ar": "منتجات إيرانية طازجة"
+        },
+        "x": -4,
+        "y": 0,
+        "z": 2,
+        "shopSlug": "iranian-fresh-produce",
+        "tier": "standard"
+      },
+      {
+        "id": "booth-sample-2",
+        "name": {
+          "en": "Business Services",
+          "fa": "خدمات تجاری",
+          "ar": "خدمات الأعمال"
+        },
+        "x": 4,
+        "y": 0,
+        "z": 2,
+        "shopSlug": "tohid-services",
+        "tier": "premium"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "headers": [
+    {
+      "source": "/sitemap.xml",
+      "headers": [{ "key": "Content-Type", "value": "application/xml; charset=utf-8" }]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+    }
+  ],
+  "rewrites": [
+    { "source": "/sitemap.xml",           "destination": "/sitemap.xml" },
+    { "source": "/robots.txt",            "destination": "/robots.txt"  },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(facebookexternalhit|facebot|meta-externalagent|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|ia_archiver).*"
+        }
+      ],
+      "destination": "/api/og-meta"
+    },
+    { "source": "/((?!api/).*)",          "destination": "/index.html"  }
+  ],
+  "crons": [
+    {
+      "path": "/api/daily-summary",
+      "schedule": "30 13 * * *"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "id": "sample-bazaar",
+  "slug": "tohid-bazaar",
+  "name": "Tohid Bazaar",
+  "isActive": true,
+  "defaultLang": "en",
+  "title": { "fa": "بازارچه توحید دیهمی", "en": "Tohid Dayhami Bazaar" },
+  "subtitle": { "fa": "فروشگاه‌ها بر اساس کشور، شهر و گروه کالایی", "en": "Shops by country, city and product group" },
+  "coverImage": "",
+  "logo": "",
+  "theme": { "primary": "#2d4a1a", "cover": "#1f2a18" },
+  "levelLabels": [
+    { "fa": "کشور", "en": "Country" },
+    { "fa": "شهر", "en": "City" },
+    { "fa": "گروه کالایی", "en": "Product Group" }
+  ],
+  "tree": [
+    {
+      "id": "n-iran", "label": { "fa": "ایران", "en": "Iran" },
+      "children": [
+        {
+          "id": "n-tehran", "label": { "fa": "تهران", "en": "Tehran" },
+          "children": [
+            { "id": "n-food", "label": { "fa": "مواد غذایی", "en": "Food" }, "shopSlugs": ["iranian-fresh-produce"] },
+            { "id": "n-services", "label": { "fa": "خدمات", "en": "Services" }, "shopSlugs": ["tohid-services"] }
+          ]
+        },
+        {
+          "id": "n-mashhad", "label": { "fa": "مشهد", "en": "Mashhad" },
+          "children": [
+            { "id": "n-saffron", "label": { "fa": "زعفران", "en": "Saffron" }, "shopSlugs": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "n-oman", "label": { "fa": "عمان", "en": "Oman" },
+      "children": [
+        { "id": "n-muscat", "label": { "fa": "مسقط", "en": "Muscat" }, "shopSlugs": ["tohid-services"] }
+      ]
+    }
+  ],
+  "expo": {
+    "enabled": true,
+    "defaultLang": "en",
+    "languages": [
+      { "code": "en", "name": "English" },
+      { "code": "fa", "name": "فارسی", "rtl": true },
+      { "code": "ar", "name": "العربية", "rtl": true }
+    ],
+    "visualStyle": "exhibition",
+    "title": {
+      "en": "Tohid Dayhami Virtual Bazaar",
+      "fa": "بازارچه مجازی توحید دیهمی",
+      "ar": "سوق توحيد ديهامي الافتراضي"
+    },
+    "subtitle": {
+      "en": "Explore shops in English, Persian or Arabic",
+      "fa": "فروشگاه‌ها را به فارسی، انگلیسی یا عربی ببینید",
+      "ar": "استكشف المتاجر بالعربية أو الفارسية أو الإنجليزية"
+    },
+    "entranceEnabled": true,
+    "width": 30,
+    "depth": 30,
+    "height": 9,
+    "spawn": { "x": 0, "y": 0, "z": 8 },
+    "booths": []
+  }
+}
