@@ -33,7 +33,6 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
-import { shopNeedsProductHydration } from './utils/metaShopChunks';
 import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
@@ -1315,7 +1314,7 @@ const App: React.FC = () => {
   const metaShopHydrateKey = useMemo(() => {
     const s = shopSlug ? metaShops.find(x => x.slug === shopSlug) : null;
     if (!s) return '';
-    return `${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}`;
+    return `${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}:${s.isActive !== false ? 1 : 0}:${s.hidePrices ? 1 : 0}`;
   }, [shopSlug, metaShops]);
 
   // ── Meta Shop: sync from subscription cache when available ──
@@ -1330,11 +1329,16 @@ const App: React.FC = () => {
     setShopResolved(false);
 
     (async () => {
-      const resolved = (local.products || []).length > 0 ? local : await hydrateMetaShop(local);
-      if (!cancelled) {
-        setPublicShop(resolved);
-        setShopLoading(false);
-        setShopResolved(true);
+      try {
+        const resolved = (local.products || []).length > 0 ? local : await hydrateMetaShop(local);
+        if (!cancelled) setPublicShop(resolved);
+      } catch {
+        if (!cancelled) setPublicShop(local);
+      } finally {
+        if (!cancelled) {
+          setShopLoading(false);
+          setShopResolved(true);
+        }
       }
     })();
 
@@ -1351,16 +1355,19 @@ const App: React.FC = () => {
       return;
     }
     if (metaShops.some(s => s.slug === shopSlug)) return;
-    if (shopFetchSlugRef.current === shopSlug) return;
 
     let cancelled = false;
-    shopFetchSlugRef.current = shopSlug;
     setShopLoading(true);
     setShopResolved(false);
-    setPublicShop(null);
     getMetaShopBySlug(shopSlug).then(s => {
       if (!cancelled) {
         setPublicShop(s);
+        setShopLoading(false);
+        setShopResolved(true);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setPublicShop(null);
         setShopLoading(false);
         setShopResolved(true);
       }
@@ -1774,20 +1781,15 @@ const App: React.FC = () => {
   if (view === 'metashop') {
     const cachedShop = shopSlug ? metaShops.find(s => s.slug === shopSlug) : null;
     const hydratedShop = publicShop?.slug === shopSlug ? publicShop : null;
-    const waitingForProducts = !!(
-      cachedShop &&
-      shopNeedsProductHydration(cachedShop) &&
-      !(hydratedShop?.products || []).length
-    );
     const resolvedShop = hydratedShop ?? cachedShop ?? null;
 
-    if (resolvedShop && resolvedShop.isActive !== false && !waitingForProducts) {
+    if (resolvedShop && resolvedShop.isActive !== false) {
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
       if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
       return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
     // Still resolving — shutter loader (never flash "not found" while loading)
-    if (shopSlug && (shopLoading || !shopResolved || waitingForProducts)) {
+    if (shopSlug && (!shopResolved || shopLoading)) {
       return <ShopShutterLoader lang={lang} />;
     }
     return (

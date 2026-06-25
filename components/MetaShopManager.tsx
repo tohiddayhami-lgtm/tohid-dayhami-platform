@@ -599,7 +599,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     setSaving(true);
     try {
       const allowEmptyProducts = productsFullyLoaded && draft.products.length === 0;
-      await onSaveMetaShop({ ...draft, slug, code }, { allowEmptyProducts });
+      await onSaveMetaShop({ ...draft, slug, code, isActive: draft.isActive !== false }, { allowEmptyProducts });
       setMode('list'); setDraft(null);
     }
     catch (e) {
@@ -1500,7 +1500,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             ))}
           </div>
         </div>
-        <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
+        <label className="flex items-center gap-2 mt-4 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-indigo-600" checked={draft.isActive !== false} onChange={e => upd({ isActive: e.target.checked })} />{t.active}</label>
         {draft.type === 'products' && (
           <div className="mt-4 p-3 rounded-xl border border-violet-100 bg-violet-50/50">
             <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" className="w-4 h-4 accent-violet-600" checked={!!draft.supplierCollaborationEnabled} onChange={e => upd({ supplierCollaborationEnabled: e.target.checked })} />{t.supplierCollabEnable}</label>

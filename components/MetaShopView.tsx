@@ -285,7 +285,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const STRINGS: Record<string, Record<string, string>> = {
     en: {
       cartBtn: 'Place Order', addProduct: 'Add to cart', addService: 'Add to request', added: 'Added ✓', all: 'All',
-      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', loadMore: 'Load more', showingProducts: 'Showing {shown} of {total}', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
+      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', loadingProducts: 'Loading products…', loadMore: 'Load more', showingProducts: 'Showing {shown} of {total}', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
       qty: 'Qty', remove: 'Remove', total: 'Total', yourInfo: 'Your Information', name: 'Full Name', company: 'Company',
       phone: 'Mobile / WhatsApp', email: 'Email', country: 'Country', city: 'City / Destination', notes: 'Notes / Special requests',
       submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
@@ -334,7 +334,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
-      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', loadMore: 'مشاهده بیشتر', showingProducts: 'نمایش {shown} از {total}', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
+      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', loadingProducts: 'در حال بارگذاری محصولات…', loadMore: 'مشاهده بیشتر', showingProducts: 'نمایش {shown} از {total}', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
       qty: 'تعداد', remove: 'حذف', total: 'جمع کل', yourInfo: 'اطلاعات شما', name: 'نام و نام خانوادگی', company: 'شرکت',
       phone: 'موبایل / واتس‌اپ', email: 'ایمیل', country: 'کشور', city: 'شهر / مقصد', notes: 'توضیحات و درخواست‌های ویژه',
       submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
@@ -506,6 +506,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
+  const productsPending = (shop.productCount ?? 0) > 0 && products.length === 0;
   const searchIndex = useMemo(() => buildProductSearchIndex(shop, products), [shop.id, shop.searchKeywords, products]);
 
   const commitSearch = useCallback((value: string) => {
@@ -1216,6 +1217,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         {/* Grid */}
         {searchBusy ? (
           <p className="ms-empty ms-search-pending">{S('searchPending')}</p>
+        ) : productsPending ? (
+          <p className="ms-empty ms-search-pending">{S('loadingProducts')}</p>
         ) : filtered.length === 0 ? (
           <p className="ms-empty">{t.empty}</p>
         ) : (
