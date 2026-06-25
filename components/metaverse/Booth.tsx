@@ -121,7 +121,7 @@ const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; col
       <meshStandardMaterial color={color} />
     </mesh>
     {!hideLabel && (
-      <CanvasLabel text={glyph} width={btnW - 0.04} height={btnH - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+      <CanvasLabel text={glyph} width={btnW - 0.04} height={btnH - 0.04} position={[0, 0, 0.01]} color="#fff" direction="ltr" onClick={onClick} />
     )}
   </group>
   );
@@ -799,15 +799,6 @@ const ProductSlideshowPanel: React.FC<{
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
-  const toolbarGlyphs = [
-    playing ? '⏸' : '▶',
-    multiPage ? '«' : '',
-    '‹',
-    counterLabel,
-    '›',
-    multiPage ? '»' : '',
-    showLang ? displayLang.toUpperCase() : '',
-  ].filter(Boolean).join('   ');
 
   const atlasGeo = useMemo(() => {
     if (!useAtlas || atlasSlot == null) return null;
@@ -861,45 +852,18 @@ const ProductSlideshowPanel: React.FC<{
       )}
       {totalCount > 0 && (
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        {useAtlas ? (
-          <>
-            <CanvasLabel
-              text={toolbarGlyphs}
-              width={Math.min(width * 0.92, 2.8)}
-              height={btnH}
-              position={[0, 0, 0.015]}
-              bg="rgba(15,23,42,.92)"
-              color="#ffffff"
-            />
-            <PdfArrowBtn hideLabel x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-            {multiPage && toolbar.pagePrevX != null && (
-              <PdfArrowBtn hideLabel x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pagePrev} color="#475569" />
-            )}
-            <PdfArrowBtn hideLabel x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-            <PdfArrowBtn hideLabel x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-            {multiPage && toolbar.pageNextX != null && (
-              <PdfArrowBtn hideLabel x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pageNext} color="#475569" />
-            )}
-            {showLang && toolbar.langX != null && (
-              <PdfArrowBtn hideLabel x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={cycleLang} color="#334155" />
-            )}
-          </>
-        ) : (
-          <>
-            <PdfArrowBtn x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-            {multiPage && toolbar.pagePrevX != null && (
-              <PdfArrowBtn x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="«" onClick={pagePrev} color="#475569" />
-            )}
-            <PdfArrowBtn x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-            <CanvasLabel text={counterLabel} width={toolbar.counterW} height={btnH * 0.65} position={[0, 0, 0.015]} bg="rgba(15,23,42,.92)" color="#ffffff" />
-            <PdfArrowBtn x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-            {multiPage && toolbar.pageNextX != null && (
-              <PdfArrowBtn x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="»" onClick={pageNext} color="#475569" />
-            )}
-            {showLang && toolbar.langX != null && (
-              <PdfArrowBtn x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph={displayLang.toUpperCase()} onClick={cycleLang} color="#334155" />
-            )}
-          </>
+        <PdfArrowBtn x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        {multiPage && toolbar.pagePrevX != null && (
+          <PdfArrowBtn x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="«" onClick={pagePrev} color="#475569" />
+        )}
+        <PdfArrowBtn x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <CanvasLabel text={counterLabel} width={toolbar.counterW} height={btnH * 0.65} position={[0, 0, 0.015]} bg="rgba(15,23,42,.92)" color="#ffffff" direction="ltr" />
+        <PdfArrowBtn x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        {multiPage && toolbar.pageNextX != null && (
+          <PdfArrowBtn x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="»" onClick={pageNext} color="#475569" />
+        )}
+        {showLang && toolbar.langX != null && (
+          <PdfArrowBtn x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph={displayLang.toUpperCase()} onClick={cycleLang} color="#334155" />
         )}
       </group>
       )}

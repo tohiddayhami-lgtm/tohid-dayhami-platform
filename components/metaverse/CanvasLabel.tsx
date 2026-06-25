@@ -12,6 +12,7 @@ interface Props {
   color?: string;           // text color
   bold?: boolean;
   radius?: number;          // bg corner radius (px on the source canvas)
+  direction?: 'ltr' | 'rtl';
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   onPointerOver?: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut?: (e: ThreeEvent<PointerEvent>) => void;
@@ -20,7 +21,7 @@ interface Props {
 // A text label baked into a CanvasTexture on a plane. Unlike drei <Html>, this renders inside an
 // immersive WebXR session (so booth names / buttons are visible in VR) and shapes Persian/Arabic
 // correctly using the page's loaded font. Clickable, so it doubles as an in-world button.
-export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, rotation, bg, color = '#ffffff', bold = true, radius = 28, onClick, onPointerOver, onPointerOut }) => {
+export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, rotation, bg, color = '#ffffff', bold = true, radius = 28, direction = 'rtl', onClick, onPointerOver, onPointerOut }) => {
   const texture = useMemo(() => {
     const W = 1024;
     const H = Math.max(64, Math.round((W * height) / width));
@@ -38,7 +39,7 @@ export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, ro
     ctx.fillStyle = color;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    (ctx as any).direction = 'rtl';
+    (ctx as any).direction = direction;
     ctx.shadowColor = 'rgba(0,0,0,.45)';
     ctx.shadowBlur = 6;
     ctx.shadowOffsetY = 2;
@@ -54,7 +55,7 @@ export const CanvasLabel: React.FC<Props> = ({ text, width, height, position, ro
     tex.anisotropy = 4;
     tex.needsUpdate = true;
     return tex;
-  }, [text, width, height, bg, color, bold, radius]);
+  }, [text, width, height, bg, color, bold, radius, direction]);
 
   useEffect(() => () => texture.dispose(), [texture]);
 
