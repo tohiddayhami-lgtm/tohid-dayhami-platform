@@ -12,6 +12,14 @@ import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
+import {
+  SLIDESHOW_ATLAS_CELL_W,
+  createSlideshowAtlasPlaneGeometry,
+  getSlideshowAtlasTexture,
+  paintSlideshowAtlasCell,
+  registerSlideshowAtlasPanel,
+  unregisterSlideshowAtlasPanel,
+} from './slideshowAtlas';
 import type { BoothFace } from '../../types';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -32,6 +40,8 @@ interface Props {
   /** Default language for slideshow product text (expo / shop). */
   slideshowDefaultLang?: string;
   slideshowLangOptions?: string[];
+  /** Quest / mobile — one shared texture atlas for all slideshow LCDs. */
+  compactGpu?: boolean;
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -508,8 +518,69 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   return [...set];
 };
 
+const drawSlideshowFrame = (
+  ctx: CanvasRenderingContext2D,
+  cw: number,
+  ch: number,
+  idx: number,
+  code: string,
+  barText: string,
+  pageProducts: MetaShopProduct[],
+  bitmaps: Map<number, ImageBitmap | null>,
+) => {
+  const scale = cw / 640;
+  const toolBarH = SLIDE_TOOLBAR_H;
+  const footerH = Math.round(132 * scale);
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(0, 0, cw, ch);
+  const imgMaxH = ch - footerH - toolBarH - 10;
+  const bmp = bitmaps.get(idx) ?? null;
+  const p = pageProducts[idx];
+  if (bmp) {
+    const ar = bmp.width / bmp.height;
+    let dw = cw * 0.98;
+    let dh = dw / ar;
+    if (dh > imgMaxH * 0.98) { dh = imgMaxH * 0.98; dw = dh * ar; }
+    const dx = (cw - dw) / 2;
+    const dy = Math.max(6, (imgMaxH - dh) / 2);
+    ctx.drawImage(bmp, dx, dy, dw, dh);
+  }
+  if (p) {
+    const rtl = isRtlCode(code);
+    const pad = Math.round(18 * scale);
+    const maxW = cw - pad * 2;
+    ctx.fillStyle = 'rgba(8,12,24,.94)';
+    ctx.fillRect(0, ch - footerH - toolBarH, cw, footerH);
+    const name = productLabel(p, code);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.max(14, Math.round(24 * scale))}px Vazirmatn, Tahoma, sans-serif`;
+    ctx.textAlign = rtl ? 'right' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.direction = rtl ? 'rtl' : 'ltr';
+    const nameLine = name.length > 48 ? `${name.slice(0, 46)}…` : name;
+    ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH - toolBarH + 10);
+    const desc = productDesc(p, code);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = `${Math.max(12, Math.round(18 * scale))}px Vazirmatn, Tahoma, sans-serif`;
+    wrapCanvasLines(ctx, desc, maxW, 3).forEach((ln, i) => {
+      ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH - toolBarH + 40 + i * Math.round(24 * scale));
+    });
+    ctx.direction = 'ltr';
+  }
+  if (barText) {
+    ctx.fillStyle = 'rgba(15,23,42,.95)';
+    ctx.fillRect(0, ch - toolBarH, cw, toolBarH);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = `bold ${Math.max(12, Math.round(17 * scale))}px Vazirmatn, Tahoma, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(barText, cw / 2, ch - toolBarH / 2 + 1);
+  }
+};
+
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
+  panelId: string;
   products: MetaShopProduct[];
   width: number;
   height: number;
@@ -518,12 +589,15 @@ const ProductSlideshowPanel: React.FC<{
   autoPlaySec?: number;
   defaultLang: string;
   langOptions: string[];
+  compactGpu?: boolean;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = React.memo(({ panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, compactGpu = false, onClick }) => {
   const inXR = useXR(s => !!s.session);
-  const bitmapMax = inXR ? 320 : SLIDE_BITMAP_MAX;
-  const canvasW = inXR ? 480 : 640;
-  const [tex] = useState(() => createSlideshowTexture());
+  const useAtlas = compactGpu || inXR;
+  const bitmapMax = useAtlas ? 280 : SLIDE_BITMAP_MAX;
+  const canvasW = useAtlas ? SLIDESHOW_ATLAS_CELL_W : 640;
+  const [tex] = useState(() => (compactGpu ? null : createSlideshowTexture()));
+  const [atlasSlot, setAtlasSlot] = useState<number | null>(null);
   const totalCount = products.length;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
@@ -575,6 +649,13 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
+    if (!useAtlas) { setAtlasSlot(null); return; }
+    const slot = registerSlideshowAtlasPanel(panelId);
+    setAtlasSlot(slot);
+    return () => { unregisterSlideshowAtlasPanel(panelId); };
+  }, [useAtlas, panelId]);
+
+  useEffect(() => {
     if (!count) return;
     let cancelled = false;
     const loadNearby = async () => {
@@ -597,65 +678,27 @@ const ProductSlideshowPanel: React.FC<{
   }, [index, count, urlsKey, urls, bitmapMax]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
-  useEffect(() => () => tex.dispose(), [tex]);
+  useEffect(() => () => { tex?.dispose(); }, [tex]);
 
   const paintSlide = useCallback((idx: number, code: string, barText: string) => {
+    const cw = canvasW;
+    const ch = Math.round(cw * 0.75) + SLIDE_TOOLBAR_H;
+    const draw = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      drawSlideshowFrame(ctx, w, h, idx, code, barText, pageProducts, bitmapRef.current);
+    };
+    if (useAtlas && atlasSlot != null) {
+      paintSlideshowAtlasCell(atlasSlot, draw);
+      return;
+    }
+    if (!tex) return;
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = canvasW;
-    const toolBarH = SLIDE_TOOLBAR_H;
-    const ch = Math.round(cw * 0.75) + toolBarH;
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
-    ctx.fillStyle = '#0a0f1a';
-    ctx.fillRect(0, 0, cw, ch);
-    const footerH = 132;
-    const imgMaxH = ch - footerH - toolBarH - 10;
-    const bmp = bitmapRef.current.get(idx) ?? null;
-    const p = pageProducts[idx];
-    if (bmp) {
-      const ar = bmp.width / bmp.height;
-      let dw = cw * 0.98;
-      let dh = dw / ar;
-      if (dh > imgMaxH * 0.98) { dh = imgMaxH * 0.98; dw = dh * ar; }
-      const dx = (cw - dw) / 2;
-      const dy = Math.max(6, (imgMaxH - dh) / 2);
-      ctx.drawImage(bmp, dx, dy, dw, dh);
-    }
-    if (p) {
-      const rtl = isRtlCode(code);
-      const pad = 18;
-      const maxW = cw - pad * 2;
-      ctx.fillStyle = 'rgba(8,12,24,.94)';
-      ctx.fillRect(0, ch - footerH, cw, footerH);
-      const name = productLabel(p, code);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px Vazirmatn, Tahoma, sans-serif';
-      ctx.textAlign = rtl ? 'right' : 'left';
-      ctx.textBaseline = 'top';
-      ctx.direction = rtl ? 'rtl' : 'ltr';
-      const nameLine = name.length > 48 ? `${name.slice(0, 46)}…` : name;
-      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 10);
-      const desc = productDesc(p, code);
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = '18px Vazirmatn, Tahoma, sans-serif';
-      wrapCanvasLines(ctx, desc, maxW, 3).forEach((ln, i) => {
-        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 40 + i * 24);
-      });
-      ctx.direction = 'ltr';
-    }
-    if (barText) {
-      ctx.fillStyle = 'rgba(15,23,42,.95)';
-      ctx.fillRect(0, ch - toolBarH, cw, toolBarH);
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = 'bold 17px Vazirmatn, Tahoma, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(barText, cw / 2, ch - toolBarH / 2 + 1);
-    }
+    draw(ctx, cw, ch);
     tex.needsUpdate = true;
-  }, [pageProducts, tex, canvasW]);
+  }, [pageProducts, tex, canvasW, useAtlas, atlasSlot]);
 
   const advanceSlide = useCallback((dir: 1 | -1) => {
     if (!totalCount) return;
@@ -730,6 +773,13 @@ const ProductSlideshowPanel: React.FC<{
   const canvasCh = Math.round(canvasW * 0.75) + SLIDE_TOOLBAR_H;
   const toolbarBandV = SLIDE_TOOLBAR_H / canvasCh;
 
+  const atlasGeo = useMemo(() => {
+    if (!useAtlas || atlasSlot == null) return null;
+    return createSlideshowAtlasPlaneGeometry(atlasSlot, width, viewH);
+  }, [useAtlas, atlasSlot, width, viewH]);
+
+  useEffect(() => () => { atlasGeo?.dispose(); }, [atlasGeo]);
+
   useEffect(() => {
     if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang, toolbarGlyphs);
@@ -762,8 +812,12 @@ const ProductSlideshowPanel: React.FC<{
       </mesh>
       {totalCount > 0 ? (
         <mesh position={[0, ctrlH / 2, 0.006]} onClick={handleScreenClick}>
-          <planeGeometry args={[width, viewH]} />
-          <meshBasicMaterial map={tex} toneMapped={false} />
+          {atlasGeo ? (
+            <primitive object={atlasGeo} attach="geometry" />
+          ) : (
+            <planeGeometry args={[width, viewH]} />
+          )}
+          <meshBasicMaterial map={useAtlas ? getSlideshowAtlasTexture() : tex!} toneMapped={false} />
         </mesh>
       ) : (
         <CanvasLabel
@@ -1264,7 +1318,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'], compactGpu = false }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -1700,6 +1754,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           return (
             <ProductSlideshowPanel
               key={`ss-${s.face}`}
+              panelId={`${booth.id}-${s.face}`}
               products={slides}
               width={s.w}
               height={s.h}
@@ -1708,6 +1763,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               autoPlaySec={slideshow.autoPlaySec ?? 5}
               defaultLang={slideshowDefaultLang}
               langOptions={slideshowLangOptions}
+              compactGpu={compactGpu}
               onClick={(e) => {
                 e.stopPropagation();
                 onTrack?.('booth_panel_click', { ...trackBase, targetType: 'product_slideshow', targetId: s.face, side: s.face });

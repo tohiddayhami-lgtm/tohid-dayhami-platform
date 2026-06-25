@@ -8,7 +8,7 @@ import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase, collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate } from './expoUtils';
 import { hydrateMetaShop } from '../../services/firebaseService';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
-import { useDeviceCapabilities } from './useDeviceCapabilities';
+import { useDeviceCapabilities, prefersCompactGpu } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
 import { Player } from './Player';
 import { MobileControls } from './MobileControls';
@@ -236,6 +236,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     return s;
   }), [shops, slideshowProducts]);
   const caps = useDeviceCapabilities();
+  const compactGpu = prefersCompactGpu(caps);
   const expoLangs = useMemo(() => resolveExpoLanguages(expo), [expo.languages]);
   const defaultExpoLang = expo.defaultLang && expoLangs.some(l => l.code === expo.defaultLang)
     ? expo.defaultLang
@@ -507,9 +508,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
       <Canvas
-        dpr={expo.environmentUrl ? [1, 1.25] : [1, 1.5]}
+        dpr={compactGpu ? [1, 1] : (expo.environmentUrl ? [1, 1.25] : [1, 1.5])}
         camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: !compactGpu, powerPreference: 'high-performance' }}
       >
         <XR store={store}>
           <EnvironmentCollisionProvider>
@@ -518,6 +519,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               expo={expo}
               shops={shopsForScene}
               lang={lang}
+              compactGpu={compactGpu}
               onSelectHotspot={setActive}
               onSelectBooth={onSelectBooth}
               onFloorTeleport={(x, z) => teleportRef.current?.(x, z)}

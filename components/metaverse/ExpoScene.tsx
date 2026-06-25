@@ -39,6 +39,7 @@ interface Props {
   onDeselectEdit?: () => void;
   onUpdateEditTransform?: (patch: Partial<EnvEditTransform>) => void;
   onAddEnvMedia?: (kind: ExpoEnvironmentMediaKind, at: { x: number; y: number; z: number }) => void;
+  compactGpu?: boolean;
 }
 
 const Wall: React.FC<{ args: [number, number, number]; position: [number, number, number]; color: string }> = ({ args, position, color }) => (
@@ -359,6 +360,7 @@ export const ExpoScene: React.FC<Props> = ({
   onRegistrationKioskClick, boothSummaries = {}, onReserveBooth,
   environmentEditMode, environmentMedia, editDecorations, editSelection,
   onSelectEditMedia, onSelectEditDecoration, onDeselectEdit, onUpdateEditTransform, onAddEnvMedia,
+  compactGpu = false,
 }) => {
   const { width, depth, height } = hallDims(expo);
   const ground = expo.groundColor || EXPO_DEFAULTS.groundColor;
@@ -705,6 +707,7 @@ export const ExpoScene: React.FC<Props> = ({
             shopProducts={needsSlideshowProducts ? (linkedShop?.products || []) : []}
             slideshowDefaultLang={slideshowLang.defaultLang}
             slideshowLangOptions={slideshowLang.langOptions}
+            compactGpu={compactGpu}
           />
         );
       })}

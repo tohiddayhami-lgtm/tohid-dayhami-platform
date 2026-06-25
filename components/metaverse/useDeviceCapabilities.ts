@@ -6,6 +6,10 @@ export interface DeviceCapabilities {
   vrSupported: boolean;  // navigator.xr reports an immersive-vr session is available
 }
 
+/** Quest browser / mobile XR — strict WebGL texture limits; use shared slideshow atlas. */
+export const prefersCompactGpu = (caps: DeviceCapabilities): boolean =>
+  caps.vrSupported || (caps.touch && !caps.finePointer);
+
 // Detects input modality + WebXR availability so the viewer can pick the right controls.
 // Pointer Lock is desktop-only; the VR button is hidden unless an immersive-vr session is supported.
 export const useDeviceCapabilities = (): DeviceCapabilities => {
