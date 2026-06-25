@@ -1342,7 +1342,10 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // and an optional auto-playing LCD screen).
 export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
   const { products: slideshowShopProducts, loading: slideshowLoading } = useSlideshowShopProducts(booth.shopSlug);
-  const effectiveShopProducts = slideshowShopProducts.length ? slideshowShopProducts : shopProducts;
+  const effectiveShopProducts = useMemo(() => {
+    if (slideshowShopProducts.length) return slideshowShopProducts;
+    return shopProducts;
+  }, [slideshowShopProducts, shopProducts]);
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;

@@ -255,13 +255,14 @@ export const filterProductsForSlideshowHydrate = (
   const active = products.filter(p => p.active !== false);
   const { explicitIds, hasOpenList } = collectSlideshowProductIdsForShop(booths, shopSlug);
   let list: MetaShopProduct[];
-  if (explicitIds.length) {
+  // If any booth uses the full catalog, hydrate everything — per-booth resolveSlideshowProducts trims later.
+  if (hasOpenList) {
+    list = active;
+  } else if (explicitIds.length) {
     const pick = new Set(explicitIds);
     list = active.filter(p => pick.has(p.id));
-  } else if (!hasOpenList) {
-    return [];
   } else {
-    list = active;
+    return [];
   }
   return list.map(trimProductForSlideshow).filter((p): p is MetaShopProduct => !!p);
 };

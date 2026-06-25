@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -1184,6 +1184,59 @@ export const hydrateMetaShopProgressive = async (
     onProgress?.(all, 1, 1);
   }
   return { ...shop, products: all };
+};
+
+const trimProductLight = (p: MetaShopProduct): MetaShopProduct | null => {
+  const img = (p.images || []).find(u => !!String(u || '').trim());
+  if (!img) return null;
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    images: [String(img)],
+    i18n: p.i18n,
+    active: p.active,
+  };
+};
+
+/** Load only slideshow-needed fields; streams chunks to limit memory spikes. */
+export const loadSlideshowProductsForShop = async (
+  shop: MetaShop,
+  onPartial?: (products: MetaShopProduct[]) => void,
+): Promise<MetaShopProduct[]> => {
+  const push = (batch: MetaShopProduct[], acc: MetaShopProduct[]) => {
+    for (const p of batch) {
+      if (p.active === false) continue;
+      const t = trimProductLight(p);
+      if (t && !acc.some(x => x.id === t.id)) acc.push(t);
+    }
+    if (acc.length) onPartial?.([...acc]);
+    return acc;
+  };
+
+  if ((shop.products || []).length) {
+    const list: MetaShopProduct[] = [];
+    push(shop.products || [], list);
+    return list;
+  }
+
+  let all: MetaShopProduct[] = [];
+  const total = shop.productChunkCount || 0;
+  if (total > 0) {
+    for (let i = 0; i < total; i++) {
+      const chunk = await loadOneMetaShopChunk(`${shop.id}_${i}`);
+      if (chunk?.products?.length) all = push(chunk.products, all);
+    }
+  }
+  if (!all.length) {
+    const orphan = await loadMetaShopProductChunks(shop.id);
+    all = push(mergeProductChunks(orphan), all);
+  }
+  if (!all.length && (shop.productCount || 0) > 0) {
+    const raw = await fetchMetaShopDocRaw(shop.id);
+    if (raw?.products?.length) all = push(raw.products, all);
+  }
+  return all;
 };
 
 export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOptions) => {

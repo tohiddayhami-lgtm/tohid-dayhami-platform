@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { MetaShop, MetaShopProduct, MetaverseBooth } from '../../types';
-import { hydrateMetaShopProgressive } from '../../services/firebaseService';
+import { getMetaShopBySlug, loadSlideshowProductsForShop } from '../../services/firebaseService';
 import { collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate } from './expoUtils';
 
 type Ctx = {
@@ -10,6 +10,13 @@ type Ctx = {
 };
 
 const SlideshowProductsCtx = createContext<Ctx | null>(null);
+
+const normSlug = (s: string) => s.trim().toLowerCase();
+
+const findShopShell = (shops: MetaShop[], slug: string): MetaShop | undefined => {
+  const n = normSlug(slug);
+  return shops.find(s => normSlug(s.slug || '') === n || s.id === slug);
+};
 
 export const SlideshowProductsProvider: React.FC<{
   shops: MetaShop[];
@@ -24,6 +31,7 @@ export const SlideshowProductsProvider: React.FC<{
   const inflightRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<string[]>([]);
   const drainingRef = useRef(false);
+  const retriesRef = useRef<Record<string, number>>({});
 
   shopsRef.current = shops;
   boothsRef.current = booths;
@@ -37,6 +45,42 @@ export const SlideshowProductsProvider: React.FC<{
     });
   }, []);
 
+  const applyList = useCallback((slug: string, list: MetaShopProduct[]) => {
+    if (!list.length) return;
+    setProductsBySlug(prev => {
+      if (prev[slug] === list) return prev;
+      return { ...prev, [slug]: list };
+    });
+  }, []);
+
+  const loadSlug = useCallback(async (slug: string) => {
+    let shell = findShopShell(shopsRef.current, slug);
+    if (!shell) {
+      try {
+        const remote = await getMetaShopBySlug(slug);
+        if (remote) shell = remote;
+      } catch { /* fall through */ }
+    }
+    if (!shell) return false;
+
+    const booths = boothsRef.current;
+    const publish = (raw: MetaShopProduct[]) => {
+      const list = filterProductsForSlideshowHydrate(raw, booths, slug);
+      applyList(slug, list);
+      return list;
+    };
+
+    if ((shell.products || []).some(p => (p.images || []).some(Boolean))) {
+      publish(shell.products || []);
+      return true;
+    }
+
+    await loadSlideshowProductsForShop(shell, partial => {
+      publish(partial);
+    });
+    return true;
+  }, [applyList]);
+
   const drainQueue = useCallback(async () => {
     if (drainingRef.current) return;
     drainingRef.current = true;
@@ -44,21 +88,18 @@ export const SlideshowProductsProvider: React.FC<{
       while (queueRef.current.length) {
         const slug = queueRef.current.shift()!;
         if (loadedRef.current.has(slug) || inflightRef.current.has(slug)) continue;
-        const shell = shopsRef.current.find(s => s.slug === slug);
-        if (!shell) {
-          queueRef.current.push(slug);
-          break;
-        }
+
         inflightRef.current.add(slug);
         markPending(slug, true);
+        let ok = false;
         try {
-          const full = await hydrateMetaShopProgressive(shell);
-          const list = filterProductsForSlideshowHydrate(full?.products || [], boothsRef.current, slug);
-          loadedRef.current.add(slug);
-          if (list.length) {
-            setProductsBySlug(prev => ({ ...prev, [slug]: list }));
-          }
-        } catch { /* try next slug */ }
+          ok = await loadSlug(slug);
+          if (ok) loadedRef.current.add(slug);
+        } catch {
+          const n = (retriesRef.current[slug] || 0) + 1;
+          retriesRef.current[slug] = n;
+          if (n < 3 && !queueRef.current.includes(slug)) queueRef.current.push(slug);
+        }
         inflightRef.current.delete(slug);
         markPending(slug, false);
       }
@@ -66,7 +107,7 @@ export const SlideshowProductsProvider: React.FC<{
       drainingRef.current = false;
       if (queueRef.current.length) void drainQueue();
     }
-  }, [markPending]);
+  }, [loadSlug, markPending]);
 
   const ensureShop = useCallback((slug: string) => {
     const s = (slug || '').trim();
@@ -107,8 +148,9 @@ export const useSlideshowShopProducts = (shopSlug?: string): {
     if (slug && ctx) ctx.ensureShop(slug);
   }, [slug, ctx]);
   if (!ctx || !slug) return { products: [], loading: false };
+  const products = ctx.productsBySlug[slug] || [];
   return {
-    products: ctx.productsBySlug[slug] || [],
-    loading: ctx.pendingSlugs.has(slug) && !(ctx.productsBySlug[slug]?.length),
+    products,
+    loading: ctx.pendingSlugs.has(slug) && !products.length,
   };
 };
