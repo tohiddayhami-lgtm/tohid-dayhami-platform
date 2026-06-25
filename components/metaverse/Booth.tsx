@@ -100,17 +100,21 @@ const getPdfjs = () => {
   return pdfjsPromise;
 };
 
-const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string }> = ({ x, glyph, onClick, color }) => (
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean }> = ({ x, glyph, onClick, color, compact }) => {
+  const w = compact ? 0.28 : 0.34;
+  const h = compact ? 0.2 : 0.26;
+  return (
   <group position={[x, 0, 0]}>
     <mesh onClick={(e) => { e.stopPropagation(); onClick(); }}
       onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
-      <planeGeometry args={[0.34, 0.26]} />
+      <planeGeometry args={[w, h]} />
       <meshStandardMaterial color={color} />
     </mesh>
-    <CanvasLabel text={glyph} width={0.28} height={0.22} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    <CanvasLabel text={glyph} width={w - 0.04} height={h - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
   </group>
-);
+  );
+};
 
 const PdfPanel: React.FC<MediaProps> = ({ url, width, height, position, rotation, onClick }) => {
   const [page, setPage] = useState(1);
@@ -447,6 +451,8 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 };
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
+const SLIDE_BITMAP_MAX = 480;
+const SLIDESHOW_NEAR_DIST = 24;
 
 const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
   const key = url.trim();
@@ -457,8 +463,13 @@ const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = async () => {
-        try { resolve(await createImageBitmap(img)); }
-        catch { resolve(null); }
+        try {
+          const max = Math.max(img.width, img.height);
+          const scale = max > SLIDE_BITMAP_MAX ? SLIDE_BITMAP_MAX / max : 1;
+          const rw = Math.max(1, Math.round(img.width * scale));
+          const rh = Math.max(1, Math.round(img.height * scale));
+          resolve(await createImageBitmap(img, { resizeWidth: rw, resizeHeight: rh }));
+        } catch { resolve(null); }
       };
       img.onerror = () => resolve(null);
       img.src = key;
@@ -486,16 +497,21 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = ({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+  const rootRef = useRef<THREE.Group>(null);
+  const { camera } = useThree();
   const totalCount = products.length;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
   const [page, setPage] = useState(0);
   const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [nearby, setNearby] = useState(false);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
+  const nearCheck = useRef(0);
+  const worldPos = useMemo(() => new THREE.Vector3(), []);
 
   const pageProducts = useMemo(
     () => slideshowPageSlice(products, page),
@@ -505,13 +521,16 @@ const ProductSlideshowPanel: React.FC<{
   const globalIndex = page * SLIDESHOW_PAGE_SIZE + index;
   const canNavigate = totalCount > 1;
   const multiPage = pageCount > 1;
+  const showLang = langs.length > 1;
 
   const [tex] = useState(() => {
     const c = document.createElement('canvas');
     c.width = 8; c.height = 8;
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 2;
+    t.anisotropy = 1;
+    t.generateMipmaps = false;
+    t.minFilter = THREE.LinearFilter;
     return t;
   });
 
@@ -523,10 +542,23 @@ const ProductSlideshowPanel: React.FC<{
 
   const productsKey = useMemo(() => products.map(p => p.id).join(','), [products]);
 
+  useFrame(() => {
+    nearCheck.current += 1;
+    if (nearCheck.current % 18 !== 0) return;
+    const g = rootRef.current;
+    if (!g) return;
+    g.getWorldPosition(worldPos);
+    const d = worldPos.distanceTo(camera.position);
+    setNearby(prev => {
+      const next = d < SLIDESHOW_NEAR_DIST;
+      return prev === next ? prev : next;
+    });
+  });
+
   useEffect(() => {
     setPage(0);
     setIndex(0);
-    setPlaying(true);
+    setPlaying(false);
     bitmapRef.current.clear();
     setBitmapTick(t => t + 1);
   }, [productsKey]);
@@ -542,7 +574,7 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
-    if (!count) return;
+    if (!nearby || !count) return;
     let cancelled = false;
     const loadNearby = async () => {
       const keep = new Set(nearbySlideIndexes(index, count));
@@ -561,7 +593,7 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey]);
+  }, [index, count, urlsKey, nearby]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -569,14 +601,14 @@ const ProductSlideshowPanel: React.FC<{
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = 800;
+    const cw = 640;
     const ch = Math.round(cw * 0.75);
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
     ctx.fillStyle = '#0a0f1a';
     ctx.fillRect(0, 0, cw, ch);
-    const footerH = 148;
-    const imgMaxH = ch - footerH - 12;
+    const footerH = 132;
+    const imgMaxH = ch - footerH - 10;
     const bmp = bitmapRef.current.get(idx) ?? null;
     const p = pageProducts[idx];
     if (bmp) {
@@ -590,23 +622,23 @@ const ProductSlideshowPanel: React.FC<{
     }
     if (p) {
       const rtl = isRtlCode(code);
-      const pad = 22;
+      const pad = 18;
       const maxW = cw - pad * 2;
       ctx.fillStyle = 'rgba(8,12,24,.94)';
       ctx.fillRect(0, ch - footerH, cw, footerH);
       const name = productLabel(p, code);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 26px Vazirmatn, Tahoma, sans-serif';
+      ctx.font = 'bold 24px Vazirmatn, Tahoma, sans-serif';
       ctx.textAlign = rtl ? 'right' : 'left';
       ctx.textBaseline = 'top';
       ctx.direction = rtl ? 'rtl' : 'ltr';
       const nameLine = name.length > 48 ? `${name.slice(0, 46)}…` : name;
-      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 12);
+      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 10);
       const desc = productDesc(p, code);
       ctx.fillStyle = '#cbd5e1';
-      ctx.font = '20px Vazirmatn, Tahoma, sans-serif';
+      ctx.font = '18px Vazirmatn, Tahoma, sans-serif';
       wrapCanvasLines(ctx, desc, maxW, 3).forEach((ln, i) => {
-        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 46 + i * 26);
+        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 40 + i * 24);
       });
       ctx.direction = 'ltr';
     }
@@ -614,9 +646,9 @@ const ProductSlideshowPanel: React.FC<{
   }, [pageProducts, tex]);
 
   useEffect(() => {
-    if (!count) return;
+    if (!count || !nearby) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page, nearby]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
@@ -643,11 +675,11 @@ const ProductSlideshowPanel: React.FC<{
   }, [index, count, page, pageCount, products, totalCount]);
 
   useEffect(() => {
-    if (!playing || totalCount < 2) return;
+    if (!playing || !nearby || totalCount < 2) return;
     const ms = Math.max(2000, autoPlaySec * 1000);
     const id = window.setInterval(() => advanceSlide(1), ms);
     return () => window.clearInterval(id);
-  }, [playing, totalCount, autoPlaySec, advanceSlide]);
+  }, [playing, nearby, totalCount, autoPlaySec, advanceSlide]);
 
   const prev = () => { setPlaying(false); advanceSlide(-1); };
   const next = () => { setPlaying(false); advanceSlide(1); };
@@ -670,15 +702,21 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const step = Math.max(0.34, width * 0.13);
-  const playX = -step * 2.15;
-  const prevX = -step;
-  const nextX = step;
-  const langX = step * 2.15;
+  const sideSlots = (multiPage ? 3 : 2) + (showLang ? 0 : 0);
+  const slot = Math.min(0.36, Math.max(0.26, (width * 0.9) / (sideSlots * 2 + 0.55)));
+  const playX = -(multiPage ? 3 : 2) * slot;
+  const pagePrevX = -2 * slot;
+  const slidePrevX = -slot;
+  const slideNextX = slot;
+  const pageNextX = 2 * slot;
+  const langX = (multiPage ? 3 : 2) * slot;
+  const counterLabel = totalCount
+    ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
+    : '—';
 
   return (
-    <group position={position} rotation={rotation}>
-      <RoundedBox args={[width + bezel, height + bezel, 0.035]} radius={0.02} smoothness={2} position={[0, 0, -0.028]} castShadow>
+    <group ref={rootRef} position={position} rotation={rotation}>
+      <RoundedBox args={[width + bezel, height + bezel, 0.035]} radius={0.02} smoothness={2} position={[0, 0, -0.028]}>
         <meshStandardMaterial color="#1a1f2e" metalness={0.45} roughness={0.5} />
       </RoundedBox>
       <mesh position={[0, ctrlH / 2, -0.008]}>
@@ -700,45 +738,37 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
+        <PdfArrowBtn compact x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
         {multiPage && (
-          <group position={[0, 0.15, 0]}>
-            <PdfArrowBtn x={-0.28} glyph="«" onClick={pagePrev} color="#475569" />
-            <CanvasLabel
-              text={`${page + 1}/${pageCount}`}
-              width={0.34}
-              height={0.15}
-              position={[0, 0, 0]}
-              bg="rgba(30,41,59,.9)"
-              color="#e2e8f0"
-            />
-            <PdfArrowBtn x={0.28} glyph="»" onClick={pageNext} color="#475569" />
-          </group>
+          <PdfArrowBtn compact x={pagePrevX} glyph="«" onClick={pagePrev} color="#475569" />
         )}
-        <PdfArrowBtn x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-        <PdfArrowBtn x={prevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn compact x={slidePrevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
-          text={totalCount ? `${globalIndex + 1}/${totalCount}` : '—'}
-          width={0.42}
+          text={counterLabel}
+          width={multiPage ? 0.52 : 0.4}
           height={0.18}
           position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn x={nextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        {langs.length > 1 && (
+        <PdfArrowBtn compact x={slideNextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        {multiPage && (
+          <PdfArrowBtn compact x={pageNextX} glyph="»" onClick={pageNext} color="#475569" />
+        )}
+        {showLang && (
           <group position={[langX, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); cycleLang(); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
-              <planeGeometry args={[0.32, 0.22]} />
+              <planeGeometry args={[0.3, 0.2]} />
               <meshStandardMaterial color="#334155" />
             </mesh>
             <CanvasLabel
               text={displayLang.toUpperCase()}
-              width={0.26}
-              height={0.16}
+              width={0.24}
+              height={0.15}
               position={[0, 0, 0.01]}
               color="#f8fafc"
               onClick={cycleLang}
@@ -748,7 +778,7 @@ const ProductSlideshowPanel: React.FC<{
       </group>
     </group>
   );
-};
+});
 
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
 // video → LCD screen, anything else → a static image panel.
