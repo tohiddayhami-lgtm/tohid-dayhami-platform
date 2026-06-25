@@ -8,6 +8,7 @@ import type { BoothReservationSummary } from '../../utils/boothReservationUtils'
 import { Language } from '../../App';
 import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET, resolveSlideshowLangConfig, boothNeedsSlideshowProducts } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
+import { SlideshowAutoplayDriver } from './slideshowRuntime';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
 import { useEnvironmentCollision } from './EnvironmentCollisionContext';
@@ -459,6 +460,7 @@ export const ExpoScene: React.FC<Props> = ({
 
   return (
     <>
+      <SlideshowAutoplayDriver />
       <ambientLight intensity={1.15} />
       <hemisphereLight intensity={0.9} groundColor="#ffffff" color="#ffffff" />
       <directionalLight position={[width, height * 2, depth]} intensity={0.45} />
