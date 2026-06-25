@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive } from '../services/firebaseService';
+import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, type MetaShopSaveOptions } from '../services/firebaseService';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -31,7 +31,7 @@ interface Props {
   config: AppConfig;
   lang: Language;
   shopBaseUrl: string;
-  onSaveMetaShop: (shop: MetaShop) => Promise<void>;
+  onSaveMetaShop: (shop: MetaShop, opts?: MetaShopSaveOptions) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
@@ -168,6 +168,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [saving, setSaving] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsSyncing, setProductsSyncing] = useState(false);
+  const [productsFullyLoaded, setProductsFullyLoaded] = useState(false);
+  const [recoveringShopId, setRecoveringShopId] = useState<string | null>(null);
   const [editorProductShown, setEditorProductShown] = useState(EDITOR_PRODUCT_PAGE_SIZE);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -441,12 +443,29 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const copyText = (text: string, id: string) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1800); };
 
   // Download a single shop as a JSON file (re-importable / editable)
-  const downloadShopJson = (shop: MetaShop) => {
-    const blob = new Blob([JSON.stringify(shop, null, 2)], { type: 'application/json' });
+  const downloadShopJson = async (shop: MetaShop) => {
+    const full = (await hydrateMetaShop(shop)) || shop;
+    const blob = new Blob([JSON.stringify(full, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `metashop-${shop.slug || shop.id}.json`; a.click();
+    a.href = url; a.download = `metashop-${full.slug || full.id}.json`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const recoverShopProducts = async (shop: MetaShop) => {
+    if (readonly) return;
+    if (!confirm(T ? 'تلاش برای بازیابی محصولات از سرور؟' : 'Try to recover products from the server?')) return;
+    setRecoveringShopId(shop.id);
+    try {
+      const ok = await recoverMetaShopFromChunks(shop);
+      alert(ok
+        ? (T ? `${ok.products.length} محصول بازیابی شد.` : `${ok.products.length} products recovered.`)
+        : (T ? 'محصولی در سرور یافت نشد. فایل JSON پشتیبان را با دکمه ⤒ JSON وارد کنید.' : 'No products found on server. Re-import your JSON backup with ⤒ JSON.'));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : (T ? 'بازیابی ناموفق بود.' : 'Recovery failed.'));
+    } finally {
+      setRecoveringShopId(null);
+    }
   };
 
   // Update an EXISTING shop from an uploaded JSON file (keeps the same id + slug/link)
@@ -469,19 +488,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const startEdit = (s: MetaShop) => {
     setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
     setProductsSyncing(false);
+    setProductsFullyLoaded(!shopNeedsProductHydration(s));
     setMode('editor');
     setDraft({ ...s, products: [...(s.products || [])] });
-    if (!shopNeedsProductHydration(s) && (s.products || []).length > 0) return;
+    if (!shopNeedsProductHydration(s)) return;
     setProductsLoading(true);
     const shopId = s.id;
     hydrateMetaShopProgressive(s, (products, loaded, total) => {
       setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
       if (loaded >= 1) setProductsLoading(false);
       setProductsSyncing(loaded < total);
-    }).catch(() => {
-      setProductsLoading(false);
-      setProductsSyncing(false);
-    });
+    })
+      .then(() => setProductsFullyLoaded(true))
+      .catch(() => {
+        setProductsLoading(false);
+        setProductsSyncing(false);
+      });
   };
 
   const draftProductGroups = useMemo(
@@ -494,9 +516,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const shop = metaShops.find(s => s.id === ref.shopId);
     if (!shop) return;
     if (!confirm(T ? 'این ملک به لیست فروشگاه اضافه شود؟ (ابتدا غیرفعال است)' : 'Add this property to the shop? (starts inactive)')) return;
+    const fullShop = (await hydrateMetaShop(shop)) || shop;
     const productId = `p-${Date.now()}`;
-    const product = referralToProduct(ref, shop, productId);
-    const updated: MetaShop = { ...shop, products: [...(shop.products || []), product] };
+    const product = referralToProduct(ref, fullShop, productId);
+    const updated: MetaShop = { ...fullShop, products: [...(fullShop.products || []), product] };
     await onSaveMetaShop(updated);
     await onUpdateMetaShopPropertyReferral(ref.id, { status: 'approved', productId, reviewedAt: new Date().toISOString() });
     if (draft?.id === shop.id) setDraft(updated);
@@ -514,9 +537,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const shop = metaShops.find(s => s.id === sub.shopId);
     if (!shop) return;
     if (!confirm(T ? 'این تأمین‌کننده به لیست فروشگاه اضافه شود؟ (ابتدا غیرفعال است)' : 'Add this supplier as a draft product? (starts inactive)')) return;
+    const fullShop = (await hydrateMetaShop(shop)) || shop;
     const productId = `p-${Date.now()}`;
-    const product = supplierCollaborationToProduct(sub, shop, productId);
-    const updated: MetaShop = { ...shop, products: [...(shop.products || []), product] };
+    const product = supplierCollaborationToProduct(sub, fullShop, productId);
+    const updated: MetaShop = { ...fullShop, products: [...(fullShop.products || []), product] };
     await onSaveMetaShop(updated);
     await onUpdateMetaShopSupplierCollaboration(sub.id, { status: 'approved', productId, reviewedAt: new Date().toISOString() });
     if (draft?.id === shop.id) setDraft(updated);
@@ -558,6 +582,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const save = async () => {
     if (!draft) return;
+    if (productsLoading || productsSyncing) {
+      alert(T ? 'لطفاً تا بارگذاری کامل محصولات صبر کنید.' : 'Please wait until all products are loaded.');
+      return;
+    }
+    if (shopNeedsProductHydration(draft) && !productsFullyLoaded) {
+      alert(T ? 'محصولات هنوز کامل بارگذاری نشده‌اند. کمی صبر کنید و دوباره ذخیره کنید.' : 'Products are not fully loaded yet. Wait and try again.');
+      return;
+    }
     if (!draft.name.trim()) { alert(T ? 'نام فروشگاه را وارد کنید.' : 'Enter a shop name.'); return; }
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     // ensure unique slug
@@ -566,7 +598,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const code = (draft.code && draft.code.trim()) ? draft.code.trim().toUpperCase() : uniqueShopCode(metaShops);
     setSaving(true);
     try {
-      await onSaveMetaShop({ ...draft, slug, code });
+      const allowEmptyProducts = productsFullyLoaded && draft.products.length === 0;
+      await onSaveMetaShop({ ...draft, slug, code }, { allowEmptyProducts });
       setMode('list'); setDraft(null);
     }
     catch (e) {
@@ -992,6 +1025,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
                     <div className="text-[11px] text-gray-400">{(s.productCount ?? (s.products || []).length)} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
+                    {(s.productCount ?? 0) === 0 && (s.productRefs?.length ?? 0) > 0 && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                        {T ? '⚠ محصولات از دست رفته‌اند — بازیابی یا import JSON' : '⚠ Products missing — recover or import JSON'}
+                      </p>
+                    )}
                     {(s.searchKeywords?.length || 0) > 0 && (
                       <div className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 line-clamp-2" title={formatSearchKeywordsForInput(s.searchKeywords)}>
                         🔍 {formatSearchKeywordsForInput(s.searchKeywords)}
@@ -1012,6 +1050,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       )}
                       <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
+                      {!readonly && (s.productCount ?? 0) === 0 && (
+                        <button
+                          onClick={() => recoverShopProducts(s)}
+                          disabled={recoveringShopId === s.id}
+                          title={T ? 'بازیابی محصولات از سرور' : 'Recover products from server'}
+                          className="text-xs px-2 py-1.5 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          {recoveringShopId === s.id ? '…' : (T ? '↺ بازیابی' : '↺ Recover')}
+                        </button>
+                      )}
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
                       {!readonly && <button onClick={() => startEdit(s)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
                       {!readonly && canDelete && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaShop(s.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
@@ -1334,7 +1382,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <a href={draft.slug ? catalogUrl(draft) : undefined} target="_blank" rel="noreferrer" title={t.catalogTitle} className={`text-xs px-3 py-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}>📄 {t.catalog}</a>
           <button onClick={() => downloadShopJson(draft)} title={t.downloadJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
           {!readonly && <button onClick={() => triggerUpdate(draft)} title={t.updateJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
-          {!readonly && <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
+          {!readonly && <button onClick={save} disabled={saving || productsLoading || productsSyncing} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
         </div>
       </div>
 

@@ -71,7 +71,7 @@ interface Props {
   metaShopOrders?: MetaShopOrder[];
   metaShopReferrals?: MetaShopPropertyReferral[];
   metaShopSupplierCollaborations?: MetaShopSupplierCollaboration[];
-  onSaveMetaShop?: (shop: MetaShop) => Promise<void>;
+  onSaveMetaShop?: (shop: MetaShop, opts?: import('../services/firebaseService').MetaShopSaveOptions) => Promise<void>;
   onDeleteMetaShop?: (id: string) => Promise<void>;
   onUpdateMetaShopOrder?: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;

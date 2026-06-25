@@ -1108,13 +1108,50 @@ const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
   }
 };
 
+const fetchMetaShopDocRaw = async (shopId: string): Promise<MetaShop | null> => {
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) return await proxyGet<MetaShop | null>('metaShops', { doc: shopId });
+    const snap = await getDoc(doc(db, 'metaShops', shopId));
+    return snap.exists() ? (snap.data() as MetaShop) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop | null> => {
   if (!shop) return null;
-  if (!shopNeedsProductHydration(shop)) {
+  if ((shop.products || []).length) {
     return { ...shop, products: shop.products || [] };
   }
-  const chunks = await loadMetaShopProductChunks(shop.id, shop.productChunkCount);
-  return { ...shop, products: mergeProductChunks(chunks) };
+  if ((shop.productChunkCount || 0) > 0) {
+    const chunks = await loadMetaShopProductChunks(shop.id, shop.productChunkCount);
+    const merged = mergeProductChunks(chunks);
+    if (merged.length) return { ...shop, products: merged };
+  }
+  const orphanChunks = await loadMetaShopProductChunks(shop.id);
+  if (orphanChunks.length) {
+    const merged = mergeProductChunks(orphanChunks);
+    if (merged.length) return { ...shop, products: merged };
+  }
+  if ((shop.productCount || 0) > 0) {
+    const raw = await fetchMetaShopDocRaw(shop.id);
+    if (raw?.products?.length) return { ...shop, products: raw.products };
+  }
+  return { ...shop, products: [] };
+};
+
+export type MetaShopSaveOptions = {
+  /** Set when the editor intentionally saved an empty product list. */
+  allowEmptyProducts?: boolean;
+};
+
+/** Try to restore products from chunk docs when shell metadata was wiped by mistake. */
+export const recoverMetaShopFromChunks = async (shop: MetaShop): Promise<MetaShop | null> => {
+  const hydrated = await hydrateMetaShop(shop);
+  if (!hydrated?.products?.length) return null;
+  await saveMetaShopToCloud(hydrated);
+  return hydrated;
 };
 
 /** Load product chunks one-by-one so the UI can render the first batch immediately. */
@@ -1122,26 +1159,51 @@ export const hydrateMetaShopProgressive = async (
   shop: MetaShop,
   onProgress?: (products: MetaShopProduct[], loadedChunks: number, totalChunks: number) => void,
 ): Promise<MetaShop> => {
-  if (!shopNeedsProductHydration(shop)) {
+  if ((shop.products || []).length) {
     const products = shop.products || [];
     onProgress?.(products, 1, 1);
     return { ...shop, products };
   }
-  const total = shop.productChunkCount || 0;
+  let total = shop.productChunkCount || 0;
   let all: MetaShopProduct[] = [];
-  for (let i = 0; i < total; i++) {
-    const chunk = await loadOneMetaShopChunk(`${shop.id}_${i}`);
-    if (chunk?.products?.length) all = all.concat(chunk.products);
-    onProgress?.(all, i + 1, total);
+  if (total > 0) {
+    for (let i = 0; i < total; i++) {
+      const chunk = await loadOneMetaShopChunk(`${shop.id}_${i}`);
+      if (chunk?.products?.length) all = all.concat(chunk.products);
+      onProgress?.(all, i + 1, total);
+    }
+  }
+  if (!all.length) {
+    const orphan = await loadMetaShopProductChunks(shop.id);
+    all = mergeProductChunks(orphan);
+    onProgress?.(all, 1, Math.max(1, orphan.length));
+  }
+  if (!all.length && (shop.productCount || 0) > 0) {
+    const raw = await fetchMetaShopDocRaw(shop.id);
+    all = raw?.products || [];
+    onProgress?.(all, 1, 1);
   }
   return { ...shop, products: all };
 };
 
-export const saveMetaShopToCloud = async (shop: MetaShop) => {
+export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOptions) => {
   const normalized = normalizeMetaShopForCloud(shop);
-  const products = normalized.products || [];
+  let products = normalized.products || [];
+  const priorCount = shop.productCount ?? 0;
+  const priorChunks = shop.productChunkCount ?? 0;
+
+  if (products.length === 0 && (priorCount > 0 || priorChunks > 0) && !opts?.allowEmptyProducts) {
+    const restored = await hydrateMetaShop(shop);
+    products = restored?.products || [];
+    if (!products.length) {
+      throw new Error(
+        'محصولات بارگذاری نشد — ذخیره لغو شد تا داده‌ها پاک نشوند. فایل JSON پشتیبان را دوباره import کنید.',
+      );
+    }
+  }
+
   const chunks = splitProductsIntoChunks(normalized.id, products);
-  const shell = prepareMetaShopShell(normalized, products, chunks.length);
+  const shell = prepareMetaShopShell({ ...normalized, products }, products, chunks.length);
   const shellBytes = metaShopPayloadBytes(shell);
   if (shellBytes > META_SHOP_FIRESTORE_MAX_BYTES) {
     throw new Error(
@@ -1149,12 +1211,12 @@ export const saveMetaShopToCloud = async (shop: MetaShop) => {
       'Remove large text from pages or use image URLs instead of embedded files.',
     );
   }
-  await deleteMetaShopProductChunks(normalized.id, chunks.length);
   if (chunks.length) {
     await Promise.all(chunks.map(chunk => setDocCloud(META_SHOP_CHUNKS_COL, chunk.id, chunk)));
   }
+  await deleteMetaShopProductChunks(normalized.id, chunks.length);
   await setDocCloud('metaShops', shell.id, shell);
-  logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shell.name} ذخیره شد`, 'Master', shell.id);
+  logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shell.name} ذخیره شد (${products.length} محصول)`, 'Master', shell.id);
 };
 export const deleteMetaShopFromCloud = async (id: string) => {
     const proxy = await checkProxyMode();

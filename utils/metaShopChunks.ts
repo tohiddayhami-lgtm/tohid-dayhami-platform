@@ -78,7 +78,9 @@ export function prepareMetaShopShell(
 }
 
 export function shopNeedsProductHydration(shop: MetaShop): boolean {
-  if ((shop.productChunkCount || 0) > 0) return !(shop.products || []).length;
+  if ((shop.products || []).length) return false;
+  if ((shop.productChunkCount || 0) > 0) return true;
+  if ((shop.productCount || 0) > 0) return true;
   return false;
 }
 

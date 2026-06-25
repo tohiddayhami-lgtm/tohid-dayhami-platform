@@ -2237,7 +2237,7 @@ const App: React.FC = () => {
                     metaShopOrders={metaShopOrders}
                     metaShopReferrals={metaShopReferrals}
                     metaShopSupplierCollaborations={metaShopSupplierCollaborations}
-                    onSaveMetaShop={async (s) => { await saveMetaShopToCloud(s); }}
+                    onSaveMetaShop={async (s, opts) => { await saveMetaShopToCloud(s, opts); }}
                     onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
                     onUpdateMetaShopPropertyReferral={async (id, u) => { await updateMetaShopPropertyReferralInCloud(id, u); }}
