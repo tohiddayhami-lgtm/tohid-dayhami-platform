@@ -518,6 +518,44 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   return [...set];
 };
 
+type SlideshowToolbarLayout = {
+  playX: number;
+  pagePrevX?: number;
+  slidePrevX: number;
+  slideNextX: number;
+  pageNextX?: number;
+  langX?: number;
+  counterW: number;
+  btnW: number;
+};
+
+const layoutSlideshowToolbar = (width: number, multiPage: boolean, showLang: boolean): SlideshowToolbarLayout => {
+  const avail = Math.max(1.1, width * 0.9);
+  const leftBtns = multiPage ? 3 : 2;
+  const rightBtns = 1 + (multiPage ? 1 : 0) + (showLang ? 1 : 0);
+  const baseBtn = 0.26;
+  const baseCounter = multiPage ? 0.46 : 0.34;
+  const basePad = 0.05;
+  const rawSpan = baseCounter + (leftBtns + rightBtns) * (baseBtn + basePad);
+  const scale = Math.min(1, avail / rawSpan);
+  const btnW = Math.max(0.17, baseBtn * scale);
+  const counterW = Math.max(0.28, baseCounter * scale);
+  const pad = Math.max(0.035, basePad * scale);
+  const step = btnW + pad;
+  const slidePrevX = -(counterW / 2 + pad + btnW / 2);
+  const slideNextX = counterW / 2 + pad + btnW / 2;
+  if (multiPage) {
+    const pagePrevX = slidePrevX - step;
+    const playX = pagePrevX - step;
+    const pageNextX = slideNextX + step;
+    const langX = showLang ? pageNextX + step : undefined;
+    return { playX, pagePrevX, slidePrevX, slideNextX, pageNextX, langX, counterW, btnW };
+  }
+  const playX = slidePrevX - step;
+  const langX = showLang ? slideNextX + step : undefined;
+  return { playX, slidePrevX, slideNextX, langX, counterW, btnW };
+};
+
 const drawSlideshowFrame = (
   ctx: CanvasRenderingContext2D,
   cw: number,
@@ -770,8 +808,6 @@ const ProductSlideshowPanel: React.FC<{
     multiPage ? '»' : '',
     showLang ? displayLang.toUpperCase() : '',
   ].filter(Boolean).join('   ');
-  const canvasCh = Math.round(canvasW * 0.75) + SLIDE_TOOLBAR_H;
-  const toolbarBandV = SLIDE_TOOLBAR_H / canvasCh;
 
   const atlasGeo = useMemo(() => {
     if (!useAtlas || atlasSlot == null) return null;
@@ -782,24 +818,19 @@ const ProductSlideshowPanel: React.FC<{
 
   useEffect(() => {
     if (!count) return;
-    paintSlide(Math.min(index, count - 1), displayLang, toolbarGlyphs);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, toolbarGlyphs]);
+    paintSlide(Math.min(index, count - 1), displayLang, '');
+  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
 
   const handleScreenClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    if (e.uv && totalCount > 0) {
-      const u = e.uv.x;
-      const v = e.uv.y;
-      if (v > toolbarBandV) { onClick?.(e); return; }
-      if (u < 0.14) { togglePlay(); return; }
-      if (multiPage && u < 0.24) { pagePrev(); return; }
-      if (u < 0.34) { prev(); return; }
-      if (u > 0.86) { if (showLang) cycleLang(); return; }
-      if (multiPage && u > 0.76) { pageNext(); return; }
-      if (u > 0.66) { next(); return; }
-    }
     onClick?.(e);
   };
+
+  const toolbar = useMemo(
+    () => layoutSlideshowToolbar(width, multiPage, showLang),
+    [width, multiPage, showLang],
+  );
+  const btnH = Math.max(0.16, toolbar.btnW * 0.72);
 
   return (
     <group position={position} rotation={rotation}>
@@ -827,6 +858,50 @@ const ProductSlideshowPanel: React.FC<{
           position={[0, ctrlH / 2, 0.012]}
           color="#ffffff"
         />
+      )}
+      {totalCount > 0 && (
+      <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
+        {useAtlas ? (
+          <>
+            <CanvasLabel
+              text={toolbarGlyphs}
+              width={Math.min(width * 0.92, 2.8)}
+              height={btnH}
+              position={[0, 0, 0.015]}
+              bg="rgba(15,23,42,.92)"
+              color="#ffffff"
+            />
+            <PdfArrowBtn hideLabel x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+            {multiPage && toolbar.pagePrevX != null && (
+              <PdfArrowBtn hideLabel x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pagePrev} color="#475569" />
+            )}
+            <PdfArrowBtn hideLabel x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+            <PdfArrowBtn hideLabel x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+            {multiPage && toolbar.pageNextX != null && (
+              <PdfArrowBtn hideLabel x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pageNext} color="#475569" />
+            )}
+            {showLang && toolbar.langX != null && (
+              <PdfArrowBtn hideLabel x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={cycleLang} color="#334155" />
+            )}
+          </>
+        ) : (
+          <>
+            <PdfArrowBtn x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+            {multiPage && toolbar.pagePrevX != null && (
+              <PdfArrowBtn x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="«" onClick={pagePrev} color="#475569" />
+            )}
+            <PdfArrowBtn x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+            <CanvasLabel text={counterLabel} width={toolbar.counterW} height={btnH * 0.65} position={[0, 0, 0.015]} bg="rgba(15,23,42,.92)" color="#ffffff" />
+            <PdfArrowBtn x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+            {multiPage && toolbar.pageNextX != null && (
+              <PdfArrowBtn x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="»" onClick={pageNext} color="#475569" />
+            )}
+            {showLang && toolbar.langX != null && (
+              <PdfArrowBtn x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph={displayLang.toUpperCase()} onClick={cycleLang} color="#334155" />
+            )}
+          </>
+        )}
+      </group>
       )}
     </group>
   );
