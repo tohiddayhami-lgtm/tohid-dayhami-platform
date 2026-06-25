@@ -12,7 +12,6 @@ import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
-import { useSlideshowActivation, slideshowBitmapMaxPx, slideshowCanvasWidth } from './slideshowActivation';
 import type { BoothFace } from '../../types';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -101,9 +100,9 @@ const getPdfjs = () => {
   return pdfjsPromise;
 };
 
-const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean; btnW?: number; btnH?: number }> = ({ x, glyph, onClick, color, compact, btnW, btnH }) => {
-  const w = btnW ?? (compact ? 0.28 : 0.34);
-  const h = btnH ?? (compact ? 0.2 : 0.26);
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean }> = ({ x, glyph, onClick, color, compact }) => {
+  const w = compact ? 0.28 : 0.34;
+  const h = compact ? 0.2 : 0.26;
   const fire = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); };
   return (
   <group position={[x, 0, 0]}>
@@ -113,7 +112,7 @@ const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; col
       <planeGeometry args={[w, h]} />
       <meshStandardMaterial color={color} />
     </mesh>
-    <CanvasLabel text={glyph} width={Math.max(0.12, w - 0.04)} height={Math.max(0.1, h - 0.04)} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    <CanvasLabel text={glyph} width={w - 0.04} height={h - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
   </group>
   );
 };
@@ -453,40 +452,23 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 };
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
-const SLIDE_CACHE_ORDER: string[] = [];
-const SLIDE_CACHE_MAX_DESKTOP = 56;
-const SLIDE_CACHE_MAX_VR = 20;
+const SLIDE_BITMAP_MAX = 480;
 const SLIDESHOW_NEAR_DIST = 28;
 
-const trimSlideCache = (inXR: boolean) => {
-  const max = inXR ? SLIDE_CACHE_MAX_VR : SLIDE_CACHE_MAX_DESKTOP;
-  while (SLIDE_CACHE_ORDER.length > max) {
-    const key = SLIDE_CACHE_ORDER.shift();
-    if (key) SLIDE_BITMAP_CACHE.delete(key);
-  }
-};
-
-const touchSlideCache = (key: string) => {
-  const i = SLIDE_CACHE_ORDER.indexOf(key);
-  if (i >= 0) SLIDE_CACHE_ORDER.splice(i, 1);
-  SLIDE_CACHE_ORDER.push(key);
-};
-
-const loadSlideBitmap = (url: string, maxPx: number, inXR: boolean): Promise<ImageBitmap | null> => {
-  const raw = url.trim();
-  if (!raw) return Promise.resolve(null);
-  const key = `${maxPx}|${raw}`;
+const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
+  const key = url.trim();
+  if (!key) return Promise.resolve(null);
   let pending = SLIDE_BITMAP_CACHE.get(key);
   if (!pending) {
     pending = new Promise(resolve => {
       const img = new Image();
-      if (!raw.startsWith('data:') && !raw.startsWith('blob:')) {
+      if (!key.startsWith('data:') && !key.startsWith('blob:')) {
         img.crossOrigin = 'anonymous';
       }
       img.onload = async () => {
         try {
           const max = Math.max(img.width, img.height);
-          const scale = max > maxPx ? maxPx / max : 1;
+          const scale = max > SLIDE_BITMAP_MAX ? SLIDE_BITMAP_MAX / max : 1;
           const rw = Math.max(1, Math.round(img.width * scale));
           const rh = Math.max(1, Math.round(img.height * scale));
           if (scale < 1) {
@@ -499,58 +481,22 @@ const loadSlideBitmap = (url: string, maxPx: number, inXR: boolean): Promise<Ima
         } catch { resolve(null); }
       };
       img.onerror = () => resolve(null);
-      img.src = raw;
+      img.src = key;
     });
     SLIDE_BITMAP_CACHE.set(key, pending);
   }
-  touchSlideCache(key);
-  trimSlideCache(inXR);
   return pending;
 };
 
-const slidePrefetchIndexes = (index: number, count: number, inXR: boolean): number[] => {
+const nearbySlideIndexes = (index: number, count: number): number[] => {
   if (count <= 0) return [];
   if (count === 1) return [0];
-  if (inXR) return [index, (index + 1) % count];
   const set = new Set([index, (index + 1) % count, (index - 1 + count) % count]);
   return [...set];
 };
 
-/** Fit slideshow transport buttons inside panel width: ▶ « ‹ | counter | › » FA */
-const slideshowControlLayout = (panelW: number, multiPage: boolean, showLang: boolean) => {
-  const span = Math.max(0.55, panelW * 0.94);
-  let btnW = Math.min(0.24, span * 0.1);
-  let counterW = Math.min(multiPage ? 0.38 : 0.28, span * 0.24);
-  const slots: { key: string; w: number }[] = [
-    { key: 'play', w: btnW },
-    ...(multiPage ? [{ key: 'pagePrev', w: btnW }] : []),
-    { key: 'slidePrev', w: btnW },
-    { key: 'counter', w: counterW },
-    { key: 'slideNext', w: btnW },
-    ...(multiPage ? [{ key: 'pageNext', w: btnW }] : []),
-    ...(showLang ? [{ key: 'lang', w: btnW }] : []),
-  ];
-  let total = slots.reduce((s, i) => s + i.w, 0);
-  if (total > span) {
-    const scale = span / total;
-    btnW *= scale;
-    counterW *= scale;
-    slots.forEach(s => { s.w *= scale; });
-    total = span;
-  }
-  let x = -total / 2;
-  const pos: Record<string, number> = {};
-  for (const s of slots) {
-    pos[s.key] = x + s.w / 2;
-    x += s.w;
-  }
-  const btnH = Math.max(0.14, btnW * 0.72);
-  return { pos, btnW, btnH, counterW: slots.find(s => s.key === 'counter')?.w ?? counterW };
-};
-
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
-  panelId: string;
   products: MetaShopProduct[];
   width: number;
   height: number;
@@ -560,13 +506,10 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = React.memo(({ panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
-  const active = useSlideshowActivation(panelId, rootRef);
-  const bitmapMax = slideshowBitmapMaxPx(inXR);
-  const canvasW = slideshowCanvasWidth(inXR);
   const totalCount = products.length;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
@@ -632,18 +575,10 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
-    if (active) {
-      setBitmapTick(t => t + 1);
-      return;
-    }
-    bitmapRef.current.clear();
-  }, [active]);
-
-  useEffect(() => {
-    if (!active || !count) return;
+    if (!count) return;
     let cancelled = false;
     const loadNearby = async () => {
-      const keep = new Set(slidePrefetchIndexes(index, count, inXR));
+      const keep = new Set(nearbySlideIndexes(index, count));
       for (const i of bitmapRef.current.keys()) {
         if (!keep.has(i)) bitmapRef.current.delete(i);
       }
@@ -651,7 +586,7 @@ const ProductSlideshowPanel: React.FC<{
         if (bitmapRef.current.has(i)) return;
         const url = urls[i];
         if (!url) { bitmapRef.current.set(i, null); return; }
-        const bmp = await loadSlideBitmap(url, bitmapMax, inXR);
+        const bmp = await loadSlideBitmap(url);
         if (cancelled) return;
         bitmapRef.current.set(i, bmp);
       }));
@@ -659,7 +594,7 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey, urls, active, bitmapMax, inXR]);
+  }, [index, count, urlsKey, urls]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -667,7 +602,7 @@ const ProductSlideshowPanel: React.FC<{
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = canvasW;
+    const cw = 640;
     const ch = Math.round(cw * 0.75);
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
@@ -709,12 +644,12 @@ const ProductSlideshowPanel: React.FC<{
       ctx.direction = 'ltr';
     }
     tex.needsUpdate = true;
-  }, [pageProducts, tex, canvasW]);
+  }, [pageProducts, tex]);
 
   useEffect(() => {
-    if (!active || !count) return;
+    if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, active]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
@@ -742,14 +677,14 @@ const ProductSlideshowPanel: React.FC<{
   advanceRef.current = advanceSlide;
 
   useFrame((_, dt) => {
-    if (!active) return;
     nearCheck.current += 1;
     if (nearCheck.current % 24 === 0) {
       const g = rootRef.current;
       if (g) {
         g.getWorldPosition(worldPos);
         const d = worldPos.distanceTo(camera.position);
-        nearbyRef.current = d < SLIDESHOW_NEAR_DIST;
+        const next = d < SLIDESHOW_NEAR_DIST;
+        nearbyRef.current = next;
       }
     }
     if (!playingRef.current || totalCount < 2) return;
@@ -787,13 +722,18 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const ctrl = useMemo(
-    () => slideshowControlLayout(width, multiPage, showLang),
-    [width, multiPage, showLang],
-  );
-  const { pos, btnW, btnH, counterW } = ctrl;
+  const btnHalf = 0.14;
+  const counterHalf = multiPage ? 0.26 : 0.2;
+  const gap = Math.min(0.42, Math.max(0.34, width * 0.11));
+  const step = gap + btnHalf * 2;
+  const slidePrevX = -(counterHalf + step);
+  const slideNextX = counterHalf + step;
+  const pagePrevX = slidePrevX - step;
+  const pageNextX = slideNextX + step;
+  const playX = (multiPage ? pagePrevX : slidePrevX) - step;
+  const langX = (multiPage ? pageNextX : slideNextX) + step;
   const counterLabel = totalCount
-    ? (multiPage ? `${globalIndex + 1}/${totalCount}·${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
+    ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
 
   return (
@@ -806,17 +746,10 @@ const ProductSlideshowPanel: React.FC<{
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {totalCount > 0 ? (
-        active ? (
-          <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
-            <planeGeometry args={[width, viewH]} />
-            <meshBasicMaterial map={tex} toneMapped={false} />
-          </mesh>
-        ) : (
-          <mesh position={[0, ctrlH / 2, 0.006]}>
-            <planeGeometry args={[width, viewH]} />
-            <meshBasicMaterial color="#0a0f1a" toneMapped={false} />
-          </mesh>
-        )
+        <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
+          <planeGeometry args={[width, viewH]} />
+          <meshBasicMaterial map={tex} toneMapped={false} />
+        </mesh>
       ) : (
         <CanvasLabel
           text={displayLang === 'fa' || displayLang === 'ar' ? 'بدون محصول' : 'No products'}
@@ -827,37 +760,37 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.play} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        <PdfArrowBtn compact x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
         {multiPage && (
-          <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.pagePrev} glyph="«" onClick={pagePrev} color="#475569" />
+          <PdfArrowBtn compact x={pagePrevX} glyph="«" onClick={pagePrev} color="#475569" />
         )}
-        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.slidePrev} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn compact x={slidePrevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
           text={counterLabel}
-          width={counterW}
-          height={btnH}
-          position={[pos.counter, 0, 0]}
+          width={multiPage ? 0.48 : 0.36}
+          height={0.16}
+          position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.slideNext} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn compact x={slideNextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         {multiPage && (
-          <PdfArrowBtn compact btnW={btnW} btnH={btnH} x={pos.pageNext} glyph="»" onClick={pageNext} color="#475569" />
+          <PdfArrowBtn compact x={pageNextX} glyph="»" onClick={pageNext} color="#475569" />
         )}
         {showLang && (
-          <group position={[pos.lang, 0, 0]}>
+          <group position={[langX, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); cycleLang(); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
-              <planeGeometry args={[btnW, btnH]} />
+              <planeGeometry args={[0.3, 0.2]} />
               <meshStandardMaterial color="#334155" />
             </mesh>
             <CanvasLabel
               text={displayLang.toUpperCase()}
-              width={Math.max(0.12, btnW - 0.04)}
-              height={Math.max(0.1, btnH - 0.04)}
+              width={0.24}
+              height={0.15}
               position={[0, 0, 0.01]}
               color="#f8fafc"
               onClick={cycleLang}
@@ -1791,7 +1724,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           return (
             <ProductSlideshowPanel
               key={`ss-${s.face}`}
-              panelId={`${booth.id}-${s.face}`}
               products={slides}
               width={s.w}
               height={s.h}
