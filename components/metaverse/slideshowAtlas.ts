@@ -93,3 +93,25 @@ export const createSlideshowAtlasPlaneGeometry = (
   uv.needsUpdate = true;
   return geo;
 };
+
+/** Map mesh hit UV (atlas space) to 0–1 cell-local coords for toolbar hit zones. */
+export const slideshowAtlasLocalUV = (
+  slot: number,
+  u: number,
+  v: number,
+): { lu: number; lv: number } => {
+  const cols = SLIDESHOW_ATLAS_COLS;
+  const rows = SLIDESHOW_ATLAS_ROWS;
+  const col = slot % cols;
+  const row = Math.floor(slot / cols);
+  const u0 = col / cols;
+  const u1 = (col + 1) / cols;
+  const vBottom = 1 - (row + 1) / rows;
+  const vTop = 1 - row / rows;
+  const lu = (u - u0) / (u1 - u0);
+  const lv = (v - vBottom) / (vTop - vBottom);
+  return {
+    lu: Math.max(0, Math.min(1, lu)),
+    lv: Math.max(0, Math.min(1, lv)),
+  };
+};
