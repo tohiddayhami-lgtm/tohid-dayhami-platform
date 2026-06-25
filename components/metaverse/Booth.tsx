@@ -103,9 +103,10 @@ const getPdfjs = () => {
 const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean }> = ({ x, glyph, onClick, color, compact }) => {
   const w = compact ? 0.28 : 0.34;
   const h = compact ? 0.2 : 0.26;
+  const fire = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); };
   return (
   <group position={[x, 0, 0]}>
-    <mesh onClick={(e) => { e.stopPropagation(); onClick(); }}
+    <mesh onClick={fire}
       onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
       <planeGeometry args={[w, h]} />
@@ -508,6 +509,7 @@ const ProductSlideshowPanel: React.FC<{
 }> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
+  const inXR = useXR(s => !!s.session);
   const totalCount = products.length;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
@@ -515,12 +517,15 @@ const ProductSlideshowPanel: React.FC<{
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const nearbyRef = useRef(true);
-  const [nearby, setNearby] = useState(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
   const nearCheck = useRef(0);
+  const playAcc = useRef(0);
+  const playingRef = useRef(playing);
+  const advanceRef = useRef<(dir: 1 | -1) => void>(() => {});
   const worldPos = useMemo(() => new THREE.Vector3(), []);
+  playingRef.current = playing;
 
   const pageProducts = useMemo(
     () => slideshowPageSlice(products, page),
@@ -550,18 +555,6 @@ const ProductSlideshowPanel: React.FC<{
   const urlsKey = `${page}|${products.map(p => p.id).join(',')}`;
 
   const productsKey = useMemo(() => products.map(p => p.id).join(','), [products]);
-
-  useFrame(() => {
-    nearCheck.current += 1;
-    if (nearCheck.current % 24 !== 0) return;
-    const g = rootRef.current;
-    if (!g) return;
-    g.getWorldPosition(worldPos);
-    const d = worldPos.distanceTo(camera.position);
-    const next = d < SLIDESHOW_NEAR_DIST;
-    nearbyRef.current = next;
-    setNearby(prev => (prev === next ? prev : next));
-  });
 
   useEffect(() => {
     setPage(0);
@@ -681,27 +674,46 @@ const ProductSlideshowPanel: React.FC<{
       setIndex(Math.max(0, lastLen - 1));
     }
   }, [index, count, page, pageCount, products, totalCount]);
+  advanceRef.current = advanceSlide;
 
-  useEffect(() => {
-    if (!playing || !nearby || totalCount < 2) return;
-    const ms = Math.max(2000, autoPlaySec * 1000);
-    const id = window.setInterval(() => advanceSlide(1), ms);
-    return () => window.clearInterval(id);
-  }, [playing, nearby, totalCount, autoPlaySec, advanceSlide]);
+  useFrame((_, dt) => {
+    nearCheck.current += 1;
+    if (nearCheck.current % 24 === 0) {
+      const g = rootRef.current;
+      if (g) {
+        g.getWorldPosition(worldPos);
+        const d = worldPos.distanceTo(camera.position);
+        const next = d < SLIDESHOW_NEAR_DIST;
+        nearbyRef.current = next;
+      }
+    }
+    if (!playingRef.current || totalCount < 2) return;
+    if (!inXR && !nearbyRef.current) return;
+    playAcc.current += dt;
+    if (playAcc.current >= Math.max(2, autoPlaySec)) {
+      playAcc.current = 0;
+      advanceRef.current(1);
+    }
+  });
 
-  const prev = () => { setPlaying(false); advanceSlide(-1); };
-  const next = () => { setPlaying(false); advanceSlide(1); };
+  const prev = () => { playAcc.current = 0; setPlaying(false); advanceSlide(-1); };
+  const next = () => { playAcc.current = 0; setPlaying(false); advanceSlide(1); };
   const pagePrev = () => {
+    playAcc.current = 0;
     setPlaying(false);
     setPage(p => (p - 1 + pageCount) % pageCount);
     setIndex(0);
   };
   const pageNext = () => {
+    playAcc.current = 0;
     setPlaying(false);
     setPage(p => (p + 1) % pageCount);
     setIndex(0);
   };
-  const togglePlay = () => setPlaying(p => !p);
+  const togglePlay = () => {
+    playAcc.current = 0;
+    setPlaying(p => !p);
+  };
   const cycleLang = () => {
     if (langs.length < 2) return;
     setDisplayLang(prev => langs[(langs.indexOf(prev) + 1) % langs.length] || prev);
@@ -710,14 +722,16 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const sideSlots = (multiPage ? 3 : 2) + (showLang ? 0 : 0);
-  const slot = Math.min(0.36, Math.max(0.26, (width * 0.9) / (sideSlots * 2 + 0.55)));
-  const playX = -(multiPage ? 3 : 2) * slot;
-  const pagePrevX = -2 * slot;
-  const slidePrevX = -slot;
-  const slideNextX = slot;
-  const pageNextX = 2 * slot;
-  const langX = (multiPage ? 3 : 2) * slot;
+  const btnHalf = 0.14;
+  const counterHalf = multiPage ? 0.26 : 0.2;
+  const gap = Math.min(0.42, Math.max(0.34, width * 0.11));
+  const step = gap + btnHalf * 2;
+  const slidePrevX = -(counterHalf + step);
+  const slideNextX = counterHalf + step;
+  const pagePrevX = slidePrevX - step;
+  const pageNextX = slideNextX + step;
+  const playX = (multiPage ? pagePrevX : slidePrevX) - step;
+  const langX = (multiPage ? pageNextX : slideNextX) + step;
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
@@ -753,8 +767,8 @@ const ProductSlideshowPanel: React.FC<{
         <PdfArrowBtn compact x={slidePrevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
           text={counterLabel}
-          width={multiPage ? 0.52 : 0.4}
-          height={0.18}
+          width={multiPage ? 0.48 : 0.36}
+          height={0.16}
           position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
