@@ -207,7 +207,13 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         const shell = shops.find(s => s.slug === slug);
         if (!shell) return;
         try {
-          const full = (shell.products || []).length ? shell : await hydrateMetaShop(shell);
+          const shellList = shell.products || [];
+          const hasSlideImages = shellList.some(
+            p => p.active !== false && (p.images || []).some(u => !!String(u || '').trim()),
+          );
+          const full = shellList.length && hasSlideImages
+            ? shell
+            : await hydrateMetaShop(shell);
           const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
           if (list.length) next[slug] = list;
         } catch { /* skip */ }

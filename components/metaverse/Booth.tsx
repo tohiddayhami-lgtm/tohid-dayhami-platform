@@ -452,7 +452,7 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
 const SLIDE_BITMAP_MAX = 480;
-const SLIDESHOW_NEAR_DIST = 24;
+const SLIDESHOW_NEAR_DIST = 28;
 
 const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
   const key = url.trim();
@@ -461,14 +461,22 @@ const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
   if (!pending) {
     pending = new Promise(resolve => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      if (!key.startsWith('data:') && !key.startsWith('blob:')) {
+        img.crossOrigin = 'anonymous';
+      }
       img.onload = async () => {
         try {
           const max = Math.max(img.width, img.height);
           const scale = max > SLIDE_BITMAP_MAX ? SLIDE_BITMAP_MAX / max : 1;
           const rw = Math.max(1, Math.round(img.width * scale));
           const rh = Math.max(1, Math.round(img.height * scale));
-          resolve(await createImageBitmap(img, { resizeWidth: rw, resizeHeight: rh }));
+          if (scale < 1) {
+            try {
+              resolve(await createImageBitmap(img, { resizeWidth: rw, resizeHeight: rh }));
+              return;
+            } catch { /* fall through */ }
+          }
+          resolve(await createImageBitmap(img));
         } catch { resolve(null); }
       };
       img.onerror = () => resolve(null);
@@ -505,8 +513,9 @@ const ProductSlideshowPanel: React.FC<{
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
   const [page, setPage] = useState(0);
   const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [nearby, setNearby] = useState(false);
+  const [playing, setPlaying] = useState(true);
+  const nearbyRef = useRef(true);
+  const [nearby, setNearby] = useState(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
@@ -544,21 +553,20 @@ const ProductSlideshowPanel: React.FC<{
 
   useFrame(() => {
     nearCheck.current += 1;
-    if (nearCheck.current % 18 !== 0) return;
+    if (nearCheck.current % 24 !== 0) return;
     const g = rootRef.current;
     if (!g) return;
     g.getWorldPosition(worldPos);
     const d = worldPos.distanceTo(camera.position);
-    setNearby(prev => {
-      const next = d < SLIDESHOW_NEAR_DIST;
-      return prev === next ? prev : next;
-    });
+    const next = d < SLIDESHOW_NEAR_DIST;
+    nearbyRef.current = next;
+    setNearby(prev => (prev === next ? prev : next));
   });
 
   useEffect(() => {
     setPage(0);
     setIndex(0);
-    setPlaying(false);
+    setPlaying(true);
     bitmapRef.current.clear();
     setBitmapTick(t => t + 1);
   }, [productsKey]);
@@ -574,7 +582,7 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
-    if (!nearby || !count) return;
+    if (!count) return;
     let cancelled = false;
     const loadNearby = async () => {
       const keep = new Set(nearbySlideIndexes(index, count));
@@ -593,7 +601,7 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey, nearby]);
+  }, [index, count, urlsKey, urls]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -646,9 +654,9 @@ const ProductSlideshowPanel: React.FC<{
   }, [pageProducts, tex]);
 
   useEffect(() => {
-    if (!count || !nearby) return;
+    if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, nearby]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
