@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { Language } from '../../App';
 import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
+import { SlideshowProductsProvider } from './SlideshowProductsContext';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
@@ -476,6 +477,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           <EnvironmentCollisionProvider>
           <VrPerformanceTune />
           <Suspense fallback={null}>
+            <SlideshowProductsProvider shops={shops} booths={expo.booths}>
             <ExpoScene
               expo={expo}
               shops={shops}
@@ -498,6 +500,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onUpdateEditTransform={onUpdateEditTransform}
               onAddEnvMedia={addEnvMediaAt}
             />
+            </SlideshowProductsProvider>
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} flyMode={flyMode} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
