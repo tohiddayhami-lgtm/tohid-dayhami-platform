@@ -18,7 +18,6 @@ import {
   getSlideshowAtlasTexture,
   paintSlideshowAtlasCell,
   registerSlideshowAtlasPanel,
-  slideshowAtlasLocalUV,
   unregisterSlideshowAtlasPanel,
 } from './slideshowAtlas';
 import type { BoothFace } from '../../types';
@@ -519,44 +518,6 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   return [...set];
 };
 
-type SlideshowToolbarLayout = {
-  playX: number;
-  pagePrevX?: number;
-  slidePrevX: number;
-  slideNextX: number;
-  pageNextX?: number;
-  langX?: number;
-  counterW: number;
-  btnW: number;
-};
-
-const layoutSlideshowToolbar = (width: number, multiPage: boolean, showLang: boolean): SlideshowToolbarLayout => {
-  const avail = Math.max(1.1, width * 0.9);
-  const leftBtns = multiPage ? 3 : 2;
-  const rightBtns = 1 + (multiPage ? 1 : 0) + (showLang ? 1 : 0);
-  const baseBtn = 0.26;
-  const baseCounter = multiPage ? 0.46 : 0.34;
-  const basePad = 0.05;
-  const rawSpan = baseCounter + (leftBtns + rightBtns) * (baseBtn + basePad);
-  const scale = Math.min(1, avail / rawSpan);
-  const btnW = Math.max(0.17, baseBtn * scale);
-  const counterW = Math.max(0.28, baseCounter * scale);
-  const pad = Math.max(0.035, basePad * scale);
-  const step = btnW + pad;
-  const slidePrevX = -(counterW / 2 + pad + btnW / 2);
-  const slideNextX = counterW / 2 + pad + btnW / 2;
-  if (multiPage) {
-    const pagePrevX = slidePrevX - step;
-    const playX = pagePrevX - step;
-    const pageNextX = slideNextX + step;
-    const langX = showLang ? pageNextX + step : undefined;
-    return { playX, pagePrevX, slidePrevX, slideNextX, pageNextX, langX, counterW, btnW };
-  }
-  const playX = slidePrevX - step;
-  const langX = showLang ? slideNextX + step : undefined;
-  return { playX, slidePrevX, slideNextX, langX, counterW, btnW };
-};
-
 const drawSlideshowFrame = (
   ctx: CanvasRenderingContext2D,
   cw: number,
@@ -797,11 +758,6 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const toolbar = useMemo(
-    () => layoutSlideshowToolbar(width, multiPage, showLang),
-    [width, multiPage, showLang],
-  );
-  const btnH = Math.max(0.16, toolbar.btnW * 0.72);
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
@@ -829,24 +785,19 @@ const ProductSlideshowPanel: React.FC<{
     paintSlide(Math.min(index, count - 1), displayLang, toolbarGlyphs);
   }, [index, count, displayLang, bitmapTick, paintSlide, page, toolbarGlyphs]);
 
-  const handleScreenPointer = (e: ThreeEvent<MouseEvent>) => {
+  const handleScreenClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    if (!e.uv || totalCount <= 0) { onClick?.(e); return; }
-    let u = e.uv.x;
-    let v = e.uv.y;
-    if (useAtlas && atlasSlot != null) {
-      const local = slideshowAtlasLocalUV(atlasSlot, u, v);
-      u = local.lu;
-      v = local.lv;
+    if (e.uv && totalCount > 0) {
+      const u = e.uv.x;
+      const v = e.uv.y;
+      if (v > toolbarBandV) { onClick?.(e); return; }
+      if (u < 0.14) { togglePlay(); return; }
+      if (multiPage && u < 0.24) { pagePrev(); return; }
+      if (u < 0.34) { prev(); return; }
+      if (u > 0.86) { if (showLang) cycleLang(); return; }
+      if (multiPage && u > 0.76) { pageNext(); return; }
+      if (u > 0.66) { next(); return; }
     }
-    // Toolbar band at bottom (v≈0); image area above.
-    if (v > toolbarBandV) { onClick?.(e); return; }
-    if (u < 0.14) { togglePlay(); return; }
-    if (multiPage && u < 0.24) { pagePrev(); return; }
-    if (u < 0.34) { prev(); return; }
-    if (u > 0.86) { if (showLang) cycleLang(); return; }
-    if (multiPage && u > 0.76) { pageNext(); return; }
-    if (u > 0.66) { next(); return; }
     onClick?.(e);
   };
 
@@ -860,10 +811,7 @@ const ProductSlideshowPanel: React.FC<{
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {totalCount > 0 ? (
-        <mesh
-          position={[0, ctrlH / 2, 0.006]}
-          onPointerUp={handleScreenPointer}
-        >
+        <mesh position={[0, ctrlH / 2, 0.006]} onClick={handleScreenClick}>
           {atlasGeo ? (
             <primitive object={atlasGeo} attach="geometry" />
           ) : (
@@ -879,30 +827,6 @@ const ProductSlideshowPanel: React.FC<{
           position={[0, ctrlH / 2, 0.012]}
           color="#ffffff"
         />
-      )}
-      {!useAtlas && (
-      <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn hideLabel x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-        {multiPage && toolbar.pagePrevX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pagePrev} color="#475569" />
-        )}
-        <PdfArrowBtn hideLabel x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        <PdfArrowBtn hideLabel x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        {multiPage && toolbar.pageNextX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pageNext} color="#475569" />
-        )}
-        {showLang && toolbar.langX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={cycleLang} color="#334155" />
-        )}
-        <CanvasLabel
-          text={toolbarGlyphs}
-          width={Math.min(width * 0.92, 2.8)}
-          height={btnH}
-          position={[0, 0, 0.015]}
-          bg="rgba(15,23,42,.92)"
-          color="#ffffff"
-        />
-      </group>
       )}
     </group>
   );
