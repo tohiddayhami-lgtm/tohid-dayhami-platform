@@ -212,12 +212,32 @@ export const isPdfFile = (url?: string): boolean => !!url && /\.pdf(\?.*)?$/i.te
 // An uploaded HTML page → embedded through an iframe transformed onto the wall surface.
 export const isHtmlFile = (url?: string): boolean => !!url && /\.html?(\?.*)?$/i.test(url);
 
-export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
-  (Object.entries(booth.productSlideshows || {}) as [BoothFace, BoothProductSlideshow | undefined][])
-    .filter(([, cfg]) => cfg?.enabled)
-    .map(([face]) => face);
+const BOOTH_FACE_LIST: BoothFace[] = ['innerBack', 'outerBack', 'innerLeft', 'outerLeft', 'innerRight', 'outerRight'];
 
 export const normShopSlug = (slug?: string) => (slug || '').trim().toLowerCase();
+
+/** Panel image/video URL on a booth face (legacy screenUrl on innerBack). */
+export const boothPanelUrl = (booth: MetaverseBooth, face: BoothFace): string | undefined => {
+  const P = booth.panels || {};
+  return P[face] || (face === 'innerBack' ? (booth.screenUrl || booth.bannerImage) : undefined);
+};
+
+/** Explicit editor toggle, or auto innerBack whenever a shop is linked. */
+export const boothSlideshowConfig = (
+  booth: MetaverseBooth,
+  face: BoothFace,
+): BoothProductSlideshow | undefined => {
+  const cfg = booth.productSlideshows?.[face];
+  if (cfg?.enabled) return cfg;
+  if (cfg?.enabled === false) return undefined;
+  if (face === 'innerBack' && booth.shopSlug) {
+    return { enabled: true, autoPlaySec: cfg?.autoPlaySec ?? 5, productIds: cfg?.productIds };
+  }
+  return undefined;
+};
+
+export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
+  BOOTH_FACE_LIST.filter(face => !!boothSlideshowConfig(booth, face)?.enabled);
 
 export const boothNeedsSlideshowProducts = (booth: MetaverseBooth): boolean =>
   boothSlideshowFaces(booth).length > 0 && !!booth.shopSlug;
@@ -249,25 +269,14 @@ const trimProductForSlideshow = (p: MetaShopProduct): MetaShopProduct | null => 
   return { ...p, images: [String(img)] };
 };
 
+/** All active products with at least one image — per-booth filtering happens in resolveSlideshowProducts. */
 export const filterProductsForSlideshowHydrate = (
   products: MetaShopProduct[],
-  booths: MetaverseBooth[] | undefined,
-  shopSlug: string,
-): MetaShopProduct[] => {
-  const active = products.filter(p => p.active !== false);
-  const { explicitIds, hasOpenList } = collectSlideshowProductIdsForShop(booths, shopSlug);
-  let list: MetaShopProduct[];
-  // If any booth uses the full catalog, hydrate everything — per-booth resolveSlideshowProducts trims later.
-  if (hasOpenList) {
-    list = active;
-  } else if (explicitIds.length) {
-    const pick = new Set(explicitIds);
-    list = active.filter(p => pick.has(p.id));
-  } else {
-    return [];
-  }
-  return list.map(trimProductForSlideshow).filter((p): p is MetaShopProduct => !!p);
-};
+): MetaShopProduct[] =>
+  products
+    .filter(p => p.active !== false)
+    .map(trimProductForSlideshow)
+    .filter((p): p is MetaShopProduct => !!p);
 
 export const resolveSlideshowProducts = (
   products: MetaShopProduct[] | undefined,

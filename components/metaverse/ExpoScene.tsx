@@ -713,7 +713,7 @@ export const ExpoScene: React.FC<Props> = ({
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
             shopProducts={needsSlideshowProducts ? (linkedShop?.products || []) : []}
             linkedShop={linkedShop}
-            expoBooths={expo.booths}
+            allShops={shops}
             slideshowDefaultLang={slideshowLang.defaultLang}
             slideshowLangOptions={slideshowLang.langOptions}
           />
