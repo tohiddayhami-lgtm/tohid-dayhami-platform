@@ -10,6 +10,7 @@ import { hydrateMetaShop } from '../../services/firebaseService';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
+import { SlideshowActivationManager } from './slideshowActivation';
 import { Player } from './Player';
 import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
@@ -185,8 +186,16 @@ const ExpoAnalyticsTracker: React.FC<{
   return null;
 };
 
-// Full-screen 3D / WebXR exhibition viewer. Orchestrates the Canvas (scene + player + XR rig)
-// and all 2D chrome (top bar, minimap, joystick, hotspot modal). Lazy-loaded by App.tsx.
+const VrPerformanceTune: React.FC = () => {
+  const inXR = useXR(s => !!s.session);
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.setPixelRatio(inXR ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+  }, [inXR, gl]);
+  return null;
+};
+
+// Full-screen 3D / WebXR exhibition viewer.
 export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit, onOpenShop, environmentEditMode = false, onSaveExpo }) => {
   const expo = bazaar.expo!;
   const slideshowSlugs = useMemo(
@@ -500,12 +509,14 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
   return (
     <div className="fixed inset-0 z-[100] bg-[#0b1020] overflow-hidden" style={{ fontFamily: 'Vazirmatn, sans-serif' }} dir={T ? 'rtl' : 'ltr'}>
       <Canvas
-        dpr={expo.environmentUrl ? [1, 1.25] : [1, 1.5]}
+        dpr={[1, 1.25]}
         camera={{ fov: 72, near: 0.1, far: 2000, position: spawn }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
       >
         <XR store={store}>
           <EnvironmentCollisionProvider>
+          <SlideshowActivationManager>
+          <VrPerformanceTune />
           <Suspense fallback={null}>
             <ExpoScene
               expo={expo}
@@ -540,6 +551,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           {mode === 'fp' && <VrFlyModeToggle onToggle={() => setFlyMode(f => !f)} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
+          </SlideshowActivationManager>
           </EnvironmentCollisionProvider>
         </XR>
       </Canvas>
