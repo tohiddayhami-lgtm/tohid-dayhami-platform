@@ -193,6 +193,13 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     () => collectExpoSlideshowShopSlugs(expo.booths),
     [expo.booths],
   );
+  const slideshowShopSig = useMemo(
+    () => slideshowSlugs.map(slug => {
+      const s = shops.find(x => x.slug === slug);
+      return s ? `${slug}:${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}` : slug;
+    }).join('|'),
+    [slideshowSlugs, shops],
+  );
   const [slideshowProducts, setSlideshowProducts] = useState<Record<string, MetaShopProduct[]>>({});
 
   useEffect(() => {
@@ -208,14 +215,20 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
         if (!shell) return;
         try {
           const full = await hydrateMetaShop(shell);
-          const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
+          const hydrated = full?.products || [];
+          let list = filterProductsForSlideshowHydrate(hydrated, expo.booths, slug);
+          if (!list.length) {
+            list = hydrated.filter(
+              p => p.active !== false && (p.images || []).some(u => !!String(u || '').trim()),
+            );
+          }
           if (list.length) next[slug] = list;
         } catch { /* skip */ }
       }));
       if (!cancelled) setSlideshowProducts(next);
     })();
     return () => { cancelled = true; };
-  }, [slideshowSlugs.join('|'), shops]);
+  }, [slideshowSlugs.join('|'), slideshowShopSig, expo.booths]);
 
   const shopsForScene = useMemo(() => shops.map(s => {
     const hydrated = slideshowProducts[s.slug];

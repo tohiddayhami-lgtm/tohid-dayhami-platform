@@ -14,6 +14,7 @@ import {
   prepareMetaShopShell,
   stripProductsForList,
   shopNeedsProductHydration,
+  shopProductsNeedFullHydration,
   type MetaShopProductChunk,
 } from '../utils/metaShopChunks';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
@@ -1121,7 +1122,7 @@ const fetchMetaShopDocRaw = async (shopId: string): Promise<MetaShop | null> => 
 
 export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop | null> => {
   if (!shop) return null;
-  if ((shop.products || []).length) {
+  if (!shopProductsNeedFullHydration(shop)) {
     return { ...shop, products: shop.products || [] };
   }
   if ((shop.productChunkCount || 0) > 0) {

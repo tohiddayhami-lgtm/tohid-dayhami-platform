@@ -453,6 +453,7 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
 const SLIDE_BITMAP_MAX = 480;
+const SLIDE_TOOLBAR_H = 40;
 
 const createSlideshowTexture = () => {
   const c = document.createElement('canvas');
@@ -467,13 +468,14 @@ const createSlideshowTexture = () => {
 };
 
 const loadSlideBitmap = (url: string, maxPx = SLIDE_BITMAP_MAX): Promise<ImageBitmap | null> => {
-  const key = `${maxPx}|${url.trim()}`;
-  if (!url.trim()) return Promise.resolve(null);
-  let pending = SLIDE_BITMAP_CACHE.get(key);
+  const raw = url.trim();
+  if (!raw) return Promise.resolve(null);
+  const cacheKey = `${maxPx}|${raw}`;
+  let pending = SLIDE_BITMAP_CACHE.get(cacheKey);
   if (!pending) {
     pending = new Promise(resolve => {
       const img = new Image();
-      if (!key.startsWith('data:') && !key.startsWith('blob:')) {
+      if (!raw.startsWith('data:') && !raw.startsWith('blob:')) {
         img.crossOrigin = 'anonymous';
       }
       img.onload = async () => {
@@ -492,9 +494,9 @@ const loadSlideBitmap = (url: string, maxPx = SLIDE_BITMAP_MAX): Promise<ImageBi
         } catch { resolve(null); }
       };
       img.onerror = () => resolve(null);
-      img.src = url.trim();
+      img.src = raw;
     });
-    SLIDE_BITMAP_CACHE.set(key, pending);
+    SLIDE_BITMAP_CACHE.set(cacheKey, pending);
   }
   return pending;
 };
@@ -504,45 +506,6 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   if (count === 1) return [0];
   const set = new Set([index, (index + 1) % count, (index - 1 + count) % count]);
   return [...set];
-};
-
-type SlideshowToolbarLayout = {
-  playX: number;
-  pagePrevX?: number;
-  slidePrevX: number;
-  slideNextX: number;
-  pageNextX?: number;
-  langX?: number;
-  counterW: number;
-  btnW: number;
-};
-
-/** Fit slideshow transport buttons inside panel width — scales down on narrow walls. */
-const layoutSlideshowToolbar = (width: number, multiPage: boolean, showLang: boolean): SlideshowToolbarLayout => {
-  const avail = Math.max(1.1, width * 0.9);
-  const leftBtns = multiPage ? 3 : 2;
-  const rightBtns = 1 + (multiPage ? 1 : 0) + (showLang ? 1 : 0);
-  const baseBtn = 0.26;
-  const baseCounter = multiPage ? 0.46 : 0.34;
-  const basePad = 0.05;
-  const rawSpan = baseCounter + (leftBtns + rightBtns) * (baseBtn + basePad);
-  const scale = Math.min(1, avail / rawSpan);
-  const btnW = Math.max(0.17, baseBtn * scale);
-  const counterW = Math.max(0.28, baseCounter * scale);
-  const pad = Math.max(0.035, basePad * scale);
-  const step = btnW + pad;
-  const slidePrevX = -(counterW / 2 + pad + btnW / 2);
-  const slideNextX = counterW / 2 + pad + btnW / 2;
-  if (multiPage) {
-    const pagePrevX = slidePrevX - step;
-    const playX = pagePrevX - step;
-    const pageNextX = slideNextX + step;
-    const langX = showLang ? pageNextX + step : undefined;
-    return { playX, pagePrevX, slidePrevX, slideNextX, pageNextX, langX, counterW, btnW };
-  }
-  const playX = slidePrevX - step;
-  const langX = showLang ? slideNextX + step : undefined;
-  return { playX, slidePrevX, slideNextX, langX, counterW, btnW };
 };
 
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
@@ -636,12 +599,12 @@ const ProductSlideshowPanel: React.FC<{
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
   useEffect(() => () => tex.dispose(), [tex]);
 
-  const paintSlide = useCallback((idx: number, code: string, barText: string, xr: boolean) => {
+  const paintSlide = useCallback((idx: number, code: string, barText: string) => {
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const cw = canvasW;
-    const toolBarH = xr ? 40 : 0;
+    const toolBarH = SLIDE_TOOLBAR_H;
     const ch = Math.round(cw * 0.75) + toolBarH;
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
@@ -682,7 +645,7 @@ const ProductSlideshowPanel: React.FC<{
       });
       ctx.direction = 'ltr';
     }
-    if (xr && barText) {
+    if (barText) {
       ctx.fillStyle = 'rgba(15,23,42,.95)';
       ctx.fillRect(0, ch - toolBarH, cw, toolBarH);
       ctx.fillStyle = '#e2e8f0';
@@ -752,11 +715,6 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const toolbar = useMemo(
-    () => layoutSlideshowToolbar(width, multiPage, showLang),
-    [width, multiPage, showLang],
-  );
-  const btnH = Math.max(0.16, toolbar.btnW * 0.72);
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
@@ -769,20 +727,20 @@ const ProductSlideshowPanel: React.FC<{
     multiPage ? '»' : '',
     showLang ? displayLang.toUpperCase() : '',
   ].filter(Boolean).join('   ');
+  const canvasCh = Math.round(canvasW * 0.75) + SLIDE_TOOLBAR_H;
+  const toolbarBandV = SLIDE_TOOLBAR_H / canvasCh;
 
   useEffect(() => {
     if (!count) return;
-    paintSlide(Math.min(index, count - 1), displayLang, toolbarGlyphs, inXR);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, toolbarGlyphs, inXR]);
+    paintSlide(Math.min(index, count - 1), displayLang, toolbarGlyphs);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page, toolbarGlyphs]);
 
   const handleScreenClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    if (inXR && e.uv && totalCount > 0) {
+    if (e.uv && totalCount > 0) {
       const u = e.uv.x;
       const v = e.uv.y;
-      const toolBarH = 40;
-      const ch = Math.round(canvasW * 0.75) + toolBarH;
-      if (v > toolBarH / ch) { onClick?.(e); return; }
+      if (v > toolbarBandV) { onClick?.(e); return; }
       if (u < 0.14) { togglePlay(); return; }
       if (multiPage && u < 0.24) { pagePrev(); return; }
       if (u < 0.34) { prev(); return; }
@@ -815,30 +773,6 @@ const ProductSlideshowPanel: React.FC<{
           position={[0, ctrlH / 2, 0.012]}
           color="#ffffff"
         />
-      )}
-      {!inXR && (
-      <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <CanvasLabel
-          text={toolbarGlyphs}
-          width={Math.min(width * 0.92, 2.8)}
-          height={btnH}
-          position={[0, 0, 0.015]}
-          bg="rgba(15,23,42,.92)"
-          color="#ffffff"
-        />
-        <PdfArrowBtn hideLabel x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-        {multiPage && toolbar.pagePrevX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pagePrev} color="#475569" />
-        )}
-        <PdfArrowBtn hideLabel x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        <PdfArrowBtn hideLabel x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        {multiPage && toolbar.pageNextX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pageNext} color="#475569" />
-        )}
-        {showLang && toolbar.langX != null && (
-          <PdfArrowBtn hideLabel x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={cycleLang} color="#334155" />
-        )}
-      </group>
       )}
     </group>
   );

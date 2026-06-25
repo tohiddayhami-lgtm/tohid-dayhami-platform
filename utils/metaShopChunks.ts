@@ -81,4 +81,17 @@ export function shopNeedsProductHydration(shop: MetaShop): boolean {
   return !(shop.products || []).length;
 }
 
+/** Shell list without images still needs chunk hydration for slideshow / gallery. */
+export function shopProductsNeedFullHydration(shop: MetaShop): boolean {
+  const products = shop.products || [];
+  if (!products.length) {
+    return (shop.productChunkCount || 0) > 0 || (shop.productCount || 0) > 0;
+  }
+  const hasImages = products.some(
+    p => p.active !== false && (p.images || []).some(u => !!String(u || '').trim()),
+  );
+  if (hasImages) return false;
+  return (shop.productChunkCount || 0) > 0 || (shop.productCount || 0) > 0;
+}
+
 export { META_SHOP_FIRESTORE_MAX_BYTES };
