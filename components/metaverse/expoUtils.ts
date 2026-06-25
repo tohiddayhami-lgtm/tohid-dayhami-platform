@@ -1,4 +1,4 @@
-import type { MetaShopDirCat, MetaShopLang, MetaverseExpo, MetaverseBooth, MetaShop, BoothEntranceFacing } from '../../types';
+import type { MetaShopDirCat, MetaShopLang, MetaverseExpo, MetaverseBooth, MetaShop, BoothEntranceFacing, BoothFace, BoothProductSlideshow, MetaShopProduct } from '../../types';
 
 export type ExpoLangCode = string;
 
@@ -211,6 +211,35 @@ export const isPdfFile = (url?: string): boolean => !!url && /\.pdf(\?.*)?$/i.te
 
 // An uploaded HTML page → embedded through an iframe transformed onto the wall surface.
 export const isHtmlFile = (url?: string): boolean => !!url && /\.html?(\?.*)?$/i.test(url);
+
+export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
+  (Object.entries(booth.productSlideshows || {}) as [BoothFace, BoothProductSlideshow | undefined][])
+    .filter(([, cfg]) => cfg?.enabled)
+    .map(([face]) => face);
+
+export const boothNeedsSlideshowProducts = (booth: MetaverseBooth): boolean =>
+  boothSlideshowFaces(booth).length > 0 && !!booth.shopSlug;
+
+export const resolveSlideshowProducts = (
+  products: MetaShopProduct[] | undefined,
+  config?: BoothProductSlideshow,
+): MetaShopProduct[] => {
+  let list = (products || []).filter(p => p.active !== false);
+  const ids = config?.productIds;
+  if (ids?.length) {
+    const pick = new Set(ids);
+    list = list.filter(p => pick.has(p.id));
+  }
+  return list.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
+};
+
+export const collectExpoSlideshowShopSlugs = (booths: MetaverseBooth[] | undefined): string[] => {
+  const slugs = new Set<string>();
+  for (const b of booths || []) {
+    if (b.shopSlug && boothNeedsSlideshowProducts(b)) slugs.add(b.shopSlug);
+  }
+  return [...slugs];
+};
 
 // Pull a booth's visuals from a linked MetaShop ("make the booth this shop"): bilingual name,
 // accent color, logo, and panels (cover image inside-back, first product video for the LCD).

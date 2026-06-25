@@ -4,10 +4,10 @@ import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { Html, useTexture, useVideoTexture, RoundedBox, useGLTF, Billboard } from '@react-three/drei';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaverseBooth, MetaverseHotspot } from '../../types';
+import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaShopProduct, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { boothIsReservable, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
-import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw } from './expoUtils';
+import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
@@ -28,6 +28,7 @@ interface Props {
   hallDepth?: number;
   boothSummary?: BoothReservationSummary | null;
   onReserveBooth?: (b: MetaverseBooth) => void;
+  shopProducts?: MetaShopProduct[];
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -401,6 +402,171 @@ const HtmlSnapshotPlane: React.FC<{
       <meshBasicMaterial map={tex} toneMapped={false} />
     </mesh>
   ) : null;
+};
+
+const productLabel = (p: MetaShopProduct, lang: Language) =>
+  (p.i18n?.[lang]?.name || p.name || '').trim() || '—';
+
+/** Wall-mounted LCD cycling through linked shop products with prev/next controls. */
+const ProductSlideshowPanel: React.FC<{
+  products: MetaShopProduct[];
+  width: number;
+  height: number;
+  position: [number, number, number];
+  rotation?: [number, number, number];
+  autoPlaySec?: number;
+  lang: Language;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+}> = ({ products, width, height, position, rotation, autoPlaySec = 5, lang, onClick }) => {
+  const count = products.length;
+  const [index, setIndex] = useState(0);
+  const paused = useRef(false);
+  const acc = useRef(0);
+  const [tex] = useState(() => {
+    const c = document.createElement('canvas');
+    c.width = 8; c.height = 8;
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  });
+  const cacheRef = useRef<{ url: string; bmp: ImageBitmap | null; failed: boolean }[]>([]);
+  const [readyCount, setReadyCount] = useState(0);
+
+  const urls = useMemo(
+    () => products.map(p => String((p.images || []).find(Boolean) || '')),
+    [products],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setIndex(0);
+    setReadyCount(0);
+    cacheRef.current.forEach(c => c.bmp?.close?.());
+    cacheRef.current = urls.map(url => ({ url, bmp: null, failed: false }));
+    urls.forEach((url, i) => {
+      if (!url) { if (!cancelled) setReadyCount(n => n + 1); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        if (cancelled) return;
+        try {
+          const bmp = await createImageBitmap(img);
+          cacheRef.current[i] = { url, bmp, failed: false };
+        } catch {
+          cacheRef.current[i] = { url, bmp: null, failed: true };
+        }
+        if (!cancelled) setReadyCount(n => n + 1);
+      };
+      img.onerror = () => {
+        if (cancelled) return;
+        cacheRef.current[i] = { url, bmp: null, failed: true };
+        setReadyCount(n => n + 1);
+      };
+      img.src = url;
+    });
+    return () => {
+      cancelled = true;
+      cacheRef.current.forEach(c => c.bmp?.close?.());
+      cacheRef.current = [];
+    };
+  }, [urls.join('|')]);
+
+  const paintSlide = (idx: number) => {
+    const canvas = tex.image as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const cw = 1100;
+    const ch = Math.round(cw * 0.62);
+    if (canvas.width !== cw) canvas.width = cw;
+    if (canvas.height !== ch) canvas.height = ch;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, cw, ch);
+    const entry = cacheRef.current[idx];
+    const p = products[idx];
+    if (entry?.bmp) {
+      const ar = entry.bmp.width / entry.bmp.height;
+      let dw = cw * 0.92;
+      let dh = dw / ar;
+      if (dh > ch * 0.72) { dh = ch * 0.72; dw = dh * ar; }
+      const dx = (cw - dw) / 2;
+      const dy = (ch * 0.52 - dh) / 2;
+      ctx.drawImage(entry.bmp, dx, dy, dw, dh);
+    }
+    if (p) {
+      const name = productLabel(p, lang);
+      ctx.fillStyle = 'rgba(15,23,42,.88)';
+      ctx.fillRect(0, ch - 72, cw, 72);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 34px Vazirmatn, Tahoma, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const line = name.length > 42 ? `${name.slice(0, 40)}…` : name;
+      ctx.fillText(line, cw / 2, ch - 36);
+    }
+    tex.needsUpdate = true;
+  };
+
+  useEffect(() => {
+    if (!count) return;
+    paintSlide(Math.min(index, count - 1));
+  }, [index, readyCount, count, lang]);
+
+  useEffect(() => () => tex.dispose(), [tex]);
+
+  useFrame((_, dt) => {
+    if (!count || count < 2 || paused.current) return;
+    acc.current += dt;
+    if (acc.current >= Math.max(2, autoPlaySec)) {
+      acc.current = 0;
+      setIndex(i => (i + 1) % count);
+    }
+  });
+
+  const prev = () => { paused.current = true; setIndex(i => (i - 1 + count) % count); acc.current = 0; };
+  const next = () => { paused.current = true; setIndex(i => (i + 1) % count); acc.current = 0; };
+
+  const ctrlH = 0.28;
+  const viewH = height - ctrlH;
+
+  return (
+    <group position={position} rotation={rotation}>
+      <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
+        <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
+      </RoundedBox>
+      <mesh position={[0, ctrlH / 2, -0.005]}>
+        <planeGeometry args={[width + 0.02, viewH + 0.02]} />
+        <meshStandardMaterial color="#05070b" emissive="#0a1626" emissiveIntensity={0.55} />
+      </mesh>
+      {count > 0 ? (
+        <mesh position={[0, ctrlH / 2, 0.012]} onClick={onClick}>
+          <planeGeometry args={[width, viewH]} />
+          <meshBasicMaterial map={tex} toneMapped={false} />
+        </mesh>
+      ) : (
+        <CanvasLabel
+          text={lang === 'fa' || lang === 'ar' ? 'بدون محصول' : 'No products'}
+          width={width * 0.7}
+          height={0.32}
+          position={[0, ctrlH / 2, 0.02]}
+          color="#ffffff"
+        />
+      )}
+      <group position={[0, -height / 2 + ctrlH / 2, 0.03]}>
+        <PdfArrowBtn x={-0.48} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        <CanvasLabel
+          text={count ? `${index + 1}/${count}` : '—'}
+          width={0.55}
+          height={0.2}
+          position={[0, 0, 0]}
+          bg="rgba(15,23,42,.92)"
+          color="#ffffff"
+        />
+        <PdfArrowBtn x={0.48} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+      </group>
+      <ThinPanelFrame width={width + 0.02} height={height + 0.02} />
+    </group>
+  );
 };
 
 // One wall surface, by source: HTML page → iframe panel, animated GIF → animated texture,
@@ -889,7 +1055,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [] }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -1311,6 +1477,26 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
 
       {/* Configurable overlays — panels, shop entry, logo, managers, hotspots (procedural & GLB). */}
       {PANEL_SPECS.map(s => {
+        const slideshow = booth.productSlideshows?.[s.face];
+        if (slideshow?.enabled) {
+          const slides = resolveSlideshowProducts(shopProducts, slideshow);
+          return (
+            <ProductSlideshowPanel
+              key={`ss-${s.face}`}
+              products={slides}
+              width={s.w}
+              height={s.h}
+              position={s.position}
+              rotation={s.rotation}
+              autoPlaySec={slideshow.autoPlaySec ?? 5}
+              lang={lang}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTrack?.('booth_panel_click', { ...trackBase, targetType: 'product_slideshow', targetId: s.face, side: s.face });
+              }}
+            />
+          );
+        }
         const u = panelUrl(s.face);
         return u ? (
           <PanelMedia

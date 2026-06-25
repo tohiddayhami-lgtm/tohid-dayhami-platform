@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoEnvironmentButtonAction } from '../types';
+import { MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot, HotspotType, EnvPreset, MetaShopDirCat, BoothFace, BoothProductSlideshow, ExpoWallAd, ExpoWall, ExpoPresentation, BoothTier, ExpoEntranceAd, ExpoEntranceAdPosition, ExpoRetailCategory, ExpoVisualStyle, BoothEntranceFacing, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoEnvironmentButtonAction } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { autoArrangeBooths, shopToBoothFields, BANNER_SIZES, bannerSize, type ExpoBoothLayout, planRectPct, findNextLayoutSlot, layoutCarpetRects, EXPO_LAYOUT_OPTIONS, normalizeBoothLayout, resolveExpoLanguages, DEFAULT_EXPO_LANGS } from './metaverse/expoUtils';
 import { MetaShopLang } from '../types';
@@ -208,7 +208,11 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     screenHint: T ? 'لینک یوتیوب/ویمیو یا فایل mp4. روی نمایشگر داخل غرفه به‌صورت خودکار و بی‌صدا پخش می‌شود.' : 'YouTube/Vimeo link or mp4 file. Plays automatically (muted) on the in-booth LCD.',
     screenAuto: T ? 'از ویدئوی محصولات' : 'From product video',
     panels: T ? 'تابلوها و نمایشگرها (۳ داخل + ۳ بیرون)' : 'Panels & screens (3 inside + 3 outside)',
-    panelsHint: T ? 'برای هر دیوار غرفه رسانه بگذارید: تصویر/GIF، ویدیو، PDF ورق‌خور، یا HTML. همه مستقیماً روی خود دیوار نمایش داده می‌شوند.' : 'Put media on each booth wall: image/GIF, video, page-turnable PDF, or HTML. Everything renders directly on the wall.',
+    panelsHint: T ? 'برای هر دیوار غرفه رسانه بگذارید: تصویر/GIF، ویدیو، PDF ورق‌خور، HTML، یا مانیتور اسلاید محصولات فروشگاه.' : 'Put media on each booth wall: image/GIF, video, PDF, HTML, or a product slideshow monitor.',
+    slideshowMonitor: T ? 'مانیتور اسلاید محصولات' : 'Product slideshow monitor',
+    slideshowHint: T ? 'همه محصولات فعال فروشگاه متصل را نمایش می‌دهد — با دکمه عقب/جلو قابل کنترل است.' : 'Shows all active products from the linked shop — use on-screen prev/next controls.',
+    slideshowSec: T ? 'ثانیه هر اسلاید' : 'Seconds per slide',
+    slideshowNeedShop: T ? 'ابتدا فروشگاه را به غرفه وصل کنید.' : 'Link a shop to this booth first.',
     applyShop: T ? 'پر کردن اطلاعات از فروشگاه' : 'Fill from shop',
     boothFa: T ? 'نام غرفه (فارسی)' : 'Booth name (FA)', boothEn: T ? 'نام غرفه (انگلیسی)' : 'Booth name (EN)',
     shop: T ? 'فروشگاه مرتبط' : 'Linked shop', noShop: T ? '— بدون فروشگاه —' : '— none —',
@@ -568,6 +572,27 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
     const p: Partial<MetaverseBooth> = { panels };
     if (face === 'innerBack') { p.screenUrl = undefined; p.bannerImage = undefined; } // migrate legacy into panels
     updBooth(b.id, p);
+  };
+
+  const slideshowCfg = (b: MetaverseBooth, face: BoothFace): BoothProductSlideshow | undefined =>
+    b.productSlideshows?.[face];
+
+  const setSlideshow = (b: MetaverseBooth, face: BoothFace, enabled: boolean) => {
+    const productSlideshows = { ...(b.productSlideshows || {}) };
+    if (enabled) {
+      productSlideshows[face] = { enabled: true, autoPlaySec: productSlideshows[face]?.autoPlaySec ?? 5 };
+    } else {
+      delete productSlideshows[face];
+    }
+    updBooth(b.id, {
+      productSlideshows: Object.keys(productSlideshows).length ? productSlideshows : undefined,
+    });
+  };
+
+  const setSlideshowSec = (b: MetaverseBooth, face: BoothFace, sec: number) => {
+    const productSlideshows = { ...(b.productSlideshows || {}) };
+    productSlideshows[face] = { ...(productSlideshows[face] || { enabled: true }), enabled: true, autoPlaySec: Math.min(60, Math.max(2, sec || 5)) };
+    updBooth(b.id, { productSlideshows });
   };
 
   // ── Hotspots ──
@@ -1678,11 +1703,53 @@ export const ExpoEditor: React.FC<Props> = ({ expo, shops, lang, bazaarSlug, sho
                             <span className="text-xs font-bold text-gray-600">🖼 {t.panels}</span>
                             <p className="text-[11px] text-gray-400 mb-2 mt-0.5">{t.panelsHint}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                              {PANEL_FACES.map(pf => (
-                                <PanelField key={pf.face} id={`panel-${b.id}-${pf.face}`} label={T ? pf.fa : pf.en}
-                                  value={panelVal(b, pf.face)} onUrl={u => setPanel(b, pf.face, u)}
-                                  product={pf.face === 'innerBack' ? firstProductVideo(b.shopSlug) : undefined} />
-                              ))}
+                              {PANEL_FACES.map(pf => {
+                                const ss = slideshowCfg(b, pf.face);
+                                const ssOn = !!ss?.enabled;
+                                return (
+                                  <div key={pf.face} className="rounded-lg border border-gray-100 bg-gray-50/60 p-2.5 space-y-2">
+                                    <div className="text-[11px] font-bold text-gray-600">{T ? pf.fa : pf.en}</div>
+                                    <label className={`flex items-start gap-2 text-xs ${!b.shopSlug ? 'opacity-50' : 'text-indigo-800'}`} title={!b.shopSlug ? t.slideshowNeedShop : t.slideshowHint}>
+                                      <input
+                                        type="checkbox"
+                                        className="accent-indigo-600 mt-0.5"
+                                        checked={ssOn}
+                                        disabled={readonly || !b.shopSlug}
+                                        onChange={e => setSlideshow(b, pf.face, e.target.checked)}
+                                      />
+                                      <span><span className="font-bold">📺 {t.slideshowMonitor}</span><span className="block text-[10px] text-gray-500 font-normal mt-0.5">{t.slideshowHint}</span></span>
+                                    </label>
+                                    {ssOn && (
+                                      <div>
+                                        <label className={lbl}>{t.slideshowSec}</label>
+                                        <input
+                                          type="number"
+                                          min={2}
+                                          max={60}
+                                          step={1}
+                                          className={fld}
+                                          value={ss?.autoPlaySec ?? 5}
+                                          disabled={readonly}
+                                          onChange={ev => setSlideshowSec(b, pf.face, +ev.target.value)}
+                                        />
+                                        <p className="text-[10px] text-emerald-700 mt-1">
+                                          {(shopProducts(b.shopSlug).filter(p => p.active !== false && (p.images || []).length).length) || 0}
+                                          {T ? ' محصول در اسلاید' : ' products in slideshow'}
+                                        </p>
+                                      </div>
+                                    )}
+                                    {!ssOn && (
+                                      <PanelField
+                                        id={`panel-${b.id}-${pf.face}`}
+                                        label={T ? 'رسانه دیوار' : 'Wall media'}
+                                        value={panelVal(b, pf.face)}
+                                        onUrl={u => setPanel(b, pf.face, u)}
+                                        product={pf.face === 'innerBack' ? firstProductVideo(b.shopSlug) : undefined}
+                                      />
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
 

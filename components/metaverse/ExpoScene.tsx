@@ -699,6 +699,7 @@ export const ExpoScene: React.FC<Props> = ({
             onReserveBooth={onReserveBooth}
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
+            shopProducts={renderBooth.shopSlug ? (shopBySlug.get(renderBooth.shopSlug)?.products || []) : []}
           />
         );
       })}

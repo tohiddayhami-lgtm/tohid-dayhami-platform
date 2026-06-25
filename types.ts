@@ -757,6 +757,15 @@ export interface MetaverseHotspot {
 // interior) and an outer face (the aisle side). Each can show an image OR a video link.
 export type BoothFace = 'innerBack' | 'innerLeft' | 'innerRight' | 'outerBack' | 'outerLeft' | 'outerRight';
 
+/** Product carousel monitor mounted on a booth wall face. */
+export interface BoothProductSlideshow {
+  enabled?: boolean;
+  /** Seconds between auto-advance (default 5). Manual prev/next always available. */
+  autoPlaySec?: number;
+  /** Empty = all active products with images from the linked shop. */
+  productIds?: string[];
+}
+
 /** Which booth side points toward the hall entrance (+Z wall); geometry spins in place, `ry` unchanged. */
 export type BoothEntranceFacing = 'front' | 'left' | 'right' | 'back';
 export type BoothTier = 'basic' | 'standard' | 'premium';
@@ -809,6 +818,8 @@ export interface MetaverseBooth {
   // Per-face media: each value is an image URL or a video link (YouTube/Vimeo/mp4). Videos
   // auto-play muted & looping on an in-world screen; images render on the wall panel.
   panels?: Partial<Record<BoothFace, string>>;
+  /** Per-wall product slideshow monitors — shows linked shop catalog with prev/next controls. */
+  productSlideshows?: Partial<Record<BoothFace, BoothProductSlideshow>>;
   hotspots?: MetaverseHotspot[];
   meetEnabled?: boolean;        // per-booth WhatsApp contact badge (legacy field name)
   meetUrl?: string;             // https://wa.me/… or phone number
