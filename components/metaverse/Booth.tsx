@@ -13,6 +13,7 @@ import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
 import { slideshowBitmapMaxPx, slideshowCanvasWidth } from './slideshowActivation';
+import { useSlideshowShopProducts } from './SlideshowProductsContext';
 import type { BoothFace } from '../../types';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -545,6 +546,7 @@ const slideshowControlLayout = (panelW: number, multiPage: boolean, showLang: bo
 const ProductSlideshowPanel: React.FC<{
   panelId: string;
   products: MetaShopProduct[];
+  loading?: boolean;
   width: number;
   height: number;
   position: [number, number, number];
@@ -553,7 +555,7 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = ({ panelId: _panelId, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = ({ panelId: _panelId, products, loading = false, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
@@ -798,7 +800,11 @@ const ProductSlideshowPanel: React.FC<{
         </mesh>
       ) : (
         <CanvasLabel
-          text={displayLang === 'fa' || displayLang === 'ar' ? 'بدون محصول' : 'No products'}
+          text={
+            loading
+              ? (displayLang === 'fa' || displayLang === 'ar' ? 'در حال بارگذاری…' : 'Loading…')
+              : (displayLang === 'fa' || displayLang === 'ar' ? 'بدون محصول' : 'No products')
+          }
           width={width * 0.7}
           height={0.32}
           position={[0, ctrlH / 2, 0.012]}
@@ -1335,6 +1341,8 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
 export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
+  const { products: slideshowShopProducts, loading: slideshowLoading } = useSlideshowShopProducts(booth.shopSlug);
+  const effectiveShopProducts = slideshowShopProducts.length ? slideshowShopProducts : shopProducts;
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -1396,10 +1404,10 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
     const out = new Map<BoothFace, MetaShopProduct[]>();
     for (const s of PANEL_SPECS) {
       const cfg = booth.productSlideshows?.[s.face];
-      if (cfg?.enabled) out.set(s.face, resolveSlideshowProducts(shopProducts, cfg));
+      if (cfg?.enabled) out.set(s.face, resolveSlideshowProducts(effectiveShopProducts, cfg));
     }
     return out;
-  }, [booth.productSlideshows, shopProducts]);
+  }, [booth.productSlideshows, effectiveShopProducts]);
   const managerSlots = [0, 1, 2, 3, 4];
   const managerPngs = managerSlots.map(i => booth.managerPngs?.[i] || '');
   const managerVisible = managerSlots.map(i => booth.managerEnabled?.[i] !== false);
@@ -1772,6 +1780,7 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               key={`ss-${s.face}`}
               panelId={`${booth.id}-${s.face}`}
               products={slides}
+              loading={slideshowLoading && !slides.length && !!booth.shopSlug}
               width={s.w}
               height={s.h}
               position={s.position}
