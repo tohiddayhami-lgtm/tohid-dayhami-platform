@@ -100,7 +100,7 @@ const getPdfjs = () => {
   return pdfjsPromise;
 };
 
-const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; btnW?: number; btnH?: number }> = ({ x, glyph, onClick, color, btnW = 0.34, btnH = 0.26 }) => {
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; btnW?: number; btnH?: number; hideLabel?: boolean }> = ({ x, glyph, onClick, color, btnW = 0.34, btnH = 0.26, hideLabel }) => {
   const fire = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); };
   return (
   <group position={[x, 0, 0]}>
@@ -110,7 +110,9 @@ const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; col
       <planeGeometry args={[btnW, btnH]} />
       <meshStandardMaterial color={color} />
     </mesh>
-    <CanvasLabel text={glyph} width={btnW - 0.04} height={btnH - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    {!hideLabel && (
+      <CanvasLabel text={glyph} width={btnW - 0.04} height={btnH - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    )}
   </group>
   );
 };
@@ -451,22 +453,34 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
 
 const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
 const SLIDE_BITMAP_MAX = 480;
-const SLIDESHOW_NEAR_DIST = 28;
 
-const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
-  const key = url.trim();
-  if (!key) return Promise.resolve(null);
+const createSlideshowTexture = (canvasW: number) => {
+  const c = document.createElement('canvas');
+  c.width = 8;
+  c.height = 8;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearFilter;
+  t.anisotropy = 1;
+  return t;
+};
+
+const loadSlideBitmap = (url: string, maxPx = SLIDE_BITMAP_MAX): Promise<ImageBitmap | null> => {
+  const key = `${maxPx}|${url.trim()}`;
+  if (!url.trim()) return Promise.resolve(null);
   let pending = SLIDE_BITMAP_CACHE.get(key);
   if (!pending) {
     pending = new Promise(resolve => {
       const img = new Image();
-      if (!key.startsWith('data:') && !key.startsWith('blob:')) {
+      const raw = url.trim();
+      if (!raw.startsWith('data:') && !raw.startsWith('blob:')) {
         img.crossOrigin = 'anonymous';
       }
       img.onload = async () => {
         try {
           const max = Math.max(img.width, img.height);
-          const scale = max > SLIDE_BITMAP_MAX ? SLIDE_BITMAP_MAX / max : 1;
+          const scale = max > maxPx ? maxPx / max : 1;
           const rw = Math.max(1, Math.round(img.width * scale));
           const rh = Math.max(1, Math.round(img.height * scale));
           if (scale < 1) {
@@ -479,7 +493,7 @@ const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
         } catch { resolve(null); }
       };
       img.onerror = () => resolve(null);
-      img.src = key;
+      img.src = raw;
     });
     SLIDE_BITMAP_CACHE.set(key, pending);
   }
@@ -544,24 +558,22 @@ const ProductSlideshowPanel: React.FC<{
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
-  const rootRef = useRef<THREE.Group>(null);
-  const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
+  const bitmapMax = inXR ? 320 : SLIDE_BITMAP_MAX;
+  const canvasW = inXR ? 480 : 640;
+  const [tex] = useState(() => createSlideshowTexture(canvasW));
   const totalCount = products.length;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
   const [page, setPage] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const nearbyRef = useRef(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
-  const nearCheck = useRef(0);
   const playAcc = useRef(0);
   const playingRef = useRef(playing);
   const advanceRef = useRef<(dir: 1 | -1) => void>(() => {});
-  const worldPos = useMemo(() => new THREE.Vector3(), []);
   playingRef.current = playing;
 
   const pageProducts = useMemo(
@@ -573,17 +585,6 @@ const ProductSlideshowPanel: React.FC<{
   const canNavigate = totalCount > 1;
   const multiPage = pageCount > 1;
   const showLang = langs.length > 1;
-
-  const [tex] = useState(() => {
-    const c = document.createElement('canvas');
-    c.width = 8; c.height = 8;
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 1;
-    t.generateMipmaps = false;
-    t.minFilter = THREE.LinearFilter;
-    return t;
-  });
 
   const urls = useMemo(
     () => pageProducts.map(p => String((p.images || []).find(Boolean) || '')),
@@ -623,7 +624,7 @@ const ProductSlideshowPanel: React.FC<{
         if (bitmapRef.current.has(i)) return;
         const url = urls[i];
         if (!url) { bitmapRef.current.set(i, null); return; }
-        const bmp = await loadSlideBitmap(url);
+        const bmp = await loadSlideBitmap(url, bitmapMax);
         if (cancelled) return;
         bitmapRef.current.set(i, bmp);
       }));
@@ -631,22 +632,24 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey, urls]);
+  }, [index, count, urlsKey, urls, bitmapMax]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
+  useEffect(() => () => tex.dispose(), [tex]);
 
-  const paintSlide = useCallback((idx: number, code: string) => {
-    const canvas = tex.image as HTMLCanvasElement;
+  const paintSlide = useCallback((idx: number, code: string, targetTex: THREE.CanvasTexture, barText: string, xr: boolean) => {
+    const canvas = targetTex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = 640;
-    const ch = Math.round(cw * 0.75);
+    const cw = canvasW;
+    const toolBarH = xr ? 40 : 0;
+    const ch = Math.round(cw * 0.75) + toolBarH;
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
     ctx.fillStyle = '#0a0f1a';
     ctx.fillRect(0, 0, cw, ch);
     const footerH = 132;
-    const imgMaxH = ch - footerH - 10;
+    const imgMaxH = ch - footerH - toolBarH - 10;
     const bmp = bitmapRef.current.get(idx) ?? null;
     const p = pageProducts[idx];
     if (bmp) {
@@ -680,15 +683,17 @@ const ProductSlideshowPanel: React.FC<{
       });
       ctx.direction = 'ltr';
     }
-    tex.needsUpdate = true;
-  }, [pageProducts, tex]);
-
-  useEffect(() => {
-    if (!count) return;
-    paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
-
-  useEffect(() => () => tex.dispose(), [tex]);
+    if (xr && barText) {
+      ctx.fillStyle = 'rgba(15,23,42,.95)';
+      ctx.fillRect(0, ch - toolBarH, cw, toolBarH);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 18px Vazirmatn, Tahoma, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(barText, cw / 2, ch - toolBarH / 2 + 1);
+    }
+    targetTex.needsUpdate = true;
+  }, [pageProducts, canvasW]);
 
   const advanceSlide = useCallback((dir: 1 | -1) => {
     if (!totalCount) return;
@@ -714,18 +719,7 @@ const ProductSlideshowPanel: React.FC<{
   advanceRef.current = advanceSlide;
 
   useFrame((_, dt) => {
-    nearCheck.current += 1;
-    if (nearCheck.current % 24 === 0) {
-      const g = rootRef.current;
-      if (g) {
-        g.getWorldPosition(worldPos);
-        const d = worldPos.distanceTo(camera.position);
-        const next = d < SLIDESHOW_NEAR_DIST;
-        nearbyRef.current = next;
-      }
-    }
     if (!playingRef.current || totalCount < 2) return;
-    if (!inXR && !nearbyRef.current) return;
     playAcc.current += dt;
     if (playAcc.current >= Math.max(2, autoPlaySec)) {
       playAcc.current = 0;
@@ -767,9 +761,37 @@ const ProductSlideshowPanel: React.FC<{
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
+  const toolbarGlyphs = [
+    playing ? '⏸' : '▶',
+    multiPage ? '«' : '',
+    '‹',
+    counterLabel,
+    '›',
+    multiPage ? '»' : '',
+    showLang ? displayLang.toUpperCase() : '',
+  ].filter(Boolean).join('   ');
+
+  useEffect(() => {
+    if (!count) return;
+    paintSlide(Math.min(index, count - 1), displayLang, tex, toolbarGlyphs, inXR);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page, tex, toolbarGlyphs, inXR]);
+
+  const handleScreenClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    if (inXR && e.uv && totalCount > 0) {
+      const u = e.uv.x;
+      if (u < 0.14) { togglePlay(); return; }
+      if (multiPage && u < 0.24) { pagePrev(); return; }
+      if (u < 0.34) { prev(); return; }
+      if (u > 0.86) { if (showLang) cycleLang(); return; }
+      if (multiPage && u > 0.76) { pageNext(); return; }
+      if (u > 0.66) { next(); return; }
+    }
+    onClick?.(e);
+  };
 
   return (
-    <group ref={rootRef} position={position} rotation={rotation}>
+    <group position={position} rotation={rotation}>
       <RoundedBox args={[width + bezel, height + bezel, 0.035]} radius={0.02} smoothness={2} position={[0, 0, -0.028]}>
         <meshStandardMaterial color="#1a1f2e" metalness={0.45} roughness={0.5} />
       </RoundedBox>
@@ -778,7 +800,7 @@ const ProductSlideshowPanel: React.FC<{
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {totalCount > 0 ? (
-        <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
+        <mesh position={[0, ctrlH / 2, 0.006]} onClick={handleScreenClick}>
           <planeGeometry args={[width, viewH]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
@@ -791,45 +813,30 @@ const ProductSlideshowPanel: React.FC<{
           color="#ffffff"
         />
       )}
+      {!inXR && (
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-        {multiPage && toolbar.pagePrevX != null && (
-          <PdfArrowBtn x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="«" onClick={pagePrev} color="#475569" />
-        )}
-        <PdfArrowBtn x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
-          text={counterLabel}
-          width={toolbar.counterW}
+          text={toolbarGlyphs}
+          width={Math.min(width * 0.92, 2.8)}
           height={btnH}
-          position={[0, 0, 0]}
+          position={[0, 0, 0.015]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn hideLabel x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        {multiPage && toolbar.pagePrevX != null && (
+          <PdfArrowBtn hideLabel x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pagePrev} color="#475569" />
+        )}
+        <PdfArrowBtn hideLabel x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn hideLabel x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         {multiPage && toolbar.pageNextX != null && (
-          <PdfArrowBtn x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="»" onClick={pageNext} color="#475569" />
+          <PdfArrowBtn hideLabel x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={pageNext} color="#475569" />
         )}
         {showLang && toolbar.langX != null && (
-          <group position={[toolbar.langX, 0, 0]}>
-            <mesh
-              onClick={(e) => { e.stopPropagation(); cycleLang(); }}
-              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-            >
-              <planeGeometry args={[toolbar.btnW, btnH]} />
-              <meshStandardMaterial color="#334155" />
-            </mesh>
-            <CanvasLabel
-              text={displayLang.toUpperCase()}
-              width={toolbar.btnW - 0.04}
-              height={btnH - 0.04}
-              position={[0, 0, 0.01]}
-              color="#f8fafc"
-              onClick={cycleLang}
-            />
-          </group>
+          <PdfArrowBtn hideLabel x={toolbar.langX} btnW={toolbar.btnW} btnH={btnH} glyph="" onClick={cycleLang} color="#334155" />
         )}
       </group>
+      )}
     </group>
   );
 });
