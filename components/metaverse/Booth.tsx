@@ -8,7 +8,7 @@ import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaShopProduct, Metave
 import { boothIsReservable, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
 import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts, SLIDESHOW_PAGE_SIZE, slideshowPageCount, slideshowPageSlice } from './expoUtils';
-import { loadSlideBitmap, useSlideshowAutoplay } from './slideshowRuntime';
+import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
 import { CanvasLabel } from './CanvasLabel';
@@ -449,6 +449,43 @@ const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: numb
   return lines.slice(0, maxLines);
 };
 
+const SLIDE_BITMAP_CACHE = new Map<string, Promise<ImageBitmap | null>>();
+const SLIDE_BITMAP_MAX = 480;
+const SLIDESHOW_NEAR_DIST = 28;
+
+const loadSlideBitmap = (url: string): Promise<ImageBitmap | null> => {
+  const key = url.trim();
+  if (!key) return Promise.resolve(null);
+  let pending = SLIDE_BITMAP_CACHE.get(key);
+  if (!pending) {
+    pending = new Promise(resolve => {
+      const img = new Image();
+      if (!key.startsWith('data:') && !key.startsWith('blob:')) {
+        img.crossOrigin = 'anonymous';
+      }
+      img.onload = async () => {
+        try {
+          const max = Math.max(img.width, img.height);
+          const scale = max > SLIDE_BITMAP_MAX ? SLIDE_BITMAP_MAX / max : 1;
+          const rw = Math.max(1, Math.round(img.width * scale));
+          const rh = Math.max(1, Math.round(img.height * scale));
+          if (scale < 1) {
+            try {
+              resolve(await createImageBitmap(img, { resizeWidth: rw, resizeHeight: rh }));
+              return;
+            } catch { /* fall through */ }
+          }
+          resolve(await createImageBitmap(img));
+        } catch { resolve(null); }
+      };
+      img.onerror = () => resolve(null);
+      img.src = key;
+    });
+    SLIDE_BITMAP_CACHE.set(key, pending);
+  }
+  return pending;
+};
+
 const nearbySlideIndexes = (index: number, count: number): number[] => {
   if (count <= 0) return [];
   if (count === 1) return [0];
@@ -497,8 +534,6 @@ const layoutSlideshowToolbar = (width: number, multiPage: boolean, showLang: boo
 
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
-  panelId: string;
-  bootDelayMs?: number;
   products: MetaShopProduct[];
   width: number;
   height: number;
@@ -508,23 +543,25 @@ const ProductSlideshowPanel: React.FC<{
   defaultLang: string;
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = React.memo(({ panelId, bootDelayMs = 0, products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
+}> = React.memo(({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const rootRef = useRef<THREE.Group>(null);
+  const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
   const totalCount = products.length;
-  const bitmapMax = inXR ? 320 : 420;
-  const canvasW = inXR ? 480 : 560;
   const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
   const [page, setPage] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const nearbyRef = useRef(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
+  const nearCheck = useRef(0);
   const playAcc = useRef(0);
   const playingRef = useRef(playing);
   const advanceRef = useRef<(dir: 1 | -1) => void>(() => {});
+  const worldPos = useMemo(() => new THREE.Vector3(), []);
   playingRef.current = playing;
 
   const pageProducts = useMemo(
@@ -577,26 +614,24 @@ const ProductSlideshowPanel: React.FC<{
   useEffect(() => {
     if (!count) return;
     let cancelled = false;
-    const timer = window.setTimeout(() => {
-      const loadSlide = async () => {
-        const keep = [...new Set([index, ...nearbySlideIndexes(index, count)])];
-        for (const i of bitmapRef.current.keys()) {
-          if (!keep.includes(i)) bitmapRef.current.delete(i);
-        }
-        for (const i of keep) {
-          if (bitmapRef.current.has(i)) continue;
-          const url = urls[i];
-          if (!url) { bitmapRef.current.set(i, null); continue; }
-          const bmp = await loadSlideBitmap(url, bitmapMax);
-          if (cancelled) return;
-          bitmapRef.current.set(i, bmp);
-          if (!cancelled) setBitmapTick(t => t + 1);
-        }
-      };
-      loadSlide();
-    }, bootDelayMs);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [index, count, urlsKey, urls, bootDelayMs, bitmapMax]);
+    const loadNearby = async () => {
+      const keep = new Set(nearbySlideIndexes(index, count));
+      for (const i of bitmapRef.current.keys()) {
+        if (!keep.has(i)) bitmapRef.current.delete(i);
+      }
+      await Promise.all([...keep].map(async i => {
+        if (bitmapRef.current.has(i)) return;
+        const url = urls[i];
+        if (!url) { bitmapRef.current.set(i, null); return; }
+        const bmp = await loadSlideBitmap(url);
+        if (cancelled) return;
+        bitmapRef.current.set(i, bmp);
+      }));
+      if (!cancelled) setBitmapTick(t => t + 1);
+    };
+    loadNearby();
+    return () => { cancelled = true; };
+  }, [index, count, urlsKey, urls]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -604,7 +639,7 @@ const ProductSlideshowPanel: React.FC<{
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const cw = canvasW;
+    const cw = 640;
     const ch = Math.round(cw * 0.75);
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
@@ -646,7 +681,7 @@ const ProductSlideshowPanel: React.FC<{
       ctx.direction = 'ltr';
     }
     tex.needsUpdate = true;
-  }, [pageProducts, tex, canvasW]);
+  }, [pageProducts, tex]);
 
   useEffect(() => {
     if (!count) return;
@@ -678,14 +713,25 @@ const ProductSlideshowPanel: React.FC<{
   }, [index, count, page, pageCount, products, totalCount]);
   advanceRef.current = advanceSlide;
 
-  useSlideshowAutoplay(
-    panelId,
-    playing,
-    inXR,
-    totalCount,
-    autoPlaySec,
-    () => advanceRef.current(1),
-  );
+  useFrame((_, dt) => {
+    nearCheck.current += 1;
+    if (nearCheck.current % 24 === 0) {
+      const g = rootRef.current;
+      if (g) {
+        g.getWorldPosition(worldPos);
+        const d = worldPos.distanceTo(camera.position);
+        const next = d < SLIDESHOW_NEAR_DIST;
+        nearbyRef.current = next;
+      }
+    }
+    if (!playingRef.current || totalCount < 2) return;
+    if (!inXR && !nearbyRef.current) return;
+    playAcc.current += dt;
+    if (playAcc.current >= Math.max(2, autoPlaySec)) {
+      playAcc.current = 0;
+      advanceRef.current(1);
+    }
+  });
 
   const prev = () => { playAcc.current = 0; setPlaying(false); advanceSlide(-1); };
   const next = () => { playAcc.current = 0; setPlaying(false); advanceSlide(1); };
@@ -1710,8 +1756,6 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
           return (
             <ProductSlideshowPanel
               key={`ss-${s.face}`}
-              panelId={`${booth.id}-${s.face}`}
-              bootDelayMs={Math.max(0, (index ?? 0) * 120 + (s.face.length * 40))}
               products={slides}
               width={s.w}
               height={s.h}

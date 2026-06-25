@@ -203,9 +203,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
     let cancelled = false;
     (async () => {
       const next: Record<string, MetaShopProduct[]> = {};
-      for (const slug of slideshowSlugs) {
+      await Promise.all(slideshowSlugs.map(async slug => {
         const shell = shops.find(s => s.slug === slug);
-        if (!shell) continue;
+        if (!shell) return;
         try {
           const shellList = shell.products || [];
           const hasSlideImages = shellList.some(
@@ -217,7 +217,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
           if (list.length) next[slug] = list;
         } catch { /* skip */ }
-      }
+      }));
       if (!cancelled) setSlideshowProducts(next);
     })();
     return () => { cancelled = true; };
