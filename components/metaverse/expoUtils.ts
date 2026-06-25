@@ -241,12 +241,6 @@ export const collectSlideshowProductIdsForShop = (
   return { explicitIds: [...explicitIds], hasOpenList };
 };
 
-const trimProductForSlideshow = (p: MetaShopProduct): MetaShopProduct | null => {
-  const img = (p.images || []).find(u => !!String(u || '').trim());
-  if (!img) return null;
-  return { ...p, images: [String(img)] };
-};
-
 export const filterProductsForSlideshowHydrate = (
   products: MetaShopProduct[],
   booths: MetaverseBooth[] | undefined,
@@ -254,16 +248,12 @@ export const filterProductsForSlideshowHydrate = (
 ): MetaShopProduct[] => {
   const active = products.filter(p => p.active !== false);
   const { explicitIds, hasOpenList } = collectSlideshowProductIdsForShop(booths, shopSlug);
-  let list: MetaShopProduct[];
   if (explicitIds.length) {
     const pick = new Set(explicitIds);
-    list = active.filter(p => pick.has(p.id));
-  } else if (!hasOpenList) {
-    return [];
-  } else {
-    list = active;
+    return active.filter(p => pick.has(p.id) && (p.images || []).some(u => !!String(u || '').trim()));
   }
-  return list.map(trimProductForSlideshow).filter((p): p is MetaShopProduct => !!p);
+  if (!hasOpenList) return [];
+  return active.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
 };
 
 export const resolveSlideshowProducts = (

@@ -3,13 +3,14 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useProgress } from '@react-three/drei';
 import { XR, createXRStore, useXR } from '@react-three/xr';
 import * as THREE from 'three';
-import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
+import type { MetaBazaar, MetaExpoPresence, MetaShop, MetaShopProduct, MetaverseHotspot, MetaverseBooth, MetaExpoEvent, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind } from '../../types';
 import { Language } from '../../App';
-import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase } from './expoUtils';
-import { SlideshowProductsProvider } from './SlideshowProductsContext';
+import { bi, EXPO_DEFAULTS, hallDims, resolveExpoLanguages, isRtlExpoLang, expoUi, expoPhrase, collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate } from './expoUtils';
+import { hydrateMetaShop } from '../../services/firebaseService';
 import { makeControlState, resetControlState, type ControlRef, type PlayerPoseRef, type TeleportRef } from './expoControls';
 import { useDeviceCapabilities } from './useDeviceCapabilities';
 import { ExpoScene } from './ExpoScene';
+import { SlideshowActivationManager } from './slideshowActivation';
 import { Player } from './Player';
 import { MobileControls } from './MobileControls';
 import { Minimap } from './Minimap';
@@ -197,6 +198,45 @@ const VrPerformanceTune: React.FC = () => {
 // Full-screen 3D / WebXR exhibition viewer.
 export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initialLang, onExit, onOpenShop, environmentEditMode = false, onSaveExpo }) => {
   const expo = bazaar.expo!;
+  const slideshowSlugs = useMemo(
+    () => collectExpoSlideshowShopSlugs(expo.booths),
+    [expo.booths],
+  );
+  const [slideshowProducts, setSlideshowProducts] = useState<Record<string, MetaShopProduct[]>>({});
+
+  useEffect(() => {
+    if (!slideshowSlugs.length) {
+      setSlideshowProducts({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, MetaShopProduct[]> = {};
+      await Promise.all(slideshowSlugs.map(async slug => {
+        const shell = shops.find(s => s.slug === slug);
+        if (!shell) return;
+        try {
+          const shellList = shell.products || [];
+          const hasSlideImages = shellList.some(
+            p => p.active !== false && (p.images || []).some(u => !!String(u || '').trim()),
+          );
+          const full = shellList.length && hasSlideImages
+            ? shell
+            : await hydrateMetaShop(shell);
+          const list = filterProductsForSlideshowHydrate(full?.products || [], expo.booths, slug);
+          if (list.length) next[slug] = list;
+        } catch { /* skip */ }
+      }));
+      if (!cancelled) setSlideshowProducts(next);
+    })();
+    return () => { cancelled = true; };
+  }, [slideshowSlugs.join('|'), shops]);
+
+  const shopsForScene = useMemo(() => shops.map(s => {
+    const hydrated = slideshowProducts[s.slug];
+    if (hydrated?.length) return { ...s, products: hydrated };
+    return s;
+  }), [shops, slideshowProducts]);
   const caps = useDeviceCapabilities();
   const expoLangs = useMemo(() => resolveExpoLanguages(expo), [expo.languages]);
   const defaultExpoLang = expo.defaultLang && expoLangs.some(l => l.code === expo.defaultLang)
@@ -475,12 +515,12 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       >
         <XR store={store}>
           <EnvironmentCollisionProvider>
+          <SlideshowActivationManager>
           <VrPerformanceTune />
           <Suspense fallback={null}>
-            <SlideshowProductsProvider shops={shops} booths={expo.booths}>
             <ExpoScene
               expo={expo}
-              shops={shops}
+              shops={shopsForScene}
               lang={lang}
               onSelectHotspot={setActive}
               onSelectBooth={onSelectBooth}
@@ -500,7 +540,6 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
               onUpdateEditTransform={onUpdateEditTransform}
               onAddEnvMedia={addEnvMediaAt}
             />
-            </SlideshowProductsProvider>
           </Suspense>
           <ExpoAnalyticsTracker bazaar={bazaar} expo={expo} lang={lang} onTrack={trackExpoEvent} />
           <Player expo={expo} mode={mode} pointerLock={pointerLock} flyMode={flyMode} controlsPaused={controlsPaused} controlRef={controlRef} poseRef={poseRef} teleportRef={teleportRef} />
@@ -512,6 +551,7 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
           {!flyMode && <VrEnvironmentCollision expo={expo} originRef={originRef} eyeOffsetY={seated ? 0.55 : 0} />}
           {mode === 'fp' && <VrFlyModeToggle onToggle={() => setFlyMode(f => !f)} />}
           <VrRig originRef={originRef} spawn={spawn} eyeOffsetY={seated ? 0.55 : 0} />
+          </SlideshowActivationManager>
           </EnvironmentCollisionProvider>
         </XR>
       </Canvas>
