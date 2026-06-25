@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import type { BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET, resolveSlideshowLangConfig } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
@@ -684,6 +684,8 @@ export const ExpoScene: React.FC<Props> = ({
       {/* Brand shelves / booths — business center: current floor only */}
       {supermarketShelves.map((b, i) => {
         const renderBooth = boothForRender(b, i);
+        const linkedShop = renderBooth.shopSlug ? shopBySlug.get(renderBooth.shopSlug) : undefined;
+        const slideshowLang = resolveSlideshowLangConfig(expo, linkedShop);
         return (
           <Booth
             key={b.id}
@@ -699,7 +701,9 @@ export const ExpoScene: React.FC<Props> = ({
             onReserveBooth={onReserveBooth}
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
-            shopProducts={renderBooth.shopSlug ? (shopBySlug.get(renderBooth.shopSlug)?.products || []) : []}
+            shopProducts={linkedShop?.products || []}
+            slideshowDefaultLang={slideshowLang.defaultLang}
+            slideshowLangOptions={slideshowLang.langOptions}
           />
         );
       })}

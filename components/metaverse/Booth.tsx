@@ -29,6 +29,9 @@ interface Props {
   boothSummary?: BoothReservationSummary | null;
   onReserveBooth?: (b: MetaverseBooth) => void;
   shopProducts?: MetaShopProduct[];
+  /** Default language for slideshow product text (expo / shop). */
+  slideshowDefaultLang?: string;
+  slideshowLangOptions?: string[];
 }
 
 // Latin → Persian digits for the booth number on the header sign.
@@ -404,10 +407,46 @@ const HtmlSnapshotPlane: React.FC<{
   ) : null;
 };
 
-const productLabel = (p: MetaShopProduct, lang: Language) =>
-  (p.i18n?.[lang]?.name || p.name || '').trim() || '—';
+const productLabel = (p: MetaShopProduct, code: string) =>
+  (p.i18n?.[code]?.name || p.name || '').trim() || '—';
 
-/** Wall-mounted LCD cycling through linked shop products with prev/next controls. */
+const productDesc = (p: MetaShopProduct, code: string) =>
+  (p.i18n?.[code]?.description || p.description || '').trim();
+
+const isRtlCode = (code: string) => code === 'fa' || code === 'ar';
+
+const wrapCanvasLines = (ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] => {
+  if (!text) return [];
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+  const flush = () => { if (line) { lines.push(line); line = ''; } };
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      flush();
+      if (lines.length >= maxLines) break;
+      line = w;
+    } else line = test;
+    if (lines.length >= maxLines) break;
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  if (!lines.length && text) {
+    let chunk = '';
+    for (const ch of text) {
+      const test = chunk + ch;
+      if (ctx.measureText(test).width > maxW && chunk) {
+        lines.push(chunk);
+        chunk = ch;
+        if (lines.length >= maxLines) break;
+      } else chunk = test;
+    }
+    if (chunk && lines.length < maxLines) lines.push(chunk);
+  }
+  return lines.slice(0, maxLines);
+};
+
+/** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
   products: MetaShopProduct[];
   width: number;
@@ -415,12 +454,15 @@ const ProductSlideshowPanel: React.FC<{
   position: [number, number, number];
   rotation?: [number, number, number];
   autoPlaySec?: number;
-  lang: Language;
+  defaultLang: string;
+  langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
-}> = ({ products, width, height, position, rotation, autoPlaySec = 5, lang, onClick }) => {
+}> = ({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
   const count = products.length;
+  const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
   const [index, setIndex] = useState(0);
-  const paused = useRef(false);
+  const [playing, setPlaying] = useState(true);
+  const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const acc = useRef(0);
   const [tex] = useState(() => {
     const c = document.createElement('canvas');
@@ -441,6 +483,7 @@ const ProductSlideshowPanel: React.FC<{
   useEffect(() => {
     let cancelled = false;
     setIndex(0);
+    setPlaying(true);
     setReadyCount(0);
     cacheRef.current.forEach(c => c.bmp?.close?.());
     cacheRef.current = urls.map(url => ({ url, bmp: null, failed: false }));
@@ -472,50 +515,68 @@ const ProductSlideshowPanel: React.FC<{
     };
   }, [urls.join('|')]);
 
-  const paintSlide = (idx: number) => {
+  useEffect(() => {
+    setDisplayLang(defaultLang || langs[0] || 'fa');
+  }, [defaultLang, langs.join('|')]);
+
+  const paintSlide = (idx: number, code: string) => {
     const canvas = tex.image as HTMLCanvasElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const cw = 1100;
-    const ch = Math.round(cw * 0.62);
+    const ch = Math.round(cw * 0.78);
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#0a0f1a';
     ctx.fillRect(0, 0, cw, ch);
+    const footerH = 168;
+    const imgMaxH = ch - footerH - 16;
     const entry = cacheRef.current[idx];
     const p = products[idx];
     if (entry?.bmp) {
       const ar = entry.bmp.width / entry.bmp.height;
-      let dw = cw * 0.92;
+      let dw = cw * 0.98;
       let dh = dw / ar;
-      if (dh > ch * 0.72) { dh = ch * 0.72; dw = dh * ar; }
+      if (dh > imgMaxH * 0.98) { dh = imgMaxH * 0.98; dw = dh * ar; }
       const dx = (cw - dw) / 2;
-      const dy = (ch * 0.52 - dh) / 2;
+      const dy = Math.max(8, (imgMaxH - dh) / 2);
       ctx.drawImage(entry.bmp, dx, dy, dw, dh);
     }
     if (p) {
-      const name = productLabel(p, lang);
-      ctx.fillStyle = 'rgba(15,23,42,.88)';
-      ctx.fillRect(0, ch - 72, cw, 72);
+      const rtl = isRtlCode(code);
+      const pad = 28;
+      const maxW = cw - pad * 2;
+      ctx.fillStyle = 'rgba(8,12,24,.94)';
+      ctx.fillRect(0, ch - footerH, cw, footerH);
+      const name = productLabel(p, code);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 34px Vazirmatn, Tahoma, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const line = name.length > 42 ? `${name.slice(0, 40)}…` : name;
-      ctx.fillText(line, cw / 2, ch - 36);
+      ctx.font = 'bold 30px Vazirmatn, Tahoma, sans-serif';
+      ctx.textAlign = rtl ? 'right' : 'left';
+      ctx.textBaseline = 'top';
+      ctx.direction = rtl ? 'rtl' : 'ltr';
+      const nameLine = name.length > 48 ? `${name.slice(0, 46)}…` : name;
+      ctx.fillText(nameLine, rtl ? cw - pad : pad, ch - footerH + 14);
+      const desc = productDesc(p, code);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '22px Vazirmatn, Tahoma, sans-serif';
+      const descLines = wrapCanvasLines(ctx, desc, maxW, 3);
+      descLines.forEach((ln, i) => {
+        ctx.fillText(ln, rtl ? cw - pad : pad, ch - footerH + 52 + i * 30);
+      });
+      ctx.direction = 'ltr';
     }
     tex.needsUpdate = true;
   };
 
   useEffect(() => {
     if (!count) return;
-    paintSlide(Math.min(index, count - 1));
-  }, [index, readyCount, count, lang]);
+    paintSlide(Math.min(index, count - 1), displayLang);
+  }, [index, readyCount, count, displayLang]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
   useFrame((_, dt) => {
-    if (!count || count < 2 || paused.current) return;
+    if (!playing || !count || count < 2) return;
     acc.current += dt;
     if (acc.current >= Math.max(2, autoPlaySec)) {
       acc.current = 0;
@@ -523,48 +584,74 @@ const ProductSlideshowPanel: React.FC<{
     }
   });
 
-  const prev = () => { paused.current = true; setIndex(i => (i - 1 + count) % count); acc.current = 0; };
-  const next = () => { paused.current = true; setIndex(i => (i + 1) % count); acc.current = 0; };
+  const prev = () => { setPlaying(false); setIndex(i => (i - 1 + count) % count); acc.current = 0; };
+  const next = () => { setPlaying(false); setIndex(i => (i + 1) % count); acc.current = 0; };
+  const togglePlay = () => { setPlaying(p => !p); acc.current = 0; };
+  const cycleLang = () => {
+    if (langs.length < 2) return;
+    setDisplayLang(prev => langs[(langs.indexOf(prev) + 1) % langs.length] || prev);
+  };
 
-  const ctrlH = 0.28;
+  const ctrlH = 0.34;
   const viewH = height - ctrlH;
+  const bezel = 0.05;
 
   return (
     <group position={position} rotation={rotation}>
-      <RoundedBox args={[width + 0.18, height + 0.18, 0.1]} radius={0.05} smoothness={3} position={[0, 0, -0.06]} castShadow>
-        <meshStandardMaterial color="#0b0e14" metalness={0.55} roughness={0.45} />
+      <RoundedBox args={[width + bezel, height + bezel, 0.035]} radius={0.02} smoothness={2} position={[0, 0, -0.028]} castShadow>
+        <meshStandardMaterial color="#1a1f2e" metalness={0.45} roughness={0.5} />
       </RoundedBox>
-      <mesh position={[0, ctrlH / 2, -0.005]}>
-        <planeGeometry args={[width + 0.02, viewH + 0.02]} />
-        <meshStandardMaterial color="#05070b" emissive="#0a1626" emissiveIntensity={0.55} />
+      <mesh position={[0, ctrlH / 2, -0.008]}>
+        <planeGeometry args={[width + 0.008, viewH + 0.008]} />
+        <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {count > 0 ? (
-        <mesh position={[0, ctrlH / 2, 0.012]} onClick={onClick}>
+        <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
           <planeGeometry args={[width, viewH]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
         </mesh>
       ) : (
         <CanvasLabel
-          text={lang === 'fa' || lang === 'ar' ? 'بدون محصول' : 'No products'}
+          text={displayLang === 'fa' || displayLang === 'ar' ? 'بدون محصول' : 'No products'}
           width={width * 0.7}
           height={0.32}
-          position={[0, ctrlH / 2, 0.02]}
+          position={[0, ctrlH / 2, 0.012]}
           color="#ffffff"
         />
       )}
-      <group position={[0, -height / 2 + ctrlH / 2, 0.03]}>
-        <PdfArrowBtn x={-0.48} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+      <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
+        <PdfArrowBtn x={-0.62} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn x={-0.22} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={count > 1 ? '#0f766e' : '#94a3b8'} />
         <CanvasLabel
           text={count ? `${index + 1}/${count}` : '—'}
-          width={0.55}
-          height={0.2}
-          position={[0, 0, 0]}
+          width={0.42}
+          height={0.18}
+          position={[0.08, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn x={0.48} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn x={0.42} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        {langs.length > 1 && (
+          <group position={[0.72, 0, 0]}>
+            <mesh
+              onClick={(e) => { e.stopPropagation(); cycleLang(); }}
+              onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+              onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+              <planeGeometry args={[0.34, 0.24]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+            <CanvasLabel
+              text={displayLang.toUpperCase()}
+              width={0.28}
+              height={0.18}
+              position={[0, 0, 0.01]}
+              color="#f8fafc"
+              onClick={cycleLang}
+            />
+          </group>
+        )}
       </group>
-      <ThinPanelFrame width={width + 0.02} height={height + 0.02} />
     </group>
   );
 };
@@ -1055,7 +1142,7 @@ const BoothScreen: React.FC<MediaProps> = ({ url, width, height, position, rotat
 // One exhibition booth — a custom GLB when provided, otherwise a polished procedural stand
 // (carpet + accent border, framed back wall, lit header sign, reception desk, logo/banner,
 // and an optional auto-playing LCD screen).
-export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [] }) => {
+export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, onSelectBooth, onTrack, visualStyle = 'exhibition', categoryName, categoryColor, hallDepth = 30, boothSummary, onReserveBooth, shopProducts = [], slideshowDefaultLang = 'fa', slideshowLangOptions = ['fa', 'en'] }) => {
   const accent = booth.color || '#2d4a1a';
   const name = bi(booth.name, lang, expoPhrase(lang, 'booth'));
   const num = index != null ? (lang === 'fa' ? faDigits(index + 1) : String(index + 1)) : null;
@@ -1489,7 +1576,8 @@ export const Booth: React.FC<Props> = ({ booth, index, lang, onSelectHotspot, on
               position={s.position}
               rotation={s.rotation}
               autoPlaySec={slideshow.autoPlaySec ?? 5}
-              lang={lang}
+              defaultLang={slideshowDefaultLang}
+              langOptions={slideshowLangOptions}
               onClick={(e) => {
                 e.stopPropagation();
                 onTrack?.('booth_panel_click', { ...trackBase, targetType: 'product_slideshow', targetId: s.face, side: s.face });

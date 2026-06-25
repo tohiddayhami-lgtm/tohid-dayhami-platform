@@ -233,6 +233,28 @@ export const resolveSlideshowProducts = (
   return list.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
 };
 
+/** Default + available language codes for booth product slideshow text. */
+export const resolveSlideshowLangConfig = (
+  expo: MetaverseExpo | null | undefined,
+  shop?: MetaShop | null,
+): { defaultLang: string; langOptions: string[] } => {
+  const codes = new Set<string>();
+  resolveExpoLanguages(expo).forEach(l => codes.add(l.code.toLowerCase()));
+  (shop?.languages || []).forEach(l => {
+    const c = (l.code || '').trim().toLowerCase();
+    if (c) codes.add(c);
+  });
+  const defaultLang = (shop?.defaultLang || expo?.defaultLang || 'fa').trim().toLowerCase() || 'fa';
+  codes.add(defaultLang);
+  codes.add('fa');
+  codes.add('en');
+  const langOptions = Array.from(codes);
+  return {
+    defaultLang: langOptions.includes(defaultLang) ? defaultLang : (langOptions[0] || 'fa'),
+    langOptions,
+  };
+};
+
 export const collectExpoSlideshowShopSlugs = (booths: MetaverseBooth[] | undefined): string[] => {
   const slugs = new Set<string>();
   for (const b of booths || []) {
