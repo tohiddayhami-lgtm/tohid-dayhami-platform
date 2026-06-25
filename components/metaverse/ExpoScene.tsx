@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import type { ExpoEntranceAd, ExpoDecoration, ExpoEnvironmentMedia, ExpoEnvironmentMediaKind, ExpoRetailCategory, MetaExpoEvent, MetaShop, MetaverseExpo, MetaverseBooth, MetaverseHotspot } from '../../types';
 import type { BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
-import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET, resolveSlideshowLangConfig, boothNeedsSlideshowProducts, normShopSlug } from './expoUtils';
+import { hallDims, EXPO_DEFAULTS, wallTransform, layoutCarpetRects, normalizeBoothLayout, EXPO_CARPET, resolveSlideshowLangConfig, boothNeedsSlideshowProducts } from './expoUtils';
 import { Booth, TexBoundary } from './Booth';
 import { GltfModel } from './GltfModel';
 import { ExpoDecorationMesh } from './ExpoDecoration';
@@ -396,13 +396,7 @@ export const ExpoScene: React.FC<Props> = ({
   const retailCategories = expo.retailCategories || [];
   const categoryById = new Map(retailCategories.map(c => [c.id, c]));
   const categoryIndexById = new Map(retailCategories.map((c, i) => [c.id, i]));
-  const shopBySlug = new Map<string, MetaShop>();
-  for (const s of shops) {
-    if (s.slug) {
-      shopBySlug.set(s.slug, s);
-      shopBySlug.set(s.slug.trim().toLowerCase(), s);
-    }
-  }
+  const shopBySlug = new Map(shops.map(s => [s.slug, s]));
   const boothBySlug = new Map((expo.booths || []).filter(b => b.shopSlug).map(b => [b.shopSlug!, b]));
   const supermarketShelves: MetaverseBooth[] = (() => {
     if (visualStyle !== 'supermarket') return expo.booths || [];
@@ -418,9 +412,8 @@ export const ExpoScene: React.FC<Props> = ({
         return true;
       });
       slugs.forEach(slug => {
-        const shop = shopBySlug.get(slug) || shopBySlug.get(slug.trim().toLowerCase());
-        const existing = boothBySlug.get(slug)
-          ?? (expo.booths || []).find(b => normShopSlug(b.shopSlug) === normShopSlug(slug));
+        const shop = shopBySlug.get(slug);
+        const existing = boothBySlug.get(slug);
         const name = existing?.name || {
           fa: (shop as any)?.i18n?.fa?.title || shop?.name || shop?.title || slug,
           en: shop?.title || shop?.name || slug,
@@ -691,9 +684,7 @@ export const ExpoScene: React.FC<Props> = ({
       {/* Brand shelves / booths — business center: current floor only */}
       {supermarketShelves.map((b, i) => {
         const renderBooth = boothForRender(b, i);
-        const linkedShop = renderBooth.shopSlug
-          ? (shopBySlug.get(renderBooth.shopSlug) || shopBySlug.get(renderBooth.shopSlug.trim().toLowerCase()))
-          : undefined;
+        const linkedShop = renderBooth.shopSlug ? shopBySlug.get(renderBooth.shopSlug) : undefined;
         const slideshowLang = resolveSlideshowLangConfig(expo, linkedShop);
         const needsSlideshowProducts = boothNeedsSlideshowProducts(renderBooth);
         return (
@@ -712,8 +703,6 @@ export const ExpoScene: React.FC<Props> = ({
             categoryName={renderBooth.categoryId ? bi(categoryById.get(renderBooth.categoryId)?.title, lang, '') : undefined}
             categoryColor={renderBooth.categoryId ? categoryById.get(renderBooth.categoryId)?.color : undefined}
             shopProducts={needsSlideshowProducts ? (linkedShop?.products || []) : []}
-            linkedShop={linkedShop}
-            expoBooths={expo.booths}
             slideshowDefaultLang={slideshowLang.defaultLang}
             slideshowLangOptions={slideshowLang.langOptions}
           />

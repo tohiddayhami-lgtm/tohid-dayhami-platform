@@ -1,19 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { MetaShop, MetaShopProduct, MetaverseBooth } from '../../types';
-import { getMetaShopBySlug, loadSlideshowProductsForShop } from '../../services/firebaseService';
-import { collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate, normShopSlug } from './expoUtils';
+import { hydrateMetaShopProgressive } from '../../services/firebaseService';
+import { collectExpoSlideshowShopSlugs, filterProductsForSlideshowHydrate } from './expoUtils';
 
 type Ctx = {
   productsBySlug: Record<string, MetaShopProduct[]>;
   pendingSlugs: Set<string>;
+  ensureShop: (slug: string) => void;
 };
 
 const SlideshowProductsCtx = createContext<Ctx | null>(null);
-
-const findShopShell = (shops: MetaShop[], slug: string): MetaShop | undefined => {
-  const n = normShopSlug(slug);
-  return shops.find(s => normShopSlug(s.slug) === n || s.id === slug);
-};
 
 export const SlideshowProductsProvider: React.FC<{
   shops: MetaShop[];
@@ -26,57 +22,73 @@ export const SlideshowProductsProvider: React.FC<{
   const boothsRef = useRef(booths);
   const loadedRef = useRef<Set<string>>(new Set());
   const inflightRef = useRef<Set<string>>(new Set());
+  const queueRef = useRef<string[]>([]);
+  const drainingRef = useRef(false);
 
   shopsRef.current = shops;
   boothsRef.current = booths;
 
-  const publish = useCallback((slug: string, raw: MetaShopProduct[]) => {
-    const key = normShopSlug(slug);
-    const list = filterProductsForSlideshowHydrate(raw, boothsRef.current, slug);
-    if (!list.length) return;
-    setProductsBySlug(prev => (prev[key] === list ? prev : { ...prev, [key]: list }));
+  const markPending = useCallback((slug: string, on: boolean) => {
+    setPendingSlugs(prev => {
+      const next = new Set(prev);
+      if (on) next.add(slug);
+      else next.delete(slug);
+      return next.size === prev.size ? prev : next;
+    });
   }, []);
 
-  const loadOne = useCallback(async (slug: string) => {
-    const key = normShopSlug(slug);
-    if (!key || loadedRef.current.has(key) || inflightRef.current.has(key)) return;
-    inflightRef.current.add(key);
-    setPendingSlugs(prev => new Set(prev).add(key));
+  const drainQueue = useCallback(async () => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
     try {
-      let shell = findShopShell(shopsRef.current, slug);
-      if (!shell) {
-        try { shell = (await getMetaShopBySlug(slug)) || undefined; } catch { /* skip */ }
+      while (queueRef.current.length) {
+        const slug = queueRef.current.shift()!;
+        if (loadedRef.current.has(slug) || inflightRef.current.has(slug)) continue;
+        const shell = shopsRef.current.find(s => s.slug === slug);
+        if (!shell) {
+          queueRef.current.push(slug);
+          break;
+        }
+        inflightRef.current.add(slug);
+        markPending(slug, true);
+        try {
+          const full = await hydrateMetaShopProgressive(shell);
+          const list = filterProductsForSlideshowHydrate(full?.products || [], boothsRef.current, slug);
+          loadedRef.current.add(slug);
+          if (list.length) {
+            setProductsBySlug(prev => ({ ...prev, [slug]: list }));
+          }
+        } catch { /* try next slug */ }
+        inflightRef.current.delete(slug);
+        markPending(slug, false);
       }
-      if (!shell) return;
-
-      if ((shell.products || []).some(p => (p.images || []).some(Boolean))) {
-        publish(slug, shell.products || []);
-      } else {
-        await loadSlideshowProductsForShop(shell, partial => publish(slug, partial));
-      }
-      loadedRef.current.add(key);
-    } catch { /* retry on next shopsKey change */ }
-    finally {
-      inflightRef.current.delete(key);
-      setPendingSlugs(prev => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+    } finally {
+      drainingRef.current = false;
+      if (queueRef.current.length) void drainQueue();
     }
-  }, [publish]);
+  }, [markPending]);
+
+  const ensureShop = useCallback((slug: string) => {
+    const s = (slug || '').trim();
+    if (!s || loadedRef.current.has(s) || inflightRef.current.has(s)) return;
+    if (!queueRef.current.includes(s)) queueRef.current.push(s);
+    void drainQueue();
+  }, [drainQueue]);
 
   const slugs = useMemo(() => collectExpoSlideshowShopSlugs(booths), [booths]);
   const shopsKey = useMemo(
-    () => shops.map(s => `${normShopSlug(s.slug)}:${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}`).join('|'),
+    () => shops.map(s => `${s.slug}:${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}`).join('|'),
     [shops],
   );
 
   useEffect(() => {
-    slugs.forEach(slug => { void loadOne(slug); });
-  }, [slugs.join('|'), shopsKey, loadOne]);
+    slugs.forEach(ensureShop);
+  }, [slugs.join('|'), shopsKey, ensureShop]);
 
-  const value = useMemo(() => ({ productsBySlug, pendingSlugs }), [productsBySlug, pendingSlugs]);
+  const value = useMemo(
+    () => ({ productsBySlug, pendingSlugs, ensureShop }),
+    [productsBySlug, pendingSlugs, ensureShop],
+  );
 
   return (
     <SlideshowProductsCtx.Provider value={value}>
@@ -90,11 +102,13 @@ export const useSlideshowShopProducts = (shopSlug?: string): {
   loading: boolean;
 } => {
   const ctx = useContext(SlideshowProductsCtx);
-  const key = normShopSlug(shopSlug);
-  if (!ctx || !key) return { products: [], loading: false };
-  const products = ctx.productsBySlug[key] || [];
+  const slug = (shopSlug || '').trim();
+  useEffect(() => {
+    if (slug && ctx) ctx.ensureShop(slug);
+  }, [slug, ctx]);
+  if (!ctx || !slug) return { products: [], loading: false };
   return {
-    products,
-    loading: ctx.pendingSlugs.has(key) && !products.length,
+    products: ctx.productsBySlug[slug] || [],
+    loading: ctx.pendingSlugs.has(slug) && !(ctx.productsBySlug[slug]?.length),
   };
 };
