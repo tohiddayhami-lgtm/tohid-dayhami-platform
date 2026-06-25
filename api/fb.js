@@ -93,6 +93,32 @@ async function queryByField(col, field, value) {
   return doc?.fields ? parseDoc(doc) : null;
 }
 
+async function queryAllByField(col, field, value) {
+  const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: col }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: field },
+            op: 'EQUAL',
+            value: { stringValue: value },
+          },
+        },
+        orderBy: [{ field: { fieldPath: 'chunkIndex' } }],
+      },
+    }),
+  });
+  if (!r.ok) return [];
+  const rows = await r.json();
+  return (rows || [])
+    .map(row => row.document)
+    .filter(Boolean)
+    .map(parseDoc);
+}
+
 // ── Handler ────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -102,7 +128,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { col, doc: docId, orderField, dir, lim, slug, whereField, whereEq } = req.query;
+  const { col, doc: docId, orderField, dir, lim, slug, whereField, whereEq, all } = req.query;
   if (!col) return res.status(400).json({ error: 'col required' });
 
   try {
@@ -120,6 +146,9 @@ export default async function handler(req, res) {
       const field = slug ? 'slug' : whereField;
       const value = slug || whereEq;
       if (field && value) {
+        if (all === '1' || all === 'true') {
+          return res.json(await queryAllByField(col, String(field), String(value)));
+        }
         const one = await queryByField(col, String(field), String(value));
         return res.json(one);
       }

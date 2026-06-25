@@ -122,7 +122,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
             {shop.logo
               ? <img className="msd-logo" src={shop.logo} alt="" />
               : <div className="msd-logo-fallback" style={{ background: accent }}>{(shop.name || '?').charAt(0)}</div>}
-            <div className="msd-type">{shop.type === 'services' ? t.services : shop.type === 'realestate' ? t.realestate : t.products} · {(shop.products || []).length} {t.items}</div>
+            <div className="msd-type">{shop.type === 'services' ? t.services : shop.type === 'realestate' ? t.realestate : t.products} · {(shop.productCount ?? (shop.products || []).length)} {t.items}</div>
             {cats.length > 0 && <div className="msd-tags">{cats.map((c, i) => <span key={i}>{c}</span>)}</div>}
             {sampleNames.length > 0 && <ul className="msd-samples">{sampleNames.map((n, i) => <li key={i}>{n}</li>)}</ul>}
             <span className="msd-enter"><CartIcon s={14} /> {t.enter}</span>

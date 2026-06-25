@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress, fetchMetaShopEvents } from '../services/firebaseService';
+import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShop } from '../services/firebaseService';
+import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaExpoManager } from './MetaExpoManager';
@@ -15,7 +16,7 @@ import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { AppModal } from './AppModal';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
-import { normalizeMetaShopForCloud, metaShopPayloadBytes, META_SHOP_FIRESTORE_MAX_BYTES } from '../utils/metaShopNormalize';
+import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { Language } from '../App';
 
@@ -163,6 +164,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [embedShop, setEmbedShop] = useState<MetaShop | null>(null); // Google Site / iframe embed export modal
   const [embedHeight, setEmbedHeight] = useState(1200);
   const [saving, setSaving] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -460,7 +462,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
 
   const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
-  const startEdit = (s: MetaShop) => { setDraft(JSON.parse(JSON.stringify(s))); setMode('editor'); };
+  const startEdit = (s: MetaShop) => {
+    setDraft(JSON.parse(JSON.stringify({ ...s, products: s.products || [] })));
+    setMode('editor');
+    if (!shopNeedsProductHydration(s) && (s.products || []).length > 0) return;
+    setProductsLoading(true);
+    hydrateMetaShop(s)
+      .then(full => { if (full) setDraft(JSON.parse(JSON.stringify(full))); })
+      .finally(() => setProductsLoading(false));
+  };
 
   const approveReferral = async (ref: MetaShopPropertyReferral) => {
     if (readonly || !onUpdateMetaShopPropertyReferral) return;
@@ -539,18 +549,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const code = (draft.code && draft.code.trim()) ? draft.code.trim().toUpperCase() : uniqueShopCode(metaShops);
     setSaving(true);
     try {
-      const payload = normalizeMetaShopForCloud({ ...draft, slug, code });
-      const bytes = metaShopPayloadBytes(payload);
-      if (bytes > META_SHOP_FIRESTORE_MAX_BYTES) {
-        alert(T
-          ? `حجم فروشگاه (${Math.round(bytes / 1024)}KB) از حد Firebase (${Math.round(META_SHOP_FIRESTORE_MAX_BYTES / 1024)}KB) بیشتر است. تعداد محصولات یا توضیحات را کم کنید.`
-          : `Shop size (${Math.round(bytes / 1024)}KB) exceeds Firebase limit (${Math.round(META_SHOP_FIRESTORE_MAX_BYTES / 1024)}KB). Reduce products or descriptions.`);
-        return;
-      }
-      await onSaveMetaShop(payload);
+      await onSaveMetaShop({ ...draft, slug, code });
       setMode('list'); setDraft(null);
     }
-    catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); }
+    catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      alert(T
+        ? (msg || 'خطا در ذخیره. اگر عکس‌ها را داخل JSON چسبانده‌اید، فقط لینک URL آپلودشده استفاده کنید.')
+        : (msg || 'Save failed. Use uploaded image URLs, not embedded base64 in JSON.'));
+    }
     finally { setSaving(false); }
   };
 
@@ -967,7 +974,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <h4 className="font-bold text-gray-800 text-sm truncate flex items-center gap-1.5">{s.name}<span className="text-[10px] font-mono font-bold bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr">{shopCodeOf(s)}</span></h4>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
-                    <div className="text-[11px] text-gray-400">{(s.products || []).length} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
+                    <div className="text-[11px] text-gray-400">{(s.productCount ?? (s.products || []).length)} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
                     {(s.searchKeywords?.length || 0) > 0 && (
                       <div className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 line-clamp-2" title={formatSearchKeywordsForInput(s.searchKeywords)}>
                         🔍 {formatSearchKeywordsForInput(s.searchKeywords)}
@@ -1313,6 +1320,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           {!readonly && <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
         </div>
       </div>
+
+      {productsLoading && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm px-4 py-3">
+          {T ? 'در حال بارگذاری محصولات…' : 'Loading products…'}
+        </div>
+      )}
 
       {/* Basics */}
       <div className={card}>

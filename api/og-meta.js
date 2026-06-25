@@ -100,6 +100,15 @@ async function loadShopBySlug(slug) {
     const all = await listCollection('metaShops');
     shop = all.find(s => s.slug === slug) || null;
   }
+  if (!shop) return null;
+  if (shop.productChunkCount > 0 && !(shop.products || []).length) {
+    const products = [];
+    for (let i = 0; i < shop.productChunkCount; i++) {
+      const chunk = await getDoc('metaShopChunks', `${shop.id}_${i}`);
+      if (chunk?.products) products.push(...chunk.products);
+    }
+    shop = { ...shop, products };
+  }
   return shop;
 }
 

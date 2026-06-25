@@ -20,6 +20,16 @@ const normalizeOrigin = (origin: unknown) => {
   return name ? { name: String(name), flagUrl: o.flagUrl } : undefined;
 };
 
+/** Keep only remote URLs — base64 blobs blow past Firestore's 1 MiB doc limit. */
+const isStorableImageUrl = (url: unknown): url is string => {
+  const s = String(url || '').trim();
+  if (!s || s.startsWith('data:') || s.startsWith('blob:')) return false;
+  return /^https?:\/\//i.test(s) || s.startsWith('//');
+};
+
+const normalizeImages = (images: unknown): string[] =>
+  Array.isArray(images) ? images.filter(isStorableImageUrl).slice(0, 6) : [];
+
 export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unknown>): MetaShopProduct => {
   const i18n = { ...(p.i18n || {}) };
   if (!i18n.fa) i18n.fa = {};
@@ -39,7 +49,7 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     subcategory: p.subcategory || undefined,
     description: p.description || p.descriptionFa || i18n.fa?.description || undefined,
     sku: p.sku || undefined,
-    images: Array.isArray(p.images) ? p.images.filter(Boolean).slice(0, 6) : [],
+    images: normalizeImages(p.images),
     active: p.active !== false,
     featured: p.featured || undefined,
     outOfStock: p.outOfStock || undefined,

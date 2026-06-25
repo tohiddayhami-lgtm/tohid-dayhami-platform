@@ -45,7 +45,11 @@ const collectAllBazaarShops = (bazaar: MetaBazaar, shopBySlug: Record<string, Me
 
 const matchingProducts = (shop: MetaShop, q: string): MetaShopProduct[] => {
   if (!q || q.length < MIN_SEARCH) return [];
-  return (shop.products || []).filter(p => p.active !== false).filter(p => productMatchesSearch(shop, p, q)).slice(0, 3);
+  const pool = (shop.products || []).filter(p => p.active !== false);
+  const list = pool.length
+    ? pool
+    : (shop.productRefs || []).map(r => ({ id: r.id, name: r.name, sku: r.sku, active: true } as MetaShopProduct));
+  return list.filter(p => productMatchesSearch(shop, p, q)).slice(0, 3);
 };
 
 const bLbl = (c: { fa?: string; en?: string } | undefined, fa: boolean) =>
@@ -297,7 +301,7 @@ export const ExportShopPage: React.FC<Props> = ({
             {paginated.map(shop => {
               const hits = showProductHits ? matchingProducts(shop, qLower) : [];
               const cover = shop.coverImage || shop.logo;
-              const prodCount = (shop.products || []).filter(p => p.active !== false).length;
+              const prodCount = shop.productCount ?? (shop.products || []).filter(p => p.active !== false).length;
 
               return (
                 <article

@@ -7,7 +7,15 @@ import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, Pe
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
-import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
+import { normalizeMetaShopForCloud, metaShopPayloadBytes, META_SHOP_FIRESTORE_MAX_BYTES } from '../utils/metaShopNormalize';
+import {
+  splitProductsIntoChunks,
+  mergeProductChunks,
+  prepareMetaShopShell,
+  stripProductsForList,
+  shopNeedsProductHydration,
+  type MetaShopProductChunk,
+} from '../utils/metaShopChunks';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
 export const firebaseConfig = {
@@ -98,12 +106,17 @@ function _fsFields(fields: Record<string, Record<string, unknown>>): Record<stri
   return o;
 }
 
-const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; orderField?: string; dir?: 'asc' | 'desc' } = {}): Promise<T> => {
+const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; orderField?: string; dir?: 'asc' | 'desc'; whereField?: string; whereEq?: string; all?: boolean } = {}): Promise<T> => {
   const p = new URLSearchParams({ col });
   if (opts.doc) p.set('doc', opts.doc);
   if (opts.slug) p.set('slug', opts.slug);
   if (opts.orderField) p.set('orderField', opts.orderField);
   if (opts.dir) p.set('dir', opts.dir);
+  if (opts.whereField && opts.whereEq) {
+    p.set('whereField', opts.whereField);
+    p.set('whereEq', opts.whereEq);
+    if (opts.all) p.set('all', '1');
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12_000); // 12s timeout — prevents infinite hang
   try {
@@ -1043,10 +1056,85 @@ export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSect
   });
 
 // ── Meta Shops (online catalogs/shops) ──
+const META_SHOP_CHUNKS_COL = 'metaShopChunks';
+
+const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): Promise<MetaShopProductChunk[]> => {
+  const loadOne = async (id: string): Promise<MetaShopProductChunk | null> => {
+    try {
+      const proxy = await checkProxyMode();
+      if (proxy) return await proxyGet<MetaShopProductChunk | null>(META_SHOP_CHUNKS_COL, { doc: id });
+      const snap = await getDoc(doc(db, META_SHOP_CHUNKS_COL, id));
+      return snap.exists() ? (snap.data() as MetaShopProductChunk) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  if (chunkCount && chunkCount > 0) {
+    const chunks: MetaShopProductChunk[] = [];
+    for (let i = 0; i < chunkCount; i++) {
+      const c = await loadOne(`${shopId}_${i}`);
+      if (c) chunks.push(c);
+    }
+    return chunks;
+  }
+
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) {
+      const rows = await proxyGet<MetaShopProductChunk[]>(META_SHOP_CHUNKS_COL, {
+        whereField: 'shopId',
+        whereEq: shopId,
+        all: true,
+      });
+      return Array.isArray(rows) ? rows : [];
+    }
+    const q = query(collection(db, META_SHOP_CHUNKS_COL), where('shopId', '==', shopId));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data() as MetaShopProductChunk);
+  } catch {
+    return [];
+  }
+};
+
+const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
+  const existing = await loadMetaShopProductChunks(shopId);
+  const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
+  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_CHUNKS_COL, c.id)));
+  if (keepCount === 0 && !existing.length) {
+    for (let i = 0; i < 64; i++) {
+      try { await deleteDocCloud(META_SHOP_CHUNKS_COL, `${shopId}_${i}`); } catch { /* already gone */ }
+    }
+  }
+};
+
+export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop | null> => {
+  if (!shop) return null;
+  if (!shopNeedsProductHydration(shop)) {
+    return { ...shop, products: shop.products || [] };
+  }
+  const chunks = await loadMetaShopProductChunks(shop.id, shop.productChunkCount);
+  return { ...shop, products: mergeProductChunks(chunks) };
+};
+
 export const saveMetaShopToCloud = async (shop: MetaShop) => {
-    const payload = normalizeMetaShopForCloud(shop);
-    await setDocCloud('metaShops', payload.id, payload);
-    logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${payload.name} ذخیره شد`, 'Master', payload.id);
+  const normalized = normalizeMetaShopForCloud(shop);
+  const products = normalized.products || [];
+  const chunks = splitProductsIntoChunks(normalized.id, products);
+  const shell = prepareMetaShopShell(normalized, products, chunks.length);
+  const shellBytes = metaShopPayloadBytes(shell);
+  if (shellBytes > META_SHOP_FIRESTORE_MAX_BYTES) {
+    throw new Error(
+      `Shop metadata is ${Math.round(shellBytes / 1024)}KB (Firebase max ${Math.round(META_SHOP_FIRESTORE_MAX_BYTES / 1024)}KB). ` +
+      'Remove large text from pages or use image URLs instead of embedded files.',
+    );
+  }
+  await deleteMetaShopProductChunks(normalized.id, chunks.length);
+  if (chunks.length) {
+    await Promise.all(chunks.map(chunk => setDocCloud(META_SHOP_CHUNKS_COL, chunk.id, chunk)));
+  }
+  await setDocCloud('metaShops', shell.id, shell);
+  logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shell.name} ذخیره شد`, 'Master', shell.id);
 };
 export const deleteMetaShopFromCloud = async (id: string) => {
     const proxy = await checkProxyMode();
@@ -1057,11 +1145,14 @@ export const deleteMetaShopFromCloud = async (id: string) => {
         const snap = await getDoc(doc(db, 'metaShops', id));
         data = snap.exists() ? snap.data() : null;
     }
+    await deleteMetaShopProductChunks(id);
     await deleteDocCloud('metaShops', id);
     logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
 };
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
-  subscribeCollection<MetaShop>('metaShops', callback, {
+  subscribeCollection<MetaShop>('metaShops', items => {
+    callback(items.map(s => stripProductsForList(s)));
+  }, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     intervalMs: 8_000,
   });
@@ -1069,14 +1160,15 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
 export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> => {
     try {
         const proxy = await checkProxyMode();
+        let shop: MetaShop | null = null;
         if (proxy) {
-            const shop = await proxyGet<MetaShop | null>('metaShops', { slug });
-            return shop || null;
+            shop = await proxyGet<MetaShop | null>('metaShops', { slug });
+        } else {
+            const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
         }
-        const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) return null;
-        return snap.docs[0].data() as MetaShop;
+        return hydrateMetaShop(shop);
     } catch { return null; }
 };
 

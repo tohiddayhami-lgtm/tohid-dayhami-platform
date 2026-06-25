@@ -1238,6 +1238,12 @@ export interface MetaShopRealEstate {
   [key: string]: unknown;
 }
 
+export interface MetaShopProductRef {
+  id: string;
+  name: string;
+  sku?: string;
+}
+
 export interface MetaShop {
   id: string;
   slug: string;            // public link key (?shop=<slug>)
@@ -1286,6 +1292,11 @@ export interface MetaShop {
   groupLabels?: Record<string, Record<string, string>>; // alias for groupI18n in imported JSON
   hidePrices?: boolean;    // hide ALL product prices shop-wide → «قابل مذاکره»; orders still capture quantities for a later quote
   hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
+  productCount?: number;
+  /** Number of metaShopChunks docs holding products (0 = legacy inline products array). */
+  productChunkCount?: number;
+  /** Lightweight product list for admin/search without loading chunks. */
+  productRefs?: MetaShopProductRef[];
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   discounts?: MetaShopDiscount[]; // discount codes

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { NewsArticle, ServiceOption, MetaShop } from '../types';
 import { IconSearch, IconNewspaper, IconBriefcase, IconTag } from './Icons';
 import { shopCodeOf } from './shopCode';
-import { shopSearchHaystack, textMatchesSearchQuery, buildProductSearchIndex, matchesNormalizedHaystack } from '../utils/metaShopSearch';
+import { shopSearchHaystack, textMatchesSearchQuery, buildProductSearchIndex, matchesNormalizedHaystack, normalizeSearchText, keywordsHaystack } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
 interface Props {
@@ -69,8 +69,17 @@ export const GlobalSearch: React.FC<Props> = ({ news, services, shops, lang, onO
   const productIndex = useMemo(() => {
     const rows: { shop: MetaShop; hay: string; product: import('../types').MetaShopProduct }[] = [];
     shops.filter(s => s.isActive !== false).forEach(s => {
-      const index = buildProductSearchIndex(s, (s.products || []).filter(p => p.active !== false));
-      index.forEach(e => rows.push({ shop: s, hay: e.hay, product: e.product }));
+      const products = (s.products || []).filter(p => p.active !== false);
+      if (products.length) {
+        buildProductSearchIndex(s, products).forEach(e => rows.push({ shop: s, hay: e.hay, product: e.product }));
+      } else if (s.productRefs?.length) {
+        const shopHay = normalizeSearchText(keywordsHaystack(s.searchKeywords));
+        s.productRefs.forEach(ref => {
+          const stub = { id: ref.id, name: ref.name, sku: ref.sku, active: true } as import('../types').MetaShopProduct;
+          const hay = normalizeSearchText(`${ref.name} ${ref.sku || ''} ${shopHay}`);
+          rows.push({ shop: s, hay, product: stub });
+        });
+      }
     });
     return rows;
   }, [shops]);

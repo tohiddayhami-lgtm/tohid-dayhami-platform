@@ -25,7 +25,7 @@ import {
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
-  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug,
+  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug, hydrateMetaShop,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
@@ -33,8 +33,8 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
-import { MetaShopView } from './components/MetaShopView';
-import type { MetaShopReferralSubmit, MetaShopSupplierSubmit } from './components/MetaShopView';
+import { shopNeedsProductHydration } from './utils/metaShopChunks';
+import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
 import { MetaShopDirectory } from './components/MetaShopDirectory';
@@ -1316,12 +1316,24 @@ const App: React.FC = () => {
   useEffect(() => {
     if (view !== 'metashop' || !shopSlug) return;
     const local = metaShops.find(s => s.slug === shopSlug);
-    if (local) {
-      setPublicShop(local);
-      setShopLoading(false);
-      setShopResolved(true);
-      shopFetchSlugRef.current = shopSlug;
+    if (!local) return;
+    shopFetchSlugRef.current = shopSlug;
+    if (shopNeedsProductHydration(local)) {
+      let cancelled = false;
+      setShopLoading(true);
+      setShopResolved(false);
+      hydrateMetaShop(local).then(s => {
+        if (!cancelled) {
+          setPublicShop(s);
+          setShopLoading(false);
+          setShopResolved(true);
+        }
+      });
+      return () => { cancelled = true; };
     }
+    setPublicShop(local);
+    setShopLoading(false);
+    setShopResolved(true);
   }, [view, shopSlug, metaShops]);
 
   // ── Meta Shop: fetch single shop by slug (don't wait for full collection) ──
