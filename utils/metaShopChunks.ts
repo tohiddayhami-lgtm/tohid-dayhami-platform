@@ -78,10 +78,7 @@ export function prepareMetaShopShell(
 }
 
 export function shopNeedsProductHydration(shop: MetaShop): boolean {
-  if ((shop.products || []).length) return false;
-  if ((shop.productChunkCount || 0) > 0) return true;
-  if ((shop.productCount || 0) > 0) return true;
-  return false;
+  return !(shop.products || []).length;
 }
 
 export { META_SHOP_FIRESTORE_MAX_BYTES };
