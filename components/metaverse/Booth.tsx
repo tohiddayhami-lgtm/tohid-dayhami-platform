@@ -100,19 +100,17 @@ const getPdfjs = () => {
   return pdfjsPromise;
 };
 
-const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; compact?: boolean }> = ({ x, glyph, onClick, color, compact }) => {
-  const w = compact ? 0.28 : 0.34;
-  const h = compact ? 0.2 : 0.26;
+const PdfArrowBtn: React.FC<{ x: number; glyph: string; onClick: () => void; color: string; btnW?: number; btnH?: number }> = ({ x, glyph, onClick, color, btnW = 0.34, btnH = 0.26 }) => {
   const fire = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onClick(); };
   return (
   <group position={[x, 0, 0]}>
     <mesh onClick={fire}
       onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
       onPointerOut={() => { document.body.style.cursor = 'auto'; }}>
-      <planeGeometry args={[w, h]} />
+      <planeGeometry args={[btnW, btnH]} />
       <meshStandardMaterial color={color} />
     </mesh>
-    <CanvasLabel text={glyph} width={w - 0.04} height={h - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
+    <CanvasLabel text={glyph} width={btnW - 0.04} height={btnH - 0.04} position={[0, 0, 0.01]} color="#fff" onClick={onClick} />
   </group>
   );
 };
@@ -495,6 +493,45 @@ const nearbySlideIndexes = (index: number, count: number): number[] => {
   return [...set];
 };
 
+type SlideshowToolbarLayout = {
+  playX: number;
+  pagePrevX?: number;
+  slidePrevX: number;
+  slideNextX: number;
+  pageNextX?: number;
+  langX?: number;
+  counterW: number;
+  btnW: number;
+};
+
+/** Fit slideshow transport buttons inside panel width — scales down on narrow walls. */
+const layoutSlideshowToolbar = (width: number, multiPage: boolean, showLang: boolean): SlideshowToolbarLayout => {
+  const avail = Math.max(1.1, width * 0.9);
+  const leftBtns = multiPage ? 3 : 2;
+  const rightBtns = 1 + (multiPage ? 1 : 0) + (showLang ? 1 : 0);
+  const baseBtn = 0.26;
+  const baseCounter = multiPage ? 0.46 : 0.34;
+  const basePad = 0.05;
+  const rawSpan = baseCounter + (leftBtns + rightBtns) * (baseBtn + basePad);
+  const scale = Math.min(1, avail / rawSpan);
+  const btnW = Math.max(0.2, baseBtn * scale);
+  const counterW = Math.max(0.28, baseCounter * scale);
+  const pad = Math.max(0.035, basePad * scale);
+  const step = btnW + pad;
+  const slidePrevX = -(counterW / 2 + pad + btnW / 2);
+  const slideNextX = counterW / 2 + pad + btnW / 2;
+  if (multiPage) {
+    const pagePrevX = slidePrevX - step;
+    const playX = pagePrevX - step;
+    const pageNextX = slideNextX + step;
+    const langX = showLang ? pageNextX + step : undefined;
+    return { playX, pagePrevX, slidePrevX, slideNextX, pageNextX, langX, counterW, btnW };
+  }
+  const playX = slidePrevX - step;
+  const langX = showLang ? slideNextX + step : undefined;
+  return { playX, slidePrevX, slideNextX, langX, counterW, btnW };
+};
+
 /** Wall-mounted LCD cycling through linked shop products with prev/next/play and language. */
 const ProductSlideshowPanel: React.FC<{
   products: MetaShopProduct[];
@@ -722,16 +759,11 @@ const ProductSlideshowPanel: React.FC<{
   const ctrlH = 0.34;
   const viewH = height - ctrlH;
   const bezel = 0.05;
-  const btnHalf = 0.14;
-  const counterHalf = multiPage ? 0.26 : 0.2;
-  const gap = Math.min(0.42, Math.max(0.34, width * 0.11));
-  const step = gap + btnHalf * 2;
-  const slidePrevX = -(counterHalf + step);
-  const slideNextX = counterHalf + step;
-  const pagePrevX = slidePrevX - step;
-  const pageNextX = slideNextX + step;
-  const playX = (multiPage ? pagePrevX : slidePrevX) - step;
-  const langX = (multiPage ? pageNextX : slideNextX) + step;
+  const toolbar = useMemo(
+    () => layoutSlideshowToolbar(width, multiPage, showLang),
+    [width, multiPage, showLang],
+  );
+  const btnH = Math.max(0.16, toolbar.btnW * 0.72);
   const counterLabel = totalCount
     ? (multiPage ? `${globalIndex + 1}/${totalCount} · ${page + 1}/${pageCount}` : `${globalIndex + 1}/${totalCount}`)
     : '—';
@@ -760,37 +792,37 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn compact x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
-        {multiPage && (
-          <PdfArrowBtn compact x={pagePrevX} glyph="«" onClick={pagePrev} color="#475569" />
+        <PdfArrowBtn x={toolbar.playX} btnW={toolbar.btnW} btnH={btnH} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        {multiPage && toolbar.pagePrevX != null && (
+          <PdfArrowBtn x={toolbar.pagePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="«" onClick={pagePrev} color="#475569" />
         )}
-        <PdfArrowBtn compact x={slidePrevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn x={toolbar.slidePrevX} btnW={toolbar.btnW} btnH={btnH} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
           text={counterLabel}
-          width={multiPage ? 0.48 : 0.36}
-          height={0.16}
+          width={toolbar.counterW}
+          height={btnH}
           position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn compact x={slideNextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
-        {multiPage && (
-          <PdfArrowBtn compact x={pageNextX} glyph="»" onClick={pageNext} color="#475569" />
+        <PdfArrowBtn x={toolbar.slideNextX} btnW={toolbar.btnW} btnH={btnH} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
+        {multiPage && toolbar.pageNextX != null && (
+          <PdfArrowBtn x={toolbar.pageNextX} btnW={toolbar.btnW} btnH={btnH} glyph="»" onClick={pageNext} color="#475569" />
         )}
-        {showLang && (
-          <group position={[langX, 0, 0]}>
+        {showLang && toolbar.langX != null && (
+          <group position={[toolbar.langX, 0, 0]}>
             <mesh
               onClick={(e) => { e.stopPropagation(); cycleLang(); }}
               onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
               onPointerOut={() => { document.body.style.cursor = 'auto'; }}
             >
-              <planeGeometry args={[0.3, 0.2]} />
+              <planeGeometry args={[toolbar.btnW, btnH]} />
               <meshStandardMaterial color="#334155" />
             </mesh>
             <CanvasLabel
               text={displayLang.toUpperCase()}
-              width={0.24}
-              height={0.15}
+              width={toolbar.btnW - 0.04}
+              height={btnH - 0.04}
               position={[0, 0, 0.01]}
               color="#f8fafc"
               onClick={cycleLang}
