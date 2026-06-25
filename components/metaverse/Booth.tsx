@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { BoothTier, ExpoVisualStyle, MetaExpoEvent, MetaShopProduct, MetaverseBooth, MetaverseHotspot } from '../../types';
 import { boothIsReservable, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { Language } from '../../App';
-import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts } from './expoUtils';
+import { bi, expoPhrase, isVideoUrl, isVideoFile, isGif, isPdfFile, isHtmlFile, screenEmbed, boothEntranceFacingYaw, resolveSlideshowProducts, SLIDESHOW_PAGE_SIZE, slideshowPageCount, slideshowPageSlice } from './expoUtils';
 import { Hotspot } from './Hotspot';
 import { GltfModel } from './GltfModel';
 import { BoothMeetBadge } from './BoothMeetBadge';
@@ -487,13 +487,25 @@ const ProductSlideshowPanel: React.FC<{
   langOptions: string[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }> = ({ products, width, height, position, rotation, autoPlaySec = 5, defaultLang, langOptions, onClick }) => {
-  const count = products.length;
+  const totalCount = products.length;
+  const pageCount = slideshowPageCount(totalCount);
   const langs = langOptions.length ? langOptions : [defaultLang || 'fa'];
+  const [page, setPage] = useState(0);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [displayLang, setDisplayLang] = useState(defaultLang || langs[0] || 'fa');
   const [bitmapTick, setBitmapTick] = useState(0);
   const bitmapRef = useRef<Map<number, ImageBitmap | null>>(new Map());
+
+  const pageProducts = useMemo(
+    () => slideshowPageSlice(products, page),
+    [products, page],
+  );
+  const count = pageProducts.length;
+  const globalIndex = page * SLIDESHOW_PAGE_SIZE + index;
+  const canNavigate = totalCount > 1;
+  const multiPage = pageCount > 1;
+
   const [tex] = useState(() => {
     const c = document.createElement('canvas');
     c.width = 8; c.height = 8;
@@ -504,17 +516,26 @@ const ProductSlideshowPanel: React.FC<{
   });
 
   const urls = useMemo(
-    () => products.map(p => String((p.images || []).find(Boolean) || '')),
-    [products],
+    () => pageProducts.map(p => String((p.images || []).find(Boolean) || '')),
+    [pageProducts],
   );
-  const urlsKey = urls.join('|');
+  const urlsKey = `${page}|${products.map(p => p.id).join(',')}`;
+
+  const productsKey = useMemo(() => products.map(p => p.id).join(','), [products]);
 
   useEffect(() => {
+    setPage(0);
     setIndex(0);
     setPlaying(true);
     bitmapRef.current.clear();
     setBitmapTick(t => t + 1);
-  }, [urlsKey]);
+  }, [productsKey]);
+
+  useEffect(() => {
+    setIndex(i => Math.min(i, Math.max(0, count - 1)));
+    bitmapRef.current.clear();
+    setBitmapTick(t => t + 1);
+  }, [page, count]);
 
   useEffect(() => {
     setDisplayLang(defaultLang || langs[0] || 'fa');
@@ -557,7 +578,7 @@ const ProductSlideshowPanel: React.FC<{
     const footerH = 148;
     const imgMaxH = ch - footerH - 12;
     const bmp = bitmapRef.current.get(idx) ?? null;
-    const p = products[idx];
+    const p = pageProducts[idx];
     if (bmp) {
       const ar = bmp.width / bmp.height;
       let dw = cw * 0.98;
@@ -590,24 +611,56 @@ const ProductSlideshowPanel: React.FC<{
       ctx.direction = 'ltr';
     }
     tex.needsUpdate = true;
-  }, [products, tex]);
+  }, [pageProducts, tex]);
 
   useEffect(() => {
     if (!count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
-  useEffect(() => {
-    if (!playing || count < 2) return;
-    const ms = Math.max(2000, autoPlaySec * 1000);
-    const id = window.setInterval(() => setIndex(i => (i + 1) % count), ms);
-    return () => window.clearInterval(id);
-  }, [playing, count, autoPlaySec]);
+  const advanceSlide = useCallback((dir: 1 | -1) => {
+    if (!totalCount) return;
+    if (dir === 1) {
+      if (index < count - 1) setIndex(i => i + 1);
+      else if (page < pageCount - 1) { setPage(p => p + 1); setIndex(0); }
+      else { setPage(0); setIndex(0); }
+      return;
+    }
+    if (index > 0) setIndex(i => i - 1);
+    else if (page > 0) {
+      const prevPage = page - 1;
+      const prevLen = slideshowPageSlice(products, prevPage).length;
+      setPage(prevPage);
+      setIndex(Math.max(0, prevLen - 1));
+    } else {
+      const lastPage = pageCount - 1;
+      const lastLen = slideshowPageSlice(products, lastPage).length;
+      setPage(lastPage);
+      setIndex(Math.max(0, lastLen - 1));
+    }
+  }, [index, count, page, pageCount, products, totalCount]);
 
-  const prev = () => { setPlaying(false); setIndex(i => (i - 1 + count) % count); };
-  const next = () => { setPlaying(false); setIndex(i => (i + 1) % count); };
+  useEffect(() => {
+    if (!playing || totalCount < 2) return;
+    const ms = Math.max(2000, autoPlaySec * 1000);
+    const id = window.setInterval(() => advanceSlide(1), ms);
+    return () => window.clearInterval(id);
+  }, [playing, totalCount, autoPlaySec, advanceSlide]);
+
+  const prev = () => { setPlaying(false); advanceSlide(-1); };
+  const next = () => { setPlaying(false); advanceSlide(1); };
+  const pagePrev = () => {
+    setPlaying(false);
+    setPage(p => (p - 1 + pageCount) % pageCount);
+    setIndex(0);
+  };
+  const pageNext = () => {
+    setPlaying(false);
+    setPage(p => (p + 1) % pageCount);
+    setIndex(0);
+  };
   const togglePlay = () => setPlaying(p => !p);
   const cycleLang = () => {
     if (langs.length < 2) return;
@@ -632,7 +685,7 @@ const ProductSlideshowPanel: React.FC<{
         <planeGeometry args={[width + 0.008, viewH + 0.008]} />
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
-      {count > 0 ? (
+      {totalCount > 0 ? (
         <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
           <planeGeometry args={[width, viewH]} />
           <meshBasicMaterial map={tex} toneMapped={false} />
@@ -647,17 +700,31 @@ const ProductSlideshowPanel: React.FC<{
         />
       )}
       <group position={[0, -height / 2 + ctrlH / 2, 0.022]}>
-        <PdfArrowBtn x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={count > 1 ? '#0f766e' : '#94a3b8'} />
-        <PdfArrowBtn x={prevX} glyph="‹" onClick={prev} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        {multiPage && (
+          <group position={[0, 0.15, 0]}>
+            <PdfArrowBtn x={-0.28} glyph="«" onClick={pagePrev} color="#475569" />
+            <CanvasLabel
+              text={`${page + 1}/${pageCount}`}
+              width={0.34}
+              height={0.15}
+              position={[0, 0, 0]}
+              bg="rgba(30,41,59,.9)"
+              color="#e2e8f0"
+            />
+            <PdfArrowBtn x={0.28} glyph="»" onClick={pageNext} color="#475569" />
+          </group>
+        )}
+        <PdfArrowBtn x={playX} glyph={playing ? '⏸' : '▶'} onClick={togglePlay} color={canNavigate ? '#0f766e' : '#94a3b8'} />
+        <PdfArrowBtn x={prevX} glyph="‹" onClick={prev} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         <CanvasLabel
-          text={count ? `${index + 1}/${count}` : '—'}
-          width={0.38}
+          text={totalCount ? `${globalIndex + 1}/${totalCount}` : '—'}
+          width={0.42}
           height={0.18}
           position={[0, 0, 0]}
           bg="rgba(15,23,42,.92)"
           color="#ffffff"
         />
-        <PdfArrowBtn x={nextX} glyph="›" onClick={next} color={count > 1 ? '#1f2937' : '#94a3b8'} />
+        <PdfArrowBtn x={nextX} glyph="›" onClick={next} color={canNavigate ? '#1f2937' : '#94a3b8'} />
         {langs.length > 1 && (
           <group position={[langX, 0, 0]}>
             <mesh

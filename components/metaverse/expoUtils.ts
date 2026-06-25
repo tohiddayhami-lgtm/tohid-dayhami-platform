@@ -220,8 +220,8 @@ export const boothSlideshowFaces = (booth: MetaverseBooth): BoothFace[] =>
 export const boothNeedsSlideshowProducts = (booth: MetaverseBooth): boolean =>
   boothSlideshowFaces(booth).length > 0 && !!booth.shopSlug;
 
-/** Cap auto slideshow lists so large shops do not load thousands of textures. */
-export const SLIDESHOW_MAX_AUTO_PRODUCTS = 32;
+/** Products per slideshow page — images load lazily per page only. */
+export const SLIDESHOW_PAGE_SIZE = 32;
 
 /** Product ids explicitly referenced on booth slideshow configs for a shop slug. */
 export const collectSlideshowProductIdsForShop = (
@@ -250,10 +250,10 @@ export const filterProductsForSlideshowHydrate = (
   const { explicitIds, hasOpenList } = collectSlideshowProductIdsForShop(booths, shopSlug);
   if (explicitIds.length) {
     const pick = new Set(explicitIds);
-    return active.filter(p => pick.has(p.id));
+    return active.filter(p => pick.has(p.id) && (p.images || []).some(u => !!String(u || '').trim()));
   }
   if (!hasOpenList) return [];
-  return active.slice(0, SLIDESHOW_MAX_AUTO_PRODUCTS);
+  return active.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
 };
 
 export const resolveSlideshowProducts = (
@@ -265,10 +265,20 @@ export const resolveSlideshowProducts = (
   if (ids?.length) {
     const pick = new Set(ids);
     list = list.filter(p => pick.has(p.id));
-  } else if (list.length > SLIDESHOW_MAX_AUTO_PRODUCTS) {
-    list = list.slice(0, SLIDESHOW_MAX_AUTO_PRODUCTS);
   }
   return list.filter(p => (p.images || []).some(u => !!String(u || '').trim()));
+};
+
+export const slideshowPageCount = (total: number, pageSize = SLIDESHOW_PAGE_SIZE) =>
+  Math.max(1, Math.ceil(Math.max(0, total) / pageSize));
+
+export const slideshowPageSlice = (
+  products: MetaShopProduct[],
+  page: number,
+  pageSize = SLIDESHOW_PAGE_SIZE,
+) => {
+  const start = Math.max(0, page) * pageSize;
+  return products.slice(start, start + pageSize);
 };
 
 /** Default + available language codes for booth product slideshow text. */
