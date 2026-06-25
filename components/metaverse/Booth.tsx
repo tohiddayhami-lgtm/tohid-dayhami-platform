@@ -565,6 +565,7 @@ const ProductSlideshowPanel: React.FC<{
   const { camera } = useThree();
   const inXR = useXR(s => !!s.session);
   const active = useSlideshowActivation(panelId, rootRef);
+  const live = !inXR || active;
   const bitmapMax = slideshowBitmapMaxPx(inXR);
   const canvasW = slideshowCanvasWidth(inXR);
   const totalCount = products.length;
@@ -632,15 +633,15 @@ const ProductSlideshowPanel: React.FC<{
   }, [defaultLang, langs.join('|')]);
 
   useEffect(() => {
-    if (active) {
-      setBitmapTick(t => t + 1);
+    if (!live) {
+      bitmapRef.current.clear();
       return;
     }
-    bitmapRef.current.clear();
-  }, [active]);
+    setBitmapTick(t => t + 1);
+  }, [live]);
 
   useEffect(() => {
-    if (!active || !count) return;
+    if (!live || !count) return;
     let cancelled = false;
     const loadNearby = async () => {
       const keep = new Set(slidePrefetchIndexes(index, count, inXR));
@@ -659,7 +660,7 @@ const ProductSlideshowPanel: React.FC<{
     };
     loadNearby();
     return () => { cancelled = true; };
-  }, [index, count, urlsKey, urls, active, bitmapMax, inXR]);
+  }, [index, count, urlsKey, urls, live, bitmapMax, inXR]);
 
   useEffect(() => () => { bitmapRef.current.clear(); }, [urlsKey]);
 
@@ -712,9 +713,9 @@ const ProductSlideshowPanel: React.FC<{
   }, [pageProducts, tex, canvasW]);
 
   useEffect(() => {
-    if (!active || !count) return;
+    if (!live || !count) return;
     paintSlide(Math.min(index, count - 1), displayLang);
-  }, [index, count, displayLang, bitmapTick, paintSlide, page, active]);
+  }, [index, count, displayLang, bitmapTick, paintSlide, page, live]);
 
   useEffect(() => () => tex.dispose(), [tex]);
 
@@ -742,7 +743,7 @@ const ProductSlideshowPanel: React.FC<{
   advanceRef.current = advanceSlide;
 
   useFrame((_, dt) => {
-    if (!active) return;
+    if (!live) return;
     nearCheck.current += 1;
     if (nearCheck.current % 24 === 0) {
       const g = rootRef.current;
@@ -806,7 +807,7 @@ const ProductSlideshowPanel: React.FC<{
         <meshStandardMaterial color="#030712" emissive="#0a1626" emissiveIntensity={0.35} />
       </mesh>
       {totalCount > 0 ? (
-        active ? (
+        live ? (
           <mesh position={[0, ctrlH / 2, 0.006]} onClick={onClick}>
             <planeGeometry args={[width, viewH]} />
             <meshBasicMaterial map={tex} toneMapped={false} />

@@ -3,10 +3,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useXR } from '@react-three/xr';
 import * as THREE from 'three';
 
-const VR_MAX_ACTIVE = 5;
-const DESKTOP_MAX_ACTIVE = 16;
-const ACTIVE_DIST_VR = 32;
-const ACTIVE_DIST_DESKTOP = 36;
+const VR_MAX_ACTIVE = 6;
+const ACTIVE_DIST_VR = 34;
 
 type Entry = {
   id: string;
@@ -33,7 +31,7 @@ class SlideshowRegistry {
 
 const SlideshowRegistryCtx = createContext<SlideshowRegistry | null>(null);
 
-/** One useFrame loop picks the nearest slideshow panels to keep live (VRAM-safe in VR). */
+/** VR only: keep the nearest slideshow panels live to avoid Quest GPU memory exhaustion. */
 export const SlideshowActivationManager: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const registry = useMemo(() => new SlideshowRegistry(), []);
   const { camera } = useThree();
@@ -42,12 +40,11 @@ export const SlideshowActivationManager: React.FC<{ children?: React.ReactNode }
   const worldPos = useMemo(() => new THREE.Vector3(), []);
 
   useFrame(() => {
+    if (!inXR) return;
     tick.current += 1;
-    if (tick.current % (inXR ? 8 : 20) !== 0) return;
+    if (tick.current % 6 !== 0) return;
     const items = registry.list();
     if (!items.length) return;
-    const maxDist = inXR ? ACTIVE_DIST_VR : ACTIVE_DIST_DESKTOP;
-    const maxActive = inXR ? VR_MAX_ACTIVE : DESKTOP_MAX_ACTIVE;
     for (const e of items) {
       const obj = e.ref.current;
       if (!obj) { e.dist = Infinity; continue; }
@@ -56,7 +53,7 @@ export const SlideshowActivationManager: React.FC<{ children?: React.ReactNode }
     }
     const sorted = [...items].sort((a, b) => a.dist - b.dist);
     const activeIds = new Set(
-      sorted.filter((e, i) => e.dist < maxDist && i < maxActive).map(e => e.id),
+      sorted.filter((e, i) => e.dist < ACTIVE_DIST_VR && i < VR_MAX_ACTIVE).map(e => e.id),
     );
     for (const e of items) {
       e.setActive(activeIds.has(e.id));
@@ -71,16 +68,25 @@ export const SlideshowActivationManager: React.FC<{ children?: React.ReactNode }
 };
 
 export const useSlideshowActivation = (id: string, ref: React.RefObject<THREE.Object3D | null>) => {
+  const inXR = useXR(s => !!s.session);
   const registry = useContext(SlideshowRegistryCtx);
-  const [active, setActive] = useState(() => !registry);
+  const [vrActive, setVrActive] = useState(true);
 
   useEffect(() => {
-    if (!registry || !id) return;
-    registry.register(id, ref, setActive);
-    return () => registry.unregister(id);
-  }, [registry, id, ref]);
+    if (!inXR || !registry || !id) {
+      setVrActive(true);
+      return;
+    }
+    setVrActive(false);
+    registry.register(id, ref, setVrActive);
+    return () => {
+      registry.unregister(id);
+      setVrActive(true);
+    };
+  }, [inXR, registry, id, ref]);
 
-  return registry ? active : true;
+  if (!inXR || !registry) return true;
+  return vrActive;
 };
 
 export const slideshowBitmapMaxPx = (inXR: boolean) => (inXR ? 320 : 480);
