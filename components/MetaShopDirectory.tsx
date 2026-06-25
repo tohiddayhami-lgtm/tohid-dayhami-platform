@@ -284,7 +284,7 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 };
 
 const MSD_CSS = `
-.msd-root { background:#f5f1e8; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Vazirmatn,Tahoma,sans-serif; color:#1f2a18; padding-bottom:60px; }
+.msd-root { background:#f5f1e8; min-height:100vh; font-family:'Vazirmatn',Tahoma,'Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; color:#1f2a18; padding-bottom:60px; }
 .msd-root * { box-sizing:border-box; }
 .msd-cover { background:linear-gradient(135deg,#1f2a18,#2d4a1a); color:#fdfbf6; text-align:center; padding:54px 20px 44px; position:relative; overflow:hidden; }
 .msd-cover::after { content:''; position:absolute; inset:0; background-image:repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 22px, transparent 22px 44px); pointer-events:none; }

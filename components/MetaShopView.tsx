@@ -1891,7 +1891,7 @@ const PageView: React.FC<{ page: MetaShopPage; uiLang: string; L: (fa?: string, 
 };
 
 const MS_CSS = `
-.ms-root { --ms-primary:#2d4a1a; background: var(--ms-bg,#fdfbf6); color: var(--ms-text,#2d3a24); min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+.ms-root { --ms-primary:#2d4a1a; background: var(--ms-bg,#fdfbf6); color: var(--ms-text,#2d3a24); min-height:100vh; font-family:'Vazirmatn',Tahoma,'Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
 .ms-root * { box-sizing:border-box; }
 /* Embedded (Google Sites / iframe) — compact cover so the catalog shows sooner inside a fixed-height frame */
 .ms-root.ms-embed { min-height:100%; }

@@ -27,7 +27,7 @@ export const ShopShutterLoader: React.FC<{ lang?: Language; primary?: string }> 
 };
 
 const CSS = `
-.ssl-wrap { --ssl-accent:#c0392b; position:fixed; inset:0; z-index:300; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; background:radial-gradient(120% 90% at 50% 0%, #fefdfb 0%, #f1efe9 70%, #e9e7e0 100%); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+.ssl-wrap { --ssl-accent:#c0392b; position:fixed; inset:0; z-index:300; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; background:radial-gradient(120% 90% at 50% 0%, #fefdfb 0%, #f1efe9 70%, #e9e7e0 100%); font-family:'Vazirmatn',Tahoma,'Segoe UI',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
 .ssl-shop { width:min(300px,76vw); }
 .ssl-awning { height:30px; border-radius:9px 9px 3px 3px; background:repeating-linear-gradient(90deg, var(--ssl-accent) 0 26px, #fdfbf6 26px 52px); box-shadow:0 7px 16px rgba(0,0,0,.13); transform-origin:top center; animation:ssl-awning .55s cubic-bezier(.34,1.56,.64,1) both; position:relative; z-index:2; }
 .ssl-awning::after { content:''; position:absolute; left:0; right:0; bottom:-9px; height:11px; background:repeating-linear-gradient(90deg, var(--ssl-accent) 0 26px, #fdfbf6 26px 52px); -webkit-mask:radial-gradient(11px at 13px 0, transparent 98%, #000) repeat-x; mask:radial-gradient(11px at 13px 0, transparent 98%, #000) repeat-x; -webkit-mask-size:26px 11px; mask-size:26px 11px; }
