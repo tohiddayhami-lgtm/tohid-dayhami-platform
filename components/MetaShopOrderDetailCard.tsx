@@ -1,6 +1,7 @@
 import React from 'react';
-import { MetaShop, MetaShopOrder } from '../types';
+import { CustomerAccount, MetaShop, MetaShopOrder } from '../types';
 import { Language } from '../App';
+import { orderPartnerCommission } from '../utils/metaShopCommission';
 
 interface Props {
   order: MetaShopOrder;
@@ -9,6 +10,10 @@ interface Props {
   lang: Language;
   onStatusChange?: (status: MetaShopOrder['status']) => void;
   showShopName?: boolean;
+  customerAccounts?: CustomerAccount[];
+  /** When true, show commission as revenue for master; when false, show as amount partner owes. */
+  commissionView?: 'master' | 'partner';
+  partnerCommissionPercent?: number;
 }
 
 const statusCls = (s: MetaShopOrder['status']) =>
@@ -19,6 +24,7 @@ const statusCls = (s: MetaShopOrder['status']) =>
 
 export const MetaShopOrderDetailCard: React.FC<Props> = ({
   order, shop, shopBaseUrl, lang, onStatusChange, showShopName,
+  customerAccounts = [], commissionView, partnerCommissionPercent,
 }) => {
   const T = lang === 'fa';
   const shopType = order.shopType || shop?.type;
@@ -40,6 +46,9 @@ export const MetaShopOrderDetailCard: React.FC<Props> = ({
 
   const allNeg = order.items.length > 0 && order.items.every(it => it.priceHidden);
   const someNeg = order.items.some(it => it.priceHidden);
+  const commission = orderPartnerCommission(order, customerAccounts);
+  const effectivePct = partnerCommissionPercent ?? commission.percent;
+  const showCommission = effectivePct > 0 && order.status !== 'cancelled' && !allNeg;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 md:p-5 space-y-4">
@@ -159,6 +168,22 @@ export const MetaShopOrderDetailCard: React.FC<Props> = ({
               {order.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {order.taxRate}%: {order.currency} {order.taxAmount.toLocaleString()}
             </div>
           ) : null}
+        </div>
+      )}
+
+      {showCommission && (
+        <div className="text-xs rounded-lg px-3 py-2 border bg-violet-50 border-violet-100 text-violet-900 space-y-0.5">
+          <div className="font-semibold">
+            {commissionView === 'partner'
+              ? (T ? 'کمیسیون همکاری (قابل پرداخت)' : 'Partner commission (payable)')
+              : (T ? 'سود همکاری' : 'Partner commission')}
+          </div>
+          {commission.accountName && commissionView === 'master' && (
+            <div className="text-violet-700">{T ? 'همکار' : 'Partner'}: {commission.accountName}</div>
+          )}
+          <div>
+            {effectivePct}% — {order.currency} {commission.amount.toLocaleString()}
+          </div>
         </div>
       )}
     </div>

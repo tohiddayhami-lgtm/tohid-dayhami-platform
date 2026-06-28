@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent, CustomerAccount } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, type MetaShopSaveOptions } from '../services/firebaseService';
@@ -15,6 +15,7 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
+import { productHasPriceDrift, revertAllProductsToBase } from '../utils/metaShopPricing';
 import { AppModal } from './AppModal';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
@@ -42,6 +43,7 @@ interface Props {
   metaBazaars?: MetaBazaar[];
   onSaveMetaBazaar?: (b: MetaBazaar) => Promise<void>;
   onDeleteMetaBazaar?: (id: string) => Promise<void>;
+  customerAccounts?: CustomerAccount[];
   readonly?: boolean;
   canDelete?: boolean;
   canDeleteBooths?: boolean;
@@ -152,7 +154,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
@@ -659,7 +661,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   // ── Product rate options (max 3) ──
   const addRate = (idx: number) => { const opts = draft!.products[idx].priceOptions || []; if (opts.length >= 3) return; updProduct(idx, { priceOptions: [...opts, { id: `o-${Date.now()}`, label: '', price: 0 }] }); };
-  const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number; currency: string }>) => { const opts = [...(draft!.products[idx].priceOptions || [])]; opts[oIdx] = { ...opts[oIdx], ...patch }; updProduct(idx, { priceOptions: opts }); };
+  const updRate = (idx: number, oIdx: number, patch: Partial<{ label: string; labelEn: string; price: number; currency: string }>) => {
+    const opts = [...(draft!.products[idx].priceOptions || [])];
+    const next = { ...opts[oIdx], ...patch };
+    if (patch.price != null) next.basePrice = patch.price;
+    opts[oIdx] = next;
+    updProduct(idx, { priceOptions: opts });
+  };
   const removeRate = (idx: number, oIdx: number) => { const opts = (draft!.products[idx].priceOptions || []).filter((_, i) => i !== oIdx); updProduct(idx, { priceOptions: opts.length ? opts : undefined }); };
 
   // ── Discount codes ──
@@ -1142,6 +1150,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 shopBaseUrl={shopBaseUrl}
                 lang={lang}
                 showShopName
+                customerAccounts={customerAccounts}
+                commissionView="master"
                 onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
               />
             ))}
@@ -1169,6 +1179,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 shop={shop}
                 shopBaseUrl={shopBaseUrl}
                 lang={lang}
+                customerAccounts={customerAccounts}
+                commissionView="master"
                 onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
               />
             ))}
@@ -1946,6 +1958,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             } : d)}
             showStrikethroughPrice={draft.showStrikethroughPrice !== false}
             onShowStrikethroughChange={val => setDraft(d => d ? { ...d, showStrikethroughPrice: val } : d)}
+            hasTemporaryShopMarkup={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) !== 0}
+            hasDriftedProducts={draft.products.some(productHasPriceDrift)}
+            onClearTemporaryMarkup={() => setDraft(d => d ? { ...d, priceMarkupType: undefined, priceMarkupValue: undefined } : d)}
+            onRevertAllToBase={() => setDraft(d => d ? {
+              ...d,
+              products: revertAllProductsToBase(d.products),
+              priceMarkupType: undefined,
+              priceMarkupValue: undefined,
+            } : d)}
           />
         )}
         {isRealEstate && (
@@ -1962,9 +1983,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <input className={fld + ' dir-ltr'} placeholder={t.pSku} value={p.sku || ''} onChange={e => updProduct(idx, { sku: e.target.value })} />
                     <input className={fld} placeholder={t.pGroup} value={p.group || ''} onChange={e => updProduct(idx, { group: e.target.value })} list={`ms-cats-${draft.id}`} />
                     <input className={fld} placeholder={t.pSubcat} value={p.subcategory || ''} onChange={e => updProduct(idx, { subcategory: e.target.value })} />
-                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت نمایشی فروش' : 'Display sale price') : t.pPrice} value={p.price ?? ''} onChange={e => updProduct(idx, { price: parseFloat(e.target.value) || 0 })} />
+                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت نمایشی فروش' : 'Display sale price') : t.pPrice} value={p.price ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { price: v, basePrice: v }); }} />
                     <input className={fld + ' dir-ltr'} placeholder={`${t.pCurrency} (${draft.currency})`} value={p.currency || ''} onChange={e => updProduct(idx, { currency: e.target.value.toUpperCase() })} />
-                    {!isServices && !isRealEstate && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => updProduct(idx, { packPrice: parseFloat(e.target.value) || 0 })} />}
+                    {!isServices && !isRealEstate && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { packPrice: v, basePackPrice: v }); }} />}
                     {!isRealEstate && <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />}
                     {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : !isRealEstate ? <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} /> : null}
                     {!isServices && !isRealEstate && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}

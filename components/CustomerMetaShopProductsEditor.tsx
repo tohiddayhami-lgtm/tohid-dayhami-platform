@@ -9,7 +9,7 @@ import { CustomerMetaShopCategoryManager } from './CustomerMetaShopCategoryManag
 import { CustomerMetaShopPriceSettings } from './CustomerMetaShopPriceSettings';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
-import type { PriceAdjustType } from '../utils/metaShopPricing';
+import { productHasPriceDrift, revertAllProductsToBase, type PriceAdjustType } from '../utils/metaShopPricing';
 
 interface Props {
   products: MetaShopProduct[];
@@ -246,6 +246,13 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
           }}
           showStrikethroughPrice={showStrikethroughPrice !== false}
           onShowStrikethroughChange={val => onPriceSettingsChange?.({ showStrikethroughPrice: val })}
+          hasTemporaryShopMarkup={!!priceMarkupType && (priceMarkupValue ?? 0) !== 0}
+          hasDriftedProducts={products.some(productHasPriceDrift)}
+          onClearTemporaryMarkup={() => onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined })}
+          onRevertAllToBase={() => {
+            onProductsChange(revertAllProductsToBase(products));
+            onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
+          }}
         />
       )}
       {categorySection}
@@ -411,7 +418,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                               onChange={e => {
                                 const price = e.target.value === '' ? 0 : Number(e.target.value);
                                 updProduct(p.id, {
-                                  priceOptions: p.priceOptions!.map(o => o.id === opt.id ? { ...o, price } : o),
+                                  priceOptions: p.priceOptions!.map(o => o.id === opt.id ? { ...o, price, basePrice: price } : o),
                                 });
                               }}
                             />
@@ -429,7 +436,10 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                           className={fld + ' dir-ltr'}
                           disabled={p.hidePrice || shopPricesHidden}
                           value={p.price ?? ''}
-                          onChange={e => updProduct(p.id, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          onChange={e => {
+                            const v = e.target.value === '' ? undefined : Number(e.target.value);
+                            updProduct(p.id, { price: v, basePrice: v });
+                          }}
                         />
                       </div>
                     )}
@@ -442,7 +452,10 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                           step="any"
                           className={fld + ' dir-ltr'}
                           value={p.packPrice ?? ''}
-                          onChange={e => updProduct(p.id, { packPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+                          onChange={e => {
+                            const v = e.target.value === '' ? undefined : Number(e.target.value);
+                            updProduct(p.id, { packPrice: v, basePackPrice: v });
+                          }}
                         />
                       </div>
                     )}

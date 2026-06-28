@@ -18,15 +18,15 @@ export const CustomerAccountManager: React.FC<Props> = ({
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ fullName: '', username: '', password: '', ticketIds: [] as string[], metaShopIds: [] as string[], note: '', isActive: true });
+  const [form, setForm] = useState({ fullName: '', username: '', password: '', ticketIds: [] as string[], metaShopIds: [] as string[], commissionPercent: undefined as number | undefined, note: '', isActive: true });
   const [ticketSearch, setTicketSearch] = useState('');
   const [shopSearch, setShopSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const resetForm = () => { setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], note: '', isActive: true }); setEditId(null); setShowForm(false); setTicketSearch(''); setShopSearch(''); };
+  const resetForm = () => { setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], commissionPercent: undefined, note: '', isActive: true }); setEditId(null); setShowForm(false); setTicketSearch(''); setShopSearch(''); };
 
   const handleEdit = (acc: CustomerAccount) => {
-    setForm({ fullName: acc.fullName, username: acc.username, password: acc.password, ticketIds: acc.ticketIds, metaShopIds: acc.metaShopIds || [], note: acc.note || '', isActive: acc.isActive });
+    setForm({ fullName: acc.fullName, username: acc.username, password: acc.password, ticketIds: acc.ticketIds, metaShopIds: acc.metaShopIds || [], commissionPercent: acc.commissionPercent, note: acc.note || '', isActive: acc.isActive });
     setEditId(acc.id);
     setShowForm(true);
   };
@@ -75,7 +75,7 @@ export const CustomerAccountManager: React.FC<Props> = ({
           <IconUsers className="w-4 h-4 text-gray-500" /> مدیریت حساب‌های مشتریان
           <span className="text-xs font-normal text-gray-400">({customerAccounts.length} حساب)</span>
         </h2>
-        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], note: '', isActive: true }); }}
+        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], commissionPercent: undefined, note: '', isActive: true }); }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors">
           <IconPlus className="w-3.5 h-3.5" /> حساب جدید
         </button>
@@ -99,6 +99,20 @@ export const CustomerAccountManager: React.FC<Props> = ({
                 <label className="block text-xs font-medium text-gray-500 mb-1">رمز عبور</label>
                 <input required className={inputClass + " dir-ltr"} placeholder="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">درصد همکاری (کمیسیون فروش MetaShop)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="0.1"
+                className={inputClass + ' dir-ltr max-w-[160px]'}
+                placeholder="مثلاً 10"
+                value={form.commissionPercent ?? ''}
+                onChange={e => setForm(f => ({ ...f, commissionPercent: e.target.value === '' ? undefined : Number(e.target.value) }))}
+              />
+              <p className="text-[10px] text-gray-400 mt-1">از مبلغ هر سفارش در فروشگاه‌های انتخاب‌شده محاسبه می‌شود.</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-2">انتخاب پرونده(ها)</label>
@@ -176,6 +190,9 @@ export const CustomerAccountManager: React.FC<Props> = ({
                   <span className="font-semibold text-sm text-gray-900">{acc.fullName}</span>
                   <span className="text-[10px] font-mono text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded dir-ltr">{acc.username}</span>
                   {!acc.isActive && <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">غیرفعال</span>}
+                  {(acc.commissionPercent ?? 0) > 0 && (
+                    <span className="text-[10px] text-violet-700 bg-violet-50 border border-violet-100 px-1.5 py-0.5 rounded">{acc.commissionPercent}% همکاری</span>
+                  )}
                 </div>
                 {acc.note && <p className="text-xs text-gray-400 mt-0.5">{acc.note}</p>}
                 <div className="flex flex-wrap gap-2 mt-2">

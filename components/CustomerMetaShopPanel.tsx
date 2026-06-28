@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { MetaShop, MetaShopOrder, MetaShopProduct, MetaShopDiscount, MetaShopDirCat } from '../types';
+import { MetaShop, MetaShopOrder, MetaShopProduct, MetaShopDiscount, MetaShopDirCat, CustomerAccount } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { pickCustomerEditableFields } from '../utils/customerMetaShopAccess';
@@ -10,12 +10,14 @@ import { CustomerMetaShopDiscountsEditor } from './CustomerMetaShopDiscountsEdit
 import { CustomerMetaShopLocaleEditor } from './CustomerMetaShopLocaleEditor';
 import { IconGlobe, IconTrash, IconUpload, IconTag } from './Icons';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
+import { sumOrderCommissions } from '../utils/metaShopCommission';
 
 interface Props {
   shops: MetaShop[];
   orders: MetaShopOrder[];
   shopBaseUrl: string;
   lang: Language;
+  customerUser?: CustomerAccount;
   onSave: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
   onLoadShop?: (shopId: string) => Promise<MetaShop>;
 }
@@ -23,7 +25,7 @@ interface Props {
 type Tab = 'info' | 'locale' | 'products' | 'discounts' | 'orders';
 
 export const CustomerMetaShopPanel: React.FC<Props> = ({
-  shops, orders, shopBaseUrl, lang, onSave, onLoadShop,
+  shops, orders, shopBaseUrl, lang, customerUser, onSave, onLoadShop,
 }) => {
   const T = lang === 'fa';
   const [selectedShopId, setSelectedShopId] = useState(shops[0]?.id || '');
@@ -46,6 +48,11 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     () => orders.filter(o => o.shopId === selectedShopId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [orders, selectedShopId],
   );
+  const commissionTotal = useMemo(
+    () => sumOrderCommissions(shopOrders, customerUser ? [customerUser] : []),
+    [shopOrders, customerUser],
+  );
+  const commissionPct = customerUser?.commissionPercent ?? 0;
 
   const applyCatalog = useCallback((full: MetaShop) => {
     const prods = full.products || [];
@@ -334,12 +341,30 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
 
       {tab === 'orders' && (
         <div className="space-y-3">
+          {commissionPct > 0 && shopOrders.length > 0 && (
+            <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 text-sm text-violet-900">
+              <div className="font-semibold">{T ? 'خلاصه کمیسیون همکاری' : 'Commission summary'}</div>
+              <p className="text-xs text-violet-700 mt-1">
+                {T
+                  ? `نرخ تعریف‌شده: ${commissionPct}% — جمع کمیسیون سفارش‌های این فروشگاه: ${shopOrders[0]?.currency || shop?.currency || ''} ${commissionTotal.toLocaleString()}`
+                  : `Rate: ${commissionPct}% — total commission for this shop: ${shopOrders[0]?.currency || shop?.currency || ''} ${commissionTotal.toLocaleString()}`}
+              </p>
+            </div>
+          )}
           {shopOrders.length === 0 ? (
             <div className="bg-white border border-gray-100 rounded-xl p-12 text-center text-gray-400 text-sm">
               {T ? 'سفارشی ثبت نشده است.' : 'No orders yet.'}
             </div>
           ) : shopOrders.map(o => (
-            <MetaShopOrderDetailCard key={o.id} order={o} shop={loadedShop || shop} shopBaseUrl={shopBaseUrl} lang={lang} />
+            <MetaShopOrderDetailCard
+              key={o.id}
+              order={o}
+              shop={loadedShop || shop}
+              shopBaseUrl={shopBaseUrl}
+              lang={lang}
+              commissionView="partner"
+              partnerCommissionPercent={commissionPct}
+            />
           ))}
         </div>
       )}

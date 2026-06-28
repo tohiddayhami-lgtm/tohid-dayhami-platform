@@ -1,5 +1,6 @@
 import { MetaShop, MetaShopProduct, MetaShopDiscount, MetaShopType } from '../types';
 import { defaultRealEstate } from './metaShopRealEstate';
+import { ensureProductBaseSnapshot } from './metaShopPricing';
 
 /** Shop-level fields a customer portal user may change. */
 export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
@@ -68,12 +69,18 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
   for (const key of CUSTOMER_EDITABLE_PRODUCT_FIELDS) {
     if (key in edits) (merged as Record<string, unknown>)[key] = edits[key as CustomerEditableProductField];
   }
+  if (edits.basePrice != null) merged.basePrice = edits.basePrice;
+  if (edits.basePackPrice != null) merged.basePackPrice = edits.basePackPrice;
+  if ('price' in edits && edits.price != null && edits.basePrice == null) merged.basePrice = edits.price;
+  if ('packPrice' in edits && edits.packPrice != null && edits.basePackPrice == null) merged.basePackPrice = edits.packPrice;
   if (edits.priceOptions && existing.priceOptions?.length) {
     const pmap = new Map(edits.priceOptions.map(o => [o.id, o]));
     merged.priceOptions = existing.priceOptions.map(o => {
       const e = pmap.get(o.id);
       if (!e) return o;
-      return { ...o, price: e.price ?? o.price, currency: e.currency ?? o.currency };
+      const price = e.price ?? o.price;
+      const basePrice = e.basePrice ?? price;
+      return { ...o, price, basePrice, currency: e.currency ?? o.currency };
     });
   }
   if (edits.i18n) {
@@ -82,7 +89,7 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
       merged.i18n[langCode] = { ...(merged.i18n[langCode] || {}), ...fields };
     }
   }
-  return merged;
+  return ensureProductBaseSnapshot(merged);
 }
 
 /** Blank product a customer can add to their shop. */

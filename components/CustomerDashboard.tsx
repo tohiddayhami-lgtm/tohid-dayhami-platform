@@ -126,6 +126,7 @@ export const CustomerDashboard: React.FC<Props> = ({
           orders={metaShopOrders}
           shopBaseUrl={shopBaseUrl}
           lang={lang}
+          customerUser={customerUser}
           onSave={onSaveMetaShop}
           onLoadShop={onLoadMetaShop}
         />

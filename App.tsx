@@ -47,6 +47,7 @@ import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 import { customerCanAccessShop, mergeCustomerShopEdits } from './utils/customerMetaShopAccess';
+import { calcCommission, findPortalAccountForShop } from './utils/metaShopCommission';
 import { shopNeedsProductHydration } from './utils/metaShopChunks';
 
 export type Language = 'fa' | 'en';
@@ -1520,6 +1521,10 @@ const App: React.FC = () => {
       await saveCustomerToCloud(newCustomer);
     }
 
+    const portalAccount = findPortalAccountForShop(customerAccounts, shop.id);
+    const commissionPct = portalAccount?.commissionPercent ?? 0;
+    const commissionAmt = calcCommission(data.total, commissionPct);
+
     const order: MetaShopOrder = {
       id: `mso-${Date.now()}`, shopId: shop.id, shopName: shop.name, shopType: shop.type,
       trackingCode, customerName: data.customerName, company: data.company, phone, email: data.email,
@@ -1527,6 +1532,10 @@ const App: React.FC = () => {
       fees: data.fees, itemsTotal: data.itemsTotal, discountCode: data.discountCode, discountAmount: data.discountAmount,
       taxRate: data.taxRate, taxAmount: data.taxAmount, taxInclusive: data.taxInclusive, total: data.total,
       currency: data.currency, status: 'new', createdAt: new Date().toISOString(), customerId,
+      customerAccountId: portalAccount?.id,
+      partnerAccountName: portalAccount?.fullName,
+      partnerCommissionPercent: commissionPct,
+      partnerCommissionAmount: commissionAmt,
       via: isEmbed ? 'gsite' : 'shop',
     };
     await saveMetaShopOrderToCloud(order);
@@ -1551,7 +1560,10 @@ const App: React.FC = () => {
     const discountText = data.discountAmount ? `\nتخفیف (${data.discountCode || ''}): − ${data.currency} ${data.discountAmount.toLocaleString()}` : '';
     const taxText = data.taxAmount ? `\nمالیات (${data.taxRate}%${data.taxInclusive ? ' شامل' : ''}): ${data.taxInclusive ? '' : '+ '}${data.currency} ${data.taxAmount.toLocaleString()}` : '';
     const viaText = isEmbed ? `\n🌐 ثبت‌شده از طریق گوگل‌سایت / سایت تعبیه‌شده` : '';
-    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}${viaText}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${allNeg ? 'قابل مذاکره' : `${data.currency} ${data.total.toLocaleString()}${anyNeg ? ' + اقلام قابل مذاکره' : ''}`}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
+    const commissionText = commissionPct > 0 && !allNeg
+      ? `\nهمکاری (${portalAccount?.fullName || '—'}): ${commissionPct}% = ${data.currency} ${commissionAmt.toLocaleString()}`
+      : '';
+    const body = `🛒 سفارش جدید از فروشگاه «${shop.name}»\nکد رهگیری: ${trackingCode}${viaText}\n\nمشتری: ${data.customerName}${data.company ? ` (${data.company})` : ''}\nموبایل: ${phoneRaw}${data.email ? `\nایمیل: ${data.email}` : ''}${data.country || data.city ? `\nمقصد: ${[data.city, data.country].filter(Boolean).join('، ')}` : ''}\n\nاقلام:\n${itemsText}${subtotalText}${discountText}${feesText}${taxText}\n\nجمع کل: ${allNeg ? 'قابل مذاکره' : `${data.currency} ${data.total.toLocaleString()}${anyNeg ? ' + اقلام قابل مذاکره' : ''}`}${commissionText}${data.notes ? `\n\nتوضیحات: ${data.notes}` : ''}`;
     const msg: InternalMessage = {
       id: `shopmsg-${Date.now()}`, senderId: '', senderName: data.customerName,
       recipientIds: recipients.map(p => p.id), recipientNames: recipients.map(p => p.fullName),

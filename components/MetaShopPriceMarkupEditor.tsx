@@ -1,6 +1,6 @@
 import React from 'react';
 import { MetaShopProduct } from '../types';
-import { commitMarkupToProducts, PROMO_LABEL_PRESETS_FA, type PriceAdjustType } from '../utils/metaShopPricing';
+import { commitMarkupToProducts, productHasPriceDrift, PROMO_LABEL_PRESETS_FA, revertAllProductsToBase, revertProductToBase, type PriceAdjustType } from '../utils/metaShopPricing';
 
 const fld = 'w-full px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-sm';
 
@@ -14,11 +14,16 @@ interface ShopBulkProps {
   products: MetaShopProduct[];
   showStrikethroughPrice?: boolean;
   onShowStrikethroughChange?: (val: boolean) => void;
+  onRevertAllToBase?: () => void;
+  onClearTemporaryMarkup?: () => void;
+  hasTemporaryShopMarkup?: boolean;
+  hasDriftedProducts?: boolean;
 }
 
 export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   T, markupType, markupValue, productCount, onMarkupChange, onCommitToBasePrices, products,
   showStrikethroughPrice = true, onShowStrikethroughChange,
+  onRevertAllToBase, onClearTemporaryMarkup, hasTemporaryShopMarkup, hasDriftedProducts,
 }) => {
   const hasAdjust = !!markupType && markupValue != null && markupValue !== 0;
   const isDecrease = hasAdjust && (markupValue ?? 0) < 0;
@@ -129,6 +134,27 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
           onChange={onShowStrikethroughChange}
         />
       )}
+      {(onRevertAllToBase || onClearTemporaryMarkup) && (
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-sky-200">
+          {onClearTemporaryMarkup && hasTemporaryShopMarkup && (
+            <button type="button" onClick={onClearTemporaryMarkup} className="text-xs px-3 py-2 rounded-lg border border-sky-300 bg-white text-sky-800 hover:bg-sky-100">
+              {T ? 'لغو تغییر موقت (بدون تغییر قیمت پایه)' : 'Clear temporary adjustment'}
+            </button>
+          )}
+          {onRevertAllToBase && (hasDriftedProducts || hasTemporaryShopMarkup) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm(T ? 'همه محصولات به قیمت پایه برگردند؟ تخفیف‌ها و تغییرات موقت هم پاک می‌شود.' : 'Revert all products to base prices? Temporary discounts/markups will be cleared.')) return;
+                onRevertAllToBase();
+              }}
+              className="text-xs px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 font-semibold"
+            >
+              {T ? '↺ برگشت همه به قیمت پایه' : '↺ Revert all to base prices'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -238,6 +264,18 @@ export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, p
       value={product.showStrikethroughPrice}
       onChange={val => onChange({ showStrikethroughPrice: val })}
     />
+    {productHasPriceDrift(product) && (
+      <button
+        type="button"
+        onClick={() => {
+          if (!window.confirm(T ? 'این محصول به قیمت پایه برگردد؟' : 'Revert this product to base price?')) return;
+          onChange(revertProductToBase(product));
+        }}
+        className="text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 w-fit"
+      >
+        {T ? '↺ برگشت به قیمت پایه' : '↺ Revert to base'}
+      </button>
+    )}
   </div>
 );
 

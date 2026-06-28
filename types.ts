@@ -1136,6 +1136,8 @@ export interface MetaShopProduct {
   // pricing
   currency?: string;       // overrides shop currency if set
   price?: number;          // primary price (per unit / per service) — fallback when no priceOptions
+  /** Reference base price for revert & strikethrough anchor (defaults to price when unset). */
+  basePrice?: number;
   // Optional per-product discount applied to price / packPrice / every rate option.
   // discountType 'percent' → discountValue is 0-100 ; 'amount' → discountValue is a flat amount in the product currency.
   discountType?: 'percent' | 'amount';
@@ -1149,8 +1151,9 @@ export interface MetaShopProduct {
   showStrikethroughPrice?: boolean;
   // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
   // Each rate option may carry its OWN currency (e.g. a money-exchange buy/sell rate in different currencies)
-  priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string }[];
+  priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string; basePrice?: number }[];
   packPrice?: number;      // optional pack price (products)
+  basePackPrice?: number;
   unit?: string;           // kg, pcs, day, hour, session ...
   priceUnit?: string;      // services: "per day", "per session"
   pack?: number;           // items per pack (products)
@@ -1438,6 +1441,11 @@ export interface MetaShopOrder {
   status: 'new' | 'in_progress' | 'done' | 'cancelled';
   createdAt: string;
   customerId?: string;     // linked customer-bank record (by phone)
+  /** Portal customer account that owns this shop (cooperation partner). */
+  customerAccountId?: string;
+  partnerAccountName?: string;
+  partnerCommissionPercent?: number;
+  partnerCommissionAmount?: number;
   via?: 'shop' | 'gsite';  // where the order was placed from: direct shop page, or an embedded Google Site / external site
 }
 
@@ -1785,6 +1793,8 @@ export interface CustomerAccount {
   ticketIds: string[];
   /** MetaShop ids this customer may edit (cover/logo/info) and view orders for. */
   metaShopIds?: string[];
+  /** Cooperation commission % on sales in assigned MetaShops (master sets). */
+  commissionPercent?: number;
   isActive: boolean;
   note?: string;
   createdAt: string;
