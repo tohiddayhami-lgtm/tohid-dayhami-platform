@@ -420,6 +420,14 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
+  const openMetaShopNewTab = (slug: string, productId?: string) => {
+    const q = productId
+      ? `?shop=${encodeURIComponent(slug)}&product=${encodeURIComponent(productId)}`
+      : `?shop=${encodeURIComponent(slug)}`;
+    const href = `${window.location.origin}${window.location.pathname}${q}`;
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
+
   const setView = (newView: ViewState, extra?: string) => {
     setViewState(newView);
     localStorage.setItem(STORAGE_KEYS.VIEW, newView);
@@ -2205,8 +2213,8 @@ const App: React.FC = () => {
                 lang={lang}
                 onBack={() => setView('landing')}
                 isLoading={!metaShopsReady || !metaBazaarsReady}
-                onOpenShop={(slug) => openMetaShop(slug)}
-                onOpenProduct={(slug, productId) => openMetaShop(slug, productId)}
+                onOpenShop={(slug) => openMetaShopNewTab(slug)}
+                onOpenProduct={(slug, productId) => openMetaShopNewTab(slug, productId)}
               />
             )}
 
