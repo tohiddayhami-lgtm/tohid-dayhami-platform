@@ -14,7 +14,7 @@ import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
-import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
 import { AppModal } from './AppModal';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
@@ -158,6 +158,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [keywordEdits, setKeywordEdits] = useState<Record<string, string>>({});
   const [keywordSearch, setKeywordSearch] = useState('');
+  const [listSearch, setListSearch] = useState('');
   const [keywordSaving, setKeywordSaving] = useState(false);
   const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
   const [referralsShopId, setReferralsShopId] = useState<string | null>(null);
@@ -341,6 +342,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     keywordsBulkTitle: T ? 'مدیریت کلمات کلیدی فروشگاه‌ها' : 'Shop keywords — bulk edit',
     keywordsBulkHint: T ? 'کلمات هر فروشگاه را اینجا یکجا ویرایش کنید. با ویرگول یا خط جدید جدا کنید. در جستجوی سایت و فروشگاه بین‌المللی استفاده می‌شود.' : 'Edit keywords for all shops in one place. Separate with commas or new lines. Used in site search and the international shop page.',
     keywordsBulkSearch: T ? 'جستجو در فروشگاه‌ها...' : 'Search shops...',
+    listSearch: T ? 'جستجوی فروشگاه (نام، slug، کد، کلمات کلیدی)...' : 'Search shops (name, slug, code, keywords)...',
+    listSearchEmpty: T ? 'فروشگاهی با این جستجو پیدا نشد.' : 'No shops match your search.',
     keywordsBulkSave: T ? 'ذخیره همه' : 'Save all',
     keywordsBulkSaved: T ? 'ذخیره شد' : 'Saved',
     keywordsBulkEmpty: T ? 'فروشگاهی یافت نشد.' : 'No shops found.',
@@ -418,7 +421,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const shopTypeBadge = (type: MetaShopType) => type === 'services' ? t.typeServices : type === 'realestate' ? t.typeRealEstate : t.typeProducts;
 
-  const filteredShops = useMemo(() => shopFilter === 'all' ? metaShops : metaShops.filter(s => s.type === shopFilter), [metaShops, shopFilter]);
+  const filteredShops = useMemo(() => {
+    let list = shopFilter === 'all' ? metaShops : metaShops.filter(s => s.type === shopFilter);
+    const q = listSearch.trim();
+    if (q) {
+      list = list.filter(s => shopMatchesSearch(s, q) || textMatchesSearchQuery(shopCodeOf(s), q));
+    }
+    return list;
+  }, [metaShops, shopFilter, listSearch]);
 
   const ordersByShop = useMemo(() => {
     const m: Record<string, MetaShopOrder[]> = {};
@@ -1008,17 +1018,37 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         </div>
 
         {/* Shop type filter tabs */}
-        <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-xl w-fit">
-          {(['all', 'products', 'services', 'realestate'] as const).map(f => (
-            <button key={f} type="button" onClick={() => setShopFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${shopFilter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              {f === 'all' ? (T ? 'همه' : 'All') : shopTypeBadge(f)}
-              <span className="text-gray-400 font-normal ms-1">({f === 'all' ? metaShops.length : metaShops.filter(s => s.type === f).length})</span>
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+            {(['all', 'products', 'services', 'realestate'] as const).map(f => (
+              <button key={f} type="button" onClick={() => setShopFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${shopFilter === f ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                {f === 'all' ? (T ? 'همه' : 'All') : shopTypeBadge(f)}
+                <span className="text-gray-400 font-normal ms-1">({f === 'all' ? metaShops.length : metaShops.filter(s => s.type === f).length})</span>
+              </button>
+            ))}
+          </div>
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <IconSearch className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+            <input
+              type="search"
+              className="w-full ps-9 pe-8 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              value={listSearch}
+              onChange={e => setListSearch(e.target.value)}
+              placeholder={t.listSearch}
+            />
+            {listSearch.trim() && (
+              <button type="button" onClick={() => setListSearch('')} className="absolute top-1/2 -translate-y-1/2 end-2.5 text-gray-400 hover:text-gray-600 text-xs px-1.5" aria-label={T ? 'پاک کردن' : 'Clear'}>✕</button>
+            )}
+          </div>
+          {listSearch.trim() && (
+            <span className="text-xs text-gray-500">{filteredShops.length} {T ? 'نتیجه' : 'results'}</span>
+          )}
         </div>
 
         {filteredShops.length === 0 ? (
-          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{shopFilter === 'all' ? t.empty : (T ? 'فروشگاهی در این دسته نیست.' : 'No shops in this category.')}</div>
+          <div className={card + ' text-center py-16 text-gray-400 text-sm'}>
+            {listSearch.trim() ? t.listSearchEmpty : shopFilter === 'all' ? t.empty : (T ? 'فروشگاهی در این دسته نیست.' : 'No shops in this category.')}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredShops.map(s => {

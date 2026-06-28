@@ -16,6 +16,8 @@ import {
   sortShopsForBazaar,
   toggleBazaarFeaturedShop,
 } from '../utils/bazaarShopSort';
+import { shopMatchesSearch, textMatchesSearchQuery } from '../utils/metaShopSearch';
+import { shopCodeOf } from './shopCode';
 
 interface Props {
   bazaars: MetaBazaar[];
@@ -73,6 +75,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const [updTarget, setUpdTarget] = useState<MetaBazaar | null>(null);
   const [shopPanelFor, setShopPanelFor] = useState<string | null>(null);
   const [shopSearch, setShopSearch] = useState('');
+  const [bazaarListSearch, setBazaarListSearch] = useState('');
   const [expoAnalyticsId, setExpoAnalyticsId] = useState<string | null>(null);
   const [expoAnalyticsEvents, setExpoAnalyticsEvents] = useState<MetaExpoEvent[]>([]);
   const [expoAnalyticsLoading, setExpoAnalyticsLoading] = useState(false);
@@ -98,7 +101,10 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     addRoot: T ? 'افزودن دسته اصلی' : 'Add top category', addChild: T ? 'زیرمجموعه' : 'Subcategory', delNode: T ? 'حذف' : 'Delete',
     shopsBtn: T ? 'فروشگاه‌ها' : 'Shops', noTree: T ? 'هنوز دسته‌ای اضافه نشده. «افزودن دسته اصلی» را بزنید.' : 'No categories yet. Click “Add top category”.',
     nodeFa: T ? 'نام (فارسی)' : 'Name (FA)', nodeEn: T ? 'نام (انگلیسی)' : 'Name (EN)',
-    searchShop: T ? 'جستجوی فروشگاه...' : 'Search shop...', noShops: T ? 'فروشگاهی موجود نیست. ابتدا در تب «فروشگاه‌ها» بسازید.' : 'No shops. Create some in the Shops tab first.',
+    searchShop: T ? 'جستجوی فروشگاه (نام، slug، کد)...' : 'Search shop (name, slug, code)...',
+    searchBazaar: T ? 'جستجوی بازارچه (نام، slug)...' : 'Search bazaar (name, slug)...',
+    searchEmpty: T ? 'نتیجه‌ای یافت نشد.' : 'No results found.',
+    noShops: T ? 'فروشگاهی موجود نیست. ابتدا در تب «فروشگاه‌ها» بسازید.' : 'No shops. Create some in the Shops tab first.',
     newCatFa: T ? 'دسته جدید' : 'New category',
     shopOrder: T ? 'اولویت و فروشگاه‌های ویژه' : 'Shop order & featured',
     shopOrderHint: T
@@ -269,6 +275,26 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     return sortShopsForBazaar(list, draft);
   }, [draft, shops]);
 
+  const filterShopList = (list: MetaShop[], q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return list;
+    return list.filter(s => shopMatchesSearch(s, trimmed) || textMatchesSearchQuery(shopCodeOf(s), trimmed));
+  };
+
+  const filteredLinkedShops = useMemo(
+    () => filterShopList(linkedBazaarShops, shopSearch),
+    [linkedBazaarShops, shopSearch],
+  );
+
+  const bazaarSearchHaystack = (b: MetaBazaar) =>
+    [b.name, b.slug, b.title?.fa, b.title?.en, b.subtitle?.fa, b.subtitle?.en].filter(Boolean).join(' ');
+
+  const filteredBazaars = useMemo(() => {
+    const q = bazaarListSearch.trim();
+    if (!q) return bazaars;
+    return bazaars.filter(b => textMatchesSearchQuery(bazaarSearchHaystack(b), q));
+  }, [bazaars, bazaarListSearch]);
+
   const toggleFeaturedShop = (slug: string) => {
     setDraft(d => {
       if (!d) return d;
@@ -291,8 +317,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     const levelName = T ? (draft?.levelLabels?.[depth]?.fa || draft?.levelLabels?.[depth]?.en) : (draft?.levelLabels?.[depth]?.en || draft?.levelLabels?.[depth]?.fa);
     const count = (node.shopSlugs || []).length;
     const open = shopPanelFor === node.id;
-    const q = shopSearch.trim().toLowerCase();
-    const filteredShops = q ? shops.filter(s => `${s.name} ${s.slug}`.toLowerCase().includes(q)) : shops;
+    const filteredShops = filterShopList(shops, shopSearch);
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-2.5 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -310,7 +335,9 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
               <>
                 <div className="relative mb-2 max-w-xs"><IconSearch className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-gray-400" /><input value={shopSearch} onChange={e => setShopSearch(e.target.value)} placeholder={t.searchShop} className="w-full ltr:pl-8 rtl:pr-8 px-2 py-1.5 rounded-lg border border-gray-200 text-xs outline-none" /></div>
                 <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-                  {filteredShops.map(s => { const on = (node.shopSlugs || []).includes(s.slug); return (
+                  {filteredShops.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-2 w-full text-center">{t.searchEmpty}</p>
+                  ) : filteredShops.map(s => { const on = (node.shopSlugs || []).includes(s.slug); return (
                     <button key={s.id} onClick={() => toggleShop(node.id, s.slug)} className={`text-xs px-2.5 py-1 rounded-full border ${on ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`} title={s.slug}>{on ? '✓ ' : ''}{s.name}</button>
                   ); })}
                 </div>
@@ -406,8 +433,21 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
           {linkedBazaarShops.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">{t.noLinkedShops}</p>
           ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {linkedBazaarShops.map(shop => {
+            <>
+              <div className="relative mb-3 max-w-sm">
+                <IconSearch className="absolute top-1/2 -translate-y-1/2 ltr:left-2.5 rtl:right-2.5 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  type="search"
+                  value={shopSearch}
+                  onChange={e => setShopSearch(e.target.value)}
+                  placeholder={t.searchShop}
+                  className="w-full ltr:pl-8 rtl:pr-8 px-2 py-2 rounded-lg border border-gray-200 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+              {filteredLinkedShops.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">{t.searchEmpty}</p>
+              ) : filteredLinkedShops.map(shop => {
                 const featured = draft ? isBazaarFeaturedShop(shop.slug, draft) : false;
                 const priority = draft?.shopPriorities?.[shop.slug] ?? 0;
                 return (
@@ -445,7 +485,8 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -621,9 +662,27 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
         </div>}
       </div>
 
-      {bazaars.length === 0 ? <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.empty}</div> : (
+      {bazaars.length > 0 && (
+        <div className="relative max-w-md">
+          <IconSearch className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
+          <input
+            type="search"
+            className="w-full ps-9 pe-8 py-2.5 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            value={bazaarListSearch}
+            onChange={e => setBazaarListSearch(e.target.value)}
+            placeholder={t.searchBazaar}
+          />
+          {bazaarListSearch.trim() && (
+            <button type="button" onClick={() => setBazaarListSearch('')} className="absolute top-1/2 -translate-y-1/2 end-2.5 text-gray-400 hover:text-gray-600 text-xs px-1.5" aria-label={T ? 'پاک کردن' : 'Clear'}>✕</button>
+          )}
+        </div>
+      )}
+
+      {bazaars.length === 0 ? <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.empty}</div> : filteredBazaars.length === 0 ? (
+        <div className={card + ' text-center py-16 text-gray-400 text-sm'}>{t.searchEmpty}</div>
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {bazaars.map(b => (
+          {filteredBazaars.map(b => (
             <div key={b.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
               <div className="h-16 flex items-center justify-center text-white font-bold relative" style={{ background: b.theme?.cover || '#1f2a18', backgroundImage: b.coverImage ? `linear-gradient(rgba(0,0,0,.4),rgba(0,0,0,.5)), url(${b.coverImage})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                 <span className="text-sm px-3 text-center">🏬 {(T ? b.title?.fa : b.title?.en) || b.name}</span>
