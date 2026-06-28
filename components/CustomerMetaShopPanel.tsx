@@ -1,10 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { MetaShop, MetaShopOrder } from '../types';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { MetaShop, MetaShopOrder, MetaShopProduct, MetaShopDiscount } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { pickCustomerEditableFields } from '../utils/customerMetaShopAccess';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
-import { IconGlobe, IconTrash, IconUpload } from './Icons';
+import { CustomerMetaShopProductsEditor } from './CustomerMetaShopProductsEditor';
+import { CustomerMetaShopDiscountsEditor } from './CustomerMetaShopDiscountsEditor';
+import { IconGlobe, IconTrash, IconUpload, IconTag } from './Icons';
+import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 
 interface Props {
   shops: MetaShop[];
@@ -12,30 +15,76 @@ interface Props {
   shopBaseUrl: string;
   lang: Language;
   onSave: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
+  onLoadShop?: (shopId: string) => Promise<MetaShop>;
 }
 
+type Tab = 'info' | 'products' | 'discounts' | 'orders';
+
 export const CustomerMetaShopPanel: React.FC<Props> = ({
-  shops, orders, shopBaseUrl, lang, onSave,
+  shops, orders, shopBaseUrl, lang, onSave, onLoadShop,
 }) => {
   const T = lang === 'fa';
   const [selectedShopId, setSelectedShopId] = useState(shops[0]?.id || '');
-  const [tab, setTab] = useState<'info' | 'orders'>('info');
+  const [tab, setTab] = useState<Tab>('info');
   const [draft, setDraft] = useState<Partial<MetaShop>>({});
+  const [productsDraft, setProductsDraft] = useState<MetaShopProduct[]>([]);
+  const [discountsDraft, setDiscountsDraft] = useState<MetaShopDiscount[]>([]);
+  const [loadedShop, setLoadedShop] = useState<MetaShop | null>(null);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const seoRef = useRef<HTMLInputElement>(null);
 
-  const shop = shops.find(s => s.id === selectedShopId);
+  const shop = shops.find(s => s.id === selectedShopId) || loadedShop;
   const shopOrders = useMemo(
     () => orders.filter(o => o.shopId === selectedShopId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [orders, selectedShopId],
   );
 
-  React.useEffect(() => {
-    if (shop) setDraft(pickCustomerEditableFields(shop));
-  }, [shop?.id]);
+  const loadCatalog = useCallback(async (shopId: string, force = false) => {
+    const base = shops.find(s => s.id === shopId);
+    if (!base) return;
+    const needsLoad = force || shopNeedsProductHydration(base) || (base.discounts === undefined && (base.productCount ?? 0) > 0);
+    if (!needsLoad && (base.products?.length || !base.productCount)) {
+      setLoadedShop(base);
+      setProductsDraft(base.products || []);
+      setDiscountsDraft(base.discounts || []);
+      return;
+    }
+    if (!onLoadShop) {
+      setLoadedShop(base);
+      setProductsDraft(base.products || []);
+      setDiscountsDraft(base.discounts || []);
+      return;
+    }
+    setLoadingCatalog(true);
+    try {
+      const full = await onLoadShop(shopId);
+      setLoadedShop(full);
+      setProductsDraft(full.products || []);
+      setDiscountsDraft(full.discounts || []);
+    } finally {
+      setLoadingCatalog(false);
+    }
+  }, [shops, onLoadShop]);
+
+  useEffect(() => {
+    const s = shops.find(x => x.id === selectedShopId);
+    if (s) {
+      setDraft(pickCustomerEditableFields(s));
+      setLoadedShop(null);
+      setProductsDraft([]);
+      setDiscountsDraft(s.discounts || []);
+    }
+  }, [selectedShopId, shops]);
+
+  useEffect(() => {
+    if ((tab === 'products' || tab === 'discounts') && selectedShopId) {
+      loadCatalog(selectedShopId);
+    }
+  }, [tab, selectedShopId, loadCatalog]);
 
   const upd = (patch: Partial<MetaShop>) => {
     setDraft(d => ({ ...d, ...patch }));
@@ -46,13 +95,39 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     uploadFileWithProgress(file, () => {}, onUrl, e => alert(e.message), 'images');
   };
 
-  const handleSave = async () => {
+  const flashSaved = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleSaveInfo = async () => {
     if (!shop) return;
     setSaving(true);
     try {
       await onSave(shop.id, draft);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      flashSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveProducts = async () => {
+    if (!shop) return;
+    setSaving(true);
+    try {
+      await onSave(shop.id, { products: productsDraft });
+      flashSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDiscounts = async () => {
+    if (!shop) return;
+    setSaving(true);
+    try {
+      await onSave(shop.id, { discounts: discountsDraft });
+      flashSaved();
     } finally {
       setSaving(false);
     }
@@ -61,6 +136,19 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gray-800 transition-colors bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
+  const tabBtn = (id: Tab, label: string, badge?: number) => (
+    <button
+      type="button"
+      onClick={() => setTab(id)}
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${tab === id ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+    >
+      {label}
+      {badge != null && badge > 0 && (
+        <span className="ms-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{badge}</span>
+      )}
+    </button>
+  );
+
   if (shops.length === 0) {
     return (
       <div className="bg-white border border-gray-100 rounded-xl p-12 text-center text-gray-400 text-sm">
@@ -68,6 +156,9 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       </div>
     );
   }
+
+  const currency = loadedShop?.currency || shop?.currency || 'USD';
+  const productCount = loadedShop?.productCount ?? shop?.productCount ?? productsDraft.length;
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -86,22 +177,44 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button type="button" onClick={() => setTab('info')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${tab === 'info' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-          {T ? 'اطلاعات و تصاویر' : 'Info & images'}
-        </button>
-        <button type="button" onClick={() => setTab('orders')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${tab === 'orders' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-          {T ? 'سفارش‌ها' : 'Orders'}
-          {shopOrders.filter(o => o.status === 'new').length > 0 && (
-            <span className="ms-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{shopOrders.filter(o => o.status === 'new').length}</span>
-          )}
-        </button>
+      <div className="flex gap-2 flex-wrap items-center">
+        {tabBtn('info', T ? 'اطلاعات فروشگاه' : 'Shop info')}
+        {tabBtn('products', T ? `محصولات (${productCount})` : `Products (${productCount})`)}
+        {tabBtn('discounts', T ? 'کدهای تخفیف' : 'Discount codes')}
+        {tabBtn('orders', T ? 'سفارش‌ها' : 'Orders', shopOrders.filter(o => o.status === 'new').length)}
         {shop && (
           <a href={`${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`} target="_blank" rel="noreferrer" className="ms-auto text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">
             <IconGlobe className="w-3.5 h-3.5" />{T ? 'مشاهده فروشگاه' : 'View shop'}
           </a>
         )}
       </div>
+
+      {tab === 'products' && shop && (
+        <CustomerMetaShopProductsEditor
+          products={productsDraft}
+          currency={currency}
+          shopSlug={shop.slug}
+          shopBaseUrl={shopBaseUrl}
+          lang={lang}
+          loading={loadingCatalog}
+          saving={saving}
+          saved={saved}
+          onChange={setProductsDraft}
+          onSave={handleSaveProducts}
+        />
+      )}
+
+      {tab === 'discounts' && shop && (
+        <CustomerMetaShopDiscountsEditor
+          discounts={discountsDraft}
+          currency={currency}
+          lang={lang}
+          saving={saving}
+          saved={saved}
+          onChange={setDiscountsDraft}
+          onSave={handleSaveDiscounts}
+        />
+      )}
 
       {tab === 'orders' && (
         <div className="space-y-3">
@@ -110,7 +223,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
               {T ? 'سفارشی ثبت نشده است.' : 'No orders yet.'}
             </div>
           ) : shopOrders.map(o => (
-            <MetaShopOrderDetailCard key={o.id} order={o} shop={shop} shopBaseUrl={shopBaseUrl} lang={lang} />
+            <MetaShopOrderDetailCard key={o.id} order={o} shop={loadedShop || shop} shopBaseUrl={shopBaseUrl} lang={lang} />
           ))}
         </div>
       )}
@@ -191,7 +304,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           </div>
 
           <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs font-semibold text-gray-500 mb-3">{T ? 'اشتراک‌گذاری (SEO)' : 'Share preview (SEO)'}</p>
+            <p className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-1"><IconTag className="w-3.5 h-3.5" />{T ? 'اشتراک‌گذاری (SEO)' : 'Share preview (SEO)'}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className={lbl}>{T ? 'عنوان لینک' : 'Link title'}</label>
@@ -216,7 +329,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={handleSave} disabled={saving} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50">
+            <button type="button" onClick={handleSaveInfo} disabled={saving} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50">
               {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره تغییرات' : 'Save changes')}
             </button>
           </div>

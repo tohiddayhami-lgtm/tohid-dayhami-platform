@@ -14,6 +14,7 @@ interface Props {
   metaShopOrders?: MetaShopOrder[];
   shopBaseUrl?: string;
   onSaveMetaShop?: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
+  onLoadMetaShop?: (shopId: string) => Promise<MetaShop>;
   onAddComment: (ticketId: string, commentText: string, files?: AttachedFile[]) => Promise<void>;
   onLogout: () => void;
   lang: Language;
@@ -30,7 +31,7 @@ interface FileRow {
 
 export const CustomerDashboard: React.FC<Props> = ({
   customerUser, tickets, personnel, metaShops = [], metaShopOrders = [], shopBaseUrl = '',
-  onSaveMetaShop, onAddComment, onLogout, lang,
+  onSaveMetaShop, onLoadMetaShop, onAddComment, onLogout, lang,
 }) => {
   const hasMetaShop = (customerUser.metaShopIds?.length ?? 0) > 0 && metaShops.length > 0;
   const hasTickets = tickets.length > 0;
@@ -126,6 +127,7 @@ export const CustomerDashboard: React.FC<Props> = ({
           shopBaseUrl={shopBaseUrl}
           lang={lang}
           onSave={onSaveMetaShop}
+          onLoadShop={onLoadMetaShop}
         />
       )}
 

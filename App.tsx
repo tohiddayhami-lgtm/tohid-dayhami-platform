@@ -47,6 +47,7 @@ import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
 import { customerCanAccessShop, mergeCustomerShopEdits } from './utils/customerMetaShopAccess';
+import { shopNeedsProductHydration } from './utils/metaShopChunks';
 
 export type Language = 'fa' | 'en';
 
@@ -1681,11 +1682,23 @@ const App: React.FC = () => {
     }
     let existing = metaShops.find(s => s.id === shopId);
     if (!existing) throw new Error('فروشگاه یافت نشد');
-    if ((existing.productCount ?? 0) > 0 && (existing.products || []).length === 0) {
+    const needsProducts = edits.products !== undefined || edits.discounts !== undefined;
+    if (needsProducts || ((existing.productCount ?? 0) > 0 && (existing.products || []).length === 0)) {
       existing = await hydrateMetaShop(existing);
     }
     const merged = mergeCustomerShopEdits(existing, edits);
-    await saveMetaShopToCloud(merged, { allowEmptyProducts: true });
+    const savingProducts = (merged.products || []).length > 0;
+    await saveMetaShopToCloud(merged, { allowEmptyProducts: !savingProducts && (existing.productCount ?? 0) === 0 });
+  };
+
+  const handleCustomerLoadMetaShop = async (shopId: string): Promise<MetaShop> => {
+    if (!currentCustomerUser || !customerCanAccessShop(currentCustomerUser.metaShopIds, shopId)) {
+      throw new Error('دسترسی مجاز نیست');
+    }
+    const existing = metaShops.find(s => s.id === shopId);
+    if (!existing) throw new Error('فروشگاه یافت نشد');
+    if ((existing.products || []).length > 0 && !shopNeedsProductHydration(existing)) return existing;
+    return hydrateMetaShop(existing);
   };
 
   // ── Public meeting booking calendar ──
@@ -2267,6 +2280,7 @@ const App: React.FC = () => {
                     metaShopOrders={customerPortalMetaShopOrders}
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
                     onSaveMetaShop={handleCustomerSaveMetaShop}
+                    onLoadMetaShop={handleCustomerLoadMetaShop}
                     onAddComment={handleCustomerAddComment}
                     onLogout={handleCustomerLogout}
                     lang={lang}
