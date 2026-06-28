@@ -4,6 +4,7 @@ import {
   buildFloatingStickerHref,
   filterActiveFloatingStickers,
   isMobileViewport,
+  stickerPositionStyle,
 } from '../utils/metaShopFloatingStickers';
 
 export type FloatingStickerNavAction = {
@@ -33,6 +34,7 @@ const StickerLayer: React.FC<{
   const speed = sticker.animationSpeed ?? 1;
   const rot = sticker.rotation ?? 0;
   const z = sticker.zIndex ?? 9000;
+  const is3dSpin = anim === 'productSpin360';
 
   const animStyle = useMemo((): React.CSSProperties => {
     const base: React.CSSProperties = {
@@ -65,10 +67,26 @@ const StickerLayer: React.FC<{
           ...base,
           animation: `ms-fps-spin ${speedDur(6, speed)} linear infinite`,
         };
+      case 'productSpin360':
+        return {
+          ...base,
+          perspective: '900px',
+          perspectiveOrigin: 'center center',
+        };
       default:
         return rot ? { ...base, transform: `rotate(${rot}deg)` } : base;
     }
   }, [anim, speed, rot]);
+
+  const spin3dStyle = useMemo((): React.CSSProperties | undefined => {
+    if (!is3dSpin) return undefined;
+    return {
+      width: '100%',
+      height: '100%',
+      transformStyle: 'preserve-3d',
+      animation: `ms-fps-product-spin ${speedDur(8, speed)} linear infinite`,
+    };
+  }, [is3dSpin, speed]);
 
   const handleClick = (e: React.MouseEvent) => {
     const target = (sticker.linkTarget || '').trim();
@@ -106,34 +124,34 @@ const StickerLayer: React.FC<{
     />
   );
 
+  const content = hasLink ? (
+    <a
+      href={href}
+      onClick={handleClick}
+      target={sticker.openInNewTab ? '_blank' : undefined}
+      rel={sticker.openInNewTab ? 'noopener noreferrer' : undefined}
+      className="block w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded"
+      aria-label={sticker.label || 'Promotion'}
+    >
+      {inner}
+    </a>
+  ) : inner;
+
   return (
     <div
       className="ms-floating-sticker fixed pointer-events-none"
       style={{
-        left: `${sticker.positionX}%`,
-        top: `${sticker.positionY}%`,
+        ...stickerPositionStyle(sticker),
         width: sticker.width,
         height: sticker.height,
         zIndex: z,
-        transform: 'translate(-50%, -50%)',
       }}
       aria-hidden={!hasLink}
     >
       <div className="w-full h-full pointer-events-auto touch-manipulation" style={animStyle}>
-        {hasLink ? (
-          <a
-            href={href}
-            onClick={handleClick}
-            target={sticker.openInNewTab ? '_blank' : undefined}
-            rel={sticker.openInNewTab ? 'noopener noreferrer' : undefined}
-            className="block w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded"
-            aria-label={sticker.label || 'Promotion'}
-          >
-            {inner}
-          </a>
-        ) : (
-          inner
-        )}
+        {is3dSpin ? (
+          <div style={spin3dStyle}>{content}</div>
+        ) : content}
       </div>
     </div>
   );
@@ -184,7 +202,11 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, o
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        .ms-floating-sticker img { -webkit-user-drag: none; }
+        @keyframes ms-fps-product-spin {
+          from { transform: rotateY(0deg); }
+          to { transform: rotateY(360deg); }
+        }
+        .ms-floating-sticker img { -webkit-user-drag: none; backface-visibility: hidden; }
       `}</style>
       {active.map(s => (
         <StickerLayer key={s.id} shop={shop} sticker={s} onNavigate={onNavigate} />

@@ -1,10 +1,13 @@
 import React, { useCallback, useRef, useState } from 'react';
-import type { MetaShop, MetaShopFloatingAnimation, MetaShopFloatingLinkType, MetaShopFloatingSticker } from '../types';
+import type { MetaShop, MetaShopFloatingAnimation, MetaShopFloatingLinkType, MetaShopFloatingPositionAnchor, MetaShopFloatingSticker } from '../types';
 import { IconPlus, IconTrash, IconUpload } from './Icons';
 import {
   MAX_FLOATING_STICKERS,
   clampSticker,
   newFloatingSticker,
+  prepareStickerForDisplay,
+  resolveStickerAnchor,
+  stickerCanvasPositionStyle,
 } from '../utils/metaShopFloatingStickers';
 import { normalizeShopCategories } from '../utils/metaShopCategories';
 
@@ -20,11 +23,20 @@ interface Props {
 
 const ANIMATIONS: { id: MetaShopFloatingAnimation; fa: string; en: string }[] = [
   { id: 'none', fa: 'بدون انیمیشن', en: 'None' },
+  { id: 'productSpin360', fa: 'چرخش ۳۶۰° محصول (3D)', en: '360° Product Spin (3D)' },
   { id: 'float', fa: 'شناور (بالا/پایین)', en: 'Float' },
   { id: 'bounce', fa: 'پرش', en: 'Bounce' },
   { id: 'pulse', fa: 'ضربان', en: 'Pulse' },
   { id: 'shake', fa: 'لرزش', en: 'Shake' },
-  { id: 'spin', fa: 'چرخش مداوم', en: 'Continuous spin' },
+  { id: 'spin', fa: 'چرخش مسطح (2D)', en: 'Flat spin (2D)' },
+];
+
+const ANCHORS: { id: MetaShopFloatingPositionAnchor; fa: string; en: string }[] = [
+  { id: 'bottom-right', fa: 'گوشه پایین راست', en: 'Bottom right' },
+  { id: 'bottom-left', fa: 'گوشه پایین چپ', en: 'Bottom left' },
+  { id: 'top-right', fa: 'گوشه بالا راست', en: 'Top right' },
+  { id: 'top-left', fa: 'گوشه بالا چپ', en: 'Top left' },
+  { id: 'free', fa: 'موقعیت آزاد (وسط صفحه)', en: 'Free placement' },
 ];
 
 const LINK_TYPES: { id: MetaShopFloatingLinkType; fa: string; en: string }[] = [
@@ -58,6 +70,12 @@ const previewAnimStyle = (sticker: MetaShopFloatingSticker): React.CSSProperties
       return { ...base, animation: `ms-fps-shake ${speedDur(0.6, speed)} ease-in-out infinite` };
     case 'spin':
       return { ...base, animation: `ms-fps-spin ${speedDur(6, speed)} linear infinite` };
+    case 'productSpin360':
+      return {
+        ...base,
+        perspective: '900px',
+        perspectiveOrigin: 'center center',
+      };
     default:
       return rot ? { ...base, transform: `rotate(${rot}deg)` } : base;
   }
@@ -108,18 +126,59 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
     dragRef.current = { id, startX: e.clientX, startY: e.clientY, origX: s.positionX, origY: s.positionY };
   };
 
+  const pointerToPosition = (clientX: number, clientY: number, anchor: MetaShopFloatingPositionAnchor) => {
+    if (!canvasRef.current) return { x: 4, y: 4 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const clamp = (v: number, max = 45) => Math.min(max, Math.max(0, v));
+    switch (anchor) {
+      case 'bottom-left':
+        return {
+          x: clamp(((clientX - rect.left) / rect.width) * 100),
+          y: clamp(((rect.bottom - clientY) / rect.height) * 100),
+        };
+      case 'top-right':
+        return {
+          x: clamp(((rect.right - clientX) / rect.width) * 100),
+          y: clamp(((clientY - rect.top) / rect.height) * 100),
+        };
+      case 'top-left':
+        return {
+          x: clamp(((clientX - rect.left) / rect.width) * 100),
+          y: clamp(((clientY - rect.top) / rect.height) * 100),
+        };
+      case 'free':
+        return {
+          x: clamp(((clientX - rect.left) / rect.width) * 100, 100),
+          y: clamp(((clientY - rect.top) / rect.height) * 100, 100),
+        };
+      case 'bottom-right':
+      default:
+        return {
+          x: clamp(((rect.right - clientX) / rect.width) * 100),
+          y: clamp(((rect.bottom - clientY) / rect.height) * 100),
+        };
+    }
+  };
+
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - d.startX) / rect.width) * 100;
-    const dy = ((e.clientY - d.startY) / rect.height) * 100;
     const idx = stickers.findIndex(x => x.id === d.id);
     if (idx < 0) return;
-    upd(idx, {
-      positionX: Math.min(100, Math.max(0, d.origX + dx)),
-      positionY: Math.min(100, Math.max(0, d.origY + dy)),
-    });
+    const s = stickers[idx];
+    const anchor = resolveStickerAnchor(s);
+    if (anchor === 'free') {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const dx = ((e.clientX - d.startX) / rect.width) * 100;
+      const dy = ((e.clientY - d.startY) / rect.height) * 100;
+      upd(idx, {
+        positionX: Math.min(100, Math.max(0, d.origX + dx)),
+        positionY: Math.min(100, Math.max(0, d.origY + dy)),
+      });
+      return;
+    }
+    const pos = pointerToPosition(e.clientX, e.clientY, anchor);
+    upd(idx, { positionX: pos.x, positionY: pos.y });
   }, [stickers]);
 
   const onPointerUp = () => { dragRef.current = null; };
@@ -138,6 +197,7 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
         @keyframes ms-fps-pulse { 0%,100%{transform:scale(1) rotate(var(--ms-fps-rot,0deg))} 50%{transform:scale(1.06) rotate(var(--ms-fps-rot,0deg))} }
         @keyframes ms-fps-shake { 0%,100%{transform:translateX(0) rotate(var(--ms-fps-rot,0deg))} 25%{transform:translateX(-4px) rotate(var(--ms-fps-rot,0deg))} 75%{transform:translateX(4px) rotate(var(--ms-fps-rot,0deg))} }
         @keyframes ms-fps-spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes ms-fps-product-spin { from{transform:rotateY(0deg)} to{transform:rotateY(360deg)} }
       `}</style>
 
       <div
@@ -156,28 +216,36 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
           </div>
         </div>
         <p className="absolute top-2 inset-x-0 text-center text-[10px] text-indigo-500/80 font-medium pointer-events-none">
-          {T ? 'پیش‌نمایش — استیکرها را بکشید و رها کنید' : 'Preview — drag stickers to position'}
+          {T ? 'پیش‌نمایش — استیکر را به گوشه پایین بکشید' : 'Preview — drag sticker to bottom corner'}
         </p>
-        {stickers.filter(s => s.imageUrl).map(s => (
+        <div className="absolute bottom-1 end-1 w-8 h-8 border-b-2 border-e-2 border-indigo-300/60 rounded-br-lg pointer-events-none" title="" />
+        {stickers.filter(s => s.imageUrl).map(s => {
+          const disp = prepareStickerForDisplay(s);
+          const is3d = (s.animation || 'none') === 'productSpin360';
+          return (
           <div
             key={s.id}
-            className="absolute cursor-grab active:cursor-grabbing touch-none"
+            className="cursor-grab active:cursor-grabbing touch-none"
             style={{
-              left: `${s.positionX}%`,
-              top: `${s.positionY}%`,
+              ...stickerCanvasPositionStyle(disp),
               width: Math.min(s.width, 160),
               height: Math.min(s.height, 200),
-              transform: 'translate(-50%, -50%)',
               zIndex: s.zIndex ?? 9000,
               opacity: s.enabled === false ? 0.35 : 1,
             }}
             onPointerDown={e => onPointerDown(e, s.id)}
           >
             <div className="w-full h-full" style={previewAnimStyle(s)}>
-              <img src={s.imageUrl} alt="" className="w-full h-full object-contain pointer-events-none drop-shadow-md" draggable={false} />
+              {is3d ? (
+                <div style={{ width: '100%', height: '100%', transformStyle: 'preserve-3d', animation: `ms-fps-product-spin ${speedDur(8, s.animationSpeed ?? 1)} linear infinite` }}>
+                  <img src={s.imageUrl} alt="" className="w-full h-full object-contain pointer-events-none drop-shadow-md" draggable={false} />
+                </div>
+              ) : (
+                <img src={s.imageUrl} alt="" className="w-full h-full object-contain pointer-events-none drop-shadow-md" draggable={false} />
+              )}
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
       <div className="flex items-center justify-between">
@@ -307,14 +375,40 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <div>
-                    <label className={lbl}>X %</label>
-                    <input className={fld} type="number" min={0} max={100} value={Math.round(s.positionX)} onChange={e => upd(idx, { positionX: parseFloat(e.target.value) || 0 })} />
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="md:col-span-2">
+                    <label className={lbl}>{T ? 'محل قرارگیری' : 'Position anchor'}</label>
+                    <select
+                      className={fld + ' bg-white'}
+                      value={s.positionAnchor || resolveStickerAnchor(s)}
+                      onChange={e => {
+                        const anchor = e.target.value as MetaShopFloatingPositionAnchor;
+                        const patch: Partial<MetaShopFloatingSticker> = { positionAnchor: anchor };
+                        if (anchor !== 'free' && (s.positionX > 12 || s.positionY > 12)) {
+                          patch.positionX = 4;
+                          patch.positionY = 4;
+                        }
+                        upd(idx, patch);
+                      }}
+                    >
+                      {ANCHORS.map(a => <option key={a.id} value={a.id}>{T ? a.fa : a.en}</option>)}
+                    </select>
                   </div>
                   <div>
-                    <label className={lbl}>Y %</label>
-                    <input className={fld} type="number" min={0} max={100} value={Math.round(s.positionY)} onChange={e => upd(idx, { positionY: parseFloat(e.target.value) || 0 })} />
+                    <label className={lbl}>
+                      {(s.positionAnchor || resolveStickerAnchor(s)) === 'free'
+                        ? 'X %'
+                        : (T ? 'فاصله افقی %' : 'Inset X %')}
+                    </label>
+                    <input className={fld} type="number" min={0} max={(s.positionAnchor || resolveStickerAnchor(s)) === 'free' ? 100 : 45} value={Math.round(s.positionX)} onChange={e => upd(idx, { positionX: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div>
+                    <label className={lbl}>
+                      {(s.positionAnchor || resolveStickerAnchor(s)) === 'free'
+                        ? 'Y %'
+                        : (T ? 'فاصله عمودی %' : 'Inset Y %')}
+                    </label>
+                    <input className={fld} type="number" min={0} max={(s.positionAnchor || resolveStickerAnchor(s)) === 'free' ? 100 : 45} value={Math.round(s.positionY)} onChange={e => upd(idx, { positionY: parseFloat(e.target.value) || 0 })} />
                   </div>
                   <div>
                     <label className={lbl}>{T ? 'عرض (px)' : 'Width (px)'}</label>

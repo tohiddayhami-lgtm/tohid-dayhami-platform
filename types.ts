@@ -1260,8 +1260,9 @@ export interface MetaShopProductRef {
 }
 
 export type MetaShopFloatingLinkType = 'product' | 'category' | 'page' | 'external';
-export type MetaShopFloatingAnimation = 'none' | 'float' | 'bounce' | 'pulse' | 'shake' | 'spin';
+export type MetaShopFloatingAnimation = 'none' | 'float' | 'bounce' | 'pulse' | 'shake' | 'spin' | 'productSpin360';
 export type MetaShopFloatingPageScope = 'all' | 'products' | 'custom';
+export type MetaShopFloatingPositionAnchor = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'free';
 
 /** Floating promotional PNG overlay on the public MetaShop storefront (max 3 per shop). */
 export interface MetaShopFloatingSticker {
@@ -1273,7 +1274,9 @@ export interface MetaShopFloatingSticker {
   /** product id, category key, page id, or external URL */
   linkTarget?: string;
   openInNewTab?: boolean;
-  /** Position as % of viewport (0–100). */
+  /** Corner anchor (default bottom-right). Use `free` for drag-anywhere center placement. */
+  positionAnchor?: MetaShopFloatingPositionAnchor;
+  /** Inset from anchor corner as % of viewport (default 4). For `free`: center point (left/top %). */
   positionX: number;
   positionY: number;
   width: number;

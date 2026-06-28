@@ -1,4 +1,5 @@
-import type { MetaShop, MetaShopFloatingSticker } from '../types';
+import type { CSSProperties } from 'react';
+import type { MetaShop, MetaShopFloatingPositionAnchor, MetaShopFloatingSticker } from '../types';
 
 export const MAX_FLOATING_STICKERS = 3;
 
@@ -9,12 +10,13 @@ export const newFloatingSticker = (partial?: Partial<MetaShopFloatingSticker>): 
   linkType: 'external',
   linkTarget: '',
   openInNewTab: true,
-  positionX: 82,
-  positionY: 72,
+  positionAnchor: 'bottom-right',
+  positionX: 4,
+  positionY: 4,
   width: 120,
   height: 160,
   rotation: 0,
-  animation: 'float',
+  animation: 'productSpin360',
   animationSpeed: 1,
   zIndex: 9000,
   pageScope: 'all',
@@ -71,7 +73,8 @@ export const filterActiveFloatingStickers = (
     .filter(s => isStickerScheduled(s))
     .filter(s => isStickerVisibleOnPage(s, currentPage))
     .filter(s => isStickerVisibleOnDevice(s, mobile))
-    .slice(0, MAX_FLOATING_STICKERS);
+    .slice(0, MAX_FLOATING_STICKERS)
+    .map(prepareStickerForDisplay);
 
 export const buildFloatingStickerHref = (
   shop: MetaShop,
@@ -96,13 +99,65 @@ export const buildFloatingStickerHref = (
   }
 };
 
-export const clampSticker = (s: MetaShopFloatingSticker): MetaShopFloatingSticker => ({
-  ...s,
-  positionX: Math.min(100, Math.max(0, s.positionX ?? 50)),
-  positionY: Math.min(100, Math.max(0, s.positionY ?? 50)),
-  width: Math.min(480, Math.max(40, s.width ?? 120)),
-  height: Math.min(480, Math.max(40, s.height ?? 120)),
-  rotation: ((s.rotation ?? 0) % 360 + 360) % 360,
-  animationSpeed: Math.min(2, Math.max(0.5, s.animationSpeed ?? 1)),
-  zIndex: Math.min(99999, Math.max(1, s.zIndex ?? 9000)),
+export const resolveStickerAnchor = (s: MetaShopFloatingSticker): MetaShopFloatingPositionAnchor => {
+  if (s.positionAnchor) return s.positionAnchor;
+  // Legacy center-based coords (left/top + translate -50%) — treat as free placement
+  if ((s.positionX ?? 0) > 20 || (s.positionY ?? 0) > 20) return 'free';
+  return 'bottom-right';
+};
+
+/** Migrate legacy stickers (no anchor, far from corner) to bottom-right corner. */
+export const prepareStickerForDisplay = (s: MetaShopFloatingSticker): MetaShopFloatingSticker => {
+  const clamped = clampSticker(s);
+  if (clamped.positionAnchor) return clamped;
+  if ((clamped.positionX ?? 0) > 12 || (clamped.positionY ?? 0) > 12) {
+    return {
+      ...clamped,
+      positionAnchor: 'bottom-right',
+      positionX: 4,
+      positionY: 4,
+    };
+  }
+  return { ...clamped, positionAnchor: 'bottom-right' };
+};
+
+export const clampSticker = (s: MetaShopFloatingSticker): MetaShopFloatingSticker => {
+  const anchor = resolveStickerAnchor(s);
+  const maxInset = anchor === 'free' ? 100 : 45;
+  return {
+    ...s,
+    positionX: Math.min(maxInset, Math.max(0, s.positionX ?? 4)),
+    positionY: Math.min(maxInset, Math.max(0, s.positionY ?? 4)),
+    width: Math.min(480, Math.max(40, s.width ?? 120)),
+    height: Math.min(480, Math.max(40, s.height ?? 120)),
+    rotation: ((s.rotation ?? 0) % 360 + 360) % 360,
+    animationSpeed: Math.min(2, Math.max(0.5, s.animationSpeed ?? 1)),
+    zIndex: Math.min(99999, Math.max(1, s.zIndex ?? 9000)),
+  };
+};
+
+export const stickerPositionStyle = (s: MetaShopFloatingSticker): CSSProperties => {
+  const sticker = prepareStickerForDisplay(s);
+  const anchor = resolveStickerAnchor(sticker);
+  const x = sticker.positionX;
+  const y = sticker.positionY;
+  switch (anchor) {
+    case 'bottom-left':
+      return { left: `${x}%`, bottom: `${y}%` };
+    case 'top-right':
+      return { right: `${x}%`, top: `${y}%` };
+    case 'top-left':
+      return { left: `${x}%`, top: `${y}%` };
+    case 'free':
+      return { left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' };
+    case 'bottom-right':
+    default:
+      return { right: `${x}%`, bottom: `${y}%` };
+  }
+};
+
+/** Same as stickerPositionStyle but for the admin preview canvas (absolute positioning). */
+export const stickerCanvasPositionStyle = (s: MetaShopFloatingSticker): CSSProperties => ({
+  position: 'absolute',
+  ...stickerPositionStyle(s),
 });
