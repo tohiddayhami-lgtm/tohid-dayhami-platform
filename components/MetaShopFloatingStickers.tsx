@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { MetaShop, MetaShopFloatingSticker } from '../types';
 import {
   buildFloatingStickerHref,
@@ -36,6 +37,7 @@ const boxStyle = (sticker: MetaShopFloatingSticker, z: number): React.CSSPropert
   const w = sticker.width ?? 120;
   const h = sticker.height ?? 160;
   return {
+    position: 'fixed',
     ...stickerPositionStyle(sticker),
     width: w,
     height: h,
@@ -242,13 +244,12 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({
 
   if (active.length === 0) return null;
 
-  return (
+  const layer = (
     <>
       <style>{`
         .ms-floating-sticker {
-          position: fixed;
+          position: fixed !important;
           pointer-events: none;
-          contain: layout style paint;
         }
         .ms-floating-sticker img {
           -webkit-user-drag: none;
@@ -291,6 +292,8 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({
       ))}
     </>
   );
+
+  return createPortal(layer, document.body);
 };
 
 export default MetaShopFloatingStickers;
