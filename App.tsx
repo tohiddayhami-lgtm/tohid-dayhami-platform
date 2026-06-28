@@ -42,6 +42,7 @@ import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
 import { BazaarPassageLoader } from './components/BazaarPassageLoader';
+import { ConsultationBookingLoader } from './components/ConsultationBookingLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
@@ -376,6 +377,8 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Personnel | null>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>(() => readCache<AppConfig>(CACHE_KEYS.CONFIG) ?? INITIAL_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [bookingDataReady, setBookingDataReady] = useState(false);
+  const bookingHydratedRef = useRef({ meetings: false, categories: false });
   const [customerAccounts, setCustomerAccounts] = useState<CustomerAccount[]>([]);
   const [processes, setProcesses] = useState<CompanyProcess[]>([]);
   const [currentCustomerUser, setCurrentCustomerUser] = useState<CustomerAccount | null>(null);
@@ -610,8 +613,24 @@ const App: React.FC = () => {
     });
     const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
-    const unsubMeetings = subscribeToMeetings((data) => setMeetings(data));
-    const unsubConsultantCategories = subscribeToConsultantCategories((data) => setConsultantCategories(data));
+    const markBookingHydrated = () => {
+      const h = bookingHydratedRef.current;
+      if (h.meetings && h.categories) setBookingDataReady(true);
+    };
+    const unsubMeetings = subscribeToMeetings((data) => {
+      setMeetings(data);
+      if (!bookingHydratedRef.current.meetings) {
+        bookingHydratedRef.current.meetings = true;
+        markBookingHydrated();
+      }
+    });
+    const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
+      setConsultantCategories(data);
+      if (!bookingHydratedRef.current.categories) {
+        bookingHydratedRef.current.categories = true;
+        markBookingHydrated();
+      }
+    });
     const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
     const unsubSettings = subscribeToSettings(
       (cfg) => {
@@ -1633,6 +1652,7 @@ const App: React.FC = () => {
 
   // ── Public meeting booking calendar ──
   if (view === 'booking') {
+    if (!bookingDataReady) return <ConsultationBookingLoader lang={lang} />;
     const onConsultantChange = (id: string | null) => {
       setBookingConsultantId(id);
       const base = `${window.location.origin}${window.location.pathname}`;
