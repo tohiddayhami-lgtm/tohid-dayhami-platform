@@ -711,6 +711,10 @@ export interface MetaBazaar {
   theme?: Partial<MetaShopTheme>;
   levelLabels?: MetaShopDirCat[]; // optional names for each depth level (Country, City, Group, ...)
   tree: MetaBazaarNode[];         // category tree; leaves (or any node) carry shopSlugs
+  /** Up to 6 shop slugs pinned at the top of public listings. */
+  featuredShopSlugs?: string[];
+  /** Higher number = shown earlier (after featured shops). slug → priority */
+  shopPriorities?: Record<string, number>;
   expo?: MetaverseExpo;           // optional 3D / metaverse exhibition for this bazaar (one bazaar = one expo)
   createdAt?: string;
 }

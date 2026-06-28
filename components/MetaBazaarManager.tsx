@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { MetaBazaar, MetaBazaarNode, MetaExpoEvent, MetaShop } from '../types';
 import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
 import { downloadSample } from './metaShopSamples';
@@ -6,6 +6,15 @@ import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
 import { fetchMetaExpoEvents } from '../services/firebaseService';
 import { expoStyleMeta, bazaarHasActiveExpo, resolveExpoStyle } from './metaverse/expoCatalog';
+import {
+  MAX_BAZAAR_FEATURED_SHOPS,
+  collectBazaarShopSlugs,
+  isBazaarFeaturedShop,
+  pruneBazaarShopMeta,
+  setBazaarShopPriority,
+  sortShopsForBazaar,
+  toggleBazaarFeaturedShop,
+} from '../utils/bazaarShopSort';
 
 interface Props {
   bazaars: MetaBazaar[];
@@ -46,6 +55,8 @@ const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
     id: base.id, createdAt: base.createdAt,
     tree: Array.isArray(j.tree) ? j.tree : (base.tree || []),
     levelLabels: Array.isArray(j.levelLabels) ? j.levelLabels : (base.levelLabels || []),
+    featuredShopSlugs: Array.isArray(j.featuredShopSlugs) ? j.featuredShopSlugs.filter(Boolean).slice(0, MAX_BAZAAR_FEATURED_SHOPS) : base.featuredShopSlugs,
+    shopPriorities: j.shopPriorities && typeof j.shopPriorities === 'object' && !Array.isArray(j.shopPriorities) ? j.shopPriorities : base.shopPriorities,
     theme: { ...(base.theme || {}), ...(j.theme || {}) },
     expo: j.expo ? { ...(base.expo || {}), ...j.expo } : base.expo,
   };
@@ -87,6 +98,15 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     nodeFa: T ? 'نام (فارسی)' : 'Name (FA)', nodeEn: T ? 'نام (انگلیسی)' : 'Name (EN)',
     searchShop: T ? 'جستجوی فروشگاه...' : 'Search shop...', noShops: T ? 'فروشگاهی موجود نیست. ابتدا در تب «فروشگاه‌ها» بسازید.' : 'No shops. Create some in the Shops tab first.',
     newCatFa: T ? 'دسته جدید' : 'New category',
+    shopOrder: T ? 'اولویت و فروشگاه‌های ویژه' : 'Shop order & featured',
+    shopOrderHint: T
+      ? 'فروشگاه‌های ستاره‌دار (حداکثر ۶) بالاتر از همه نمایش داده می‌شوند. عدد اولویت بیشتر = نمایش زودتر (بعد از ویژه‌ها).'
+      : 'Starred shops (max 6) appear first. Higher priority number = shown earlier (after featured).',
+    priority: T ? 'اولویت' : 'Priority',
+    featured: T ? 'ویژه' : 'Featured',
+    featuredCount: (n: number) => T ? `${n}/${MAX_BAZAAR_FEATURED_SHOPS} ویژه` : `${n}/${MAX_BAZAAR_FEATURED_SHOPS} featured`,
+    noLinkedShops: T ? 'ابتدا فروشگاه‌ها را به دسته‌های بازارچه وصل کنید.' : 'Attach shops to bazaar categories first.',
+    featuredFull: T ? `حداکثر ${MAX_BAZAAR_FEATURED_SHOPS} فروشگاه ویژه مجاز است.` : `Maximum ${MAX_BAZAAR_FEATURED_SHOPS} featured shops.`,
     expoReport: T ? 'گزارش نمایشگاه' : 'Expo report',
     anLoading: T ? 'در حال بارگذاری آمار...' : 'Loading analytics...',
     anEmpty: T ? 'هنوز آماری برای این نمایشگاه ثبت نشده است.' : 'No expo analytics yet.',
@@ -138,7 +158,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
     setSaving(true);
-    try { await onSave({ ...draft, slug }); closeDraft(); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
+    try { await onSave(pruneBazaarShopMeta({ ...draft, slug })); closeDraft(); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
   };
 
   const uniqueSlug = (base: string, excludeId?: string) => {
@@ -233,6 +253,31 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const setLevelLabel = (i: number, which: 'fa' | 'en', val: string) => setDraft(d => { if (!d) return d; const arr = [...(d.levelLabels || [])]; while (arr.length <= i) arr.push({}); arr[i] = { ...arr[i], [which]: val }; return { ...d, levelLabels: arr }; });
   const addLevel = () => setDraft(d => d ? { ...d, levelLabels: [...(d.levelLabels || []), {}] } : d);
   const removeLevel = (i: number) => setDraft(d => d ? { ...d, levelLabels: (d.levelLabels || []).filter((_, j) => j !== i) } : d);
+
+  const linkedBazaarShops = useMemo(() => {
+    if (!draft) return [] as MetaShop[];
+    const slugs = collectBazaarShopSlugs(draft.tree || []);
+    const bySlug = new Map(shops.map(s => [s.slug, s]));
+    const list = slugs.map(sl => bySlug.get(sl)).filter((s): s is MetaShop => !!s);
+    return sortShopsForBazaar(list, draft);
+  }, [draft, shops]);
+
+  const toggleFeaturedShop = (slug: string) => {
+    setDraft(d => {
+      if (!d) return d;
+      const cur = d.featuredShopSlugs || [];
+      if (!cur.includes(slug) && cur.length >= MAX_BAZAAR_FEATURED_SHOPS) {
+        alert(t.featuredFull);
+        return d;
+      }
+      return toggleBazaarFeaturedShop(d, slug);
+    });
+  };
+
+  const setShopPriorityDraft = (slug: string, raw: string) => {
+    const priority = Number.parseInt(raw, 10);
+    setDraft(d => (d ? setBazaarShopPriority(d, slug, Number.isFinite(priority) ? priority : 0) : d));
+  };
 
   // Recursive visual node editor
   const NodeEditor: React.FC<{ node: MetaBazaarNode; depth: number }> = ({ node, depth }) => {
@@ -340,6 +385,61 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
             : (draft.tree || []).map(n => <NodeEditor key={n.id} node={n} depth={0} />)}
 
           <p className="mt-3 text-[11px] text-gray-400">{t.treeNote}</p>
+        </div>
+
+        {/* ── Shop priority & featured (max 6) ── */}
+        <div className={card}>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+            <h4 className="font-bold text-gray-700">{t.shopOrder}</h4>
+            <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-full px-2.5 py-0.5">
+              {t.featuredCount((draft.featuredShopSlugs || []).length)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">{t.shopOrderHint}</p>
+          {linkedBazaarShops.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">{t.noLinkedShops}</p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {linkedBazaarShops.map(shop => {
+                const featured = draft ? isBazaarFeaturedShop(shop.slug, draft) : false;
+                const priority = draft?.shopPriorities?.[shop.slug] ?? 0;
+                return (
+                  <div key={shop.id} className={`flex flex-wrap items-center gap-2 p-2.5 rounded-xl border ${featured ? 'border-amber-200 bg-amber-50/60' : 'border-gray-100 bg-gray-50/80'}`}>
+                    <div className="flex-1 min-w-[140px]">
+                      <div className="text-sm font-bold text-gray-900">{shop.name}</div>
+                      <div className="text-[10px] text-gray-400 font-mono dir-ltr">{shop.slug}</div>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <span className="font-semibold">{t.priority}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={9999}
+                        className="w-16 px-2 py-1 rounded-lg border border-gray-200 text-xs dir-ltr outline-none focus:border-indigo-400"
+                        value={priority || ''}
+                        placeholder="0"
+                        disabled={readonly}
+                        onChange={e => setShopPriorityDraft(shop.slug, e.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={readonly}
+                      onClick={() => toggleFeaturedShop(shop.slug)}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg border font-bold transition-colors ${
+                        featured
+                          ? 'bg-amber-400 text-amber-950 border-amber-400'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300'
+                      }`}
+                      title={t.featured}
+                    >
+                      {featured ? '⭐' : '☆'} {t.featured}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Metaverse 3D exhibition for this bazaar ── */}

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
+import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
 import { IconSearch, IconBriefcase } from './Icons';
 import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
@@ -90,6 +91,7 @@ export const ExportShopPage: React.FC<Props> = ({
     realestate: fa ? 'املاک' : 'Real Estate',
     matches: fa ? 'محصولات مرتبط' : 'Matching products',
     count: (n: number) => fa ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
+    featured: fa ? 'ویژه' : 'Featured',
   };
 
   const bazaarLevels = useMemo(() => {
@@ -127,10 +129,10 @@ export const ExportShopPage: React.FC<Props> = ({
       if (activeNode) pool = collectShopsFromNode(activeNode, shopBySlug);
     }
 
-    if (!q) return pool;
-    if (q.length < MIN_SEARCH) return pool;
+    if (!q) return sortShopsForBazaar(pool, bazaar);
+    if (q.length < MIN_SEARCH) return sortShopsForBazaar(pool, bazaar);
 
-    return pool.filter(s => shopMatchesSearch(s, q));
+    return sortShopsForBazaar(pool.filter(s => shopMatchesSearch(s, q)), bazaar);
   }, [bazaar, bazaarShopPool, bazaarPath, shopBySlug, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -302,12 +304,20 @@ export const ExportShopPage: React.FC<Props> = ({
               const hits = showProductHits ? matchingProducts(shop, qLower) : [];
               const cover = shop.coverImage || shop.logo;
               const prodCount = shop.productCount ?? (shop.products || []).filter(p => p.active !== false).length;
+              const featured = bazaar ? isBazaarFeaturedShop(shop.slug, bazaar) : false;
 
               return (
                 <article
                   key={shop.id}
-                  className="text-start border border-gray-100 rounded-xl overflow-hidden hover:border-gray-300 hover:shadow-sm transition-all bg-white flex flex-col"
+                  className={`text-start border rounded-xl overflow-hidden hover:shadow-sm transition-all bg-white flex flex-col relative ${
+                    featured ? 'border-amber-300 ring-1 ring-amber-200/80' : 'border-gray-100 hover:border-gray-300'
+                  }`}
                 >
+                  {featured && (
+                    <span className="absolute top-2 start-2 z-10 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 shadow-sm">
+                      ⭐ {t.featured}
+                    </span>
+                  )}
                   <button type="button" onClick={() => onOpenShop(shop.slug)} className="text-start w-full group">
                     {cover ? (
                       <div className="w-full h-40 bg-gray-100 overflow-hidden">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode } from '../types';
 import { shopCodeOf } from './shopCode';
+import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
 import { shopSearchHaystack, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { Language } from '../App';
 
@@ -98,14 +99,15 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
     count: (n: number) => T ? `${n} فروشگاه` : `${n} shop${n === 1 ? '' : 's'}`,
   };
 
-  const Storefront: React.FC<{ shop: MetaShop }> = ({ shop }) => {
+  const Storefront: React.FC<{ shop: MetaShop; featured?: boolean }> = ({ shop, featured }) => {
     const accent = (shop.storefrontColor && shop.storefrontColor.trim()) || shop.theme?.cover || shop.theme?.primary || '#2d4a1a';
     const num = shopCodeOf(shop);
     const tagline = ((T ? shop.storefrontTagline : (shop.storefrontTaglineEn || shop.storefrontTagline)) || '').trim();
     const cats = Array.from(new Set((shop.products || []).map(p => p.group).filter(Boolean))).slice(0, 3);
     const sampleNames = (shop.products || []).slice(0, 3).map(p => p.name);
     return (
-      <button className="msd-shop" onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
+      <button className={`msd-shop${featured ? ' msd-shop-featured' : ''}`} onClick={() => onOpenShop(shop.slug)} style={{ ['--accent' as any]: accent }} title={shop.name}>
+        {featured && <span className="msd-featured-badge">⭐ {T ? 'ویژه' : 'Featured'}</span>}
         {/* Fixed header: optional banner + title (title never moves) */}
         <div className="msd-head">
           {tagline && <div className="msd-banner">{tagline}</div>}
@@ -169,9 +171,10 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
       activeNode = cursor.find(n => n.id === explicit);
       cursor = activeNode?.children || [];
     }
-    const gridShops = q
-      ? allTreeShops()
-      : (activeNode ? collectShops(activeNode) : allTreeShops());
+    const gridShops = sortShopsForBazaar(
+      q ? allTreeShops() : (activeNode ? collectShops(activeNode) : allTreeShops()),
+      bazaar,
+    );
 
     const selectAt = (depth: number, id: string) => setBazaarPath(prev => prev[depth] === id ? prev : [...prev.slice(0, depth), id]);
 
@@ -220,7 +223,9 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
           {gridShops.length === 0
             ? <p className="msd-empty">{t.empty}</p>
-            : <div className="msd-grid" style={{ marginTop: 18 }}>{gridShops.map(s => <Storefront key={s.id} shop={s} />)}</div>}
+            : <div className="msd-grid" style={{ marginTop: 18 }}>{gridShops.map(s => (
+              <Storefront key={s.id} shop={s} featured={isBazaarFeaturedShop(s.slug, bazaar)} />
+            ))}</div>}
         </div>
       </div>
     );
@@ -381,6 +386,8 @@ const MSD_CSS = `
 .msd-compact .msd-awning { height:32px; }
 .msd-compact .msd-banner { font-size:12px; padding:6px 7px; }
 .msd-compact .msd-shop-name { font-size:10.5px; max-height:24px; }
+.msd-shop-featured { box-shadow:0 8px 22px rgba(245,158,11,.22), 0 0 0 1px rgba(251,191,36,.45); }
+.msd-featured-badge { position:absolute; top:6px; inset-inline-start:6px; z-index:3; font-size:9px; font-weight:800; padding:2px 7px; border-radius:999px; background:#fbbf24; color:#78350f; box-shadow:0 2px 6px rgba(0,0,0,.12); }
 .msd-compact .msd-shutter { padding-bottom:14px; }
 .msd-compact .msd-shutter-grip { bottom:7px; height:5px; }
 .msd-compact .msd-plate { font-size:11px; padding:3px 10px; border-width:1.5px; }
