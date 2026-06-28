@@ -2040,7 +2040,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <MetaShopProductMarkupFields
                       T={T}
                       product={p}
-                      inheritsShop={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) > 0}
+                      inheritsShop={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) !== 0}
                       onChange={patch => updProduct(idx, patch)}
                     />
                     <MetaShopProductPromoLabelField

@@ -510,7 +510,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                       <MetaShopProductMarkupFields
                         T={T}
                         product={p}
-                        inheritsShop={!!priceMarkupType && (priceMarkupValue ?? 0) > 0}
+                        inheritsShop={!!priceMarkupType && (priceMarkupValue ?? 0) !== 0}
                         onChange={patch => updProduct(p.id, patch)}
                       />
                       <MetaShopProductPromoLabelField

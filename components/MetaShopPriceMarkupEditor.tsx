@@ -17,17 +17,20 @@ interface ShopBulkProps {
 export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   T, markupType, markupValue, productCount, onMarkupChange, onCommitToBasePrices, products,
 }) => {
-  const hasMarkup = !!markupType && (markupValue ?? 0) > 0;
+  const hasAdjust = !!markupType && markupValue != null && markupValue !== 0;
+  const isDecrease = hasAdjust && (markupValue ?? 0) < 0;
 
   const applyToBase = () => {
-    if (!markupType || !(markupValue ?? 0)) {
-      alert(T ? 'ابتدا نوع و مقدار افزایش را وارد کنید.' : 'Set markup type and value first.');
+    if (!markupType || markupValue == null || markupValue === 0) {
+      alert(T ? 'ابتدا نوع و مقدار تغییر را وارد کنید (مثلاً 10- برای ۱۰٪ تخفیف).' : 'Set adjustment type and value (e.g. -10 for 10% off).');
       return;
     }
+    const absVal = Math.abs(markupValue!);
+    const unit = markupType === 'percent' ? (T ? '٪' : '%') : '';
     if (!window.confirm(
       T
-        ? `قیمت پایه ${productCount} محصول ${markupValue}${markupType === 'percent' ? '٪' : ''} افزایش یابد؟ این عمل قابل بازگشت خودکار نیست.`
-        : `Add ${markupValue}${markupType === 'percent' ? '%' : ''} to base prices of ${productCount} products? This cannot be auto-undone.`,
+        ? `قیمت پایه ${productCount} محصول ${isDecrease ? 'کاهش' : 'افزایش'} ${absVal}${unit} یابد؟ این عمل قابل بازگشت خودکار نیست.`
+        : `${isDecrease ? 'Decrease' : 'Increase'} base prices of ${productCount} products by ${absVal}${unit}? This cannot be auto-undone.`,
     )) return;
     onCommitToBasePrices(commitMarkupToProducts(products, markupType, markupValue!));
     onMarkupChange(undefined, undefined);
@@ -36,25 +39,25 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   return (
     <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3 mb-4">
       <div>
-        <p className="text-sm font-bold text-sky-900">{T ? 'افزایش قیمت تجمیعی (همه محصولات)' : 'Bulk price increase (all products)'}</p>
+        <p className="text-sm font-bold text-sky-900">{T ? 'تغییر قیمت تجمیعی (همه محصولات)' : 'Bulk price adjustment (all products)'}</p>
         <p className="text-[11px] text-sky-700/90 mt-0.5">
           {T
-            ? 'درصدی یا مبلغ ثابت به قیمت نمایشی همه محصولات اضافه می‌شود. می‌توانید موقت اعمال کنید یا مستقیم در قیمت پایه ثبت کنید.'
-            : 'Add a percentage or fixed amount to every product price. Apply temporarily or commit to base prices.'}
+            ? 'عدد مثبت = افزایش، عدد منفی = کاهش/تخفیف (مثلاً -10 یعنی ۱۰٪ کمتر). موقت یا ثبت در قیمت پایه.'
+            : 'Positive = increase, negative = decrease (e.g. -10 = 10% off). Temporary or commit to base prices.'}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {([
-          ['none', T ? 'بدون افزایش' : 'None'],
-          ['percent', T ? 'درصدی +' : 'Percent +'],
-          ['amount', T ? 'مبلغ ثابت +' : 'Fixed +'],
+          ['none', T ? 'بدون تغییر' : 'None'],
+          ['percent', T ? 'درصدی ٪' : 'Percent %'],
+          ['amount', T ? 'مبلغ ثابت' : 'Fixed amount'],
         ] as const).map(([type, label]) => (
           <button
             key={type}
             type="button"
             onClick={() => {
               if (type === 'none') onMarkupChange(undefined, undefined);
-              else onMarkupChange(type, markupValue ?? (type === 'percent' ? 10 : 1000));
+              else onMarkupChange(type, markupValue ?? (type === 'percent' ? -10 : -1000));
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
               (type === 'none' && !markupType) || markupType === type
@@ -70,25 +73,43 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
         <div className="flex flex-wrap items-end gap-3">
           <div className="max-w-[140px]">
             <label className="block text-[11px] font-semibold text-gray-600 mb-1">
-              {markupType === 'percent' ? (T ? 'درصد افزایش' : 'Increase %') : (T ? 'مبلغ افزایش' : 'Increase amount')}
+              {markupType === 'percent' ? (T ? 'درصد (+/-)' : 'Percent (+/-)') : (T ? 'مبلغ (+/-)' : 'Amount (+/-)')}
             </label>
             <input
               type="number"
-              min={0}
               step="any"
               className={fld + ' dir-ltr'}
+              placeholder={markupType === 'percent' ? (T ? 'مثلاً -10' : 'e.g. -10') : (T ? 'مثلاً -5000' : 'e.g. -5000')}
               value={markupValue ?? ''}
               onChange={e => onMarkupChange(markupType, e.target.value === '' ? undefined : Number(e.target.value))}
             />
           </div>
-          {hasMarkup && (
+          {markupType === 'percent' && (
+            <div className="flex flex-wrap gap-1.5 pb-2">
+              {([-20, -10, -5, 5, 10, 20] as const).map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onMarkupChange('percent', n)}
+                  className={`text-[10px] px-2 py-1 rounded-full border ${
+                    markupValue === n ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-200 hover:border-sky-300'
+                  }`}
+                >
+                  {n > 0 ? `+${n}%` : `${n}%`}
+                </button>
+              ))}
+            </div>
+          )}
+          {hasAdjust && (
             <p className="text-[11px] text-sky-800 pb-2">
-              {T ? `→ روی ${productCount} محصول اعمال می‌شود` : `→ applies to ${productCount} products`}
+              {T
+                ? `→ ${isDecrease ? 'کاهش' : 'افزایش'} روی ${productCount} محصول`
+                : `→ ${isDecrease ? 'decrease' : 'increase'} on ${productCount} products`}
             </p>
           )}
         </div>
       )}
-      {hasMarkup && productCount > 0 && (
+      {hasAdjust && productCount > 0 && (
         <button
           type="button"
           onClick={applyToBase}
@@ -111,7 +132,7 @@ interface ProductMarkupProps {
 export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, product, onChange, inheritsShop }) => (
   <div className="bg-sky-50/80 border border-sky-100 rounded-xl p-3 space-y-2">
     <p className="text-xs font-semibold text-sky-900">
-      {T ? 'افزایش قیمت این محصول' : 'Price increase for this product'}
+      {T ? 'تغییر قیمت این محصول (+/-)' : 'Price adjustment for this product (+/-)'}
       {inheritsShop && !product.priceMarkupType && (
         <span className="font-normal text-sky-600 ms-1">({T ? 'از تنظیم تجمیعی فروشگاه' : 'inherits shop bulk'})</span>
       )}
@@ -119,15 +140,15 @@ export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, p
     <div className="flex flex-wrap gap-2">
       {([
         ['none', T ? 'پیش‌فرض فروشگاه' : 'Shop default'],
-        ['percent', T ? 'درصدی +' : 'Percent +'],
-        ['amount', T ? 'مبلغ +' : 'Fixed +'],
+        ['percent', T ? 'درصدی ٪' : 'Percent %'],
+        ['amount', T ? 'مبلغ' : 'Fixed'],
       ] as const).map(([type, label]) => (
         <button
           key={type}
           type="button"
           onClick={() => {
             if (type === 'none') onChange({ priceMarkupType: undefined, priceMarkupValue: undefined });
-            else onChange({ priceMarkupType: type, priceMarkupValue: product.priceMarkupValue ?? (type === 'percent' ? 10 : 1000) });
+            else onChange({ priceMarkupType: type, priceMarkupValue: product.priceMarkupValue ?? (type === 'percent' ? -10 : -1000) });
           }}
           className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border ${
             (type === 'none' && !product.priceMarkupType) || product.priceMarkupType === type
@@ -142,10 +163,9 @@ export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, p
     {product.priceMarkupType && (
       <input
         type="number"
-        min={0}
         step="any"
         className={fld + ' max-w-[140px] dir-ltr text-xs'}
-        placeholder={product.priceMarkupType === 'percent' ? '10' : '5000'}
+        placeholder={product.priceMarkupType === 'percent' ? (T ? '-10' : '-10') : (T ? '-5000' : '-5000')}
         value={product.priceMarkupValue ?? ''}
         onChange={e => onChange({ priceMarkupValue: e.target.value === '' ? undefined : Number(e.target.value) })}
       />

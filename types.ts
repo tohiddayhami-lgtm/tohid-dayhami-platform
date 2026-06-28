@@ -1140,7 +1140,7 @@ export interface MetaShopProduct {
   // discountType 'percent' → discountValue is 0-100 ; 'amount' → discountValue is a flat amount in the product currency.
   discountType?: 'percent' | 'amount';
   discountValue?: number;
-  /** Optional markup added on top of stored price before discount (product overrides shop default). */
+  /** Optional price adjustment before discount: positive = increase, negative = decrease (product overrides shop default). */
   priceMarkupType?: 'percent' | 'amount';
   priceMarkupValue?: number;
   /** Custom promotional badge on the storefront (e.g. «عرض خاص», «Best offer»). i18n key: promoLabel. */
@@ -1353,7 +1353,7 @@ export interface MetaShop {
   groupLabels?: Record<string, Record<string, string>>; // alias for groupI18n in imported JSON
   hidePrices?: boolean;    // hide ALL product prices shop-wide → «قابل مذاکره»; orders still capture quantities for a later quote
   hidePriceText?: string;  // shop-wide custom label shown when a price is hidden (e.g. "Please contact us for the new price"); a product's own hidePriceText overrides this; falls back to «قابل مذاکره»
-  /** Shop-wide default price markup (% or fixed) applied to every product unless the product overrides. */
+  /** Shop-wide default price adjustment (% or fixed): positive = increase, negative = decrease. */
   priceMarkupType?: 'percent' | 'amount';
   priceMarkupValue?: number;
   productCount?: number;
