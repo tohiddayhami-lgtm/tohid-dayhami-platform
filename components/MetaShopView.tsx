@@ -650,13 +650,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const final = p.discountType === 'amount' ? base - v : base * (1 - v / 100);
     return Math.max(0, Math.round(final * 100) / 100);
   };
-  // Effective % off for the badge (works for both discount types).
-  const discPercent = (p: MetaShopProduct, base?: number): number => {
-    if (!hasDiscount(p) || !base) return 0;
-    if (p.discountType === 'percent') return Math.round(p.discountValue!);
-    const final = applyDisc(p, base) ?? base;
-    return Math.round((1 - final / base) * 100);
-  };
   // Original (stored) unit price.
   const baseUnitPrice = (p: MetaShopProduct, optId?: string): number => {
     const opts = optionsOf(p);
@@ -674,6 +667,17 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     markedUpPrice(shop, p, optPrice) ?? optPrice;
   // Effective unit price (markup then discount) — used for cart math and totals.
   const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, listUnitPrice(p, optId)) ?? 0;
+  const finalOptionPrice = (p: MetaShopProduct, optPrice: number): number =>
+    applyDisc(p, listOptionPrice(p, optPrice)) ?? listOptionPrice(p, optPrice);
+  /** Strikethrough only when the customer pays less than the stored base price (never for increases). */
+  const priceCutFromBase = (stored: number | undefined, final: number | undefined): boolean => {
+    if (stored == null || final == null || stored <= 0) return false;
+    return final < stored - 0.001;
+  };
+  const percentOffBase = (stored: number | undefined, final: number | undefined): number => {
+    if (!priceCutFromBase(stored, final) || !stored) return 0;
+    return Math.round((1 - final! / stored) * 100);
+  };
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
@@ -1016,27 +1020,34 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
-    const basePrice = listUnitPrice(p, selId);
+    const storedPrice = baseUnitPrice(p, selId);
     const curPrice = unitPrice(p, selId);
     const cur = curOf(p, selId);
-    const off = discPercent(p, basePrice);
-    const basePack = listPackPrice(p);
+    const showWas = priceCutFromBase(storedPrice, curPrice);
+    const off = percentOffBase(storedPrice, curPrice);
+    const storedPack = p.packPrice;
+    const finalPack = storedPack != null ? (applyDisc(p, listPackPrice(p)) ?? listPackPrice(p)) : undefined;
+    const showPackWas = priceCutFromBase(storedPack, finalPack);
     const hidden = priceHidden(p);
     return (
       <div className={`ms-buy${big ? ' ms-buy-detail' : ''}`}>
         {opts.length > 0 && (
           <div className="ms-opts">
-            {opts.map(o => (
+            {opts.map(o => {
+              const storedOpt = o.price;
+              const finalOpt = finalOptionPrice(p, o.price);
+              const showOptWas = priceCutFromBase(storedOpt, finalOpt);
+              return (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
                 {!hidden && (
                   <span className="ms-opt-price">
-                    {hasDiscount(p) && <span className="ms-opt-was">{money(listOptionPrice(p, o.price), curOf(p, o.id))}</span>}
-                    {money(applyDisc(p, listOptionPrice(p, o.price)), curOf(p, o.id))}
+                    {showOptWas && <span className="ms-opt-was">{money(storedOpt, curOf(p, o.id))}</span>}
+                    {money(finalOpt, curOf(p, o.id))}
                   </span>
                 )}
               </button>
-            ))}
+            );})}
           </div>
         )}
         <div className="ms-prices">
@@ -1047,15 +1058,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           ) : (<>
           {(curPrice != null) && (
             <div className="ms-price-row">
-              {hasDiscount(p) && <span className="ms-price-was">{money(basePrice, cur)}</span>}
+              {showWas && <span className="ms-price-was">{money(storedPrice, cur)}</span>}
               <span className="ms-price-amt">{money(curPrice, cur)} {p.unit && <span className="ms-price-unit">/{p.unit}</span>} {isServices && p.priceUnit && <span className="ms-price-unit">{p.priceUnit}</span>}</span>
               {off > 0 && <span className="ms-disc-tag">{off}%{S('offTag')}</span>}
             </div>
           )}
-          {!isServices && !isRealEstate && opts.length === 0 && basePack != null && basePack > 0 && (
+          {!isServices && !isRealEstate && opts.length === 0 && storedPack != null && storedPack > 0 && (
             <div className="ms-price-row">
-              {hasDiscount(p) && <span className="ms-price-was">{money(basePack, curOf(p))}</span>}
-              <span className="ms-price-amt ms-pack">{money(applyDisc(p, basePack), curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
+              {showPackWas && <span className="ms-price-was">{money(storedPack, curOf(p))}</span>}
+              <span className="ms-price-amt ms-pack">{money(finalPack ?? storedPack, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
             </div>
           )}
           </>)}
@@ -1088,7 +1099,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
   // Single product card — reused by the featured rail and the main grid.
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
-    const off = discPercent(p, listUnitPrice(p, selOptId(p)));
+    const optId = selOptId(p);
+    const stored = baseUnitPrice(p, optId);
+    const final = unitPrice(p, optId);
+    const off = percentOffBase(stored, final);
     const promo = promoLabelText(p, uiLang, shop.defaultLang || 'en');
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
