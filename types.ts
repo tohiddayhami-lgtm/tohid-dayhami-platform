@@ -1145,6 +1145,8 @@ export interface MetaShopProduct {
   priceMarkupValue?: number;
   /** Custom promotional badge on the storefront (e.g. «عرض خاص», «Best offer»). i18n key: promoLabel. */
   promoLabel?: string;
+  /** When price is lower than base: show old price struck through (undefined = inherit shop setting). */
+  showStrikethroughPrice?: boolean;
   // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
   // Each rate option may carry its OWN currency (e.g. a money-exchange buy/sell rate in different currencies)
   priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string }[];
@@ -1356,6 +1358,8 @@ export interface MetaShop {
   /** Shop-wide default price adjustment (% or fixed): positive = increase, negative = decrease. */
   priceMarkupType?: 'percent' | 'amount';
   priceMarkupValue?: number;
+  /** When a product price is below base: show struck-through old price (default true if unset). */
+  showStrikethroughPrice?: boolean;
   productCount?: number;
   /** Number of metaShopChunks docs holding products (0 = legacy inline products array). */
   productChunkCount?: number;

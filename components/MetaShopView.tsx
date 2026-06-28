@@ -9,7 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
-import { markedUpPrice, promoLabelText } from '../utils/metaShopPricing';
+import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice } from '../utils/metaShopPricing';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -678,6 +678,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     if (!priceCutFromBase(stored, final) || !stored) return 0;
     return Math.round((1 - final! / stored) * 100);
   };
+  const shouldShowWasPrice = (p: MetaShopProduct, stored: number | undefined, final: number | undefined): boolean =>
+    priceCutFromBase(stored, final) && resolveShowStrikethroughPrice(shop, p);
+  const visiblePercentOff = (p: MetaShopProduct, stored: number | undefined, final: number | undefined): number =>
+    shouldShowWasPrice(p, stored, final) ? percentOffBase(stored, final) : 0;
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
@@ -1023,11 +1027,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const storedPrice = baseUnitPrice(p, selId);
     const curPrice = unitPrice(p, selId);
     const cur = curOf(p, selId);
-    const showWas = priceCutFromBase(storedPrice, curPrice);
-    const off = percentOffBase(storedPrice, curPrice);
+    const showWas = shouldShowWasPrice(p, storedPrice, curPrice);
+    const off = visiblePercentOff(p, storedPrice, curPrice);
     const storedPack = p.packPrice;
     const finalPack = storedPack != null ? (applyDisc(p, listPackPrice(p)) ?? listPackPrice(p)) : undefined;
-    const showPackWas = priceCutFromBase(storedPack, finalPack);
+    const showPackWas = shouldShowWasPrice(p, storedPack, finalPack);
     const hidden = priceHidden(p);
     return (
       <div className={`ms-buy${big ? ' ms-buy-detail' : ''}`}>
@@ -1036,7 +1040,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             {opts.map(o => {
               const storedOpt = o.price;
               const finalOpt = finalOptionPrice(p, o.price);
-              const showOptWas = priceCutFromBase(storedOpt, finalOpt);
+              const showOptWas = shouldShowWasPrice(p, storedOpt, finalOpt);
               return (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
@@ -1102,7 +1106,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const optId = selOptId(p);
     const stored = baseUnitPrice(p, optId);
     const final = unitPrice(p, optId);
-    const off = percentOffBase(stored, final);
+    const off = visiblePercentOff(p, stored, final);
     const promo = promoLabelText(p, uiLang, shop.defaultLang || 'en');
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];

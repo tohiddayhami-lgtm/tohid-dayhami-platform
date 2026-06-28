@@ -1944,6 +1944,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               priceMarkupType: undefined,
               priceMarkupValue: undefined,
             } : d)}
+            showStrikethroughPrice={draft.showStrikethroughPrice !== false}
+            onShowStrikethroughChange={val => setDraft(d => d ? { ...d, showStrikethroughPrice: val } : d)}
           />
         )}
         {isRealEstate && (

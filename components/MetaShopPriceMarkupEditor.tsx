@@ -12,10 +12,13 @@ interface ShopBulkProps {
   onMarkupChange: (type?: PriceAdjustType, value?: number) => void;
   onCommitToBasePrices: (products: MetaShopProduct[]) => void;
   products: MetaShopProduct[];
+  showStrikethroughPrice?: boolean;
+  onShowStrikethroughChange?: (val: boolean) => void;
 }
 
 export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   T, markupType, markupValue, productCount, onMarkupChange, onCommitToBasePrices, products,
+  showStrikethroughPrice = true, onShowStrikethroughChange,
 }) => {
   const hasAdjust = !!markupType && markupValue != null && markupValue !== 0;
   const isDecrease = hasAdjust && (markupValue ?? 0) < 0;
@@ -118,9 +121,68 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
           {T ? 'ثبت در قیمت پایه همه محصولات' : 'Commit to all base prices'}
         </button>
       )}
+      {onShowStrikethroughChange && (
+        <MetaShopStrikethroughToggle
+          T={T}
+          mode="shop"
+          value={showStrikethroughPrice}
+          onChange={onShowStrikethroughChange}
+        />
+      )}
     </div>
   );
 };
+
+interface StrikethroughToggleProps {
+  T: boolean;
+  mode: 'shop' | 'product';
+  value?: boolean;
+  onChange: (val: boolean | undefined) => void;
+}
+
+export const MetaShopStrikethroughToggle: React.FC<StrikethroughToggleProps> = ({ T, mode, value, onChange }) => (
+  <div className="border-t border-sky-200 pt-3 mt-1">
+    <p className="text-xs font-semibold text-sky-900 mb-2">
+      {T ? 'نمایش قیمت قبلی (خط‌خورده)' : 'Show previous price (strikethrough)'}
+    </p>
+    <p className="text-[10px] text-sky-700/90 mb-2">
+      {T
+        ? 'فقط وقتی قیمت نهایی از قیمت پایه کمتر باشد (تخفیف). برای افزایش قیمت خط‌خورده نمایش داده نمی‌شود.'
+        : 'Only when the final price is below base (discount). Never shown for price increases.'}
+    </p>
+    <div className="flex flex-wrap gap-2">
+      {mode === 'product' && (
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border ${
+            value == null ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-200'
+          }`}
+        >
+          {T ? 'پیش‌فرض فروشگاه' : 'Shop default'}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border ${
+          value === true ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-200'
+        }`}
+      >
+        {T ? 'بله — خط بخورد + درصد' : 'Yes — strikethrough + %'}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border ${
+          value === false ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-gray-600 border-gray-200'
+        }`}
+      >
+        {T ? 'خیر — فقط قیمت جدید' : 'No — new price only'}
+      </button>
+    </div>
+  </div>
+);
 
 interface ProductMarkupProps {
   T: boolean;
@@ -170,6 +232,12 @@ export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, p
         onChange={e => onChange({ priceMarkupValue: e.target.value === '' ? undefined : Number(e.target.value) })}
       />
     )}
+    <MetaShopStrikethroughToggle
+      T={T}
+      mode="product"
+      value={product.showStrikethroughPrice}
+      onChange={val => onChange({ showStrikethroughPrice: val })}
+    />
   </div>
 );
 

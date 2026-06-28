@@ -133,6 +133,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         hidePriceText: draft.hidePriceText,
         priceMarkupType: draft.priceMarkupType,
         priceMarkupValue: draft.priceMarkupValue,
+        showStrikethroughPrice: draft.showStrikethroughPrice,
       });
       setLoadedShop(prev => prev ? {
         ...prev,
@@ -144,6 +145,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         hidePriceText: draft.hidePriceText,
         priceMarkupType: draft.priceMarkupType,
         priceMarkupValue: draft.priceMarkupValue,
+        showStrikethroughPrice: draft.showStrikethroughPrice,
       } : prev);
       flashSaved();
     } finally {
@@ -170,6 +172,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const handlePriceSettingsChange = (patch: {
     hidePrices?: boolean;
     hidePriceText?: string;
+    showStrikethroughPrice?: boolean;
     priceMarkupType?: import('../types').MetaShop['priceMarkupType'];
     priceMarkupValue?: number;
   }) => {
@@ -298,6 +301,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           groupI18n={groupI18nDraft}
           hidePrices={draft.hidePrices}
           hidePriceText={draft.hidePriceText}
+          showStrikethroughPrice={draft.showStrikethroughPrice}
           priceMarkupType={draft.priceMarkupType}
           priceMarkupValue={draft.priceMarkupValue}
           currency={shopBaseCurrency}

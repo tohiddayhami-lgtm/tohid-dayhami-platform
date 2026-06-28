@@ -65,6 +65,12 @@ export function commitMarkupToProducts(
   }));
 }
 
+export function resolveShowStrikethroughPrice(shop: MetaShop, product: MetaShopProduct): boolean {
+  if (product.showStrikethroughPrice != null) return product.showStrikethroughPrice;
+  if (shop.showStrikethroughPrice != null) return shop.showStrikethroughPrice;
+  return true;
+}
+
 export function promoLabelText(
   product: MetaShopProduct,
   uiLang: string,

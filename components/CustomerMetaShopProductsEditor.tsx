@@ -17,6 +17,7 @@ interface Props {
   groupI18n: Record<string, Record<string, string>>;
   hidePrices?: boolean;
   hidePriceText?: string;
+  showStrikethroughPrice?: boolean;
   priceMarkupType?: PriceAdjustType;
   priceMarkupValue?: number;
   currency: string;
@@ -30,12 +31,12 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
-  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
+  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; showStrikethroughPrice?: boolean; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, hidePrices, hidePriceText, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, categories, groupI18n, hidePrices, hidePriceText, showStrikethroughPrice, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -241,8 +242,10 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
           onMarkupChange={(type, value) => onPriceSettingsChange({ priceMarkupType: type, priceMarkupValue: value })}
           onCommitToBasePrices={nextProducts => {
             onProductsChange(nextProducts);
-            onPriceSettingsChange({ priceMarkupType: undefined, priceMarkupValue: undefined });
+            onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
           }}
+          showStrikethroughPrice={showStrikethroughPrice !== false}
+          onShowStrikethroughChange={val => onPriceSettingsChange?.({ showStrikethroughPrice: val })}
         />
       )}
       {categorySection}
