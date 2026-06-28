@@ -8,6 +8,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'phone', 'whatsapp', 'email', 'website', 'address', 'footerText',
   'seoTitle', 'seoDescription', 'seoImage',
   'currency', 'displayCurrencies', 'defaultLang', 'languages', 'i18n',
+  'categories', 'groupI18n',
   'products', 'discounts',
 ] as const;
 
@@ -16,6 +17,7 @@ export type CustomerEditableShopField = typeof CUSTOMER_EDITABLE_SHOP_FIELDS[num
 /** Per-product fields customers may edit (admin-only fields like sku/group stay intact). */
 export const CUSTOMER_EDITABLE_PRODUCT_FIELDS = [
   'name', 'description', 'images', 'i18n',
+  'group', 'subcategory',
   'price', 'packPrice', 'currency',
   'discountType', 'discountValue',
   'hidePrice', 'hidePriceText',
@@ -37,6 +39,8 @@ export function pickCustomerEditableFields(shop: MetaShop): Partial<MetaShop> {
       if (key === 'i18n') (out as MetaShop).i18n = { ...(val as MetaShop['i18n']) };
       else if (key === 'languages') (out as MetaShop).languages = [...(val as MetaShop['languages'] || [])];
       else if (key === 'displayCurrencies') (out as MetaShop).displayCurrencies = [...(val as MetaShop['displayCurrencies'] || [])];
+      else if (key === 'categories') (out as MetaShop).categories = [...(val as MetaShop['categories'] || [])];
+      else if (key === 'groupI18n') (out as MetaShop).groupI18n = { ...(val as MetaShop['groupI18n']) };
       else (out as Record<string, unknown>)[key] = val;
     }
   }

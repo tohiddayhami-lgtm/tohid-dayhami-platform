@@ -1,8 +1,9 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { MetaShop, MetaShopOrder, MetaShopProduct, MetaShopDiscount } from '../types';
+import { MetaShop, MetaShopOrder, MetaShopProduct, MetaShopDiscount, MetaShopDirCat } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { pickCustomerEditableFields } from '../utils/customerMetaShopAccess';
+import { seedCustomerCategories } from '../utils/customerMetaShopCategories';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { CustomerMetaShopProductsEditor } from './CustomerMetaShopProductsEditor';
 import { CustomerMetaShopDiscountsEditor } from './CustomerMetaShopDiscountsEditor';
@@ -29,6 +30,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const [tab, setTab] = useState<Tab>('info');
   const [draft, setDraft] = useState<Partial<MetaShop>>({});
   const [productsDraft, setProductsDraft] = useState<MetaShopProduct[]>([]);
+  const [categoriesDraft, setCategoriesDraft] = useState<(string | MetaShopDirCat)[]>([]);
+  const [groupI18nDraft, setGroupI18nDraft] = useState<Record<string, Record<string, string>>>({});
   const [discountsDraft, setDiscountsDraft] = useState<MetaShopDiscount[]>([]);
   const [loadedShop, setLoadedShop] = useState<MetaShop | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
@@ -44,32 +47,36 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     [orders, selectedShopId],
   );
 
+  const applyCatalog = useCallback((full: MetaShop) => {
+    const prods = full.products || [];
+    const seeded = seedCustomerCategories(full, prods);
+    setLoadedShop(full);
+    setProductsDraft(prods);
+    setCategoriesDraft(seeded.categories);
+    setGroupI18nDraft(seeded.groupI18n);
+    setDiscountsDraft(full.discounts || []);
+  }, []);
+
   const loadCatalog = useCallback(async (shopId: string, force = false) => {
     const base = shops.find(s => s.id === shopId);
     if (!base) return;
     const needsLoad = force || shopNeedsProductHydration(base) || (base.discounts === undefined && (base.productCount ?? 0) > 0);
     if (!needsLoad && (base.products?.length || !base.productCount)) {
-      setLoadedShop(base);
-      setProductsDraft(base.products || []);
-      setDiscountsDraft(base.discounts || []);
+      applyCatalog(base);
       return;
     }
     if (!onLoadShop) {
-      setLoadedShop(base);
-      setProductsDraft(base.products || []);
-      setDiscountsDraft(base.discounts || []);
+      applyCatalog(base);
       return;
     }
     setLoadingCatalog(true);
     try {
       const full = await onLoadShop(shopId);
-      setLoadedShop(full);
-      setProductsDraft(full.products || []);
-      setDiscountsDraft(full.discounts || []);
+      applyCatalog(full);
     } finally {
       setLoadingCatalog(false);
     }
-  }, [shops, onLoadShop]);
+  }, [shops, onLoadShop, applyCatalog]);
 
   useEffect(() => {
     const s = shops.find(x => x.id === selectedShopId);
@@ -77,6 +84,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       setDraft(pickCustomerEditableFields(s));
       setLoadedShop(null);
       setProductsDraft([]);
+      setCategoriesDraft([]);
+      setGroupI18nDraft({});
       setDiscountsDraft(s.discounts || []);
     }
   }, [selectedShopId, shops]);
@@ -116,12 +125,38 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     if (!shop) return;
     setSaving(true);
     try {
-      await onSave(shop.id, { products: productsDraft });
-      setLoadedShop(prev => prev ? { ...prev, products: productsDraft, productCount: productsDraft.length } : prev);
+      await onSave(shop.id, {
+        products: productsDraft,
+        categories: categoriesDraft,
+        groupI18n: groupI18nDraft,
+      });
+      setLoadedShop(prev => prev ? {
+        ...prev,
+        products: productsDraft,
+        productCount: productsDraft.length,
+        categories: categoriesDraft,
+        groupI18n: groupI18nDraft,
+      } : prev);
       flashSaved();
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCategoriesChange = (
+    categories: (string | MetaShopDirCat)[],
+    groupI18n: Record<string, Record<string, string>>,
+    products: MetaShopProduct[],
+  ) => {
+    setCategoriesDraft(categories);
+    setGroupI18nDraft(groupI18n);
+    setProductsDraft(products);
+    setSaved(false);
+  };
+
+  const handleProductsChange = (products: MetaShopProduct[]) => {
+    setProductsDraft(products);
+    setSaved(false);
   };
 
   const handleSaveDiscounts = async () => {
@@ -242,6 +277,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       {tab === 'products' && shop && (
         <CustomerMetaShopProductsEditor
           products={productsDraft}
+          categories={categoriesDraft}
+          groupI18n={groupI18nDraft}
           currency={shopBaseCurrency}
           shopType={shop.type}
           shopSlug={shop.slug}
@@ -251,7 +288,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           loading={loadingCatalog}
           saving={saving}
           saved={saved}
-          onChange={setProductsDraft}
+          onProductsChange={handleProductsChange}
+          onCategoriesChange={handleCategoriesChange}
           onSave={handleSaveProducts}
         />
       )}

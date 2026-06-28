@@ -1,13 +1,17 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { MetaShopProduct, MetaShopLang, MetaShopType } from '../types';
+import { MetaShopProduct, MetaShopLang, MetaShopType, MetaShopDirCat } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { DEFAULT_PRODUCT_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { newCustomerProduct, duplicateCustomerProduct } from '../utils/customerMetaShopAccess';
+import { customerCategoriesList, categoryLabelFa } from '../utils/customerMetaShopCategories';
+import { CustomerMetaShopCategoryManager } from './CustomerMetaShopCategoryManager';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
 
 interface Props {
   products: MetaShopProduct[];
+  categories: (string | MetaShopDirCat)[];
+  groupI18n: Record<string, Record<string, string>>;
   currency: string;
   shopType?: MetaShopType;
   shopSlug: string;
@@ -17,18 +21,22 @@ interface Props {
   loading?: boolean;
   saving?: boolean;
   saved?: boolean;
-  onChange: (products: MetaShopProduct[]) => void;
+  onProductsChange: (products: MetaShopProduct[]) => void;
+  onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
-  loading, saving, saved, onChange, onSave,
+  products, categories, groupI18n, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  loading, saving, saved, onProductsChange, onCategoriesChange, onSave,
 }) => {
   const T = lang === 'fa';
   const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const catList = useMemo(() => customerCategoriesList(categories, groupI18n), [categories, groupI18n]);
 
   const translationLangs = useMemo(() => {
     const configured = shopLangs.filter(l => l.code?.trim());
@@ -48,17 +56,20 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     p.i18n?.[code]?.[field] || '';
 
   const filtered = useMemo(() => {
+    let list = products;
+    if (catFilter) list = list.filter(p => p.group === catFilter);
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p =>
+    if (!q) return list;
+    return list.filter(p =>
       p.name.toLowerCase().includes(q) ||
       (p.sku || '').toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q),
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.group || '').toLowerCase().includes(q),
     );
-  }, [products, search]);
+  }, [products, search, catFilter]);
 
   const updProduct = (id: string, patch: Partial<MetaShopProduct>) => {
-    onChange(products.map(p => p.id === id ? { ...p, ...patch } : p));
+    onProductsChange(products.map(p => p.id === id ? { ...p, ...patch } : p));
   };
 
   const uploadImg = (file: File, onUrl: (url: string) => void) => {
@@ -91,7 +102,8 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
 
   const addNewProduct = () => {
     const p = newCustomerProduct(currency, shopType, lang);
-    onChange([p, ...products]);
+    if (catFilter) p.group = catFilter;
+    onProductsChange([p, ...products]);
     setExpandedId(p.id);
     setSearch('');
   };
@@ -101,9 +113,73 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     const idx = products.findIndex(x => x.id === source.id);
     const next = [...products];
     next.splice(idx + 1, 0, p);
-    onChange(next);
+    onProductsChange(next);
     setExpandedId(p.id);
   };
+
+  const categoryPicker = (p: MetaShopProduct) => (
+    <div className="space-y-2">
+      <label className={lbl}>{T ? 'دسته محصول' : 'Category'}</label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => updProduct(p.id, { group: undefined, subcategory: undefined })}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            !p.group ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          {T ? 'بدون دسته' : 'None'}
+        </button>
+        {catList.map(c => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => updProduct(p.id, { group: c.key })}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              p.group === c.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+            }`}
+          >
+            {categoryLabelFa(c, lang)}
+          </button>
+        ))}
+      </div>
+      {catList.length === 0 && (
+        <p className="text-[11px] text-gray-400">{T ? '↑ اول از بخش بالا یک دسته بسازید' : '↑ Create a category above first'}</p>
+      )}
+      {p.group && (
+        <div>
+          <label className={lbl}>{T ? 'زیردسته (اختیاری)' : 'Subcategory (optional)'}</label>
+          <input
+            className={fld}
+            placeholder={T ? 'مثلاً: درجه یک، صادراتی…' : 'e.g. Grade A, export…'}
+            value={p.subcategory || ''}
+            onChange={e => updProduct(p.id, { subcategory: e.target.value || undefined })}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const saveBar = (
+    <div className="sticky bottom-0 bg-white/95 backdrop-blur border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm z-10">
+      <span className="text-xs text-gray-400">{T ? 'تغییرات را ذخیره کنید تا در فروشگاه اعمال شود' : 'Save to apply changes to your shop'}</span>
+      <button type="button" onClick={onSave} disabled={saving} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50 shrink-0">
+        {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره' : 'Save')}
+      </button>
+    </div>
+  );
+
+  const categorySection = (
+    <CustomerMetaShopCategoryManager
+      categories={categories}
+      groupI18n={groupI18n}
+      products={products}
+      lang={lang}
+      activeFilter={catFilter}
+      onFilterChange={setCatFilter}
+      onCategoriesChange={onCategoriesChange}
+    />
+  );
 
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
@@ -119,29 +195,22 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
   if (products.length === 0) {
     return (
       <div className="space-y-4">
+        {categorySection}
         <div className="bg-white border border-gray-100 rounded-xl p-12 text-center space-y-4">
           <p className="text-gray-400 text-sm">{T ? 'هنوز محصولی ندارید.' : 'No products yet.'}</p>
-          <button
-            type="button"
-            onClick={addNewProduct}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700"
-          >
+          <button type="button" onClick={addNewProduct} className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700">
             <IconPlus className="w-4 h-4" />
             {T ? 'افزودن اولین محصول' : 'Add your first product'}
           </button>
         </div>
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm">
-          <span className="text-xs text-gray-400">{T ? 'بعد از ویرایش، ذخیره کنید' : 'Save after editing'}</span>
-          <button type="button" onClick={onSave} disabled={saving || products.length === 0} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50 shrink-0">
-            {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره محصولات' : 'Save products')}
-          </button>
-        </div>
+        {saveBar}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {categorySection}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -189,7 +258,13 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm text-gray-800 truncate">{p.name}</div>
-                  <div className="text-[11px] text-gray-400 flex flex-wrap gap-x-2">
+                  <div className="text-[11px] text-gray-400 flex flex-wrap gap-x-2 gap-y-0.5">
+                    {p.group && (
+                      <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                        {catList.find(c => c.key === p.group) ? categoryLabelFa(catList.find(c => c.key === p.group)!, lang) : p.group}
+                        {p.subcategory ? ` · ${p.subcategory}` : ''}
+                      </span>
+                    )}
                     {p.hidePrice ? (
                       <span className="text-emerald-600">{T ? 'قابل مذاکره' : 'Negotiable'}</span>
                     ) : p.price != null ? (
@@ -240,6 +315,8 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                     />
                     <p className="text-[10px] text-gray-400">{T ? 'چند عکس همزمان انتخاب کنید' : 'You can select multiple photos at once'}</p>
                   </div>
+
+                  {categoryPicker(p)}
 
                   <div>
                     <label className={lbl}>{T ? 'نام محصول (فارسی / پیش‌فرض)' : 'Product name (default)'}</label>
@@ -412,17 +489,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
         })}
       </div>
 
-      <div className="sticky bottom-0 bg-white/95 backdrop-blur border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm">
-        <span className="text-xs text-gray-400">{T ? 'تغییرات را ذخیره کنید تا در فروشگاه اعمال شود' : 'Save to apply changes to your shop'}</span>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving}
-          className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50 shrink-0"
-        >
-          {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره محصولات' : 'Save products')}
-        </button>
-      </div>
+      {saveBar}
     </div>
   );
 };
