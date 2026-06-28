@@ -1752,6 +1752,19 @@ const App: React.FC = () => {
     return hydrateMetaShop(existing);
   };
 
+  const handleCustomerUpdateMetaShopOrder = async (id: string, updates: Partial<MetaShopOrder>) => {
+    if (!currentCustomerUser) throw new Error('دسترسی مجاز نیست');
+    const order = metaShopOrders.find(o => o.id === id);
+    if (!order || !customerCanAccessShop(currentCustomerUser.metaShopIds, order.shopId)) {
+      throw new Error('دسترسی مجاز نیست');
+    }
+    const keys = Object.keys(updates);
+    if (keys.length !== 1 || updates.status !== 'in_progress' || order.status !== 'new') {
+      throw new Error('فقط تأیید دریافت سفارش جدید مجاز است');
+    }
+    await updateMetaShopOrderInCloud(id, { status: 'in_progress' });
+  };
+
   // ── Public meeting booking calendar ──
   if (view === 'booking') {
     if (!bookingDataReady) return <ConsultationBookingLoader lang={lang} />;
@@ -2332,6 +2345,7 @@ const App: React.FC = () => {
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
                     onSaveMetaShop={handleCustomerSaveMetaShop}
                     onLoadMetaShop={handleCustomerLoadMetaShop}
+                    onUpdateMetaShopOrder={handleCustomerUpdateMetaShopOrder}
                     onAddComment={handleCustomerAddComment}
                     onLogout={handleCustomerLogout}
                     lang={lang}

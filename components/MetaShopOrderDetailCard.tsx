@@ -9,6 +9,9 @@ interface Props {
   shopBaseUrl: string;
   lang: Language;
   onStatusChange?: (status: MetaShopOrder['status']) => void;
+  /** Customer portal: acknowledge a new order → in_progress */
+  onMarkReceived?: () => void;
+  markReceivedBusy?: boolean;
   showShopName?: boolean;
   customerAccounts?: CustomerAccount[];
   /** When true, show commission as revenue for master; when false, show as amount partner owes. */
@@ -23,7 +26,7 @@ const statusCls = (s: MetaShopOrder['status']) =>
     : 'bg-amber-100 text-amber-700';
 
 export const MetaShopOrderDetailCard: React.FC<Props> = ({
-  order, shop, shopBaseUrl, lang, onStatusChange, showShopName,
+  order, shop, shopBaseUrl, lang, onStatusChange, onMarkReceived, markReceivedBusy, showShopName,
   customerAccounts = [], commissionView, partnerCommissionPercent,
 }) => {
   const T = lang === 'fa';
@@ -169,6 +172,19 @@ export const MetaShopOrderDetailCard: React.FC<Props> = ({
             </div>
           ) : null}
         </div>
+      )}
+
+      {onMarkReceived && order.status === 'new' && (
+        <button
+          type="button"
+          onClick={onMarkReceived}
+          disabled={markReceivedBusy}
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {markReceivedBusy
+            ? (T ? 'در حال ثبت...' : 'Saving...')
+            : (T ? '✓ دریافت شد — شروع پردازش' : '✓ Received — start processing')}
+        </button>
       )}
 
       {showCommission && (

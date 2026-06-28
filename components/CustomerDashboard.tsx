@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomerAccount, Ticket, Personnel, AttachedFile, MetaShop, MetaShopOrder } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { IconPaperclip, IconFile, IconTrash, IconUsers, IconTag } from './Icons';
 import { personnelLabelById } from '../services/staffId';
 import { CustomerMetaShopPanel } from './CustomerMetaShopPanel';
+import { getOrderAlertSoundEnabled, setOrderAlertSoundEnabled, unlockOrderAlertAudio, isOrderAlertAudioSuspended } from '../utils/metaShopOrderAlertSound';
+import { useMetaShopOrderAlert } from '../utils/useMetaShopOrderAlert';
 
 interface Props {
   customerUser: CustomerAccount;
@@ -15,6 +17,7 @@ interface Props {
   shopBaseUrl?: string;
   onSaveMetaShop?: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
   onLoadMetaShop?: (shopId: string) => Promise<MetaShop>;
+  onUpdateMetaShopOrder?: (orderId: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onAddComment: (ticketId: string, commentText: string, files?: AttachedFile[]) => Promise<void>;
   onLogout: () => void;
   lang: Language;
@@ -31,7 +34,7 @@ interface FileRow {
 
 export const CustomerDashboard: React.FC<Props> = ({
   customerUser, tickets, personnel, metaShops = [], metaShopOrders = [], shopBaseUrl = '',
-  onSaveMetaShop, onLoadMetaShop, onAddComment, onLogout, lang,
+  onSaveMetaShop, onLoadMetaShop, onUpdateMetaShopOrder, onAddComment, onLogout, lang,
 }) => {
   const hasMetaShop = (customerUser.metaShopIds?.length ?? 0) > 0 && metaShops.length > 0;
   const hasTickets = tickets.length > 0;
@@ -41,7 +44,34 @@ export const CustomerDashboard: React.FC<Props> = ({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => getOrderAlertSoundEnabled(customerUser.id));
+  const [audioNeedsUnlock, setAudioNeedsUnlock] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const shopIds = useMemo(() => customerUser.metaShopIds || [], [customerUser.metaShopIds]);
+  const { pendingCount } = useMetaShopOrderAlert(metaShopOrders, shopIds, hasMetaShop && soundEnabled);
+
+  useEffect(() => {
+    setSoundEnabled(getOrderAlertSoundEnabled(customerUser.id));
+  }, [customerUser.id]);
+
+  useEffect(() => {
+    if (hasMetaShop && soundEnabled && pendingCount > 0 && isOrderAlertAudioSuspended()) {
+      setAudioNeedsUnlock(true);
+    } else {
+      setAudioNeedsUnlock(false);
+    }
+  }, [hasMetaShop, soundEnabled, pendingCount]);
+
+  const handleSoundToggle = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    setOrderAlertSoundEnabled(customerUser.id, enabled);
+  };
+
+  const handleUnlockAudio = async () => {
+    const ok = await unlockOrderAlertAudio();
+    setAudioNeedsUnlock(!ok);
+  };
 
   const selectedTicket = tickets.find(t => t.id === selectedTicketId);
   const publicTimeline = (selectedTicket?.timeline || []).filter(e => e.visibility !== 'internal');
@@ -109,6 +139,53 @@ export const CustomerDashboard: React.FC<Props> = ({
         </button>
       </div>
 
+      {hasMetaShop && pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-amber-900">
+            <span className="text-lg animate-pulse">🔔</span>
+            <div>
+              <div className="font-semibold">
+                {lang === 'fa'
+                  ? `${pendingCount} سفارش جدید MetaShop`
+                  : `${pendingCount} new MetaShop order(s)`}
+              </div>
+              <div className="text-xs text-amber-700 mt-0.5">
+                {lang === 'fa'
+                  ? 'تا زمان فشردن «دریافت شد»، بوق اعلان ادامه دارد.'
+                  : 'Alert sound repeats until you mark orders as received.'}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {audioNeedsUnlock && soundEnabled && (
+              <button
+                type="button"
+                onClick={() => void handleUnlockAudio()}
+                className="text-xs px-3 py-1.5 rounded-lg bg-amber-200 text-amber-900 hover:bg-amber-300 font-medium"
+              >
+                {lang === 'fa' ? 'فعال‌سازی صدا' : 'Enable sound'}
+              </button>
+            )}
+            <label className="flex items-center gap-1.5 text-xs text-amber-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={soundEnabled}
+                onChange={e => handleSoundToggle(e.target.checked)}
+                className="rounded border-amber-300"
+              />
+              {lang === 'fa' ? 'بوق' : 'Sound'}
+            </label>
+            <button
+              type="button"
+              onClick={() => setPortalTab('metashop')}
+              className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-medium"
+            >
+              {lang === 'fa' ? 'مشاهده سفارش‌ها' : 'View orders'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {(hasTickets && hasMetaShop) && (
         <div className="flex gap-2 flex-wrap">
           <button type="button" onClick={() => setPortalTab('tickets')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${portalTab === 'tickets' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -116,6 +193,11 @@ export const CustomerDashboard: React.FC<Props> = ({
           </button>
           <button type="button" onClick={() => setPortalTab('metashop')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${portalTab === 'metashop' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
             <IconTag className="w-3.5 h-3.5" />{lang === 'fa' ? 'MetaShop من' : 'My MetaShop'}
+            {pendingCount > 0 && (
+              <span className="min-w-[1.25rem] h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                {pendingCount}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -129,6 +211,9 @@ export const CustomerDashboard: React.FC<Props> = ({
           customerUser={customerUser}
           onSave={onSaveMetaShop}
           onLoadShop={onLoadMetaShop}
+          onUpdateOrder={onUpdateMetaShopOrder}
+          soundEnabled={soundEnabled}
+          onSoundEnabledChange={handleSoundToggle}
         />
       )}
 

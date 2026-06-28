@@ -20,12 +20,16 @@ interface Props {
   customerUser?: CustomerAccount;
   onSave: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
   onLoadShop?: (shopId: string) => Promise<MetaShop>;
+  onUpdateOrder?: (orderId: string, updates: Partial<MetaShopOrder>) => Promise<void>;
+  soundEnabled?: boolean;
+  onSoundEnabledChange?: (enabled: boolean) => void;
 }
 
 type Tab = 'info' | 'locale' | 'products' | 'discounts' | 'orders';
 
 export const CustomerMetaShopPanel: React.FC<Props> = ({
   shops, orders, shopBaseUrl, lang, customerUser, onSave, onLoadShop,
+  onUpdateOrder, soundEnabled = true, onSoundEnabledChange,
 }) => {
   const T = lang === 'fa';
   const [selectedShopId, setSelectedShopId] = useState(shops[0]?.id || '');
@@ -39,6 +43,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [markingReceivedId, setMarkingReceivedId] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const seoRef = useRef<HTMLInputElement>(null);
@@ -53,6 +58,22 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     [shopOrders, customerUser],
   );
   const commissionPct = customerUser?.commissionPercent ?? 0;
+  const newOrderCount = useMemo(
+    () => orders.filter(o => (customerUser?.metaShopIds || []).includes(o.shopId) && o.status === 'new').length,
+    [orders, customerUser?.metaShopIds],
+  );
+
+  const handleMarkReceived = async (orderId: string) => {
+    if (!onUpdateOrder) return;
+    setMarkingReceivedId(orderId);
+    try {
+      await onUpdateOrder(orderId, { status: 'in_progress' });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMarkingReceivedId(null);
+    }
+  };
 
   const applyCatalog = useCallback((full: MetaShop) => {
     const prods = full.products || [];
@@ -341,6 +362,27 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
 
       {tab === 'orders' && (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {newOrderCount > 0 && (
+              <div className="flex items-center gap-2 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <span className="animate-pulse">🔔</span>
+                {T
+                  ? `${newOrderCount} سفارش جدید در انتظار دریافت`
+                  : `${newOrderCount} new order(s) awaiting receipt`}
+              </div>
+            )}
+            {onSoundEnabledChange && (
+              <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer ms-auto">
+                <input
+                  type="checkbox"
+                  checked={soundEnabled}
+                  onChange={e => onSoundEnabledChange(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                {T ? 'بوق اعلان سفارش' : 'Order alert sound'}
+              </label>
+            )}
+          </div>
           {commissionPct > 0 && shopOrders.length > 0 && (
             <div className="bg-violet-50 border border-violet-100 rounded-xl p-4 text-sm text-violet-900">
               <div className="font-semibold">{T ? 'خلاصه کمیسیون همکاری' : 'Commission summary'}</div>
@@ -364,6 +406,12 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
               lang={lang}
               commissionView="partner"
               partnerCommissionPercent={commissionPct}
+              onMarkReceived={
+                onUpdateOrder && o.status === 'new'
+                  ? () => { if (markingReceivedId !== o.id) void handleMarkReceived(o.id); }
+                  : undefined
+              }
+              markReceivedBusy={markingReceivedId === o.id}
             />
           ))}
         </div>
