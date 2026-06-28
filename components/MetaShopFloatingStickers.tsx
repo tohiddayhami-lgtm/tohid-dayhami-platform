@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { MetaShop, MetaShopFloatingSticker } from '../types';
 import {
   buildFloatingStickerHref,
@@ -24,6 +24,32 @@ const speedDur = (baseSec: number, speed?: number) => {
   return `${(baseSec / s).toFixed(2)}s`;
 };
 
+const boxStyle = (sticker: MetaShopFloatingSticker, z: number): React.CSSProperties => {
+  const w = sticker.width ?? 120;
+  const h = sticker.height ?? 160;
+  return {
+    ...stickerPositionStyle(sticker),
+    width: w,
+    height: h,
+    minWidth: w,
+    minHeight: h,
+    maxWidth: w,
+    maxHeight: h,
+    zIndex: z,
+    overflow: 'hidden',
+    boxSizing: 'border-box',
+  };
+};
+
+const fill: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  height: '100%',
+  maxWidth: '100%',
+  maxHeight: '100%',
+  boxSizing: 'border-box',
+};
+
 const StickerLayer: React.FC<{
   shop: MetaShop;
   sticker: MetaShopFloatingSticker;
@@ -35,11 +61,21 @@ const StickerLayer: React.FC<{
   const rot = sticker.rotation ?? 0;
   const z = sticker.zIndex ?? 9000;
   const is3dSpin = anim === 'productSpin360';
+  const [imgReady, setImgReady] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setImgReady(false);
+    const el = imgRef.current;
+    if (el?.complete && el.naturalWidth > 0) setImgReady(true);
+  }, [sticker.imageUrl]);
 
   const animStyle = useMemo((): React.CSSProperties => {
     const base: React.CSSProperties = {
+      ...fill,
       willChange: 'transform',
       ['--ms-fps-rot' as string]: `${rot}deg`,
+      animationPlayState: imgReady ? 'running' : 'paused',
     };
     switch (anim) {
       case 'float':
@@ -76,17 +112,17 @@ const StickerLayer: React.FC<{
       default:
         return rot ? { ...base, transform: `rotate(${rot}deg)` } : base;
     }
-  }, [anim, speed, rot]);
+  }, [anim, speed, rot, imgReady]);
 
   const spin3dStyle = useMemo((): React.CSSProperties | undefined => {
     if (!is3dSpin) return undefined;
     return {
-      width: '100%',
-      height: '100%',
+      ...fill,
       transformStyle: 'preserve-3d',
       animation: `ms-fps-product-spin ${speedDur(8, speed)} linear infinite`,
+      animationPlayState: imgReady ? 'running' : 'paused',
     };
-  }, [is3dSpin, speed]);
+  }, [is3dSpin, speed, imgReady]);
 
   const handleClick = (e: React.MouseEvent) => {
     const target = (sticker.linkTarget || '').trim();
@@ -108,19 +144,27 @@ const StickerLayer: React.FC<{
     }
   };
 
-  const hasLink = sticker.linkType === 'external'
-    ? !!targetTrim(sticker.linkTarget)
-    : !!targetTrim(sticker.linkTarget);
+  const hasLink = !!targetTrim(sticker.linkTarget);
+
+  const imgStyle: React.CSSProperties = {
+    ...fill,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))',
+    userSelect: 'none',
+  };
 
   const inner = (
     <img
+      ref={imgRef}
       src={sticker.imageUrl}
       alt=""
-      loading="lazy"
-      decoding="async"
+      width={sticker.width ?? 120}
+      height={sticker.height ?? 160}
+      loading="eager"
+      decoding="sync"
       draggable={false}
-      className="block w-full h-full object-contain select-none pointer-events-none"
-      style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}
+      style={imgStyle}
+      onLoad={() => setImgReady(true)}
     />
   );
 
@@ -130,7 +174,7 @@ const StickerLayer: React.FC<{
       onClick={handleClick}
       target={sticker.openInNewTab ? '_blank' : undefined}
       rel={sticker.openInNewTab ? 'noopener noreferrer' : undefined}
-      className="block w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded"
+      style={{ ...fill, cursor: 'pointer', touchAction: 'manipulation' }}
       aria-label={sticker.label || 'Promotion'}
     >
       {inner}
@@ -139,19 +183,16 @@ const StickerLayer: React.FC<{
 
   return (
     <div
-      className="ms-floating-sticker fixed pointer-events-none"
-      style={{
-        ...stickerPositionStyle(sticker),
-        width: sticker.width,
-        height: sticker.height,
-        zIndex: z,
-      }}
+      className="ms-floating-sticker"
+      style={boxStyle(sticker, z)}
       aria-hidden={!hasLink}
     >
-      <div className="w-full h-full pointer-events-auto touch-manipulation" style={animStyle}>
-        {is3dSpin ? (
-          <div style={spin3dStyle}>{content}</div>
-        ) : content}
+      <div style={{ ...fill, pointerEvents: 'auto', touchAction: 'manipulation' }}>
+        <div style={animStyle}>
+          {is3dSpin ? (
+            <div style={spin3dStyle}>{content}</div>
+          ) : content}
+        </div>
       </div>
     </div>
   );
@@ -181,6 +222,21 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, o
   return (
     <>
       <style>{`
+        .ms-floating-sticker {
+          position: fixed;
+          pointer-events: none;
+          contain: layout style paint;
+        }
+        .ms-floating-sticker img {
+          -webkit-user-drag: none;
+          backface-visibility: hidden;
+          width: 100% !important;
+          height: 100% !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+          object-fit: contain;
+          display: block;
+        }
         @keyframes ms-fps-float {
           0%, 100% { transform: translateY(0) rotate(var(--ms-fps-rot, 0deg)); }
           50% { transform: translateY(-12px) rotate(var(--ms-fps-rot, 0deg)); }
@@ -206,7 +262,6 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, o
           from { transform: rotateY(0deg); }
           to { transform: rotateY(360deg); }
         }
-        .ms-floating-sticker img { -webkit-user-drag: none; backface-visibility: hidden; }
       `}</style>
       {active.map(s => (
         <StickerLayer key={s.id} shop={shop} sticker={s} onNavigate={onNavigate} />
