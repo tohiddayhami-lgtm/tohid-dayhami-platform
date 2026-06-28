@@ -9,6 +9,7 @@ import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaExpoManager } from './MetaExpoManager';
 import { MetaShopFileUploader } from './MetaShopFileUploader';
 import { MetaShopRealEstateFields } from './MetaShopRealEstateFields';
+import { MetaShopFloatingPromosEditor } from './MetaShopFloatingPromosEditor';
 import { defaultRealEstate } from '../utils/metaShopRealEstate';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { MetaBazaar } from '../types';
@@ -408,6 +409,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     seoI18n: T ? 'عنوان و توضیح به زبان‌های دیگر' : 'Title & description per language',
     seoI18nHint: T ? 'برای هر زبان جداگانه — اگر خالی باشد از فیلدهای بالا یا پیش‌فرض فروشگاه استفاده می‌شود.' : 'Per language — empty fields fall back to the defaults above.',
     seoRefreshHint: T ? 'پس از ذخیره، واتس‌اپ ممکن است تا چند ساعت پیش‌نمایش قبلی را نشان دهد. برای تست سریع از ابزار Facebook Sharing Debugger استفاده کنید.' : 'After saving, WhatsApp may cache the old preview for a while. Use Facebook Sharing Debugger for a quick test.',
+    fpsT: T ? 'استیکرهای تبلیغاتی شناور' : 'Floating Promotions',
+    fpsHint: T ? 'تا ۳ تصویر PNG شفاف روی فروشگاه نمایش داده می‌شود — قابل جابجایی، لینک، انیمیشن و زمان‌بندی کمپین. بدون نیاز به تغییر قالب.' : 'Up to 3 transparent PNG overlays on the storefront — draggable, linkable, animated, and schedulable. No theme changes needed.',
   };
 
   const shopTypeBadge = (type: MetaShopType) => type === 'services' ? t.typeServices : type === 'realestate' ? t.typeRealEstate : t.typeProducts;
@@ -1651,6 +1654,24 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             <p className="text-[10px] text-gray-400 mt-2">{t.seoRefreshHint}</p>
           </div>
         )}
+      </div>
+
+      {/* Marketing — Floating Promotions */}
+      <div className={card}>
+        <h4 className="font-bold text-gray-700 mb-1 flex items-center gap-2">
+          <IconTag className="w-4 h-4 text-fuchsia-500" />
+          {T ? 'بازاریابی → استیکرهای تبلیغاتی' : 'Marketing → Floating Promotions'}
+        </h4>
+        <p className="text-xs text-gray-500 mb-4">{t.fpsHint}</p>
+        <MetaShopFloatingPromosEditor
+          shop={draft}
+          stickers={draft.floatingStickers || []}
+          onChange={stickers => upd({ floatingStickers: stickers.length ? stickers : undefined })}
+          uploadImage={uploadImg}
+          T={T}
+          fld={fld}
+          lbl={lbl}
+        />
       </div>
 
       {/* Contact */}

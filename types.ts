@@ -1259,6 +1259,40 @@ export interface MetaShopProductRef {
   sku?: string;
 }
 
+export type MetaShopFloatingLinkType = 'product' | 'category' | 'page' | 'external';
+export type MetaShopFloatingAnimation = 'none' | 'float' | 'bounce' | 'pulse' | 'shake' | 'spin';
+export type MetaShopFloatingPageScope = 'all' | 'products' | 'custom';
+
+/** Floating promotional PNG overlay on the public MetaShop storefront (max 3 per shop). */
+export interface MetaShopFloatingSticker {
+  id: string;
+  enabled?: boolean;
+  label?: string;
+  imageUrl: string;
+  linkType: MetaShopFloatingLinkType;
+  /** product id, category key, page id, or external URL */
+  linkTarget?: string;
+  openInNewTab?: boolean;
+  /** Position as % of viewport (0–100). */
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  /** Static rotation in degrees (0–360). */
+  rotation?: number;
+  animation?: MetaShopFloatingAnimation;
+  /** Animation speed multiplier (0.5–2, default 1). */
+  animationSpeed?: number;
+  zIndex?: number;
+  desktopOnly?: boolean;
+  mobileOnly?: boolean;
+  pageScope?: MetaShopFloatingPageScope;
+  /** When pageScope = custom — MetaShopPage ids where sticker is visible. */
+  pageIds?: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface MetaShop {
   id: string;
   slug: string;            // public link key (?shop=<slug>)
@@ -1337,6 +1371,8 @@ export interface MetaShop {
   searchKeywords?: string[];
   /** Product shops: show public supplier partnership form in footer (next to PDF catalog). */
   supplierCollaborationEnabled?: boolean;
+  /** Up to 3 floating PNG promo stickers on the public storefront. */
+  floatingStickers?: MetaShopFloatingSticker[];
   /** Link-share / Open Graph (WhatsApp, Telegram, …) — overrides defaults when set. */
   seoTitle?: string;
   seoDescription?: string;

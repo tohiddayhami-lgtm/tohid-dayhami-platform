@@ -9,6 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
+import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -555,6 +556,15 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     if (p) { setDetail(p); setTab('products'); }
   }, [products]);
   useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const cat = p.get('cat');
+      const tabParam = p.get('tab');
+      if (cat) { setActiveCat(cat); setActiveSub('all'); setTab('products'); }
+      if (tabParam) { setTab(tabParam); setDetail(null); }
+    } catch { /* ignore */ }
+  }, [shop.id]);
+  useEffect(() => {
     const onPop = () => {
       const pid = readProductParam();
       if (!pid) { setDetail(null); return; }
@@ -593,6 +603,31 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   );
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
+
+  const onStickerNav = useCallback((action: FloatingStickerNavAction) => {
+    switch (action.type) {
+      case 'product': {
+        const p = products.find(x => x.id === action.target);
+        if (p) { setDetail(p); setTab('products'); syncProductUrl(p.id); }
+        break;
+      }
+      case 'category':
+        selectCat(action.target);
+        setTab('products');
+        setDetail(null);
+        syncProductUrl(null);
+        break;
+      case 'page':
+        setTab(action.target);
+        setDetail(null);
+        syncProductUrl(null);
+        break;
+      case 'external':
+        if (action.newTab) window.open(action.target, '_blank', 'noopener,noreferrer');
+        else window.location.href = action.target;
+        break;
+    }
+  }, [products]);
 
   // ── Rate options (up to 3 named rates per product) ──
   const optionsOf = (p: MetaShopProduct) => p.priceOptions || [];
@@ -1840,8 +1875,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           </div>
         </div>
       )}
+
       </>
       )}
+
+      <MetaShopFloatingStickers shop={shop} currentPage={tab} onNavigate={onStickerNav} />
     </div>
   );
 };

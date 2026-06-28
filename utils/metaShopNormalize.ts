@@ -173,6 +173,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     hidePrices: raw.hidePrices,
     hidePriceText: raw.hidePriceText,
     supplierCollaborationEnabled: raw.supplierCollaborationEnabled,
+    floatingStickers: raw.floatingStickers?.length ? raw.floatingStickers : undefined,
     seoTitle: raw.seoTitle,
     seoDescription: raw.seoDescription,
     seoImage: raw.seoImage || raw.coverImage || undefined,
