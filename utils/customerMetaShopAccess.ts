@@ -9,6 +9,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'seoTitle', 'seoDescription', 'seoImage',
   'currency', 'displayCurrencies', 'defaultLang', 'languages', 'i18n',
   'categories', 'groupI18n',
+  'hidePrices', 'hidePriceText',
   'products', 'discounts',
 ] as const;
 

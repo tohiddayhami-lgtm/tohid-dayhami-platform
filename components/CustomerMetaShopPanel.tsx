@@ -129,6 +129,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         products: productsDraft,
         categories: categoriesDraft,
         groupI18n: groupI18nDraft,
+        hidePrices: draft.hidePrices,
+        hidePriceText: draft.hidePriceText,
       });
       setLoadedShop(prev => prev ? {
         ...prev,
@@ -136,6 +138,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         productCount: productsDraft.length,
         categories: categoriesDraft,
         groupI18n: groupI18nDraft,
+        hidePrices: draft.hidePrices,
+        hidePriceText: draft.hidePriceText,
       } : prev);
       flashSaved();
     } finally {
@@ -157,6 +161,10 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const handleProductsChange = (products: MetaShopProduct[]) => {
     setProductsDraft(products);
     setSaved(false);
+  };
+
+  const handlePriceSettingsChange = (patch: { hidePrices?: boolean; hidePriceText?: string }) => {
+    upd(patch);
   };
 
   const handleSaveDiscounts = async () => {
@@ -279,6 +287,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           products={productsDraft}
           categories={categoriesDraft}
           groupI18n={groupI18nDraft}
+          hidePrices={draft.hidePrices}
+          hidePriceText={draft.hidePriceText}
           currency={shopBaseCurrency}
           shopType={shop.type}
           shopSlug={shop.slug}
@@ -290,6 +300,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           saved={saved}
           onProductsChange={handleProductsChange}
           onCategoriesChange={handleCategoriesChange}
+          onPriceSettingsChange={handlePriceSettingsChange}
           onSave={handleSaveProducts}
         />
       )}

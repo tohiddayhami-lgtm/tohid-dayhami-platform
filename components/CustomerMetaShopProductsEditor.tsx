@@ -6,12 +6,15 @@ import { DEFAULT_PRODUCT_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { newCustomerProduct, duplicateCustomerProduct } from '../utils/customerMetaShopAccess';
 import { customerCategoriesList, categoryLabelFa } from '../utils/customerMetaShopCategories';
 import { CustomerMetaShopCategoryManager } from './CustomerMetaShopCategoryManager';
+import { CustomerMetaShopPriceSettings } from './CustomerMetaShopPriceSettings';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
 
 interface Props {
   products: MetaShopProduct[];
   categories: (string | MetaShopDirCat)[];
   groupI18n: Record<string, Record<string, string>>;
+  hidePrices?: boolean;
+  hidePriceText?: string;
   currency: string;
   shopType?: MetaShopType;
   shopSlug: string;
@@ -23,14 +26,17 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
+  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
-  loading, saving, saved, onProductsChange, onCategoriesChange, onSave,
+  products, categories, groupI18n, hidePrices, hidePriceText, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
+  const isRealEstate = shopType === 'realestate';
+  const shopPricesHidden = !!hidePrices;
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -181,6 +187,15 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     />
   );
 
+  const priceSettingsSection = !isRealEstate && onPriceSettingsChange ? (
+    <CustomerMetaShopPriceSettings
+      hidePrices={!!hidePrices}
+      hidePriceText={hidePriceText}
+      lang={lang}
+      onChange={onPriceSettingsChange}
+    />
+  ) : null;
+
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
@@ -195,6 +210,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
   if (products.length === 0) {
     return (
       <div className="space-y-4">
+        {priceSettingsSection}
         {categorySection}
         <div className="bg-white border border-gray-100 rounded-xl p-12 text-center space-y-4">
           <p className="text-gray-400 text-sm">{T ? 'هنوز محصولی ندارید.' : 'No products yet.'}</p>
@@ -210,6 +226,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
+      {priceSettingsSection}
       {categorySection}
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -265,7 +282,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                         {p.subcategory ? ` · ${p.subcategory}` : ''}
                       </span>
                     )}
-                    {p.hidePrice ? (
+                    {p.hidePrice || shopPricesHidden ? (
                       <span className="text-emerald-600">{T ? 'قابل مذاکره' : 'Negotiable'}</span>
                     ) : p.price != null ? (
                       <span>{currency} {p.price.toLocaleString()}</span>
@@ -368,7 +385,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                               min={0}
                               step="any"
                               className={fld + ' dir-ltr max-w-[140px]'}
-                              disabled={p.hidePrice}
+                              disabled={p.hidePrice || shopPricesHidden}
                               value={opt.price ?? ''}
                               onChange={e => {
                                 const price = e.target.value === '' ? 0 : Number(e.target.value);
@@ -389,7 +406,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                           min={0}
                           step="any"
                           className={fld + ' dir-ltr'}
-                          disabled={p.hidePrice}
+                          disabled={p.hidePrice || shopPricesHidden}
                           value={p.price ?? ''}
                           onChange={e => updProduct(p.id, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
                         />
@@ -410,6 +427,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                     )}
                   </div>
 
+                  {!shopPricesHidden && (
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -417,8 +435,9 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                       onChange={e => updProduct(p.id, { hidePrice: e.target.checked })}
                       className="rounded"
                     />
-                    <span className="text-xs text-gray-600">{T ? 'قیمت نمایش داده نشود (قابل مذاکره)' : 'Hide price (negotiable)'}</span>
+                    <span className="text-xs text-gray-600">{T ? 'فقط این محصول: قیمت نمایش داده نشود (قابل مذاکره)' : 'This product only: hide price (negotiable)'}</span>
                   </label>
+                  )}
 
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
