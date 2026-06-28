@@ -6,6 +6,7 @@ import { pickCustomerEditableFields } from '../utils/customerMetaShopAccess';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { CustomerMetaShopProductsEditor } from './CustomerMetaShopProductsEditor';
 import { CustomerMetaShopDiscountsEditor } from './CustomerMetaShopDiscountsEditor';
+import { CustomerMetaShopLocaleEditor } from './CustomerMetaShopLocaleEditor';
 import { IconGlobe, IconTrash, IconUpload, IconTag } from './Icons';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 
@@ -18,7 +19,7 @@ interface Props {
   onLoadShop?: (shopId: string) => Promise<MetaShop>;
 }
 
-type Tab = 'info' | 'products' | 'discounts' | 'orders';
+type Tab = 'info' | 'locale' | 'products' | 'discounts' | 'orders';
 
 export const CustomerMetaShopPanel: React.FC<Props> = ({
   shops, orders, shopBaseUrl, lang, onSave, onLoadShop,
@@ -133,6 +134,27 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     }
   };
 
+  const handleSaveLocale = async () => {
+    if (!shop) return;
+    setSaving(true);
+    try {
+      const localePatch: Partial<MetaShop> = {
+        currency: draft.currency,
+        displayCurrencies: draft.displayCurrencies,
+        defaultLang: draft.defaultLang,
+        languages: draft.languages,
+        i18n: draft.i18n,
+        title: draft.title,
+        subtitle: draft.subtitle,
+        collectionText: draft.collectionText,
+      };
+      await onSave(shop.id, localePatch);
+      flashSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gray-800 transition-colors bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
@@ -159,6 +181,9 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
 
   const currency = loadedShop?.currency || shop?.currency || 'USD';
   const productCount = loadedShop?.productCount ?? shop?.productCount ?? productsDraft.length;
+  const shopLangs = draft.languages?.length
+    ? draft.languages
+    : (loadedShop?.languages || shop?.languages || []);
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -179,6 +204,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
 
       <div className="flex gap-2 flex-wrap items-center">
         {tabBtn('info', T ? 'اطلاعات فروشگاه' : 'Shop info')}
+        {tabBtn('locale', T ? 'زبان و ارز' : 'Language & currency')}
         {tabBtn('products', T ? `محصولات (${productCount})` : `Products (${productCount})`)}
         {tabBtn('discounts', T ? 'کدهای تخفیف' : 'Discount codes')}
         {tabBtn('orders', T ? 'سفارش‌ها' : 'Orders', shopOrders.filter(o => o.status === 'new').length)}
@@ -189,12 +215,25 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         )}
       </div>
 
+      {tab === 'locale' && shop && (
+        <CustomerMetaShopLocaleEditor
+          shop={loadedShop || shop}
+          draft={draft}
+          lang={lang}
+          saving={saving}
+          saved={saved}
+          onChange={patch => { upd(patch); }}
+          onSave={handleSaveLocale}
+        />
+      )}
+
       {tab === 'products' && shop && (
         <CustomerMetaShopProductsEditor
           products={productsDraft}
           currency={currency}
           shopSlug={shop.slug}
           shopBaseUrl={shopBaseUrl}
+          shopLangs={shopLangs}
           lang={lang}
           loading={loadingCatalog}
           saving={saving}

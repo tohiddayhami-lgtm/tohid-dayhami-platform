@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { MetaShopProduct } from '../types';
+import { MetaShopProduct, MetaShopLang } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
+import { DEFAULT_PRODUCT_LANGS, isRtlLang } from '../utils/metaShopLang';
 import { IconSearch, IconTrash, IconUpload, IconPlus } from './Icons';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   currency: string;
   shopSlug: string;
   shopBaseUrl: string;
+  shopLangs?: MetaShopLang[];
   lang: Language;
   loading?: boolean;
   saving?: boolean;
@@ -18,13 +20,30 @@ interface Props {
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, currency, shopSlug, shopBaseUrl, lang,
+  products, currency, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onChange, onSave,
 }) => {
   const T = lang === 'fa';
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const translationLangs = useMemo(() => {
+    const configured = shopLangs.filter(l => l.code?.trim());
+    const list = configured.length ? configured : DEFAULT_PRODUCT_LANGS;
+    return list.filter(l => l.code !== 'fa');
+  }, [shopLangs]);
+
+  const updProductI18n = (id: string, code: string, field: 'name' | 'description', value: string) => {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    const i18n = { ...(p.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: value };
+    updProduct(id, { i18n });
+  };
+
+  const productI18nField = (p: MetaShopProduct, code: string, field: 'name' | 'description'): string =>
+    p.i18n?.[code]?.[field] || '';
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -179,12 +198,12 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                   </div>
 
                   <div>
-                    <label className={lbl}>{T ? 'نام محصول' : 'Product name'}</label>
+                    <label className={lbl}>{T ? 'نام محصول (فارسی / پیش‌فرض)' : 'Product name (default)'}</label>
                     <input className={fld} value={p.name} onChange={e => updProduct(p.id, { name: e.target.value })} />
                   </div>
 
                   <div>
-                    <label className={lbl}>{T ? 'توضیحات' : 'Description'}</label>
+                    <label className={lbl}>{T ? 'توضیحات (فارسی / پیش‌فرض)' : 'Description (default)'}</label>
                     <textarea
                       className={fld + ' min-h-[100px] resize-y'}
                       placeholder={T ? 'توضیحات محصول را بنویسید…' : 'Write product description…'}
@@ -192,6 +211,29 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                       onChange={e => updProduct(p.id, { description: e.target.value })}
                     />
                   </div>
+
+                  {translationLangs.length > 0 && (
+                    <div className="space-y-3 p-3 rounded-xl bg-violet-50/50 border border-violet-100">
+                      <p className="text-xs font-semibold text-violet-800">{T ? 'ترجمه به زبان‌های دیگر' : 'Translations'}</p>
+                      {translationLangs.map(lg => (
+                        <div key={lg.code} className="space-y-2 pb-2 border-b border-violet-100 last:border-0 last:pb-0">
+                          <p className="text-[11px] font-bold text-violet-600">{lg.name || lg.code}</p>
+                          <input
+                            className={fld + ' text-sm' + (!isRtlLang(lg.code, translationLangs) ? ' dir-ltr' : '')}
+                            placeholder={T ? `نام به ${lg.name || lg.code}` : `Name in ${lg.name || lg.code}`}
+                            value={productI18nField(p, lg.code, 'name')}
+                            onChange={e => updProductI18n(p.id, lg.code, 'name', e.target.value)}
+                          />
+                          <textarea
+                            className={fld + ' min-h-[60px] text-sm resize-y' + (!isRtlLang(lg.code, translationLangs) ? ' dir-ltr' : '')}
+                            placeholder={T ? `توضیحات به ${lg.name || lg.code}` : `Description in ${lg.name || lg.code}`}
+                            value={productI18nField(p, lg.code, 'description')}
+                            onChange={e => updProductI18n(p.id, lg.code, 'description', e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {(p.priceOptions?.length ?? 0) > 0 ? (

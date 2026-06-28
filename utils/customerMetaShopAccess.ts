@@ -6,6 +6,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'title', 'subtitle', 'collectionText',
   'phone', 'whatsapp', 'email', 'website', 'address', 'footerText',
   'seoTitle', 'seoDescription', 'seoImage',
+  'currency', 'displayCurrencies', 'defaultLang', 'languages', 'i18n',
   'products', 'discounts',
 ] as const;
 
@@ -13,7 +14,7 @@ export type CustomerEditableShopField = typeof CUSTOMER_EDITABLE_SHOP_FIELDS[num
 
 /** Per-product fields customers may edit (admin-only fields like sku/group stay intact). */
 export const CUSTOMER_EDITABLE_PRODUCT_FIELDS = [
-  'name', 'description', 'images',
+  'name', 'description', 'images', 'i18n',
   'price', 'packPrice', 'currency',
   'discountType', 'discountValue',
   'hidePrice', 'hidePriceText',
@@ -31,7 +32,12 @@ export function pickCustomerEditableFields(shop: MetaShop): Partial<MetaShop> {
   for (const key of CUSTOMER_EDITABLE_SHOP_FIELDS) {
     if (key === 'products' || key === 'discounts') continue;
     const val = shop[key];
-    if (val !== undefined) (out as Record<string, unknown>)[key] = val;
+    if (val !== undefined) {
+      if (key === 'i18n') (out as MetaShop).i18n = { ...(val as MetaShop['i18n']) };
+      else if (key === 'languages') (out as MetaShop).languages = [...(val as MetaShop['languages'] || [])];
+      else if (key === 'displayCurrencies') (out as MetaShop).displayCurrencies = [...(val as MetaShop['displayCurrencies'] || [])];
+      else (out as Record<string, unknown>)[key] = val;
+    }
   }
   return out;
 }
@@ -59,6 +65,12 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
       return { ...o, price: e.price ?? o.price, currency: e.currency ?? o.currency };
     });
   }
+  if (edits.i18n) {
+    merged.i18n = { ...(existing.i18n || {}) };
+    for (const [langCode, fields] of Object.entries(edits.i18n)) {
+      merged.i18n[langCode] = { ...(merged.i18n[langCode] || {}), ...fields };
+    }
+  }
   return merged;
 }
 
@@ -66,8 +78,14 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
 export function mergeCustomerShopEdits(existing: MetaShop, edits: Partial<MetaShop>): MetaShop {
   const merged = { ...existing };
   for (const key of CUSTOMER_EDITABLE_SHOP_FIELDS) {
-    if (key === 'products' || key === 'discounts') continue;
+    if (key === 'products' || key === 'discounts' || key === 'i18n') continue;
     if (key in edits) (merged as Record<string, unknown>)[key] = edits[key as CustomerEditableShopField];
+  }
+  if (edits.i18n) {
+    merged.i18n = { ...(existing.i18n || {}) };
+    for (const [langCode, fields] of Object.entries(edits.i18n)) {
+      merged.i18n[langCode] = { ...(merged.i18n[langCode] || {}), ...fields };
+    }
   }
   if (edits.products) {
     const editMap = new Map(edits.products.map(p => [p.id, p]));
