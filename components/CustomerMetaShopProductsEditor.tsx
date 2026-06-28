@@ -120,8 +120,8 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
 
       <p className="text-xs text-gray-400">
         {T
-          ? `${filtered.length} محصول — روی هر کدام کلیک کنید تا ویرایش کنید`
-          : `${filtered.length} product(s) — tap to expand and edit`}
+          ? `${filtered.length} محصول — قیمت‌ها به ${currency} — روی هر کدام کلیک کنید`
+          : `${filtered.length} product(s) — prices in ${currency} — tap to edit`}
       </p>
 
       <div className="space-y-2">
@@ -149,7 +149,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                     {p.hidePrice ? (
                       <span className="text-emerald-600">{T ? 'قابل مذاکره' : 'Negotiable'}</span>
                     ) : p.price != null ? (
-                      <span>{p.currency || currency} {p.price.toLocaleString()}</span>
+                      <span>{currency} {p.price.toLocaleString()}</span>
                     ) : null}
                     {(p.images?.length ?? 0) > 0 && <span>{p.images!.length} {T ? 'عکس' : 'photo(s)'}</span>}
                     {p.outOfStock && <span className="text-red-500">{T ? 'ناموجود' : 'Out of stock'}</span>}
@@ -256,13 +256,13 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                                 });
                               }}
                             />
-                            <span className="text-[10px] text-gray-400">{opt.currency || p.currency || currency}</span>
+                            <span className="text-[10px] text-gray-400">{opt.currency || currency}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
                       <div>
-                        <label className={lbl}>{T ? 'قیمت' : 'Price'} ({p.currency || currency})</label>
+                        <label className={lbl}>{T ? 'قیمت' : 'Price'} ({currency})</label>
                         <input
                           type="number"
                           min={0}

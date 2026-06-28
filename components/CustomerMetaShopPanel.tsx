@@ -149,6 +149,17 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         collectionText: draft.collectionText,
       };
       await onSave(shop.id, localePatch);
+      setLoadedShop(prev => prev ? {
+        ...prev,
+        currency: localePatch.currency ?? prev.currency,
+        displayCurrencies: localePatch.displayCurrencies ?? prev.displayCurrencies,
+        defaultLang: localePatch.defaultLang ?? prev.defaultLang,
+        languages: localePatch.languages ?? prev.languages,
+        i18n: localePatch.i18n ?? prev.i18n,
+        title: localePatch.title ?? prev.title,
+        subtitle: localePatch.subtitle ?? prev.subtitle,
+        collectionText: localePatch.collectionText ?? prev.collectionText,
+      } : prev);
       flashSaved();
     } finally {
       setSaving(false);
@@ -179,7 +190,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     );
   }
 
-  const currency = loadedShop?.currency || shop?.currency || 'USD';
+  const shopBaseCurrency = (draft.currency || shop?.currency || loadedShop?.currency || 'USD').trim().toUpperCase();
   const productCount = loadedShop?.productCount ?? shop?.productCount ?? productsDraft.length;
   const shopLangs = draft.languages?.length
     ? draft.languages
@@ -230,7 +241,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       {tab === 'products' && shop && (
         <CustomerMetaShopProductsEditor
           products={productsDraft}
-          currency={currency}
+          currency={shopBaseCurrency}
           shopSlug={shop.slug}
           shopBaseUrl={shopBaseUrl}
           shopLangs={shopLangs}
@@ -246,7 +257,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       {tab === 'discounts' && shop && (
         <CustomerMetaShopDiscountsEditor
           discounts={discountsDraft}
-          currency={currency}
+          currency={shopBaseCurrency}
           lang={lang}
           saving={saving}
           saved={saved}
