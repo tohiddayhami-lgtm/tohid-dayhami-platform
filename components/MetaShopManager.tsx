@@ -22,6 +22,7 @@ import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
+import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
@@ -49,6 +50,8 @@ interface Props {
   canDeleteBooths?: boolean;
   /** When true (master), show a global all-orders view across every shop. */
   showAllOrders?: boolean;
+  /** Display name for backup audit (master). */
+  backupActorName?: string;
 }
 
 const DEFAULT_THEME = { primary: '#2d4a1a', cover: '#2d4a1a', coverText: '#fdfbf6', bg: '#fdfbf6', heading: '#1f2a18', text: '#2d3a24' };
@@ -154,7 +157,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
@@ -1468,6 +1471,20 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             ? `در حال بارگذاری بقیه محصولات… (${draft.products.length}${draft.productCount ? ` / ${draft.productCount}` : ''})`
             : `Loading remaining products… (${draft.products.length}${draft.productCount ? ` / ${draft.productCount}` : ''})`}
         </div>
+      )}
+
+      {showAllOrders && !readonly && (
+        <MetaShopBackupPanel
+          shop={draft}
+          T={T}
+          actorName={backupActorName}
+          productsReady={productsFullyLoaded && !shopNeedsProductHydration(draft)}
+          productsLoading={productsLoading || productsSyncing}
+          onDraftReplace={setDraft}
+          onSaveShop={async s => {
+            await onSaveMetaShop({ ...s, isActive: s.isActive !== false });
+          }}
+        />
       )}
 
       {/* Basics */}

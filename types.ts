@@ -1449,6 +1449,23 @@ export interface MetaShopOrder {
   via?: 'shop' | 'gsite';  // where the order was placed from: direct shop page, or an embedded Google Site / external site
 }
 
+/** Master-only checkpoint: up to 3 saved snapshots per MetaShop (stored in metaShopBackups). */
+export type MetaShopBackupSlotNum = 1 | 2 | 3;
+
+export interface MetaShopBackupMeta {
+  id: string;
+  shopId: string;
+  slot: MetaShopBackupSlotNum;
+  label?: string;
+  savedAt: string;
+  savedBy: string;
+  productCount: number;
+  productChunkCount: number;
+  shopName: string;
+  /** Full shop settings/pages/discounts — products live in metaShopBackupChunks. */
+  shell: MetaShop;
+}
+
 /** Public submission: someone refers a property they own or know for a real-estate MetaShop */
 export interface MetaShopPropertyReferral {
   id: string;

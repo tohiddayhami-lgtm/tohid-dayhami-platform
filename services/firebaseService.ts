@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -17,6 +17,15 @@ import {
   shopProductsNeedFullHydration,
   type MetaShopProductChunk,
 } from '../utils/metaShopChunks';
+import {
+  assembleShopFromBackup,
+  backupChunkPrefix,
+  backupMetaDocId,
+  META_SHOP_BACKUP_SLOT_NUMS,
+  splitShopIntoBackupChunks,
+  mergeBackupProductChunks,
+  type MetaShopBackupChunk,
+} from '../utils/metaShopBackup';
 import { MAX_BOOTH_PENDING_RESERVATIONS } from '../utils/boothReservationUtils';
 
 export const firebaseConfig = {
@@ -1219,6 +1228,146 @@ export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOpt
   await setDocCloud('metaShops', shell.id, shell);
   logSystemAction('UPDATE', 'MetaShop', `فروشگاه ${shell.name} ذخیره شد (${products.length} محصول)`, 'Master', shell.id);
 };
+
+// ── Meta Shop backup slots (master checkpoints — 3 per shop) ──
+const META_SHOP_BACKUPS_COL = 'metaShopBackups';
+const META_SHOP_BACKUP_CHUNKS_COL = 'metaShopBackupChunks';
+
+const loadOneMetaShopBackupChunk = async (chunkDocId: string): Promise<MetaShopBackupChunk | null> => {
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) return await proxyGet<MetaShopBackupChunk | null>(META_SHOP_BACKUP_CHUNKS_COL, { doc: chunkDocId });
+    const snap = await getDoc(doc(db, META_SHOP_BACKUP_CHUNKS_COL, chunkDocId));
+    return snap.exists() ? (snap.data() as MetaShopBackupChunk) : null;
+  } catch {
+    return null;
+  }
+};
+
+const deleteMetaShopBackupChunksForSlot = async (shopId: string, slot: MetaShopBackupSlotNum) => {
+  const prefix = backupChunkPrefix(shopId, slot);
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) {
+      const rows = await proxyGet<MetaShopBackupChunk[]>(META_SHOP_BACKUP_CHUNKS_COL, {
+        whereField: 'shopId',
+        whereEq: shopId,
+        all: true,
+      });
+      const toDelete = (Array.isArray(rows) ? rows : []).filter(c => c.slot === slot);
+      await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, c.id)));
+    } else {
+      const q = query(
+        collection(db, META_SHOP_BACKUP_CHUNKS_COL),
+        where('shopId', '==', shopId),
+        where('slot', '==', slot),
+      );
+      const snap = await getDocs(q);
+      await Promise.all(snap.docs.map(d => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, d.id)));
+    }
+  } catch { /* best effort */ }
+  for (let i = 0; i < 64; i++) {
+    try { await deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, `${prefix}_${i}`); } catch { /* gone */ }
+  }
+};
+
+export const fetchMetaShopBackupMeta = async (
+  shopId: string,
+  slot: MetaShopBackupSlotNum,
+): Promise<MetaShopBackupMeta | null> => {
+  const id = backupMetaDocId(shopId, slot);
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) return await proxyGet<MetaShopBackupMeta | null>(META_SHOP_BACKUPS_COL, { doc: id });
+    const snap = await getDoc(doc(db, META_SHOP_BACKUPS_COL, id));
+    return snap.exists() ? (snap.data() as MetaShopBackupMeta) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const listMetaShopBackupSlots = async (shopId: string): Promise<(MetaShopBackupMeta | null)[]> =>
+  Promise.all(META_SHOP_BACKUP_SLOT_NUMS.map(slot => fetchMetaShopBackupMeta(shopId, slot)));
+
+export const saveMetaShopBackupSlot = async (
+  shop: MetaShop,
+  slot: MetaShopBackupSlotNum,
+  savedBy: string,
+  label?: string,
+): Promise<MetaShopBackupMeta> => {
+  const full = (shop.products?.length ? shop : await hydrateMetaShop(shop)) || shop;
+  const normalized = normalizeMetaShopForCloud(full);
+  const products = normalized.products || [];
+  const chunks = splitShopIntoBackupChunks(normalized.id, slot, products);
+  const shell = prepareMetaShopShell(normalized, products, chunks.length);
+
+  await deleteMetaShopBackupChunksForSlot(normalized.id, slot);
+  if (chunks.length) {
+    await Promise.all(chunks.map(c => setDocCloud(META_SHOP_BACKUP_CHUNKS_COL, c.id, c)));
+  }
+
+  const meta: MetaShopBackupMeta = {
+    id: backupMetaDocId(normalized.id, slot),
+    shopId: normalized.id,
+    slot,
+    label: label?.trim() || undefined,
+    savedAt: new Date().toISOString(),
+    savedBy,
+    productCount: products.length,
+    productChunkCount: chunks.length,
+    shopName: normalized.name,
+    shell,
+  };
+  await setDocCloud(META_SHOP_BACKUPS_COL, meta.id, meta);
+  logSystemAction('UPDATE', 'MetaShop', `بکاپ اسلات ${slot} — ${normalized.name} (${products.length} محصول)`, savedBy, meta.id);
+  return meta;
+};
+
+export const hydrateMetaShopBackup = async (
+  shopId: string,
+  slot: MetaShopBackupSlotNum,
+): Promise<MetaShop | null> => {
+  const meta = await fetchMetaShopBackupMeta(shopId, slot);
+  if (!meta?.shell) return null;
+
+  let chunks: MetaShopBackupChunk[] = [];
+  const count = meta.productChunkCount || 0;
+  if (count > 0) {
+    const prefix = backupChunkPrefix(shopId, slot);
+    const loaded = await Promise.all(
+      Array.from({ length: count }, (_, i) => loadOneMetaShopBackupChunk(`${prefix}_${i}`)),
+    );
+    chunks = loaded.filter(Boolean) as MetaShopBackupChunk[];
+  }
+  if (!chunks.length && (meta.productCount || 0) > 0) {
+    try {
+      const proxy = await checkProxyMode();
+      if (proxy) {
+        const rows = await proxyGet<MetaShopBackupChunk[]>(META_SHOP_BACKUP_CHUNKS_COL, {
+          whereField: 'shopId',
+          whereEq: shopId,
+          all: true,
+        });
+        chunks = (Array.isArray(rows) ? rows : []).filter(c => c.slot === slot);
+      } else {
+        const q = query(
+          collection(db, META_SHOP_BACKUP_CHUNKS_COL),
+          where('shopId', '==', shopId),
+          where('slot', '==', slot),
+        );
+        const snap = await getDocs(q);
+        chunks = snap.docs.map(d => d.data() as MetaShopBackupChunk);
+      }
+    } catch { /* empty */ }
+  }
+
+  const products = mergeBackupProductChunks(chunks);
+  if (!products.length && meta.shell.products?.length) {
+    return assembleShopFromBackup(meta.shell, meta.shell.products);
+  }
+  return assembleShopFromBackup(meta.shell, products);
+};
+
 export const deleteMetaShopFromCloud = async (id: string) => {
     const proxy = await checkProxyMode();
     let data: unknown = null;
