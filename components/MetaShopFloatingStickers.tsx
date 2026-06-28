@@ -4,18 +4,26 @@ import {
   buildFloatingStickerHref,
   filterActiveFloatingStickers,
   isMobileViewport,
+  resolveStickerShopSlug,
   stickerPositionStyle,
 } from '../utils/metaShopFloatingStickers';
 
 export type FloatingStickerNavAction = {
-  type: 'product' | 'category' | 'page' | 'external';
+  type: MetaShopFloatingSticker['linkType'];
   target: string;
+  shopSlug?: string;
   newTab: boolean;
+  href?: string;
 };
 
 interface Props {
-  shop: MetaShop;
-  currentPage: string;
+  /** Stickers to render (defaults to shop.floatingStickers when shop is set). */
+  stickers?: MetaShopFloatingSticker[];
+  /** Default MetaShop slug for product/category/page links. */
+  defaultShopSlug?: string;
+  /** Legacy: single-shop storefront. */
+  shop?: MetaShop;
+  currentPage?: string;
   onNavigate?: (action: FloatingStickerNavAction) => void;
 }
 
@@ -51,11 +59,11 @@ const fill: React.CSSProperties = {
 };
 
 const StickerLayer: React.FC<{
-  shop: MetaShop;
   sticker: MetaShopFloatingSticker;
+  defaultShopSlug?: string;
   onNavigate?: Props['onNavigate'];
-}> = ({ shop, sticker, onNavigate }) => {
-  const href = buildFloatingStickerHref(shop, sticker);
+}> = ({ sticker, defaultShopSlug, onNavigate }) => {
+  const href = buildFloatingStickerHref(sticker, defaultShopSlug);
   const anim = sticker.animation || 'none';
   const speed = sticker.animationSpeed ?? 1;
   const rot = sticker.rotation ?? 0;
@@ -124,9 +132,15 @@ const StickerLayer: React.FC<{
     };
   }, [is3dSpin, speed, imgReady]);
 
+  const shopSlug = resolveStickerShopSlug(sticker, defaultShopSlug);
+  const target = (sticker.linkTarget || '').trim();
+  const hasLink = sticker.linkType === 'external' || sticker.linkType === 'shop'
+    ? !!target
+    : !!shopSlug && (sticker.linkType === 'product' || sticker.linkType === 'category' || sticker.linkType === 'page' ? !!target : true);
+
   const handleClick = (e: React.MouseEvent) => {
-    const target = (sticker.linkTarget || '').trim();
-    if (!target) return;
+    if (!hasLink && sticker.linkType !== 'external') return;
+    if (sticker.linkType === 'external' && !target) return;
 
     if (sticker.openInNewTab) {
       e.preventDefault();
@@ -139,12 +153,12 @@ const StickerLayer: React.FC<{
       onNavigate({
         type: sticker.linkType,
         target,
+        shopSlug: shopSlug || (sticker.linkType === 'shop' ? target : undefined),
         newTab: false,
+        href,
       });
     }
   };
-
-  const hasLink = !!targetTrim(sticker.linkTarget);
 
   const imgStyle: React.CSSProperties = {
     ...fill,
@@ -202,7 +216,16 @@ function targetTrim(v?: string) {
   return (v || '').trim();
 }
 
-export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, onNavigate }) => {
+export const MetaShopFloatingStickers: React.FC<Props> = ({
+  stickers: stickersProp,
+  defaultShopSlug: defaultShopSlugProp,
+  shop,
+  currentPage = 'products',
+  onNavigate,
+}) => {
+  const stickers = stickersProp ?? shop?.floatingStickers;
+  const defaultShopSlug = defaultShopSlugProp ?? shop?.slug;
+
   const [mobile, setMobile] = useState(isMobileViewport);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -213,8 +236,8 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, o
   }, []);
 
   const active = useMemo(
-    () => filterActiveFloatingStickers(shop.floatingStickers, currentPage, mobile),
-    [shop.floatingStickers, currentPage, mobile],
+    () => filterActiveFloatingStickers(stickers, currentPage, mobile),
+    [stickers, currentPage, mobile],
   );
 
   if (active.length === 0) return null;
@@ -264,7 +287,7 @@ export const MetaShopFloatingStickers: React.FC<Props> = ({ shop, currentPage, o
         }
       `}</style>
       {active.map(s => (
-        <StickerLayer key={s.id} shop={shop} sticker={s} onNavigate={onNavigate} />
+        <StickerLayer key={s.id} sticker={s} defaultShopSlug={defaultShopSlug} onNavigate={onNavigate} />
       ))}
     </>
   );

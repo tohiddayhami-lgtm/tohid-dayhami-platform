@@ -12,7 +12,9 @@ import {
 import { normalizeShopCategories } from '../utils/metaShopCategories';
 
 interface Props {
-  shop: MetaShop;
+  shop?: MetaShop;
+  /** When set (bazaar editor), product/category/page links pick from these shops. */
+  linkedShops?: MetaShop[];
   stickers: MetaShopFloatingSticker[];
   onChange: (stickers: MetaShopFloatingSticker[]) => void;
   uploadImage: (file: File, onUrl: (url: string) => void) => void;
@@ -20,6 +22,17 @@ interface Props {
   fld: string;
   lbl: string;
 }
+
+const BASE_LINK_TYPES: { id: MetaShopFloatingLinkType; fa: string; en: string }[] = [
+  { id: 'product', fa: 'محصول', en: 'Product' },
+  { id: 'category', fa: 'دسته', en: 'Category' },
+  { id: 'page', fa: 'صفحه داخلی', en: 'Internal page' },
+  { id: 'external', fa: 'لینک خارجی', en: 'External URL' },
+];
+
+const SHOP_LINK_TYPE: { id: MetaShopFloatingLinkType; fa: string; en: string } = {
+  id: 'shop', fa: 'ورود به فروشگاه', en: 'Enter shop',
+};
 
 const ANIMATIONS: { id: MetaShopFloatingAnimation; fa: string; en: string }[] = [
   { id: 'none', fa: 'بدون انیمیشن', en: 'None' },
@@ -39,12 +52,13 @@ const ANCHORS: { id: MetaShopFloatingPositionAnchor; fa: string; en: string }[] 
   { id: 'free', fa: 'موقعیت آزاد (وسط صفحه)', en: 'Free placement' },
 ];
 
-const LINK_TYPES: { id: MetaShopFloatingLinkType; fa: string; en: string }[] = [
-  { id: 'product', fa: 'محصول', en: 'Product' },
-  { id: 'category', fa: 'دسته', en: 'Category' },
-  { id: 'page', fa: 'صفحه داخلی', en: 'Internal page' },
-  { id: 'external', fa: 'لینک خارجی', en: 'External URL' },
-];
+const shopForSticker = (s: MetaShopFloatingSticker, shop?: MetaShop, linkedShops?: MetaShop[]): MetaShop | null => {
+  if (linkedShops?.length) {
+    const slug = s.linkShopSlug || linkedShops[0]?.slug;
+    return linkedShops.find(x => x.slug === slug) || linkedShops[0] || null;
+  }
+  return shop || null;
+};
 
 const speedDur = (baseSec: number, speed?: number) => {
   const s = Math.min(2, Math.max(0.5, speed ?? 1));
@@ -83,6 +97,7 @@ const previewAnimStyle = (sticker: MetaShopFloatingSticker): React.CSSProperties
 
 export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
   shop,
+  linkedShops,
   stickers,
   onChange,
   uploadImage,
@@ -96,9 +111,9 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
   const [expanded, setExpanded] = useState<string | null>(stickers[0]?.id || null);
   const [uploading, setUploading] = useState<string | null>(null);
 
-  const products = (shop.products || []).filter(p => p.active !== false);
-  const categories = normalizeShopCategories(shop.categories, shop.products || []);
-  const pages = shop.pages || [];
+  const linkTypes = linkedShops?.length
+    ? [SHOP_LINK_TYPE, ...BASE_LINK_TYPES]
+    : BASE_LINK_TYPES;
 
   const upd = (idx: number, patch: Partial<MetaShopFloatingSticker>) => {
     const next = [...stickers];
@@ -272,6 +287,10 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
 
       {stickers.map((s, idx) => {
         const open = expanded === s.id;
+        const ctx = shopForSticker(s, shop, linkedShops);
+        const products = (ctx?.products || []).filter(p => p.active !== false);
+        const categories = normalizeShopCategories(ctx?.categories, ctx?.products || []);
+        const pages = ctx?.pages || [];
         return (
           <div key={s.id} className="border border-gray-200 rounded-xl overflow-hidden">
             <button
@@ -337,12 +356,41 @@ export const MetaShopFloatingPromosEditor: React.FC<Props> = ({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
                     <label className={lbl}>{T ? 'نوع لینک' : 'Link type'}</label>
-                    <select className={fld + ' bg-white'} value={s.linkType} onChange={e => upd(idx, { linkType: e.target.value as MetaShopFloatingLinkType })}>
-                      {LINK_TYPES.map(lt => <option key={lt.id} value={lt.id}>{T ? lt.fa : lt.en}</option>)}
+                    <select className={fld + ' bg-white'} value={s.linkType} onChange={e => {
+                      const linkType = e.target.value as MetaShopFloatingLinkType;
+                      const patch: Partial<MetaShopFloatingSticker> = { linkType, linkTarget: '' };
+                      if (linkedShops?.length && linkType !== 'external' && linkType !== 'shop' && !s.linkShopSlug) {
+                        patch.linkShopSlug = linkedShops[0]?.slug;
+                      }
+                      upd(idx, patch);
+                    }}>
+                      {linkTypes.map(lt => <option key={lt.id} value={lt.id}>{T ? lt.fa : lt.en}</option>)}
                     </select>
                   </div>
-                  <div className="col-span-2">
+                  {linkedShops && linkedShops.length > 0 && (s.linkType === 'product' || s.linkType === 'category' || s.linkType === 'page') && (
+                    <div className="md:col-span-4">
+                      <label className={lbl}>{T ? 'فروشگاه مقصد' : 'Target shop'}</label>
+                      <select
+                        className={fld + ' bg-white'}
+                        value={s.linkShopSlug || linkedShops[0]?.slug || ''}
+                        onChange={e => upd(idx, { linkShopSlug: e.target.value, linkTarget: '' })}
+                      >
+                        {linkedShops.map(sh => (
+                          <option key={sh.slug} value={sh.slug}>{sh.name || sh.slug}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className={linkedShops?.length && (s.linkType === 'product' || s.linkType === 'category' || s.linkType === 'page') ? 'md:col-span-4' : 'col-span-2'}>
                     <label className={lbl}>{T ? 'مقصد لینک' : 'Link target'}</label>
+                    {s.linkType === 'shop' && linkedShops && (
+                      <select className={fld + ' bg-white'} value={s.linkTarget || ''} onChange={e => upd(idx, { linkTarget: e.target.value })}>
+                        <option value="">{T ? '— انتخاب فروشگاه —' : '— Select shop —'}</option>
+                        {linkedShops.map(sh => (
+                          <option key={sh.slug} value={sh.slug}>{sh.name || sh.slug}</option>
+                        ))}
+                      </select>
+                    )}
                     {s.linkType === 'product' && (
                       <select className={fld + ' bg-white'} value={s.linkTarget || ''} onChange={e => upd(idx, { linkTarget: e.target.value })}>
                         <option value="">{T ? '— انتخاب محصول —' : '— Select product —'}</option>

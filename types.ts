@@ -715,6 +715,8 @@ export interface MetaBazaar {
   featuredShopSlugs?: string[];
   /** Higher number = shown earlier (after featured shops). slug → priority */
   shopPriorities?: Record<string, number>;
+  /** Up to 3 floating PNG promo stickers on the public bazaar page. */
+  floatingStickers?: MetaShopFloatingSticker[];
   expo?: MetaverseExpo;           // optional 3D / metaverse exhibition for this bazaar (one bazaar = one expo)
   createdAt?: string;
 }
@@ -1259,7 +1261,7 @@ export interface MetaShopProductRef {
   sku?: string;
 }
 
-export type MetaShopFloatingLinkType = 'product' | 'category' | 'page' | 'external';
+export type MetaShopFloatingLinkType = 'product' | 'category' | 'page' | 'external' | 'shop';
 export type MetaShopFloatingAnimation = 'none' | 'float' | 'bounce' | 'pulse' | 'shake' | 'spin' | 'productSpin360';
 export type MetaShopFloatingPageScope = 'all' | 'products' | 'custom';
 export type MetaShopFloatingPositionAnchor = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'free';
@@ -1271,8 +1273,10 @@ export interface MetaShopFloatingSticker {
   label?: string;
   imageUrl: string;
   linkType: MetaShopFloatingLinkType;
-  /** product id, category key, page id, or external URL */
+  /** product id, category key, page id, shop slug, or external URL */
   linkTarget?: string;
+  /** Target MetaShop slug for product/category/page links (used on bazaar pages). */
+  linkShopSlug?: string;
   openInNewTab?: boolean;
   /** Corner anchor (default bottom-right). Use `free` for drag-anywhere center placement. */
   positionAnchor?: MetaShopFloatingPositionAnchor;

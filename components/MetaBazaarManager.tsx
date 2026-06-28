@@ -1,10 +1,11 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { MetaBazaar, MetaBazaarNode, MetaExpoEvent, MetaShop } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch } from './Icons';
+import { IconPlus, IconTrash, IconEdit, IconCopy, IconLink, IconGlobe, IconUpload, IconCheck, IconSearch, IconTag } from './Icons';
 import { downloadSample } from './metaShopSamples';
 import { ExpoEditor } from './ExpoEditor';
 import { Language } from '../App';
-import { fetchMetaExpoEvents } from '../services/firebaseService';
+import { fetchMetaExpoEvents, uploadFileWithProgress } from '../services/firebaseService';
+import { MetaShopFloatingPromosEditor } from './MetaShopFloatingPromosEditor';
 import { expoStyleMeta, bazaarHasActiveExpo, resolveExpoStyle } from './metaverse/expoCatalog';
 import {
   MAX_BAZAAR_FEATURED_SHOPS,
@@ -57,6 +58,7 @@ const normalizeBazaar = (raw: string, base: MetaBazaar): MetaBazaar => {
     levelLabels: Array.isArray(j.levelLabels) ? j.levelLabels : (base.levelLabels || []),
     featuredShopSlugs: Array.isArray(j.featuredShopSlugs) ? j.featuredShopSlugs.filter(Boolean).slice(0, MAX_BAZAAR_FEATURED_SHOPS) : base.featuredShopSlugs,
     shopPriorities: j.shopPriorities && typeof j.shopPriorities === 'object' && !Array.isArray(j.shopPriorities) ? j.shopPriorities : base.shopPriorities,
+    floatingStickers: Array.isArray(j.floatingStickers) ? j.floatingStickers : base.floatingStickers,
     theme: { ...(base.theme || {}), ...(j.theme || {}) },
     expo: j.expo ? { ...(base.expo || {}), ...j.expo } : base.expo,
   };
@@ -107,6 +109,8 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     featuredCount: (n: number) => T ? `${n}/${MAX_BAZAAR_FEATURED_SHOPS} ویژه` : `${n}/${MAX_BAZAAR_FEATURED_SHOPS} featured`,
     noLinkedShops: T ? 'ابتدا فروشگاه‌ها را به دسته‌های بازارچه وصل کنید.' : 'Attach shops to bazaar categories first.',
     featuredFull: T ? `حداکثر ${MAX_BAZAAR_FEATURED_SHOPS} فروشگاه ویژه مجاز است.` : `Maximum ${MAX_BAZAAR_FEATURED_SHOPS} featured shops.`,
+    fpsT: T ? 'استیکرهای تبلیغاتی شناور' : 'Floating Promotions',
+    fpsHint: T ? 'تا ۳ تصویر PNG شفاف روی صفحه عمومی بازارچه — قابل جابجایی، لینک به فروشگاه/محصول، انیمیشن و زمان‌بندی.' : 'Up to 3 transparent PNG overlays on the public bazaar page — draggable, linkable to shops/products, animated, schedulable.',
     expoReport: T ? 'گزارش نمایشگاه' : 'Expo report',
     anLoading: T ? 'در حال بارگذاری آمار...' : 'Loading analytics...',
     anEmpty: T ? 'هنوز آماری برای این نمایشگاه ثبت نشده است.' : 'No expo analytics yet.',
@@ -253,6 +257,9 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const setLevelLabel = (i: number, which: 'fa' | 'en', val: string) => setDraft(d => { if (!d) return d; const arr = [...(d.levelLabels || [])]; while (arr.length <= i) arr.push({}); arr[i] = { ...arr[i], [which]: val }; return { ...d, levelLabels: arr }; });
   const addLevel = () => setDraft(d => d ? { ...d, levelLabels: [...(d.levelLabels || []), {}] } : d);
   const removeLevel = (i: number) => setDraft(d => d ? { ...d, levelLabels: (d.levelLabels || []).filter((_, j) => j !== i) } : d);
+
+  const uploadImg = (file: File, onUrl: (url: string) => void) =>
+    uploadFileWithProgress(file, () => {}, onUrl, (e) => alert(e.message), 'images');
 
   const linkedBazaarShops = useMemo(() => {
     if (!draft) return [] as MetaShop[];
@@ -440,6 +447,24 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
               })}
             </div>
           )}
+        </div>
+
+        {/* ── Floating promotional stickers ── */}
+        <div className={card}>
+          <h4 className="font-bold text-gray-700 mb-1 flex items-center gap-2">
+            <IconTag className="w-4 h-4 text-fuchsia-500" />
+            {T ? 'بازاریابی → استیکرهای تبلیغاتی' : 'Marketing → Floating Promotions'}
+          </h4>
+          <p className="text-xs text-gray-500 mb-4">{t.fpsHint}</p>
+          <MetaShopFloatingPromosEditor
+            linkedShops={linkedBazaarShops}
+            stickers={draft.floatingStickers || []}
+            onChange={stickers => upd({ floatingStickers: stickers.length ? stickers : undefined })}
+            uploadImage={uploadImg}
+            T={T}
+            fld={fld}
+            lbl={lbl}
+          />
         </div>
 
         {/* ── Metaverse 3D exhibition for this bazaar ── */}

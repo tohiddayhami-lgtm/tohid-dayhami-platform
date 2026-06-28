@@ -76,23 +76,39 @@ export const filterActiveFloatingStickers = (
     .slice(0, MAX_FLOATING_STICKERS)
     .map(prepareStickerForDisplay);
 
-export const buildFloatingStickerHref = (
-  shop: MetaShop,
+export const resolveStickerShopSlug = (
   sticker: MetaShopFloatingSticker,
+  defaultShopSlug?: string,
+): string => (sticker.linkShopSlug || defaultShopSlug || '').trim();
+
+export const buildFloatingStickerHref = (
+  sticker: MetaShopFloatingSticker,
+  defaultShopSlug?: string,
   originPath?: string,
 ): string => {
   const base = originPath || (typeof window !== 'undefined'
     ? `${window.location.origin}${window.location.pathname}`
     : '');
-  const slug = encodeURIComponent(shop.slug);
+  const shopSlug = resolveStickerShopSlug(sticker, defaultShopSlug);
   const target = (sticker.linkTarget || '').trim();
   switch (sticker.linkType) {
+    case 'shop':
+      return target ? `${base}?shop=${encodeURIComponent(target)}` : base;
     case 'product':
-      return target ? `${base}?shop=${slug}&product=${encodeURIComponent(target)}` : `${base}?shop=${slug}`;
+      if (!shopSlug) return base;
+      return target
+        ? `${base}?shop=${encodeURIComponent(shopSlug)}&product=${encodeURIComponent(target)}`
+        : `${base}?shop=${encodeURIComponent(shopSlug)}`;
     case 'category':
-      return target ? `${base}?shop=${slug}&cat=${encodeURIComponent(target)}` : `${base}?shop=${slug}`;
+      if (!shopSlug) return base;
+      return target
+        ? `${base}?shop=${encodeURIComponent(shopSlug)}&cat=${encodeURIComponent(target)}`
+        : `${base}?shop=${encodeURIComponent(shopSlug)}`;
     case 'page':
-      return target ? `${base}?shop=${slug}&tab=${encodeURIComponent(target)}` : `${base}?shop=${slug}`;
+      if (!shopSlug) return base;
+      return target
+        ? `${base}?shop=${encodeURIComponent(shopSlug)}&tab=${encodeURIComponent(target)}`
+        : `${base}?shop=${encodeURIComponent(shopSlug)}`;
     case 'external':
     default:
       return target || '#';

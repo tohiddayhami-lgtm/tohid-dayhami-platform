@@ -4,6 +4,7 @@ import { shopCodeOf } from './shopCode';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
 import { shopSearchHaystack, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { Language } from '../App';
+import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface Props {
   shops: MetaShop[];
@@ -178,6 +179,15 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
     const selectAt = (depth: number, id: string) => setBazaarPath(prev => prev[depth] === id ? prev : [...prev.slice(0, depth), id]);
 
+    const onBazaarStickerNav = (action: FloatingStickerNavAction) => {
+      if (action.newTab) return;
+      if (action.type === 'shop' && action.target) {
+        onOpenShop(action.target);
+        return;
+      }
+      if (action.href) window.location.assign(action.href);
+    };
+
     return (
       <div className="msd-root msd-compact" dir={T ? 'rtl' : 'ltr'} style={{ ['--accent' as any]: bazaar.theme?.primary || '#2d4a1a' }}>
         <style>{MSD_CSS}</style>
@@ -227,6 +237,11 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
               <Storefront key={s.id} shop={s} featured={isBazaarFeaturedShop(s.slug, bazaar)} />
             ))}</div>}
         </div>
+        <MetaShopFloatingStickers
+          stickers={bazaar.floatingStickers}
+          currentPage="bazaar"
+          onNavigate={onBazaarStickerNav}
+        />
       </div>
     );
   }

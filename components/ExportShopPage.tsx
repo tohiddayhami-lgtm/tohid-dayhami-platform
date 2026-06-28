@@ -6,6 +6,7 @@ import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSor
 import { IconSearch, IconBriefcase } from './Icons';
 import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
+import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface Props {
   shops: MetaShop[];
@@ -219,6 +220,15 @@ export const ExportShopPage: React.FC<Props> = ({
     );
   }
 
+  const onBazaarStickerNav = (action: FloatingStickerNavAction) => {
+    if (action.newTab) return;
+    if (action.type === 'shop' && action.target) {
+      onOpenShop(action.target);
+      return;
+    }
+    if (action.href) window.location.assign(action.href);
+  };
+
   return (
     <div className="animate-fade-in -mx-5">
       {/* Hero — بازارچه انتخاب‌شده */}
@@ -400,6 +410,13 @@ export const ExportShopPage: React.FC<Props> = ({
         </>
       )}
       </div>
+      {bazaar?.floatingStickers?.length ? (
+        <MetaShopFloatingStickers
+          stickers={bazaar.floatingStickers}
+          currentPage="bazaar"
+          onNavigate={onBazaarStickerNav}
+        />
+      ) : null}
     </div>
   );
 };
