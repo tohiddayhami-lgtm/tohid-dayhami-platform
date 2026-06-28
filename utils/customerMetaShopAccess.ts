@@ -10,6 +10,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'currency', 'displayCurrencies', 'defaultLang', 'languages', 'i18n',
   'categories', 'groupI18n',
   'hidePrices', 'hidePriceText',
+  'priceMarkupType', 'priceMarkupValue',
   'products', 'discounts',
 ] as const;
 
@@ -21,6 +22,8 @@ export const CUSTOMER_EDITABLE_PRODUCT_FIELDS = [
   'group', 'subcategory',
   'price', 'packPrice', 'currency',
   'discountType', 'discountValue',
+  'priceMarkupType', 'priceMarkupValue',
+  'promoLabel',
   'hidePrice', 'hidePriceText',
   'outOfStock',
 ] as const;
@@ -109,6 +112,9 @@ export function duplicateCustomerProduct(source: MetaShopProduct, lang: 'fa' | '
     outOfStock: source.outOfStock,
     discountType: source.discountType,
     discountValue: source.discountValue,
+    priceMarkupType: source.priceMarkupType,
+    priceMarkupValue: source.priceMarkupValue,
+    promoLabel: source.promoLabel,
     group: source.group,
     subcategory: source.subcategory,
     unit: source.unit,
@@ -134,6 +140,9 @@ function buildCustomerNewProduct(p: MetaShopProduct): MetaShopProduct {
     outOfStock: p.outOfStock,
     discountType: p.discountType,
     discountValue: p.discountValue,
+    priceMarkupType: p.priceMarkupType,
+    priceMarkupValue: p.priceMarkupValue,
+    promoLabel: p.promoLabel,
     i18n: p.i18n,
     group: p.group,
     subcategory: p.subcategory,

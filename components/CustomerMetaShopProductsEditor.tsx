@@ -7,7 +7,9 @@ import { newCustomerProduct, duplicateCustomerProduct } from '../utils/customerM
 import { customerCategoriesList, categoryLabelFa } from '../utils/customerMetaShopCategories';
 import { CustomerMetaShopCategoryManager } from './CustomerMetaShopCategoryManager';
 import { CustomerMetaShopPriceSettings } from './CustomerMetaShopPriceSettings';
+import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
+import type { PriceAdjustType } from '../utils/metaShopPricing';
 
 interface Props {
   products: MetaShopProduct[];
@@ -15,6 +17,8 @@ interface Props {
   groupI18n: Record<string, Record<string, string>>;
   hidePrices?: boolean;
   hidePriceText?: string;
+  priceMarkupType?: PriceAdjustType;
+  priceMarkupValue?: number;
   currency: string;
   shopType?: MetaShopType;
   shopSlug: string;
@@ -26,12 +30,12 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
-  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string }) => void;
+  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, hidePrices, hidePriceText, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, categories, groupI18n, hidePrices, hidePriceText, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -50,7 +54,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     return list.filter(l => l.code !== 'fa');
   }, [shopLangs]);
 
-  const updProductI18n = (id: string, code: string, field: 'name' | 'description', value: string) => {
+  const updProductI18n = (id: string, code: string, field: 'name' | 'description' | 'promoLabel', value: string) => {
     const p = products.find(x => x.id === id);
     if (!p) return;
     const i18n = { ...(p.i18n || {}) };
@@ -227,6 +231,20 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
   return (
     <div className="space-y-4">
       {priceSettingsSection}
+      {!isRealEstate && products.length > 0 && onPriceSettingsChange && (
+        <MetaShopBulkPriceMarkupPanel
+          T={T}
+          markupType={priceMarkupType}
+          markupValue={priceMarkupValue}
+          productCount={products.length}
+          products={products}
+          onMarkupChange={(type, value) => onPriceSettingsChange({ priceMarkupType: type, priceMarkupValue: value })}
+          onCommitToBasePrices={nextProducts => {
+            onProductsChange(nextProducts);
+            onPriceSettingsChange({ priceMarkupType: undefined, priceMarkupValue: undefined });
+          }}
+        />
+      )}
       {categorySection}
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -486,6 +504,24 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                       />
                     )}
                   </div>
+
+                  {!isRealEstate && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <MetaShopProductMarkupFields
+                        T={T}
+                        product={p}
+                        inheritsShop={!!priceMarkupType && (priceMarkupValue ?? 0) > 0}
+                        onChange={patch => updProduct(p.id, patch)}
+                      />
+                      <MetaShopProductPromoLabelField
+                        T={T}
+                        product={p}
+                        onChange={patch => updProduct(p.id, patch)}
+                        translationLangs={translationLangs}
+                        onI18nChange={(code, val) => updProductI18n(p.id, code, 'promoLabel', val)}
+                      />
+                    </div>
+                  )}
 
                   <a href={productUrl} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline inline-block">
                     {T ? '← مشاهده در فروشگاه' : 'View in shop →'}

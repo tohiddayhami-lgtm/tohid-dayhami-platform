@@ -131,6 +131,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         groupI18n: groupI18nDraft,
         hidePrices: draft.hidePrices,
         hidePriceText: draft.hidePriceText,
+        priceMarkupType: draft.priceMarkupType,
+        priceMarkupValue: draft.priceMarkupValue,
       });
       setLoadedShop(prev => prev ? {
         ...prev,
@@ -140,6 +142,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         groupI18n: groupI18nDraft,
         hidePrices: draft.hidePrices,
         hidePriceText: draft.hidePriceText,
+        priceMarkupType: draft.priceMarkupType,
+        priceMarkupValue: draft.priceMarkupValue,
       } : prev);
       flashSaved();
     } finally {
@@ -163,7 +167,12 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     setSaved(false);
   };
 
-  const handlePriceSettingsChange = (patch: { hidePrices?: boolean; hidePriceText?: string }) => {
+  const handlePriceSettingsChange = (patch: {
+    hidePrices?: boolean;
+    hidePriceText?: string;
+    priceMarkupType?: import('../types').MetaShop['priceMarkupType'];
+    priceMarkupValue?: number;
+  }) => {
     upd(patch);
   };
 
@@ -289,6 +298,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           groupI18n={groupI18nDraft}
           hidePrices={draft.hidePrices}
           hidePriceText={draft.hidePriceText}
+          priceMarkupType={draft.priceMarkupType}
+          priceMarkupValue={draft.priceMarkupValue}
           currency={shopBaseCurrency}
           shopType={shop.type}
           shopSlug={shop.slug}

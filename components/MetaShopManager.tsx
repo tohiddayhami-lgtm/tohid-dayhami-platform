@@ -20,6 +20,7 @@ import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCu
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
+import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { Language } from '../App';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
@@ -1929,6 +1930,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </select>
         </div>
         )}
+        {!isRealEstate && draft.products.length > 0 && (
+          <MetaShopBulkPriceMarkupPanel
+            T={T}
+            markupType={draft.priceMarkupType}
+            markupValue={draft.priceMarkupValue}
+            productCount={draft.products.length}
+            products={draft.products}
+            onMarkupChange={(type, value) => setDraft(d => d ? { ...d, priceMarkupType: type, priceMarkupValue: value } : d)}
+            onCommitToBasePrices={products => setDraft(d => d ? {
+              ...d,
+              products,
+              priceMarkupType: undefined,
+              priceMarkupValue: undefined,
+            } : d)}
+          />
+        )}
         {isRealEstate && (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">{T ? 'فروشگاه املاک سبد خرید ندارد. مشتری «درخواست بازدید» ثبت می‌کند — قیمت فقط برای نمایش است.' : 'Real-estate shops have no cart. Customers submit viewing requests — prices are display-only.'}</p>
         )}
@@ -2017,6 +2034,24 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                   </div>
                   {p.discountType && <p className="text-[11px] text-gray-400 mt-1">{t.pDiscHint}</p>}
                 </div>
+
+                {!isRealEstate && (
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <MetaShopProductMarkupFields
+                      T={T}
+                      product={p}
+                      inheritsShop={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) > 0}
+                      onChange={patch => updProduct(idx, patch)}
+                    />
+                    <MetaShopProductPromoLabelField
+                      T={T}
+                      product={p}
+                      onChange={patch => updProduct(idx, patch)}
+                      translationLangs={langOptions().filter(l => l.code !== 'fa')}
+                      onI18nChange={(code, val) => updProductI18n(idx, code, 'promoLabel', val)}
+                    />
+                  </div>
+                )}
 
                 {/* Rate options (max 3) */}
                 <div className="mt-3 border-t border-gray-100 pt-3">

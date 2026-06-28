@@ -9,6 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
+import { markedUpPrice, promoLabelText } from '../utils/metaShopPricing';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -656,14 +657,23 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const final = applyDisc(p, base) ?? base;
     return Math.round((1 - final / base) * 100);
   };
-  // Original (pre-discount) unit price.
+  // Original (stored) unit price.
   const baseUnitPrice = (p: MetaShopProduct, optId?: string): number => {
     const opts = optionsOf(p);
     if (opts.length) { const o = opts.find(x => x.id === optId) || opts[0]; return o?.price ?? 0; }
     return p.price ?? 0;
   };
-  // Effective unit price (discount applied) — used for cart math and totals.
-  const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, baseUnitPrice(p, optId)) ?? 0;
+  // List price after shop/product markup, before discount.
+  const listUnitPrice = (p: MetaShopProduct, optId?: string): number =>
+    markedUpPrice(shop, p, baseUnitPrice(p, optId)) ?? baseUnitPrice(p, optId);
+  const listPackPrice = (p: MetaShopProduct): number | undefined => {
+    if (p.packPrice == null) return undefined;
+    return markedUpPrice(shop, p, p.packPrice) ?? p.packPrice;
+  };
+  const listOptionPrice = (p: MetaShopProduct, optPrice: number): number =>
+    markedUpPrice(shop, p, optPrice) ?? optPrice;
+  // Effective unit price (markup then discount) — used for cart math and totals.
+  const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, listUnitPrice(p, optId)) ?? 0;
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
@@ -1006,11 +1016,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
-    const basePrice = baseUnitPrice(p, selId);
+    const basePrice = listUnitPrice(p, selId);
     const curPrice = unitPrice(p, selId);
     const cur = curOf(p, selId);
     const off = discPercent(p, basePrice);
-    const basePack = p.packPrice;
+    const basePack = listPackPrice(p);
     const hidden = priceHidden(p);
     return (
       <div className={`ms-buy${big ? ' ms-buy-detail' : ''}`}>
@@ -1021,8 +1031,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
                 {!hidden && (
                   <span className="ms-opt-price">
-                    {hasDiscount(p) && <span className="ms-opt-was">{money(o.price, curOf(p, o.id))}</span>}
-                    {money(applyDisc(p, o.price), curOf(p, o.id))}
+                    {hasDiscount(p) && <span className="ms-opt-was">{money(listOptionPrice(p, o.price), curOf(p, o.id))}</span>}
+                    {money(applyDisc(p, listOptionPrice(p, o.price)), curOf(p, o.id))}
                   </span>
                 )}
               </button>
@@ -1078,7 +1088,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
   // Single product card — reused by the featured rail and the main grid.
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
-    const off = discPercent(p, baseUnitPrice(p, selOptId(p)));
+    const off = discPercent(p, listUnitPrice(p, selOptId(p)));
+    const promo = promoLabelText(p, uiLang, shop.defaultLang || 'en');
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
     const stock = pStock(p);
@@ -1098,6 +1109,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         </div>
         <div className="ms-card-body">
           <h3 className="ms-pname" onClick={() => openDetail(p)}>{pName(p)}</h3>
+          {promo && <span className="ms-promo-inline">{promo}</span>}
           <div className="ms-badges">
             {p.sku && <span className="ms-sku">{p.sku}</span>}
             {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, reLang())}</span>}
@@ -1375,6 +1387,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             </div>
             <div className="ms-modal-info">
               <h2>{pName(detail)}</h2>
+              {promoLabelText(detail, uiLang, shop.defaultLang || 'en') && (
+                <span className="ms-promo-inline">{promoLabelText(detail, uiLang, shop.defaultLang || 'en')}</span>
+              )}
               <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{pStock(detail) && <span className="ms-stock">{pStock(detail)}</span>}</div>
               {pDesc(detail) && <p className="ms-modal-desc">{pDesc(detail)}</p>}
               {(() => {
@@ -2101,6 +2116,7 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-inv-neg { color:var(--ms-primary); font-weight:800; font-size:11px; }
 .ms-some-neg { font-size:11px; font-weight:700; color:var(--ms-primary); opacity:.85; }
 .ms-disc-ribbon { position:absolute; top:10px; inset-inline-end:10px; background:#dc2626; color:#fff; font-size:11px; font-weight:900; padding:4px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(220,38,38,.35); z-index:2; }
+.ms-promo-inline { display:inline-block; font-size:10px; font-weight:900; color:#c2410c; background:linear-gradient(135deg,#fff7ed,#ffedd5); border:1px solid #fdba74; padding:2px 10px; border-radius:999px; margin:-2px 0 6px; }
 .ms-feat-badge { position:absolute; bottom:10px; inset-inline-start:10px; background:rgba(245,158,11,.96); color:#fff; font-size:10px; font-weight:900; padding:3px 9px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.2); }
 /* featured rail */
 .ms-featured { margin:14px 0 4px; padding:16px; border:1px solid #fde68a; background:linear-gradient(135deg,#fffbeb,#fff7ed); border-radius:18px; }
