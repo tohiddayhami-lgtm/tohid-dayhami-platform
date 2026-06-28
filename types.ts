@@ -1771,6 +1771,8 @@ export interface CustomerAccount {
   username: string;
   password: string;
   ticketIds: string[];
+  /** MetaShop ids this customer may edit (cover/logo/info) and view orders for. */
+  metaShopIds?: string[];
   isActive: boolean;
   note?: string;
   createdAt: string;

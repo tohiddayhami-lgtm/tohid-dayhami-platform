@@ -1936,7 +1936,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} metaShopSupplierCollaborations={visibleMetaShopSupplierCollaborations} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} onUpdateMetaShopSupplierCollaboration={onUpdateMetaShopSupplierCollaboration} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} />
+          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} metaShopSupplierCollaborations={visibleMetaShopSupplierCollaborations} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} onUpdateMetaShopSupplierCollaboration={onUpdateMetaShopSupplierCollaboration} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} showAllOrders={isMaster} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />
@@ -2779,6 +2779,7 @@ export const AdminDashboard: React.FC<Props> = ({
           customerAccounts={customerAccounts}
           tickets={tickets}
           services={services}
+          metaShops={metaShops}
           currentUserName={currentUser.fullName}
           onSave={onSaveCustomerAccount}
           onDelete={onDeleteCustomerAccount}

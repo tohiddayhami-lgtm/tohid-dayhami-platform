@@ -1,0 +1,227 @@
+import React, { useState, useRef, useMemo } from 'react';
+import { MetaShop, MetaShopOrder } from '../types';
+import { Language } from '../App';
+import { uploadFileWithProgress } from '../services/firebaseService';
+import { pickCustomerEditableFields } from '../utils/customerMetaShopAccess';
+import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
+import { IconGlobe, IconTrash, IconUpload } from './Icons';
+
+interface Props {
+  shops: MetaShop[];
+  orders: MetaShopOrder[];
+  shopBaseUrl: string;
+  lang: Language;
+  onSave: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
+}
+
+export const CustomerMetaShopPanel: React.FC<Props> = ({
+  shops, orders, shopBaseUrl, lang, onSave,
+}) => {
+  const T = lang === 'fa';
+  const [selectedShopId, setSelectedShopId] = useState(shops[0]?.id || '');
+  const [tab, setTab] = useState<'info' | 'orders'>('info');
+  const [draft, setDraft] = useState<Partial<MetaShop>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const coverRef = useRef<HTMLInputElement>(null);
+  const logoRef = useRef<HTMLInputElement>(null);
+  const seoRef = useRef<HTMLInputElement>(null);
+
+  const shop = shops.find(s => s.id === selectedShopId);
+  const shopOrders = useMemo(
+    () => orders.filter(o => o.shopId === selectedShopId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [orders, selectedShopId],
+  );
+
+  React.useEffect(() => {
+    if (shop) setDraft(pickCustomerEditableFields(shop));
+  }, [shop?.id]);
+
+  const upd = (patch: Partial<MetaShop>) => {
+    setDraft(d => ({ ...d, ...patch }));
+    setSaved(false);
+  };
+
+  const uploadImg = (file: File, onUrl: (url: string) => void) => {
+    uploadFileWithProgress(file, () => {}, onUrl, e => alert(e.message), 'images');
+  };
+
+  const handleSave = async () => {
+    if (!shop) return;
+    setSaving(true);
+    try {
+      await onSave(shop.id, draft);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gray-800 transition-colors bg-white';
+  const lbl = 'block text-xs font-medium text-gray-500 mb-1';
+
+  if (shops.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-xl p-12 text-center text-gray-400 text-sm">
+        {T ? 'فروشگاه MetaShop به این حساب متصل نشده است.' : 'No MetaShop assigned to this account.'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {shops.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          {shops.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { setSelectedShopId(s.id); setTab('info'); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedShopId === s.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setTab('info')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${tab === 'info' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          {T ? 'اطلاعات و تصاویر' : 'Info & images'}
+        </button>
+        <button type="button" onClick={() => setTab('orders')} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${tab === 'orders' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          {T ? 'سفارش‌ها' : 'Orders'}
+          {shopOrders.filter(o => o.status === 'new').length > 0 && (
+            <span className="ms-1 bg-amber-500 text-white rounded-full px-1.5 text-[10px]">{shopOrders.filter(o => o.status === 'new').length}</span>
+          )}
+        </button>
+        {shop && (
+          <a href={`${shopBaseUrl}?shop=${encodeURIComponent(shop.slug)}`} target="_blank" rel="noreferrer" className="ms-auto text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+            <IconGlobe className="w-3.5 h-3.5" />{T ? 'مشاهده فروشگاه' : 'View shop'}
+          </a>
+        )}
+      </div>
+
+      {tab === 'orders' && (
+        <div className="space-y-3">
+          {shopOrders.length === 0 ? (
+            <div className="bg-white border border-gray-100 rounded-xl p-12 text-center text-gray-400 text-sm">
+              {T ? 'سفارشی ثبت نشده است.' : 'No orders yet.'}
+            </div>
+          ) : shopOrders.map(o => (
+            <MetaShopOrderDetailCard key={o.id} order={o} shop={shop} shopBaseUrl={shopBaseUrl} lang={lang} />
+          ))}
+        </div>
+      )}
+
+      {tab === 'info' && shop && (
+        <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>{T ? 'تصویر کاور' : 'Cover image'}</label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {draft.coverImage && <img src={draft.coverImage} alt="" className="w-20 h-14 object-cover rounded border" />}
+                <button type="button" onClick={() => coverRef.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 flex items-center gap-1 hover:bg-gray-50">
+                  <IconUpload className="w-3.5 h-3.5" />{T ? 'آپلود' : 'Upload'}
+                </button>
+                {draft.coverImage && (
+                  <button type="button" onClick={() => upd({ coverImage: '' })} className="text-red-400 p-1"><IconTrash className="w-4 h-4" /></button>
+                )}
+                <input type="file" ref={coverRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ coverImage: url })); e.target.value = ''; }} />
+              </div>
+              <input className={fld + ' dir-ltr text-xs mt-2'} placeholder={T ? 'یا لینک تصویر' : 'Or image URL'} value={draft.coverImage || ''} onChange={e => upd({ coverImage: e.target.value })} />
+            </div>
+            <div>
+              <label className={lbl}>{T ? 'لوگو' : 'Logo'}</label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {draft.logo && <img src={draft.logo} alt="" className="w-14 h-14 object-contain rounded border bg-white p-1" />}
+                <button type="button" onClick={() => logoRef.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 flex items-center gap-1 hover:bg-gray-50">
+                  <IconUpload className="w-3.5 h-3.5" />{T ? 'آپلود' : 'Upload'}
+                </button>
+                {draft.logo && (
+                  <button type="button" onClick={() => upd({ logo: '' })} className="text-red-400 p-1"><IconTrash className="w-4 h-4" /></button>
+                )}
+                <input type="file" ref={logoRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ logo: url })); e.target.value = ''; }} />
+              </div>
+              <input className={fld + ' dir-ltr text-xs mt-2'} placeholder={T ? 'یا لینک لوگو' : 'Or logo URL'} value={draft.logo || ''} onChange={e => upd({ logo: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>{T ? 'عنوان' : 'Title'}</label>
+              <input className={fld} value={draft.title || ''} onChange={e => upd({ title: e.target.value })} />
+            </div>
+            <div>
+              <label className={lbl}>{T ? 'زیرعنوان' : 'Subtitle'}</label>
+              <input className={fld} value={draft.subtitle || ''} onChange={e => upd({ subtitle: e.target.value })} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={lbl}>{T ? 'متن مجموعه / هیرو' : 'Collection text'}</label>
+              <input className={fld} value={draft.collectionText || ''} onChange={e => upd({ collectionText: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>{T ? 'تلفن' : 'Phone'}</label>
+              <input className={fld + ' dir-ltr'} value={draft.phone || ''} onChange={e => upd({ phone: e.target.value })} />
+            </div>
+            <div>
+              <label className={lbl}>WhatsApp</label>
+              <input className={fld + ' dir-ltr'} value={draft.whatsapp || ''} onChange={e => upd({ whatsapp: e.target.value })} />
+            </div>
+            <div>
+              <label className={lbl}>{T ? 'ایمیل' : 'Email'}</label>
+              <input className={fld + ' dir-ltr'} value={draft.email || ''} onChange={e => upd({ email: e.target.value })} />
+            </div>
+            <div>
+              <label className={lbl}>{T ? 'وب‌سایت' : 'Website'}</label>
+              <input className={fld + ' dir-ltr'} value={draft.website || ''} onChange={e => upd({ website: e.target.value })} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={lbl}>{T ? 'آدرس' : 'Address'}</label>
+              <input className={fld} value={draft.address || ''} onChange={e => upd({ address: e.target.value })} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={lbl}>{T ? 'متن فوتر' : 'Footer text'}</label>
+              <textarea className={fld + ' min-h-[60px]'} value={draft.footerText || ''} onChange={e => upd({ footerText: e.target.value })} />
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-500 mb-3">{T ? 'اشتراک‌گذاری (SEO)' : 'Share preview (SEO)'}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>{T ? 'عنوان لینک' : 'Link title'}</label>
+                <input className={fld} value={draft.seoTitle || ''} onChange={e => upd({ seoTitle: e.target.value })} />
+              </div>
+              <div>
+                <label className={lbl}>{T ? 'توضیح لینک' : 'Link description'}</label>
+                <input className={fld} value={draft.seoDescription || ''} onChange={e => upd({ seoDescription: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <label className={lbl}>{T ? 'تصویر اشتراک‌گذاری' : 'Share image'}</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {draft.seoImage && <img src={draft.seoImage} alt="" className="w-14 h-14 object-cover rounded border" />}
+                  <button type="button" onClick={() => seoRef.current?.click()} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 flex items-center gap-1 hover:bg-gray-50">
+                    <IconUpload className="w-3.5 h-3.5" />{T ? 'آپلود' : 'Upload'}
+                  </button>
+                  <input type="file" ref={seoRef} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadImg(f, url => upd({ seoImage: url })); e.target.value = ''; }} />
+                </div>
+                <input className={fld + ' dir-ltr text-xs mt-2'} value={draft.seoImage || ''} onChange={e => upd({ seoImage: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={handleSave} disabled={saving} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50">
+              {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره تغییرات' : 'Save changes')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

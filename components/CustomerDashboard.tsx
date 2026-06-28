@@ -1,14 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { CustomerAccount, Ticket, Personnel, AttachedFile } from '../types';
+import { CustomerAccount, Ticket, Personnel, AttachedFile, MetaShop, MetaShopOrder } from '../types';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
-import { IconPaperclip, IconFile, IconTrash, IconUsers } from './Icons';
+import { IconPaperclip, IconFile, IconTrash, IconUsers, IconTag } from './Icons';
 import { personnelLabelById } from '../services/staffId';
+import { CustomerMetaShopPanel } from './CustomerMetaShopPanel';
 
 interface Props {
   customerUser: CustomerAccount;
   tickets: Ticket[];
   personnel: Personnel[];
+  metaShops?: MetaShop[];
+  metaShopOrders?: MetaShopOrder[];
+  shopBaseUrl?: string;
+  onSaveMetaShop?: (shopId: string, edits: Partial<MetaShop>) => Promise<void>;
   onAddComment: (ticketId: string, commentText: string, files?: AttachedFile[]) => Promise<void>;
   onLogout: () => void;
   lang: Language;
@@ -24,8 +29,12 @@ interface FileRow {
 }
 
 export const CustomerDashboard: React.FC<Props> = ({
-  customerUser, tickets, personnel, onAddComment, onLogout, lang
+  customerUser, tickets, personnel, metaShops = [], metaShopOrders = [], shopBaseUrl = '',
+  onSaveMetaShop, onAddComment, onLogout, lang,
 }) => {
+  const hasMetaShop = (customerUser.metaShopIds?.length ?? 0) > 0 && metaShops.length > 0;
+  const hasTickets = tickets.length > 0;
+  const [portalTab, setPortalTab] = useState<'tickets' | 'metashop'>(hasMetaShop && !hasTickets ? 'metashop' : 'tickets');
   const [selectedTicketId, setSelectedTicketId] = useState<string>(tickets[0]?.id || '');
   const [comment, setComment] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -99,11 +108,33 @@ export const CustomerDashboard: React.FC<Props> = ({
         </button>
       </div>
 
-      {tickets.length === 0 ? (
-        <div className="bg-white border border-gray-100 rounded-xl p-16 text-center text-gray-400 text-sm">
-          پرونده‌ای برای نمایش وجود ندارد
+      {(hasTickets && hasMetaShop) && (
+        <div className="flex gap-2 flex-wrap">
+          <button type="button" onClick={() => setPortalTab('tickets')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${portalTab === 'tickets' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            <IconUsers className="w-3.5 h-3.5" />{lang === 'fa' ? 'پرونده‌ها' : 'Tickets'}
+          </button>
+          <button type="button" onClick={() => setPortalTab('metashop')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${portalTab === 'metashop' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            <IconTag className="w-3.5 h-3.5" />{lang === 'fa' ? 'MetaShop من' : 'My MetaShop'}
+          </button>
         </div>
-      ) : (
+      )}
+
+      {portalTab === 'metashop' && hasMetaShop && onSaveMetaShop && (
+        <CustomerMetaShopPanel
+          shops={metaShops}
+          orders={metaShopOrders}
+          shopBaseUrl={shopBaseUrl}
+          lang={lang}
+          onSave={onSaveMetaShop}
+        />
+      )}
+
+      {portalTab === 'tickets' && (
+        tickets.length === 0 ? (
+          <div className="bg-white border border-gray-100 rounded-xl p-16 text-center text-gray-400 text-sm">
+            {lang === 'fa' ? 'پرونده‌ای برای نمایش وجود ندارد' : 'No tickets to display'}
+          </div>
+        ) : (
         <>
           {/* Ticket tabs if multiple */}
           {tickets.length > 1 && (
@@ -260,6 +291,7 @@ export const CustomerDashboard: React.FC<Props> = ({
             </>
           )}
         </>
+        )
       )}
     </div>
   );

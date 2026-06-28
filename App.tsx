@@ -46,6 +46,7 @@ import { ConsultationBookingLoader } from './components/ConsultationBookingLoade
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
+import { customerCanAccessShop, mergeCustomerShopEdits } from './utils/customerMetaShopAccess';
 
 export type Language = 'fa' | 'en';
 
@@ -1660,6 +1661,33 @@ const App: React.FC = () => {
     await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), newEntry] });
   };
 
+  const customerPortalMetaShops = useMemo(() => {
+    const ids = currentCustomerUser?.metaShopIds;
+    if (!ids?.length) return [];
+    const idSet = new Set(ids);
+    return metaShops.filter(s => idSet.has(s.id));
+  }, [currentCustomerUser, metaShops]);
+
+  const customerPortalMetaShopOrders = useMemo(() => {
+    const ids = currentCustomerUser?.metaShopIds;
+    if (!ids?.length) return [];
+    const idSet = new Set(ids);
+    return metaShopOrders.filter(o => idSet.has(o.shopId));
+  }, [currentCustomerUser, metaShopOrders]);
+
+  const handleCustomerSaveMetaShop = async (shopId: string, edits: Partial<MetaShop>) => {
+    if (!currentCustomerUser || !customerCanAccessShop(currentCustomerUser.metaShopIds, shopId)) {
+      throw new Error('دسترسی مجاز نیست');
+    }
+    let existing = metaShops.find(s => s.id === shopId);
+    if (!existing) throw new Error('فروشگاه یافت نشد');
+    if ((existing.productCount ?? 0) > 0 && (existing.products || []).length === 0) {
+      existing = await hydrateMetaShop(existing);
+    }
+    const merged = mergeCustomerShopEdits(existing, edits);
+    await saveMetaShopToCloud(merged, { allowEmptyProducts: true });
+  };
+
   // ── Public meeting booking calendar ──
   if (view === 'booking') {
     if (!bookingDataReady) return <ConsultationBookingLoader lang={lang} />;
@@ -2235,6 +2263,10 @@ const App: React.FC = () => {
                     customerUser={currentCustomerUser}
                     tickets={tickets.filter(t => currentCustomerUser.ticketIds.includes(t.id))}
                     personnel={personnel}
+                    metaShops={customerPortalMetaShops}
+                    metaShopOrders={customerPortalMetaShopOrders}
+                    shopBaseUrl={`${window.location.origin}${window.location.pathname}`}
+                    onSaveMetaShop={handleCustomerSaveMetaShop}
                     onAddComment={handleCustomerAddComment}
                     onLogout={handleCustomerLogout}
                     lang={lang}

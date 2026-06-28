@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { CustomerAccount, Ticket, ServiceOption } from '../types';
-import { IconPlus, IconTrash, IconEdit, IconUsers } from './Icons';
+import { CustomerAccount, Ticket, ServiceOption, MetaShop } from '../types';
+import { IconPlus, IconTrash, IconEdit, IconUsers, IconTag } from './Icons';
 
 interface Props {
   customerAccounts: CustomerAccount[];
   tickets: Ticket[];
   services: ServiceOption[];
+  metaShops?: MetaShop[];
   currentUserName: string;
   onSave: (account: CustomerAccount) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -13,18 +14,19 @@ interface Props {
 }
 
 export const CustomerAccountManager: React.FC<Props> = ({
-  customerAccounts, tickets, services, currentUserName, onSave, onDelete
+  customerAccounts, tickets, services, metaShops = [], currentUserName, onSave, onDelete
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ fullName: '', username: '', password: '', ticketIds: [] as string[], note: '', isActive: true });
+  const [form, setForm] = useState({ fullName: '', username: '', password: '', ticketIds: [] as string[], metaShopIds: [] as string[], note: '', isActive: true });
   const [ticketSearch, setTicketSearch] = useState('');
+  const [shopSearch, setShopSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const resetForm = () => { setForm({ fullName: '', username: '', password: '', ticketIds: [], note: '', isActive: true }); setEditId(null); setShowForm(false); setTicketSearch(''); };
+  const resetForm = () => { setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], note: '', isActive: true }); setEditId(null); setShowForm(false); setTicketSearch(''); setShopSearch(''); };
 
   const handleEdit = (acc: CustomerAccount) => {
-    setForm({ fullName: acc.fullName, username: acc.username, password: acc.password, ticketIds: acc.ticketIds, note: acc.note || '', isActive: acc.isActive });
+    setForm({ fullName: acc.fullName, username: acc.username, password: acc.password, ticketIds: acc.ticketIds, metaShopIds: acc.metaShopIds || [], note: acc.note || '', isActive: acc.isActive });
     setEditId(acc.id);
     setShowForm(true);
   };
@@ -48,11 +50,21 @@ export const CustomerAccountManager: React.FC<Props> = ({
     setForm(f => ({ ...f, ticketIds: f.ticketIds.includes(id) ? f.ticketIds.filter(t => t !== id) : [...f.ticketIds, id] }));
   };
 
+  const toggleShop = (id: string) => {
+    setForm(f => ({ ...f, metaShopIds: f.metaShopIds.includes(id) ? f.metaShopIds.filter(s => s !== id) : [...f.metaShopIds, id] }));
+  };
+
   const filteredTickets = tickets.filter(t => {
     if (!ticketSearch) return true;
     const q = ticketSearch.toLowerCase();
     return t.id.toLowerCase().includes(q) || t.customerName.toLowerCase().includes(q) || (t.companyName || '').toLowerCase().includes(q);
   }).slice(0, 20);
+
+  const filteredShops = metaShops.filter(s => {
+    if (!shopSearch) return true;
+    const q = shopSearch.toLowerCase();
+    return s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q) || (s.title || '').toLowerCase().includes(q);
+  }).slice(0, 30);
 
   const inputClass = "w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gray-800 transition-colors bg-white";
 
@@ -63,7 +75,7 @@ export const CustomerAccountManager: React.FC<Props> = ({
           <IconUsers className="w-4 h-4 text-gray-500" /> مدیریت حساب‌های مشتریان
           <span className="text-xs font-normal text-gray-400">({customerAccounts.length} حساب)</span>
         </h2>
-        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ fullName: '', username: '', password: '', ticketIds: [], note: '', isActive: true }); }}
+        <button onClick={() => { setShowForm(true); setEditId(null); setForm({ fullName: '', username: '', password: '', ticketIds: [], metaShopIds: [], note: '', isActive: true }); }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors">
           <IconPlus className="w-3.5 h-3.5" /> حساب جدید
         </button>
@@ -110,6 +122,26 @@ export const CustomerAccountManager: React.FC<Props> = ({
               )}
             </div>
             <div>
+              <label className="block text-xs font-medium text-gray-500 mb-2 flex items-center gap-1"><IconTag className="w-3.5 h-3.5" /> انتخاب MetaShop (ویرایش اطلاعات + مشاهده سفارش‌ها)</label>
+              <input className={inputClass + " mb-2"} placeholder="جستجو فروشگاه..." value={shopSearch} onChange={e => setShopSearch(e.target.value)} />
+              <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-2">
+                {filteredShops.length === 0 && <p className="text-xs text-gray-400 text-center py-2">فروشگاهی یافت نشد</p>}
+                {filteredShops.map(s => (
+                  <label key={s.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={form.metaShopIds.includes(s.id)} onChange={() => toggleShop(s.id)} className="rounded" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-gray-700">{s.name}</span>
+                      <span className="text-[10px] text-gray-400 font-mono mr-2 dir-ltr">?shop={s.slug}</span>
+                    </div>
+                    <span className={`text-[10px] shrink-0 ${s.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>{s.isActive ? 'فعال' : 'غیرفعال'}</span>
+                  </label>
+                ))}
+              </div>
+              {form.metaShopIds.length > 0 && (
+                <p className="text-[10px] text-gray-500 mt-1">{form.metaShopIds.length} فروشگاه انتخاب شده</p>
+              )}
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">یادداشت (اختیاری)</label>
               <input className={inputClass} placeholder="یادداشت..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
             </div>
@@ -135,6 +167,7 @@ export const CustomerAccountManager: React.FC<Props> = ({
       )}
       {customerAccounts.map(acc => {
         const accTickets = tickets.filter(t => acc.ticketIds.includes(t.id));
+        const accShops = metaShops.filter(s => acc.metaShopIds?.includes(s.id));
         return (
           <div key={acc.id} className={`bg-white border rounded-xl p-4 ${acc.isActive ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
             <div className="flex items-start justify-between gap-3">
@@ -146,15 +179,22 @@ export const CustomerAccountManager: React.FC<Props> = ({
                 </div>
                 {acc.note && <p className="text-xs text-gray-400 mt-0.5">{acc.note}</p>}
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {accTickets.length === 0
-                    ? <span className="text-[10px] text-gray-300">بدون پرونده</span>
-                    : accTickets.map(t => (
+                  {accTickets.length === 0 && accShops.length === 0
+                    ? <span className="text-[10px] text-gray-300">بدون پرونده / فروشگاه</span>
+                    : null}
+                  {accTickets.map(t => (
                       <div key={t.id} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-mono text-gray-400">#{t.id}</span>
                         <span className="text-[10px] text-gray-600">{t.customerName}</span>
                         <span className="text-[9px] text-gray-400">({t.status})</span>
                       </div>
                     ))}
+                  {accShops.map(s => (
+                    <div key={s.id} className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">
+                      <IconTag className="w-3 h-3 text-indigo-400" />
+                      <span className="text-[10px] text-indigo-700">{s.name}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">

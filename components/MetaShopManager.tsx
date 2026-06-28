@@ -19,6 +19,7 @@ import { AppModal } from './AppModal';
 import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
+import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { Language } from '../App';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
@@ -43,6 +44,8 @@ interface Props {
   readonly?: boolean;
   canDelete?: boolean;
   canDeleteBooths?: boolean;
+  /** When true (master), show a global all-orders view across every shop. */
+  showAllOrders?: boolean;
 }
 
 const DEFAULT_THEME = { primary: '#2d4a1a', cover: '#2d4a1a', coverText: '#fdfbf6', bg: '#fdfbf6', heading: '#1f2a18', text: '#2d3a24' };
@@ -148,10 +151,10 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [keywordEdits, setKeywordEdits] = useState<Record<string, string>>({});
   const [keywordSearch, setKeywordSearch] = useState('');
@@ -359,7 +362,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
-    ordersTitle: T ? 'سفارش‌ها' : 'Orders', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
+    ordersTitle: T ? 'سفارش‌ها' : 'Orders', allOrdersTitle: T ? 'همه سفارش‌ها' : 'All orders', allOrdersBtn: T ? 'همه درخواست‌ها' : 'All requests', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
     oCode: T ? 'کد رهگیری' : 'Tracking', oCustomer: T ? 'مشتری' : 'Customer', oTotal: T ? 'مبلغ' : 'Total', oDate: T ? 'تاریخ' : 'Date', oStatus: T ? 'وضعیت' : 'Status', oItems: T ? 'اقلام' : 'Items',
     sNew: T ? 'جدید' : 'New', sProg: T ? 'در حال انجام' : 'In progress', sDone: T ? 'انجام شد' : 'Done', sCanc: T ? 'لغو شد' : 'Cancelled',
     referrals: T ? 'معرفی ملک' : 'Property referrals',
@@ -987,6 +990,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <a href={`${shopBaseUrl}?shops=1`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconGlobe className="w-4 h-4" />{t.openBazaar}</a>
+            {showAllOrders && (
+              <button type="button" onClick={() => setMode('all-orders')} className="px-3 py-2 rounded-lg text-sm font-medium bg-amber-50 text-amber-800 hover:bg-amber-100 flex items-center gap-1.5">
+                {t.allOrdersBtn}
+                {metaShopOrders.filter(o => o.status === 'new').length > 0 && (
+                  <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] font-bold">{metaShopOrders.filter(o => o.status === 'new').length}</span>
+                )}
+              </button>
+            )}
             <button onClick={startKeywordsBulk} className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5"><IconSearch className="w-4 h-4" />{t.keywordsBulk}</button>
             <button onClick={() => { navigator.clipboard.writeText(`${shopBaseUrl}?shops=1`); setCopiedId('__bazaar__'); setTimeout(() => setCopiedId(null), 1800); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5">{copiedId === '__bazaar__' ? t.allShopsCopied : <><IconLink className="w-4 h-4" />{t.allShopsLink}</>}</button>
           {!readonly && <>
@@ -1081,41 +1092,55 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     );
   }
 
+  // ════════════ ALL ORDERS (master) ════════════
+  if (mode === 'all-orders') {
+    const allOrders = [...metaShopOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const shopById = (id: string) => metaShops.find(s => s.id === id);
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+        <h3 className="text-lg font-bold text-gray-800">{t.allOrdersTitle} ({allOrders.length})</h3>
+        {allOrders.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noOrders}</div> : (
+          <div className="space-y-4">
+            {allOrders.map(o => (
+              <MetaShopOrderDetailCard
+                key={o.id}
+                order={o}
+                shop={shopById(o.shopId)}
+                shopBaseUrl={shopBaseUrl}
+                lang={lang}
+                showShopName
+                onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ════════════ ORDERS ════════════
   if (mode === 'orders') {
     const shop = metaShops.find(s => s.id === ordersShopId);
     const orders = ordersShopId ? (ordersByShop[ordersShopId] || []) : [];
+    const sorted = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return (
       <div className="space-y-4 animate-fade-in">
         <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
         <h3 className="text-lg font-bold text-gray-800">{t.ordersTitle} — {shop?.name}</h3>
-        {orders.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noOrders}</div> : (
-          <div className={card + ' overflow-x-auto p-0'}>
-            <table className="w-full text-sm text-start">
-              <thead className="bg-gray-50 text-gray-500 text-xs"><tr>
-                <th className="px-4 py-3 text-start">{t.oCode}</th><th className="px-4 py-3 text-start">{t.oCustomer}</th><th className="px-4 py-3 text-start">{t.oItems}</th><th className="px-4 py-3 text-start">{t.oTotal}</th><th className="px-4 py-3 text-start">{t.oDate}</th><th className="px-4 py-3 text-start">{t.oStatus}</th>
-              </tr></thead>
-              <tbody className="divide-y divide-gray-100">
-                {orders.map(o => {
-                  const someNeg = o.items.some(it => it.priceHidden);
-                  const allNeg = o.items.length > 0 && o.items.every(it => it.priceHidden);
-                  return (
-                  <tr key={o.id} className="hover:bg-gray-50/60 align-top">
-                    <td className="px-4 py-3 font-mono text-xs" dir="ltr">{o.trackingCode}{o.via === 'gsite' && <span title={T ? 'از طریق گوگل‌سایت' : 'via Google Site'} className="ms-via-badge inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-sans font-bold align-middle">🌐 {T ? 'گوگل‌سایت' : 'GSite'}</span>}</td>
-                    <td className="px-4 py-3"><div className="font-medium text-gray-800">{o.customerName}</div><div className="text-xs text-gray-400" dir="ltr">{o.phone}</div>{o.company && <div className="text-xs text-gray-400">{o.company}</div>}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 max-w-[220px]">{o.items.map((it, i) => <div key={i} className="truncate">{shop?.type === 'realestate' ? it.name : <>{it.name} × {it.qty}</>}{it.priceHidden && shop?.type !== 'realestate' && <span className="text-emerald-600 font-bold"> · {t.hidePrice}</span>}{shop?.type === 'realestate' && <span className="text-amber-700 font-bold"> · {T ? 'درخواست بازدید' : 'Viewing request'}</span>}</div>)}{o.discountAmount ? <div className="text-[11px] text-rose-600">− {o.currency} {o.discountAmount.toLocaleString()} ({o.discountCode})</div> : null}{(o.fees || []).map((f, i) => <div key={`f${i}`} className="text-[11px] text-emerald-600">+ {f.label}: {o.currency} {f.amount.toLocaleString()}</div>)}{o.taxAmount ? <div className="text-[11px] text-gray-500">{o.taxInclusive ? (T ? 'شامل مالیات' : 'incl. tax') : (T ? '+ مالیات' : '+ tax')} {o.taxRate}%: {o.currency} {o.taxAmount.toLocaleString()}</div> : null}{o.notes && <div className="text-[11px] text-gray-400 mt-1 italic">📝 {o.notes}</div>}</td>
-                    <td className="px-4 py-3 font-bold text-gray-800">{shop?.type === 'realestate' ? <span className="text-amber-700 text-sm">{T ? 'درخواست بازدید' : 'Viewing request'}</span> : allNeg ? <span className="text-emerald-600">{t.hidePrice}</span> : <>{o.currency} {o.total.toLocaleString()}{someNeg && <span className="text-emerald-600 text-[11px] font-medium"> + {t.hidePrice}</span>}</>}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs" dir="ltr">{new Date(o.createdAt).toLocaleString(T ? 'fa-IR' : 'en-US')}</td>
-                    <td className="px-4 py-3">
-                      <select value={o.status} onChange={e => onUpdateMetaShopOrder(o.id, { status: e.target.value as MetaShopOrder['status'] })} className={`text-[11px] px-2 py-1 rounded-full font-medium border-0 outline-none cursor-pointer ${statusCls(o.status)}`}>
-                        <option value="new">{t.sNew}</option><option value="in_progress">{t.sProg}</option><option value="done">{t.sDone}</option><option value="cancelled">{t.sCanc}</option>
-                      </select>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {sorted.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noOrders}</div> : (
+          <div className="space-y-4">
+            {sorted.map(o => (
+              <MetaShopOrderDetailCard
+                key={o.id}
+                order={o}
+                shop={shop}
+                shopBaseUrl={shopBaseUrl}
+                lang={lang}
+                onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
+              />
+            ))}
           </div>
         )}
       </div>
