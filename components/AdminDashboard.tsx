@@ -2298,6 +2298,8 @@ export const AdminDashboard: React.FC<Props> = ({
             shopBaseUrl={shopBaseUrl}
             consultantCategories={consultantCategories}
             initialSubTab={meetingSubTab}
+            config={config}
+            onUpdateConfig={onUpdateConfig}
           />
         )}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} config={config} />}

@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useRef } from 'react';
-import type { ConsultantCategory, Meeting, MeetingKind, Personnel, Price, Currency } from '../types';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import type { AppConfig, ConsultantCategory, Meeting, MeetingKind, Personnel, Price, Currency } from '../types';
 import { Language } from '../App';
 import {
   deleteMeetingFromCloud, saveMeetingToCloud, updateMeetingInCloud,
@@ -15,6 +15,10 @@ import { categoryLabel, sortCategories } from '../utils/consultationTracking';
 import { ALL_CURRENCIES, CUR_LABEL, formatPriceAmount, normalizePrices } from '../utils/servicePriceList';
 import { InvoiceAmountInput } from './InvoiceAmountInput';
 import { toDateStr, parseDateLocal } from '../utils/weekCalendar';
+import {
+  DEFAULT_CONSULTATION_PUBLIC_NOTICE_EN,
+  DEFAULT_CONSULTATION_PUBLIC_NOTICE_FA,
+} from '../utils/consultationPublicNotice';
 
 interface Props {
   meetings: Meeting[];
@@ -25,10 +29,12 @@ interface Props {
   shopBaseUrl?: string;
   /** داخل تقویم جلسات — بدون کادر بیرونی تکراری */
   embedded?: boolean;
+  config?: AppConfig;
+  onUpdateConfig?: (config: AppConfig) => void | Promise<void>;
 }
 
 export const ConsultationAdminManager: React.FC<Props> = ({
-  meetings, personnel, categories, currentUser, lang, shopBaseUrl, embedded = false,
+  meetings, personnel, categories, currentUser, lang, shopBaseUrl, embedded = false, config, onUpdateConfig,
 }) => {
   const fa = lang === 'fa';
   const isMasterOrAdmin = currentUser.username === 'master' || (currentUser.roles || []).includes('مدیر');
@@ -46,6 +52,15 @@ export const ConsultationAdminManager: React.FC<Props> = ({
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [noticeFa, setNoticeFa] = useState('');
+  const [noticeEn, setNoticeEn] = useState('');
+  const [savingNotice, setSavingNotice] = useState(false);
+  const [noticeSaved, setNoticeSaved] = useState(false);
+
+  useEffect(() => {
+    setNoticeFa(config?.consultationPublicNoticeFa?.trim() || DEFAULT_CONSULTATION_PUBLIC_NOTICE_FA);
+    setNoticeEn(config?.consultationPublicNoticeEn?.trim() || DEFAULT_CONSULTATION_PUBLIC_NOTICE_EN);
+  }, [config?.consultationPublicNoticeFa, config?.consultationPublicNoticeEn]);
 
   const emptyPrices = () => ALL_CURRENCIES.map(c => ({ currency: c, amount: 0 }));
   const [form, setForm] = useState({
@@ -78,6 +93,11 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     delete: fa ? 'حذف' : 'Delete',
     duplicate: fa ? 'کپی' : 'Duplicate',
     duplicateSession: fa ? 'کپی جلسه' : 'Duplicate session',
+    publicNotice: fa ? 'توضیحات صفحه رزرو عمومی' : 'Public booking page notice',
+    publicNoticeHint: fa ? 'این متن بالای لیست جلسات در لینک عمومی نمایش داده می‌شود.' : 'Shown above the session list on the public booking link.',
+    resetNotice: fa ? 'بازنشانی پیش‌فرض' : 'Reset to default',
+    saveNotice: fa ? 'ذخیره توضیحات' : 'Save notice',
+    noticeSaved: fa ? 'ذخیره شد ✓' : 'Saved ✓',
     category: fa ? 'دسته موضوعی' : 'Category',
     fee: fa ? 'هزینه مشاوره (چند ارزی)' : 'Consultation fee (multi-currency)',
     feeHint: fa ? 'فقط ارزهایی که مبلغ دارند در لینک عمومی نمایش داده می‌شوند' : 'Only filled currencies appear on the public booking page',
@@ -218,6 +238,27 @@ export const ConsultationAdminManager: React.FC<Props> = ({
     } catch {}
   };
 
+  const savePublicNotice = async () => {
+    if (!config || !onUpdateConfig) return;
+    setSavingNotice(true);
+    try {
+      await onUpdateConfig({
+        ...config,
+        consultationPublicNoticeFa: noticeFa.trim(),
+        consultationPublicNoticeEn: noticeEn.trim(),
+      });
+      setNoticeSaved(true);
+      setTimeout(() => setNoticeSaved(false), 1800);
+    } finally {
+      setSavingNotice(false);
+    }
+  };
+
+  const resetPublicNotice = () => {
+    setNoticeFa(DEFAULT_CONSULTATION_PUBLIC_NOTICE_FA);
+    setNoticeEn(DEFAULT_CONSULTATION_PUBLIC_NOTICE_EN);
+  };
+
   const sortedSessions = useMemo(() =>
     [...bookableMeetings].sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')),
   [bookableMeetings]);
@@ -235,6 +276,48 @@ export const ConsultationAdminManager: React.FC<Props> = ({
           <button type="button" onClick={openCreate} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-gray-900 text-white flex items-center gap-1"><IconPlus className="w-3.5 h-3.5" />{t.newSession}</button>
         </div>
       </div>
+
+      {config && onUpdateConfig && (
+        <div className="p-4 border-b border-violet-100 bg-violet-50/50 space-y-3">
+          <div>
+            <h3 className="text-xs font-black text-violet-800 uppercase">{t.publicNotice}</h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">{t.publicNoticeHint}</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'متن فارسی' : 'Persian'}</label>
+              <textarea
+                className={`${modalFieldTextarea} min-h-[108px] text-sm leading-relaxed`}
+                value={noticeFa}
+                onChange={e => setNoticeFa(e.target.value)}
+                dir="rtl"
+              />
+            </div>
+            <div>
+              <label className={modalFieldLabel}>{fa ? 'متن انگلیسی' : 'English'}</label>
+              <textarea
+                className={`${modalFieldTextarea} min-h-[108px] text-sm leading-relaxed`}
+                value={noticeEn}
+                onChange={e => setNoticeEn(e.target.value)}
+                dir="ltr"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={savePublicNotice}
+              disabled={savingNotice}
+              className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-violet-600 text-white disabled:opacity-60"
+            >
+              {noticeSaved ? t.noticeSaved : savingNotice ? (fa ? 'در حال ذخیره…' : 'Saving…') : t.saveNotice}
+            </button>
+            <button type="button" onClick={resetPublicNotice} className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700 bg-white">
+              {t.resetNotice}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-b border-gray-100 space-y-3">
         <h3 className="text-xs font-black text-gray-500 uppercase">{t.categories}</h3>

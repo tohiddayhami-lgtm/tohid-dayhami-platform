@@ -1631,6 +1631,9 @@ export interface AppConfig {
   heroBgImage?: string;
   /** MetaBazaar id whose tree powers the public «فروشگاه صادراتی» page (?page=export-shops). */
   exportShopBazaarId?: string;
+  /** Info box on public consultation booking page (?page=booking). */
+  consultationPublicNoticeFa?: string;
+  consultationPublicNoticeEn?: string;
   labels?: TicketLabel[];
 }
 

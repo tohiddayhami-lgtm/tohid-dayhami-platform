@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency, ConsultantCategory } from '../types';
+import { Meeting, Personnel, NotificationConfig, MeetingKind, Price, Currency, ConsultantCategory, AppConfig } from '../types';
 import { ConsultationAdminManager } from './ConsultationAdminManager';
 import { IconCalendarClock, IconPlus, IconMapPin, IconUsers, IconTrash, IconClock, IconEdit, IconCopy, IconLink } from './Icons';
 import { saveMeetingToCloud, deleteMeetingFromCloud, updateMeetingInCloud, saveNotificationLog, confirmMeetingBooking, uploadFileWithProgress } from '../services/firebaseService';
@@ -102,11 +102,13 @@ interface Props {
   shopBaseUrl?: string;
   consultantCategories?: ConsultantCategory[];
   initialSubTab?: CalendarSubTab;
+  config?: AppConfig;
+  onUpdateConfig?: (config: AppConfig) => void | Promise<void>;
 }
 
 export const MeetingCalendar: React.FC<Props> = ({
   meetings, currentUser, personnel, lang, notificationConfig, shopBaseUrl,
-  consultantCategories = [], initialSubTab = 'staff',
+  consultantCategories = [], initialSubTab = 'staff', config, onUpdateConfig,
 }) => {
   const [calendarSubTab, setCalendarSubTab] = useState<CalendarSubTab>(initialSubTab);
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
@@ -456,6 +458,8 @@ export const MeetingCalendar: React.FC<Props> = ({
           lang={lang}
           shopBaseUrl={shopBaseUrl}
           embedded
+          config={config}
+          onUpdateConfig={onUpdateConfig}
         />
       </div>
     );

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { ConsultantCategory, Meeting, Personnel } from '../types';
+import type { AppConfig, ConsultantCategory, Meeting, Personnel } from '../types';
 import { Language } from '../App';
 import { IconCalendarClock, IconCopy, IconSearch } from './Icons';
 import { MeetingBookingModal } from './MeetingBookingModal';
@@ -22,6 +22,7 @@ import {
 import { formatPriceAmount } from '../utils/servicePriceList';
 import { categoryLabel, sortCategories } from '../utils/consultationTracking';
 import { formatConsultationSlot } from '../utils/persianDateTime';
+import { getConsultationPublicNotice } from '../utils/consultationPublicNotice';
 
 interface Props {
   meetings: Meeting[];
@@ -32,12 +33,14 @@ interface Props {
   onConsultantChange?: (id: string | null) => void;
   onOpenTracking?: (code?: string) => void;
   onExit?: () => void;
+  appConfig?: Pick<AppConfig, 'consultationPublicNoticeFa' | 'consultationPublicNoticeEn'>;
 }
 
 export const PublicMeetingBookingView: React.FC<Props> = ({
-  meetings, personnel, categories, lang, consultantId, onConsultantChange, onOpenTracking, onExit,
+  meetings, personnel, categories, lang, consultantId, onConsultantChange, onOpenTracking, onExit, appConfig,
 }) => {
   const fa = lang === 'fa';
+  const publicNotice = getConsultationPublicNotice(appConfig, fa);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [bookingMeeting, setBookingMeeting] = useState<Meeting | null>(null);
   const [copied, setCopied] = useState(false);
@@ -102,6 +105,7 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
     sessionTopicsHint: fa ? 'موضوعات مشاوره‌ای که این مشاور ارائه می‌دهد' : 'Topics this consultant offers',
     openSlotsTopic: (n: number) => fa ? `${n.toLocaleString('fa-IR')} قابل رزرو` : `${n} bookable slot${n === 1 ? '' : 's'}`,
     clearConsultant: fa ? 'همه مشاوران' : 'All consultants',
+    noticeTitle: fa ? 'نحوه رزرو جلسه' : 'How booking works',
   };
 
   const selectedConsultant = useMemo(
@@ -220,6 +224,18 @@ export const PublicMeetingBookingView: React.FC<Props> = ({
             {onExit && (
               <button type="button" onClick={onExit} className="px-3 py-2 rounded-lg text-sm font-medium text-violet-700 hover:bg-violet-50">{t.back}</button>
             )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-br from-violet-50 to-white px-4 py-3.5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-lg" aria-hidden>
+              ℹ️
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-black text-violet-900 mb-1.5">{t.noticeTitle}</h2>
+              <p className="text-sm text-violet-950/90 leading-relaxed whitespace-pre-wrap">{publicNotice}</p>
+            </div>
           </div>
         </div>
 

@@ -120,6 +120,8 @@ const INITIAL_CONFIG: AppConfig = {
     "اخذ گواهی‌نامه‌های بین‌المللی، کلید ورود به بازارهای اروپایی است."
   ],
   showDailyTips: true,
+  consultationPublicNoticeFa: 'هر بازهٔ زمانی آزاد را می‌توانید به‌صورت «رزرو موقت» انتخاب کنید — این امکان برای همهٔ متقاضیان فعال است.\n\nپس از بررسی و تأیید رزرو توسط تیم ما، وضعیت جلسه به «رزرو قطعی» تغییر می‌کند و آن زمان دیگر برای سایرین قابل انتخاب نخواهد بود.',
+  consultationPublicNoticeEn: 'Any open time slot can be requested as a temporary booking — this option is available to everyone.\n\nOnce our team reviews and confirms your reservation, the session status becomes Confirmed and that slot is no longer available to others.',
   personnelRoles: ['مدیر', 'کارشناس صادرات', 'طراح گرافیک/بسته بندی', 'پشتیبانی', 'کارشناس آموزش', 'مدیر مالی'],
   formFields: [
     { id: 'h1', key: 'h_contact', label: 'اطلاعات تماس و موقعیت', labelEn: 'Contact Information', type: 'header', required: false, order: 0, isSystem: true },
@@ -1676,6 +1678,7 @@ const App: React.FC = () => {
         onConsultantChange={onConsultantChange}
         onOpenTracking={openTracking}
         onExit={() => setView('landing')}
+        appConfig={appConfig}
       />
     );
   }
