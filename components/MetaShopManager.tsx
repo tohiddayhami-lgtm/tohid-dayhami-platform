@@ -22,6 +22,7 @@ import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
+import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
 
@@ -2000,11 +2001,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <input className={fld + ' dir-ltr'} placeholder={t.pSku} value={p.sku || ''} onChange={e => updProduct(idx, { sku: e.target.value })} />
                     <input className={fld} placeholder={t.pGroup} value={p.group || ''} onChange={e => updProduct(idx, { group: e.target.value })} list={`ms-cats-${draft.id}`} />
                     <input className={fld} placeholder={t.pSubcat} value={p.subcategory || ''} onChange={e => updProduct(idx, { subcategory: e.target.value })} />
-                    <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت نمایشی فروش' : 'Display sale price') : t.pPrice} value={p.price ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { price: v, basePrice: v }); }} />
+                    {(isRealEstate || isServices || !(p.priceTiers?.length)) && <input className={fld} type="number" placeholder={isRealEstate ? (T ? 'قیمت نمایشی فروش' : 'Display sale price') : t.pPrice} value={p.price ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { price: v, basePrice: v }); }} />}
                     <input className={fld + ' dir-ltr'} placeholder={`${t.pCurrency} (${draft.currency})`} value={p.currency || ''} onChange={e => updProduct(idx, { currency: e.target.value.toUpperCase() })} />
-                    {!isServices && !isRealEstate && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { packPrice: v, basePackPrice: v }); }} />}
+                    {!isServices && !isRealEstate && !(p.priceTiers?.length) && <input className={fld} type="number" placeholder={t.pPack} value={p.packPrice ?? ''} onChange={e => { const v = parseFloat(e.target.value) || 0; updProduct(idx, { packPrice: v, basePackPrice: v }); }} />}
                     {!isRealEstate && <input className={fld} placeholder={t.pUnit} value={p.unit || ''} onChange={e => updProduct(idx, { unit: e.target.value })} />}
-                    {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : !isRealEstate ? <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} /> : null}
+                    {isServices ? <input className={fld + ' col-span-1'} placeholder={T ? 'مثلا: روزانه' : 'e.g. per day'} value={p.priceUnit || ''} onChange={e => updProduct(idx, { priceUnit: e.target.value })} /> : !isRealEstate && !(p.priceTiers?.length) ? <input className={fld} type="number" placeholder={t.pPackSize} value={p.pack ?? ''} onChange={e => updProduct(idx, { pack: parseFloat(e.target.value) || undefined })} /> : null}
                     {!isServices && !isRealEstate && <input className={fld} placeholder={t.pMoq} value={p.moq || ''} onChange={e => updProduct(idx, { moq: e.target.value })} />}
                     <input className={fld} placeholder={t.pStock} value={p.stockLabel || ''} onChange={e => updProduct(idx, { stockLabel: e.target.value })} />
                     <textarea className={fld + ' col-span-2 md:col-span-4'} rows={1} placeholder={t.pDesc} value={p.description || ''} onChange={e => updProduct(idx, { description: e.target.value })} />
@@ -2093,7 +2094,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                   </div>
                 )}
 
-                {/* Rate options (max 3) */}
+                {/* Bulk price tiers (products) or rate options (services) */}
+                {!isRealEstate && (
+                  isServices ? (
                 <div className="mt-3 border-t border-gray-100 pt-3">
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-[11px] font-bold text-gray-600">{t.rateOptions}</label>
@@ -2113,6 +2116,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     </div>
                   )}
                 </div>
+                  ) : (
+                    <MetaShopProductPriceTiersEditor
+                      T={T}
+                      product={p}
+                      currency={draft.currency}
+                      onChange={patch => updProduct(idx, patch)}
+                    />
+                  )
+                )}
               </div>
             ))}
             {draft.products.length > editorProductShown && (

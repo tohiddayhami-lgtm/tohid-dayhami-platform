@@ -8,6 +8,7 @@ import { customerCategoriesList, categoryLabelFa } from '../utils/customerMetaSh
 import { CustomerMetaShopCategoryManager } from './CustomerMetaShopCategoryManager';
 import { CustomerMetaShopPriceSettings } from './CustomerMetaShopPriceSettings';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
+import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
 import { productHasPriceDrift, revertAllProductsToBase, type PriceAdjustType } from '../utils/metaShopPricing';
 
@@ -401,34 +402,10 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(p.priceOptions?.length ?? 0) > 0 ? (
-                      <div className="sm:col-span-2 space-y-2">
-                        <p className="text-xs font-semibold text-gray-600">{T ? 'قیمت / نرخ‌ها' : 'Prices / rates'}</p>
-                        {p.priceOptions!.map(opt => (
-                          <div key={opt.id} className="flex items-center gap-2 flex-wrap bg-gray-50 rounded-lg p-2">
-                            <span className="text-xs text-gray-600 flex-1 min-w-[80px]">{opt.label}</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step="any"
-                              className={fld + ' dir-ltr max-w-[140px]'}
-                              disabled={p.hidePrice || shopPricesHidden}
-                              value={opt.price ?? ''}
-                              onChange={e => {
-                                const price = e.target.value === '' ? 0 : Number(e.target.value);
-                                updProduct(p.id, {
-                                  priceOptions: p.priceOptions!.map(o => o.id === opt.id ? { ...o, price, basePrice: price } : o),
-                                });
-                              }}
-                            />
-                            <span className="text-[10px] text-gray-400">{opt.currency || currency}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
+                  {shopType !== 'realestate' && !(p.priceTiers?.length) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className={lbl}>{T ? 'قیمت' : 'Price'} ({currency})</label>
+                        <label className={lbl}>{T ? 'قیمت (یک عدد)' : 'Price (per unit)'}</label>
                         <input
                           type="number"
                           min={0}
@@ -442,15 +419,14 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                           }}
                         />
                       </div>
-                    )}
-                    {p.packPrice != null && (
                       <div>
-                        <label className={lbl}>{T ? 'قیمت بسته' : 'Pack price'}</label>
+                        <label className={lbl}>{T ? 'قیمت بسته (اختیاری)' : 'Pack price (optional)'}</label>
                         <input
                           type="number"
                           min={0}
                           step="any"
                           className={fld + ' dir-ltr'}
+                          disabled={p.hidePrice || shopPricesHidden}
                           value={p.packPrice ?? ''}
                           onChange={e => {
                             const v = e.target.value === '' ? undefined : Number(e.target.value);
@@ -458,8 +434,43 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                           }}
                         />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {shopType === 'services' && (p.priceOptions?.length ?? 0) > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-600">{T ? 'قیمت / نرخ‌ها' : 'Prices / rates'}</p>
+                      {p.priceOptions!.map(opt => (
+                        <div key={opt.id} className="flex items-center gap-2 flex-wrap bg-gray-50 rounded-lg p-2">
+                          <span className="text-xs text-gray-600 flex-1 min-w-[80px]">{opt.label}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            className={fld + ' dir-ltr max-w-[140px]'}
+                            disabled={p.hidePrice || shopPricesHidden}
+                            value={opt.price ?? ''}
+                            onChange={e => {
+                              const price = e.target.value === '' ? 0 : Number(e.target.value);
+                              updProduct(p.id, {
+                                priceOptions: p.priceOptions!.map(o => o.id === opt.id ? { ...o, price, basePrice: price } : o),
+                              });
+                            }}
+                          />
+                          <span className="text-[10px] text-gray-400">{opt.currency || currency}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {shopType === 'products' && (
+                    <MetaShopProductPriceTiersEditor
+                      T={T}
+                      product={p}
+                      currency={currency}
+                      onChange={patch => updProduct(p.id, patch)}
+                    />
+                  )}
 
                   {!shopPricesHidden && (
                   <label className="flex items-center gap-2 cursor-pointer">

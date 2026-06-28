@@ -10,6 +10,7 @@ import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
 import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice } from '../utils/metaShopPricing';
+import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -630,8 +631,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     }
   }, [products]);
 
-  // ── Rate options (up to 3 named rates per product) ──
-  const optionsOf = (p: MetaShopProduct) => p.priceOptions || [];
+  // ── Purchase options: bulk tiers (products) or rate options (services) ──
+  const optionsOf = (p: MetaShopProduct) => productPurchaseOptions(p, shop.type);
   // Effective currency for a product/option (option currency wins, then product, then shop)
   const curOf = (p: MetaShopProduct, optId?: string): string => {
     const o = optionsOf(p).find(x => x.id === optId);
@@ -658,7 +659,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     if (opts.length) { const o = opts.find(x => x.id === optId) || opts[0]; return o?.price ?? 0; }
     return p.price ?? 0;
   };
-  // List price after shop/product markup, before discount.
   const listUnitPrice = (p: MetaShopProduct, optId?: string): number =>
     markedUpPrice(shop, p, sellingUnitPrice(p, optId)) ?? sellingUnitPrice(p, optId);
   const listPackPrice = (p: MetaShopProduct): number | undefined => {
@@ -708,7 +708,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
   const negLabel = (p?: MetaShopProduct) => (p && p.hidePriceText) || shop.hidePriceText || t.negotiable;
-  const optLabel = (p: MetaShopProduct, optId?: string): string => { const o = optionsOf(p).find(x => x.id === optId); return o ? L(o.label, o.labelEn) : ''; };
+  const optLabel = (p: MetaShopProduct, optId?: string): string => {
+    const o = optionsOf(p).find(x => x.id === optId);
+    if (!o) return '';
+    const base = L(o.label, o.labelEn);
+    const hint = tierUnitsHint(o, p.unit, uiLang === 'fa' || shop.defaultLang === 'fa');
+    return hint ? `${base} (${hint})` : base;
+  };
   const selectOption = (p: MetaShopProduct, optId: string) => {
     setChosenOpt(ch => ({ ...ch, [p.id]: optId }));
     setCart(c => c[p.id] ? { ...c, [p.id]: { ...c[p.id], optionId: optId } } : c);
@@ -1063,9 +1069,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               const storedOpt = wasOptionReferencePrice(p, o);
               const finalOpt = finalOptionPrice(p, o.price);
               const showOptWas = shouldShowWasPrice(p, storedOpt, finalOpt);
+              const hint = tierUnitsHint(o, p.unit, uiLang === 'fa' || shop.defaultLang === 'fa');
               return (
               <button key={o.id} className={`ms-opt ${selId === o.id ? 'on' : ''}`} onClick={() => selectOption(p, o.id)}>
-                <span className="ms-opt-label">{L(o.label, o.labelEn)}</span>
+                <span className="ms-opt-label">{L(o.label, o.labelEn)}{hint ? <span className="ms-opt-hint"> · {hint}</span> : null}</span>
                 {!hidden && (
                   <span className="ms-opt-price">
                     {showOptWas && <span className="ms-opt-was">{money(storedOpt, curOf(p, o.id))}</span>}
@@ -1089,7 +1096,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               {off > 0 && <span className="ms-disc-tag">{off}%{S('offTag')}</span>}
             </div>
           )}
-          {!isServices && !isRealEstate && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && (
+          {!isServices && !isRealEstate && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && !(p.priceTiers?.length) && (
             <div className="ms-price-row">
               {showPackWas && storedPack != null && <span className="ms-price-was">{money(storedPack, curOf(p))}</span>}
               <span className="ms-price-amt ms-pack">{money(finalPack ?? p.packPrice, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
@@ -2139,6 +2146,7 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-opt { display:flex; flex-direction:column; align-items:flex-start; gap:1px; border:1.5px solid #e2e8f0; background:#fff; border-radius:9px; padding:4px 9px; cursor:pointer; transition:all .15s; min-width:0; }
 .ms-opt.on { border-color:var(--ms-primary); background:color-mix(in srgb, var(--ms-primary) 8%, #fff); }
 .ms-opt-label { font-size:10px; font-weight:700; color:#475569; line-height:1.2; }
+.ms-opt-hint { font-weight:500; color:#94a3b8; font-size:9px; }
 .ms-opt.on .ms-opt-label { color:var(--ms-primary); }
 .ms-opt-price { font-size:11px; font-weight:800; color:#0f172a; display:flex; flex-direction:column; line-height:1.15; }
 .ms-opt-was { font-size:9px; font-weight:600; color:#94a3b8; text-decoration:line-through; }

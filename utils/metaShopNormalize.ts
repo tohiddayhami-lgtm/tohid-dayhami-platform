@@ -86,6 +86,17 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
           basePrice: o.basePrice != null ? Number(o.basePrice) : undefined,
         }))
       : undefined,
+    priceTiers: p.priceTiers?.length
+      ? p.priceTiers.slice(0, 3).map(t => ({
+          id: String(t.id),
+          label: String(t.label || ''),
+          labelEn: t.labelEn,
+          price: Number(t.price) || 0,
+          currency: t.currency,
+          basePrice: t.basePrice != null ? Number(t.basePrice) : undefined,
+          unitsInPack: t.unitsInPack != null ? Number(t.unitsInPack) : undefined,
+        }))
+      : undefined,
     realEstate: p.realEstate,
     searchKeywords: p.searchKeywords,
   };

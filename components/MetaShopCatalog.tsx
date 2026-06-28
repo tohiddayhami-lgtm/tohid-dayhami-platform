@@ -6,6 +6,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
+import { productPurchaseOptions } from '../utils/metaShopPriceTiers';
 
 interface Props {
   shop: MetaShop;
@@ -206,7 +207,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   // ── Price block ──
   const priceJsx = (p: MetaShopProduct) => {
     if (priceHidden(p)) return <div className="msc-price-neg">{p.hidePriceText || shop.hidePriceText || s('negotiable')}</div>;
-    const opts = p.priceOptions || [];
+    const opts = productPurchaseOptions(p, shop.type);
     if (opts.length) {
       return (
         <div className="msc-price-opts">
@@ -221,7 +222,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
         <div className="msc-price-main">
           {money(p.price, curOf(p))}
           <span className="msc-price-unit">{p.priceUnit ? ` ${p.priceUnit}` : (p.unit ? ` / ${p.unit}` : '')}</span>
-          {p.packPrice ? <span className="msc-price-pack"> · {s('pack')}: {money(p.packPrice, curOf(p))}</span> : null}
+          {p.packPrice && !p.priceTiers?.length ? <span className="msc-price-pack"> · {s('pack')}: {money(p.packPrice, curOf(p))}</span> : null}
         </div>
       );
     }

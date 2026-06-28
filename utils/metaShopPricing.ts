@@ -55,10 +55,19 @@ export function ensureProductBaseSnapshot(p: MetaShopProduct): MetaShopProduct {
       ...o,
       basePrice: o.basePrice ?? o.price,
     })),
+    priceTiers: p.priceTiers?.map(t => ({
+      ...t,
+      basePrice: t.basePrice ?? t.price,
+    })),
   };
 }
 
 export function anchorUnitPrice(p: MetaShopProduct, optId?: string): number {
+  const tiers = p.priceTiers || [];
+  if (tiers.length) {
+    const t = tiers.find(x => x.id === optId) || tiers[0];
+    return t?.basePrice ?? t?.price ?? 0;
+  }
   const opts = p.priceOptions || [];
   if (opts.length) {
     const o = opts.find(x => x.id === optId) || opts[0];
@@ -93,6 +102,10 @@ export function commitMarkupToProducts(
         ...o,
         price: adjustStored(o.price, type, value) ?? o.price,
       })),
+      priceTiers: snap.priceTiers?.map(t => ({
+        ...t,
+        price: adjustStored(t.price, type, value) ?? t.price,
+      })),
       priceMarkupType: undefined,
       priceMarkupValue: undefined,
     };
@@ -109,6 +122,10 @@ export function revertProductToBase(p: MetaShopProduct): MetaShopProduct {
     priceOptions: snap.priceOptions?.map(o => ({
       ...o,
       price: o.basePrice ?? o.price,
+    })),
+    priceTiers: snap.priceTiers?.map(t => ({
+      ...t,
+      price: t.basePrice ?? t.price,
     })),
     priceMarkupType: undefined,
     priceMarkupValue: undefined,
@@ -129,6 +146,8 @@ export function productHasPriceDrift(p: MetaShopProduct): boolean {
   if (snap.discountType && (snap.discountValue ?? 0) > 0) return true;
   return !!snap.priceOptions?.some(o =>
     o.basePrice != null && Math.abs((o.price ?? 0) - o.basePrice) > 0.001,
+  ) || !!snap.priceTiers?.some(t =>
+    t.basePrice != null && Math.abs((t.price ?? 0) - t.basePrice) > 0.001,
   );
 }
 

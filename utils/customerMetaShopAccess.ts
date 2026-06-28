@@ -1,6 +1,7 @@
 import { MetaShop, MetaShopProduct, MetaShopDiscount, MetaShopType } from '../types';
 import { defaultRealEstate } from './metaShopRealEstate';
 import { ensureProductBaseSnapshot } from './metaShopPricing';
+import { syncLegacyPricesFromTiers } from './metaShopPriceTiers';
 
 /** Shop-level fields a customer portal user may change. */
 export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
@@ -23,6 +24,7 @@ export const CUSTOMER_EDITABLE_PRODUCT_FIELDS = [
   'name', 'description', 'images', 'i18n',
   'group', 'subcategory',
   'price', 'packPrice', 'currency',
+  'priceTiers',
   'discountType', 'discountValue',
   'priceMarkupType', 'priceMarkupValue',
   'promoLabel',
@@ -83,6 +85,13 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
       return { ...o, price, basePrice, currency: e.currency ?? o.currency };
     });
   }
+  if (edits.priceTiers) {
+    merged.priceTiers = edits.priceTiers.map(t => ({
+      ...t,
+      basePrice: t.basePrice ?? t.price,
+    }));
+    Object.assign(merged, syncLegacyPricesFromTiers({ ...merged, priceTiers: merged.priceTiers }));
+  }
   if (edits.i18n) {
     merged.i18n = { ...(existing.i18n || {}) };
     for (const [langCode, fields] of Object.entries(edits.i18n)) {
@@ -124,6 +133,7 @@ export function duplicateCustomerProduct(source: MetaShopProduct, lang: 'fa' | '
     priceMarkupType: source.priceMarkupType,
     priceMarkupValue: source.priceMarkupValue,
     promoLabel: source.promoLabel,
+    priceTiers: source.priceTiers?.map(t => ({ ...t })),
     showStrikethroughPrice: source.showStrikethroughPrice,
     group: source.group,
     subcategory: source.subcategory,
