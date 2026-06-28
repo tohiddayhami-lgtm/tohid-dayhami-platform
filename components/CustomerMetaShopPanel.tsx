@@ -43,7 +43,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [markingReceivedId, setMarkingReceivedId] = useState<string | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const coverRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const seoRef = useRef<HTMLInputElement>(null);
@@ -63,16 +63,20 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     [orders, customerUser?.metaShopIds],
   );
 
-  const handleMarkReceived = async (orderId: string) => {
+  const handleStatusChange = async (orderId: string, status: MetaShopOrder['status']) => {
     if (!onUpdateOrder) return;
-    setMarkingReceivedId(orderId);
+    setUpdatingOrderId(orderId);
     try {
-      await onUpdateOrder(orderId, { status: 'in_progress' });
+      await onUpdateOrder(orderId, { status });
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     } finally {
-      setMarkingReceivedId(null);
+      setUpdatingOrderId(null);
     }
+  };
+
+  const handleMarkReceived = async (orderId: string) => {
+    await handleStatusChange(orderId, 'in_progress');
   };
 
   const applyCatalog = useCallback((full: MetaShop) => {
@@ -406,12 +410,18 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
               lang={lang}
               commissionView="partner"
               partnerCommissionPercent={commissionPct}
-              onMarkReceived={
-                onUpdateOrder && o.status === 'new'
-                  ? () => { if (markingReceivedId !== o.id) void handleMarkReceived(o.id); }
+              onStatusChange={
+                onUpdateOrder
+                  ? status => { if (updatingOrderId !== o.id) void handleStatusChange(o.id, status); }
                   : undefined
               }
-              markReceivedBusy={markingReceivedId === o.id}
+              statusChangeDisabled={updatingOrderId === o.id}
+              onMarkReceived={
+                onUpdateOrder && o.status === 'new'
+                  ? () => { if (updatingOrderId !== o.id) void handleMarkReceived(o.id); }
+                  : undefined
+              }
+              markReceivedBusy={updatingOrderId === o.id}
             />
           ))}
         </div>

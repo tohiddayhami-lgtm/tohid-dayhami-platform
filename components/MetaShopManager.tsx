@@ -40,6 +40,7 @@ interface Props {
   onSaveMetaShop: (shop: MetaShop, opts?: MetaShopSaveOptions) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
+  onDeleteMetaShopOrder?: (id: string) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
   onUpdateMetaShopSupplierCollaboration?: (id: string, updates: Partial<MetaShopSupplierCollaboration>) => Promise<void>;
   metaBazaars?: MetaBazaar[];
@@ -158,7 +159,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
@@ -888,6 +889,14 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const statusLabel = (s: MetaShopOrder['status']) => s === 'done' ? t.sDone : s === 'in_progress' ? t.sProg : s === 'cancelled' ? t.sCanc : t.sNew;
   const statusCls = (s: MetaShopOrder['status']) => s === 'done' ? 'bg-emerald-100 text-emerald-700' : s === 'in_progress' ? 'bg-blue-100 text-blue-700' : s === 'cancelled' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
 
+  const confirmDeleteOrder = (orderId: string) => {
+    if (!onDeleteMetaShopOrder) return;
+    const msg = T
+      ? 'این سفارش برای همیشه حذف شود؟ این عمل قابل بازگشت نیست.'
+      : 'Permanently delete this order? This cannot be undone.';
+    if (window.confirm(msg)) void onDeleteMetaShopOrder(orderId);
+  };
+
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-sm';
   const lbl = 'block text-[13px] font-semibold text-gray-700 mb-1.5';
   const card = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
@@ -1157,6 +1166,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 customerAccounts={customerAccounts}
                 commissionView="master"
                 onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
+                onDelete={!readonly && onDeleteMetaShopOrder ? () => confirmDeleteOrder(o.id) : undefined}
               />
             ))}
           </div>
@@ -1186,6 +1196,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 customerAccounts={customerAccounts}
                 commissionView="master"
                 onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
+                onDelete={!readonly && onDeleteMetaShopOrder ? () => confirmDeleteOrder(o.id) : undefined}
               />
             ))}
           </div>

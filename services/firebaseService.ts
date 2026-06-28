@@ -1412,6 +1412,10 @@ export const saveMetaShopOrderToCloud = async (order: MetaShopOrder) => {
 export const updateMetaShopOrderInCloud = async (id: string, updates: Partial<MetaShopOrder>) => {
     await updateDocCloud('metaShopOrders', id, updates as Record<string, unknown>);
 };
+export const deleteMetaShopOrderFromCloud = async (id: string) => {
+    await deleteDocCloud('metaShopOrders', id);
+    logSystemAction('DELETE', 'MetaShopOrder', `سفارش ${id} حذف شد`, 'Master', id);
+};
 export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) =>
   subscribeCollection<MetaShopOrder>('metaShopOrders', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),

@@ -26,7 +26,7 @@ import {
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug, hydrateMetaShop,
-  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
+  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
@@ -1759,10 +1759,12 @@ const App: React.FC = () => {
       throw new Error('دسترسی مجاز نیست');
     }
     const keys = Object.keys(updates);
-    if (keys.length !== 1 || updates.status !== 'in_progress' || order.status !== 'new') {
-      throw new Error('فقط تأیید دریافت سفارش جدید مجاز است');
+    if (keys.length !== 1 || keys[0] !== 'status' || !updates.status) {
+      throw new Error('فقط تغییر وضعیت مجاز است');
     }
-    await updateMetaShopOrderInCloud(id, { status: 'in_progress' });
+    const allowed: MetaShopOrder['status'][] = ['new', 'in_progress', 'done', 'cancelled'];
+    if (!allowed.includes(updates.status)) throw new Error('وضعیت نامعتبر است');
+    await updateMetaShopOrderInCloud(id, { status: updates.status });
   };
 
   // ── Public meeting booking calendar ──
@@ -2395,6 +2397,7 @@ const App: React.FC = () => {
                     onSaveMetaShop={async (s, opts) => { await saveMetaShopToCloud(s, opts); }}
                     onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
+                    onDeleteMetaShopOrder={async (id) => { await deleteMetaShopOrderFromCloud(id); }}
                     onUpdateMetaShopPropertyReferral={async (id, u) => { await updateMetaShopPropertyReferralInCloud(id, u); }}
                     onUpdateMetaShopSupplierCollaboration={async (id, u) => { await updateMetaShopSupplierCollaborationInCloud(id, u); }}
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}

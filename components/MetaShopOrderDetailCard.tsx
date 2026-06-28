@@ -9,6 +9,9 @@ interface Props {
   shopBaseUrl: string;
   lang: Language;
   onStatusChange?: (status: MetaShopOrder['status']) => void;
+  statusChangeDisabled?: boolean;
+  /** Admin only — permanently delete order */
+  onDelete?: () => void;
   /** Customer portal: acknowledge a new order → in_progress */
   onMarkReceived?: () => void;
   markReceivedBusy?: boolean;
@@ -26,7 +29,8 @@ const statusCls = (s: MetaShopOrder['status']) =>
     : 'bg-amber-100 text-amber-700';
 
 export const MetaShopOrderDetailCard: React.FC<Props> = ({
-  order, shop, shopBaseUrl, lang, onStatusChange, onMarkReceived, markReceivedBusy, showShopName,
+  order, shop, shopBaseUrl, lang, onStatusChange, statusChangeDisabled, onDelete,
+  onMarkReceived, markReceivedBusy, showShopName,
   customerAccounts = [], commissionView, partnerCommissionPercent,
 }) => {
   const T = lang === 'fa';
@@ -75,11 +79,21 @@ export const MetaShopOrderDetailCard: React.FC<Props> = ({
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-0.5 rounded border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors"
+            >
+              {T ? 'حذف سفارش' : 'Delete order'}
+            </button>
+          )}
           {onStatusChange ? (
             <select
               value={order.status}
+              disabled={statusChangeDisabled}
               onChange={e => onStatusChange(e.target.value as MetaShopOrder['status'])}
-              className={`text-[11px] px-2.5 py-1 rounded-full font-medium border-0 outline-none cursor-pointer ${statusCls(order.status)}`}
+              className={`text-[11px] px-2.5 py-1 rounded-full font-medium border-0 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${statusCls(order.status)}`}
             >
               <option value="new">{statusLabel('new')}</option>
               <option value="in_progress">{statusLabel('in_progress')}</option>
