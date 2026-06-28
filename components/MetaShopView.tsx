@@ -672,19 +672,38 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const unitPrice = (p: MetaShopProduct, optId?: string): number => applyDisc(p, listUnitPrice(p, optId)) ?? 0;
   const finalOptionPrice = (p: MetaShopProduct, optPrice: number): number =>
     applyDisc(p, listOptionPrice(p, optPrice)) ?? listOptionPrice(p, optPrice);
-  /** Strikethrough only when the customer pays less than the stored base price (never for increases). */
-  const priceCutFromBase = (stored: number | undefined, final: number | undefined): boolean => {
-    if (stored == null || final == null || stored <= 0) return false;
-    return final < stored - 0.001;
+  /** «Was» price for strikethrough: base anchor or list price before discount, when above final. */
+  const wasReferencePrice = (p: MetaShopProduct, optId?: string): number | undefined => {
+    const anchor = anchorPrice(p, optId);
+    const list = listUnitPrice(p, optId);
+    const final = unitPrice(p, optId);
+    const ref = Math.max(anchor, list);
+    return ref > final + 0.001 ? ref : undefined;
+  };
+  const wasPackReferencePrice = (p: MetaShopProduct): number | undefined => {
+    const anchor = anchorPackPrice(p);
+    if (anchor == null) return undefined;
+    const list = listPackPrice(p);
+    if (list == null) return undefined;
+    const final = applyDisc(p, list) ?? list;
+    const ref = Math.max(anchor, list);
+    return ref > final + 0.001 ? ref : undefined;
+  };
+  const wasOptionReferencePrice = (p: MetaShopProduct, opt: { basePrice?: number; price: number }): number | undefined => {
+    const anchor = anchorOptionPrice(opt);
+    const list = listOptionPrice(p, opt.price);
+    const final = finalOptionPrice(p, opt.price);
+    const ref = Math.max(anchor, list);
+    return ref > final + 0.001 ? ref : undefined;
   };
   const percentOffBase = (stored: number | undefined, final: number | undefined): number => {
-    if (!priceCutFromBase(stored, final) || !stored) return 0;
-    return Math.round((1 - final! / stored) * 100);
+    if (stored == null || final == null || stored <= 0 || final >= stored - 0.001) return 0;
+    return Math.round((1 - final / stored) * 100);
   };
-  const shouldShowWasPrice = (p: MetaShopProduct, stored: number | undefined, final: number | undefined): boolean =>
-    priceCutFromBase(stored, final) && resolveShowStrikethroughPrice(shop, p);
-  const visiblePercentOff = (p: MetaShopProduct, stored: number | undefined, final: number | undefined): number =>
-    shouldShowWasPrice(p, stored, final) ? percentOffBase(stored, final) : 0;
+  const shouldShowWasPrice = (p: MetaShopProduct, was: number | undefined, final: number | undefined): boolean =>
+    was != null && resolveShowStrikethroughPrice(shop, p);
+  const visiblePercentOff = (p: MetaShopProduct, was: number | undefined, final: number | undefined): number =>
+    shouldShowWasPrice(p, was, final) ? percentOffBase(was, final) : 0;
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
@@ -1027,13 +1046,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const opts = optionsOf(p);
     const selId = selOptId(p);
     const qty = cart[p.id]?.qty || 0;
-    const storedPrice = anchorPrice(p, selId);
+    const storedPrice = wasReferencePrice(p, selId);
     const curPrice = unitPrice(p, selId);
     const cur = curOf(p, selId);
     const showWas = shouldShowWasPrice(p, storedPrice, curPrice);
     const off = visiblePercentOff(p, storedPrice, curPrice);
-    const storedPack = anchorPackPrice(p);
-    const finalPack = storedPack != null ? (applyDisc(p, listPackPrice(p)) ?? listPackPrice(p)) : undefined;
+    const storedPack = wasPackReferencePrice(p);
+    const finalPack = p.packPrice != null ? (applyDisc(p, listPackPrice(p)) ?? listPackPrice(p)) : undefined;
     const showPackWas = shouldShowWasPrice(p, storedPack, finalPack);
     const hidden = priceHidden(p);
     return (
@@ -1041,7 +1060,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         {opts.length > 0 && (
           <div className="ms-opts">
             {opts.map(o => {
-              const storedOpt = anchorOptionPrice(o);
+              const storedOpt = wasOptionReferencePrice(p, o);
               const finalOpt = finalOptionPrice(p, o.price);
               const showOptWas = shouldShowWasPrice(p, storedOpt, finalOpt);
               return (
@@ -1070,10 +1089,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               {off > 0 && <span className="ms-disc-tag">{off}%{S('offTag')}</span>}
             </div>
           )}
-          {!isServices && !isRealEstate && opts.length === 0 && storedPack != null && storedPack > 0 && (
+          {!isServices && !isRealEstate && opts.length === 0 && p.packPrice != null && p.packPrice > 0 && (
             <div className="ms-price-row">
-              {showPackWas && <span className="ms-price-was">{money(storedPack, curOf(p))}</span>}
-              <span className="ms-price-amt ms-pack">{money(finalPack ?? storedPack, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
+              {showPackWas && storedPack != null && <span className="ms-price-was">{money(storedPack, curOf(p))}</span>}
+              <span className="ms-price-amt ms-pack">{money(finalPack ?? p.packPrice, curOf(p))} <span className="ms-price-unit">{t.perPack}</span></span>
             </div>
           )}
           </>)}
@@ -1107,7 +1126,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   // Single product card — reused by the featured rail and the main grid.
   const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
     const optId = selOptId(p);
-    const stored = anchorPrice(p, optId);
+    const stored = wasReferencePrice(p, optId);
     const final = unitPrice(p, optId);
     const off = visiblePercentOff(p, stored, final);
     const promo = promoLabelText(p, uiLang, shop.defaultLang || 'en');

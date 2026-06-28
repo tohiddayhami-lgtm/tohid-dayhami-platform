@@ -42,6 +42,8 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
 
   const price = Number(p.price) || 0;
   const packPrice = Number(p.packPrice) || 0;
+  const basePrice = p.basePrice != null ? Number(p.basePrice) : undefined;
+  const basePackPrice = p.basePackPrice != null ? Number(p.basePackPrice) : undefined;
   const out: MetaShopProduct = {
     id: String(p.id || `p-${Date.now()}`),
     name: String(p.name || p.nameFa || i18n.fa?.name || ''),
@@ -54,15 +56,36 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     featured: p.featured || undefined,
     outOfStock: p.outOfStock || undefined,
     hidePrice: p.hidePrice || undefined,
+    hidePriceText: p.hidePriceText || undefined,
     currency: p.currency || undefined,
     price: price || undefined,
+    basePrice: basePrice != null && !Number.isNaN(basePrice) ? basePrice : undefined,
     packPrice: packPrice && packPrice !== price ? packPrice : undefined,
+    basePackPrice: basePackPrice != null && !Number.isNaN(basePackPrice) ? basePackPrice : undefined,
+    pack: p.pack != null ? Number(p.pack) : undefined,
     unit: p.unit || undefined,
+    priceUnit: p.priceUnit || undefined,
     moq: p.moq || undefined,
     stockLabel: p.stockLabel || p.stockLabelFa || undefined,
+    videoUrl: p.videoUrl || undefined,
+    promoLabel: p.promoLabel || undefined,
+    showStrikethroughPrice: p.showStrikethroughPrice,
+    priceMarkupType: p.priceMarkupType === 'percent' || p.priceMarkupType === 'amount' ? p.priceMarkupType : undefined,
+    priceMarkupValue: p.priceMarkupValue != null ? Number(p.priceMarkupValue) : undefined,
+    discountType: p.discountType === 'percent' || p.discountType === 'amount' ? p.discountType : undefined,
+    discountValue: p.discountValue != null ? Number(p.discountValue) : undefined,
     origin: normalizeOrigin(p.origin),
     i18n: Object.keys(i18n).length ? i18n : undefined,
-    priceOptions: p.priceOptions?.length ? p.priceOptions : undefined,
+    priceOptions: p.priceOptions?.length
+      ? p.priceOptions.map(o => ({
+          id: String(o.id),
+          label: String(o.label || ''),
+          labelEn: o.labelEn,
+          price: Number(o.price) || 0,
+          currency: o.currency,
+          basePrice: o.basePrice != null ? Number(o.basePrice) : undefined,
+        }))
+      : undefined,
     realEstate: p.realEstate,
     searchKeywords: p.searchKeywords,
   };
@@ -172,6 +195,10 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     taxLabelEn: raw.taxLabelEn,
     hidePrices: raw.hidePrices,
     hidePriceText: raw.hidePriceText,
+    priceMarkupType: raw.priceMarkupType === 'percent' || raw.priceMarkupType === 'amount' ? raw.priceMarkupType : undefined,
+    priceMarkupValue: raw.priceMarkupValue != null ? Number(raw.priceMarkupValue) : undefined,
+    showStrikethroughPrice: raw.showStrikethroughPrice,
+    groupI18n: raw.groupI18n && typeof raw.groupI18n === 'object' ? raw.groupI18n : undefined,
     supplierCollaborationEnabled: raw.supplierCollaborationEnabled,
     floatingStickers: raw.floatingStickers?.length ? raw.floatingStickers : undefined,
     seoTitle: raw.seoTitle,
