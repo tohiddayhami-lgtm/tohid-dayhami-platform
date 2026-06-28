@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { IconShield, IconUsers } from './Icons';
 
 const STAFF_REMEMBER_KEY = 'crm_staff_remember';
+const CUSTOMER_REMEMBER_KEY = 'crm_customer_remember';
 
 interface Props {
   onLogin: (username: string, password: string) => Promise<boolean>;
@@ -18,6 +19,7 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
 
   const [custUser, setCustUser] = useState('');
   const [custPass, setCustPass] = useState('');
+  const [rememberCustomer, setRememberCustomer] = useState(false);
   const [custError, setCustError] = useState('');
   const [custLoading, setCustLoading] = useState(false);
 
@@ -29,6 +31,14 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
       if (saved.username) setStaffUser(saved.username);
       if (saved.password) setStaffPass(saved.password);
       setRememberStaff(true);
+    } catch {}
+    try {
+      const raw = localStorage.getItem(CUSTOMER_REMEMBER_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { username?: string; password?: string };
+      if (saved.username) setCustUser(saved.username);
+      if (saved.password) setCustPass(saved.password);
+      setRememberCustomer(true);
     } catch {}
   }, []);
 
@@ -61,7 +71,17 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
     setCustLoading(true);
     try {
       const ok = await onCustomerLogin(custUser, custPass);
-      if (!ok) setCustError('نام کاربری یا رمز عبور اشتباه است.');
+      if (!ok) {
+        setCustError('نام کاربری یا رمز عبور اشتباه است.');
+      } else {
+        try {
+          if (rememberCustomer) {
+            localStorage.setItem(CUSTOMER_REMEMBER_KEY, JSON.stringify({ username: custUser, password: custPass }));
+          } else {
+            localStorage.removeItem(CUSTOMER_REMEMBER_KEY);
+          }
+        } catch {}
+      }
     } catch { setCustError('خطا در برقراری ارتباط.'); }
     finally { setCustLoading(false); }
   };
@@ -136,6 +156,21 @@ export const LoginView: React.FC<Props> = ({ onLogin, onCustomerLogin, onBack })
               <label className="block text-xs font-medium text-gray-500 mb-1">رمز عبور</label>
               <input type="password" required className={inputClass} placeholder="••••••••" value={custPass} onChange={e => setCustPass(e.target.value)} />
             </div>
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-gray-900 rounded"
+                checked={rememberCustomer}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setRememberCustomer(checked);
+                  if (!checked) {
+                    try { localStorage.removeItem(CUSTOMER_REMEMBER_KEY); } catch {}
+                  }
+                }}
+              />
+              ذخیره نام کاربری و رمز عبور برای ورود بعدی
+            </label>
             {custError && <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-center">{custError}</p>}
             <button type="submit" disabled={custLoading}
               className="w-full bg-gray-100 text-gray-800 py-2.5 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors flex justify-center items-center gap-2 border border-gray-200">

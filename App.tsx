@@ -161,7 +161,12 @@ const INITIAL_CONFIG: AppConfig = {
   }
 };
 
-const STORAGE_KEYS = { USER: 'crm_session_user', VIEW: 'crm_last_view', LAST_ACTIVE: 'crm_last_active' };
+const STORAGE_KEYS = {
+  USER: 'crm_session_user',
+  VIEW: 'crm_last_view',
+  LAST_ACTIVE: 'crm_last_active',
+  CUSTOMER_SESSION: 'crm_customer_session',
+};
 const CACHE_KEYS = { SERVICES: 'crm_cache_services', CONFIG: 'crm_cache_config' };
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
@@ -322,7 +327,9 @@ const getInitialView = (): ViewState => {
   const v = parseUrl(window.location.search, window.location.hash);
   if (v && v !== 'admin') return v;
   if (v === 'admin') {
-    try { if (localStorage.getItem('crm_session_user')) return 'admin'; } catch {}
+    try {
+      if (localStorage.getItem(STORAGE_KEYS.USER) || localStorage.getItem(STORAGE_KEYS.CUSTOMER_SESSION)) return 'admin';
+    } catch {}
   }
   return 'landing';
 };
@@ -556,7 +563,7 @@ const App: React.FC = () => {
     const handleNav = () => {
       const v = parseUrl(window.location.search, window.location.hash);
       if (!v) return;
-      if (v === 'admin' && !currentUser) { setViewState('landing'); return; }
+      if (v === 'admin' && !currentUser && !currentCustomerUser) { setViewState('landing'); return; }
       const fid = extractFormId();
       if (v === 'custom-form' && fid) setCustomFormId(fid);
       if (v === 'metashop') { setShopSlug(extractShopSlug()); setCatalogMode(extractCatalogFlag()); }
@@ -586,7 +593,35 @@ const App: React.FC = () => {
       window.removeEventListener('hashchange', handleNav);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, [currentUser]);
+  }, [currentUser, currentCustomerUser]);
+
+  useEffect(() => {
+    if (!customerAccounts.length) return;
+
+    const storedId = (() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMER_SESSION);
+        if (!raw) return null;
+        return (JSON.parse(raw) as { id?: string }).id ?? null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const activeId = currentCustomerUser?.id ?? storedId;
+    if (!activeId) return;
+
+    const account = customerAccounts.find(a => a.id === activeId && a.isActive);
+    if (account) {
+      setCurrentCustomerUser(prev => {
+        if (prev && JSON.stringify(prev) === JSON.stringify(account)) return prev;
+        return account;
+      });
+    } else {
+      setCurrentCustomerUser(null);
+      try { localStorage.removeItem(STORAGE_KEYS.CUSTOMER_SESSION); } catch {}
+    }
+  }, [customerAccounts, currentCustomerUser?.id]);
 
   useEffect(() => {
     const updateActivity = () => { if (currentUser) localStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, Date.now().toString()); };
@@ -1224,6 +1259,9 @@ const App: React.FC = () => {
     const account = customerAccounts.find(a => a.username === username && a.password === password && a.isActive);
     if (account) {
       setCurrentCustomerUser(account);
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMER_SESSION, JSON.stringify({ id: account.id }));
+      } catch {}
       return true;
     }
     return false;
@@ -1231,6 +1269,7 @@ const App: React.FC = () => {
 
   const handleCustomerLogout = () => {
     setCurrentCustomerUser(null);
+    try { localStorage.removeItem(STORAGE_KEYS.CUSTOMER_SESSION); } catch {}
   };
 
   const handleCustomerUploadSubmit = async (ticketId: string, message: string, files: AttachedFile[]) => {
