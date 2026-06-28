@@ -1,4 +1,5 @@
-import { MetaShop, MetaShopProduct, MetaShopDiscount } from '../types';
+import { MetaShop, MetaShopProduct, MetaShopDiscount, MetaShopType } from '../types';
+import { defaultRealEstate } from './metaShopRealEstate';
 
 /** Shop-level fields a customer portal user may change. */
 export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
@@ -74,6 +75,70 @@ export function mergeCustomerProductEdits(existing: MetaShopProduct, edits: Meta
   return merged;
 }
 
+/** Blank product a customer can add to their shop. */
+export function newCustomerProduct(currency: string, shopType?: MetaShopType, lang: 'fa' | 'en' = 'fa'): MetaShopProduct {
+  const p: MetaShopProduct = {
+    id: `p-${Date.now()}`,
+    name: lang === 'fa' ? 'محصول جدید' : 'New product',
+    images: [],
+    active: true,
+    price: 0,
+  };
+  if (shopType === 'realestate') p.realEstate = defaultRealEstate();
+  return p;
+}
+
+/** Duplicate an existing product (editable fields + category; new id). */
+export function duplicateCustomerProduct(source: MetaShopProduct, lang: 'fa' | 'en' = 'fa'): MetaShopProduct {
+  const suffix = lang === 'fa' ? ' (کپی)' : ' (copy)';
+  return {
+    id: `p-${Date.now()}`,
+    name: (source.name || (lang === 'fa' ? 'محصول' : 'Product')) + suffix,
+    description: source.description,
+    images: [...(source.images || [])],
+    i18n: source.i18n ? JSON.parse(JSON.stringify(source.i18n)) as MetaShopProduct['i18n'] : undefined,
+    price: source.price,
+    packPrice: source.packPrice,
+    hidePrice: source.hidePrice,
+    hidePriceText: source.hidePriceText,
+    outOfStock: source.outOfStock,
+    discountType: source.discountType,
+    discountValue: source.discountValue,
+    group: source.group,
+    subcategory: source.subcategory,
+    unit: source.unit,
+    priceOptions: source.priceOptions?.map(o => ({
+      ...o,
+      id: `o-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    })),
+    active: true,
+  };
+}
+
+function buildCustomerNewProduct(p: MetaShopProduct): MetaShopProduct {
+  return {
+    id: p.id,
+    name: p.name || 'محصول جدید',
+    images: p.images || [],
+    active: p.active !== false,
+    description: p.description,
+    price: p.price,
+    packPrice: p.packPrice,
+    hidePrice: p.hidePrice,
+    hidePriceText: p.hidePriceText,
+    outOfStock: p.outOfStock,
+    discountType: p.discountType,
+    discountValue: p.discountValue,
+    i18n: p.i18n,
+    group: p.group,
+    subcategory: p.subcategory,
+    sku: p.sku,
+    unit: p.unit,
+    priceOptions: p.priceOptions,
+    realEstate: p.realEstate,
+  };
+}
+
 /** Merge only whitelisted customer edits onto the full shop record. */
 export function mergeCustomerShopEdits(existing: MetaShop, edits: Partial<MetaShop>): MetaShop {
   const merged = { ...existing };
@@ -88,10 +153,10 @@ export function mergeCustomerShopEdits(existing: MetaShop, edits: Partial<MetaSh
     }
   }
   if (edits.products) {
-    const editMap = new Map(edits.products.map(p => [p.id, p]));
-    merged.products = (existing.products || []).map(p => {
-      const e = editMap.get(p.id);
-      return e ? mergeCustomerProductEdits(p, e) : p;
+    const existingMap = new Map((existing.products || []).map(p => [p.id, p]));
+    merged.products = edits.products.map(e => {
+      const ex = existingMap.get(e.id);
+      return ex ? mergeCustomerProductEdits(ex, e) : buildCustomerNewProduct(e);
     });
   }
   if (edits.discounts !== undefined) {

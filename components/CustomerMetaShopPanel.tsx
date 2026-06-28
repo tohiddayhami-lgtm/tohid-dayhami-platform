@@ -117,6 +117,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     setSaving(true);
     try {
       await onSave(shop.id, { products: productsDraft });
+      setLoadedShop(prev => prev ? { ...prev, products: productsDraft, productCount: productsDraft.length } : prev);
       flashSaved();
     } finally {
       setSaving(false);
@@ -242,6 +243,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         <CustomerMetaShopProductsEditor
           products={productsDraft}
           currency={shopBaseCurrency}
+          shopType={shop.type}
           shopSlug={shop.slug}
           shopBaseUrl={shopBaseUrl}
           shopLangs={shopLangs}

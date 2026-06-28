@@ -1,13 +1,15 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { MetaShopProduct, MetaShopLang } from '../types';
+import { MetaShopProduct, MetaShopLang, MetaShopType } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { DEFAULT_PRODUCT_LANGS, isRtlLang } from '../utils/metaShopLang';
-import { IconSearch, IconTrash, IconUpload, IconPlus } from './Icons';
+import { newCustomerProduct, duplicateCustomerProduct } from '../utils/customerMetaShopAccess';
+import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
 
 interface Props {
   products: MetaShopProduct[];
   currency: string;
+  shopType?: MetaShopType;
   shopSlug: string;
   shopBaseUrl: string;
   shopLangs?: MetaShopLang[];
@@ -20,7 +22,7 @@ interface Props {
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, currency, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -87,6 +89,22 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     updProduct(id, { images: (p.images || []).filter((_, i) => i !== index) });
   };
 
+  const addNewProduct = () => {
+    const p = newCustomerProduct(currency, shopType, lang);
+    onChange([p, ...products]);
+    setExpandedId(p.id);
+    setSearch('');
+  };
+
+  const duplicateProduct = (source: MetaShopProduct) => {
+    const p = duplicateCustomerProduct(source, lang);
+    const idx = products.findIndex(x => x.id === source.id);
+    const next = [...products];
+    next.splice(idx + 1, 0, p);
+    onChange(next);
+    setExpandedId(p.id);
+  };
+
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
@@ -100,15 +118,40 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
 
   if (products.length === 0) {
     return (
-      <div className="bg-white border border-gray-100 rounded-xl p-12 text-center text-gray-400 text-sm">
-        {T ? 'محصولی در این فروشگاه ثبت نشده است.' : 'No products in this shop.'}
+      <div className="space-y-4">
+        <div className="bg-white border border-gray-100 rounded-xl p-12 text-center space-y-4">
+          <p className="text-gray-400 text-sm">{T ? 'هنوز محصولی ندارید.' : 'No products yet.'}</p>
+          <button
+            type="button"
+            onClick={addNewProduct}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700"
+          >
+            <IconPlus className="w-4 h-4" />
+            {T ? 'افزودن اولین محصول' : 'Add your first product'}
+          </button>
+        </div>
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur border border-gray-100 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm">
+          <span className="text-xs text-gray-400">{T ? 'بعد از ویرایش، ذخیره کنید' : 'Save after editing'}</span>
+          <button type="button" onClick={onSave} disabled={saving || products.length === 0} className="px-5 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-black disabled:opacity-50 shrink-0">
+            {saving ? '...' : saved ? (T ? 'ذخیره شد ✓' : 'Saved ✓') : (T ? 'ذخیره محصولات' : 'Save products')}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="relative">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={addNewProduct}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 shrink-0"
+        >
+          <IconPlus className="w-4 h-4" />
+          {T ? 'محصول جدید' : 'New product'}
+        </button>
+        <div className="relative flex-1 min-w-[180px]">
         <IconSearch className="w-4 h-4 text-gray-400 absolute top-1/2 -translate-y-1/2 start-3 pointer-events-none" />
         <input
           className={fld + ' ps-9'}
@@ -116,6 +159,7 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        </div>
       </div>
 
       <p className="text-xs text-gray-400">
@@ -350,6 +394,17 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                   <a href={productUrl} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline inline-block">
                     {T ? '← مشاهده در فروشگاه' : 'View in shop →'}
                   </a>
+
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => duplicateProduct(p)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-700"
+                    >
+                      <IconCopy className="w-3.5 h-3.5" />
+                      {T ? 'کپی این محصول' : 'Duplicate'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
