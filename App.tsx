@@ -11,7 +11,7 @@ import { ExportShopPage } from './components/ExportShopPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
 import { ConsultationTrackingView } from './components/ConsultationTrackingView';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, CustomForm, TeamBrainstormPost, ConsultantCategory } from './types';
-import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase } from './components/Icons';
+import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconTrolley } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
   saveCustomerToCloud, saveCustomersBulkToCloud, updateCustomerInCloud, deleteCustomerFromCloud,
@@ -56,6 +56,7 @@ export const DICTIONARY = {
   fa: {
     startBtn: 'شروع مشاوره و خدمات',
     trackBtn: 'پیگیری درخواست',
+    exportShopBtn: 'فروشگاه صادراتی',
     newTicket: 'ثبت درخواست',
     tracking: 'پیگیری',
     expertPanel: 'پنل کارشناسان',
@@ -71,6 +72,7 @@ export const DICTIONARY = {
   en: {
     startBtn: 'Get Started',
     trackBtn: 'Track Request',
+    exportShopBtn: 'Export Shop',
     newTicket: 'New Request',
     tracking: 'Track',
     expertPanel: 'Staff Login',
@@ -1974,7 +1976,7 @@ const App: React.FC = () => {
             {[
               { id: 'new-ticket', label: t.newTicket,                           icon: <IconPlus      className="w-3.5 h-3.5" /> },
               { id: 'tracking',   label: t.tracking,                            icon: <IconSearch    className="w-3.5 h-3.5" /> },
-              { id: 'export-shops', label: lang === 'fa' ? 'فروشگاه بین المللی' : 'International Shop', icon: <IconBriefcase className="w-3.5 h-3.5" /> },
+              { id: 'export-shops', label: t.exportShopBtn, icon: <IconTrolley className="w-3.5 h-3.5" /> },
               { id: 'news',       label: lang === 'fa' ? 'اخبار صادراتی' : 'Export News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
@@ -2072,6 +2074,13 @@ const App: React.FC = () => {
                       className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                     >
                       {t.trackBtn}
+                    </button>
+                    <button
+                      onClick={() => setView('export-shops')}
+                      className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <IconTrolley className="w-4 h-4 shrink-0" />
+                      {t.exportShopBtn}
                     </button>
                   </div>
                   </div>{/* end z-index wrapper */}
@@ -2423,7 +2432,7 @@ const App: React.FC = () => {
         {[
           { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />,      label: t.newTicket },
           { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />,     label: t.tracking },
-          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'بین المللی' : 'Intl. Shop' },
+          { id: 'export-shops', icon: <IconTrolley className="w-5 h-5" />, label: lang === 'fa' ? 'صادراتی' : 'Export' },
           { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار' : 'News' },
           { id: 'admin',      icon: <IconLock className="w-5 h-5" />,       label: t.expertPanel },
         ].map(item => (

@@ -3,7 +3,7 @@ import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types'
 import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
-import { IconSearch, IconBriefcase } from './Icons';
+import { IconSearch, IconTrolley } from './Icons';
 import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
@@ -77,7 +77,7 @@ export const ExportShopPage: React.FC<Props> = ({
   }, [bazaar, shopBySlug]);
 
   const t = {
-    title: fa ? 'فروشگاه بین المللی' : 'International Shop',
+    title: fa ? 'فروشگاه صادراتی' : 'Export Shop',
     subtitle: bazaar
       ? (fa ? `فروشگاه‌های ${bazaar.name}` : `Shops in ${bazaar.name}`)
       : (fa ? 'فروشگاه‌ها و محصولات صادراتی' : 'Export shops and products'),
@@ -213,7 +213,7 @@ export const ExportShopPage: React.FC<Props> = ({
           </button>
         </div>
         <div className="text-center py-16 text-gray-400 border border-dashed border-gray-200 rounded-xl">
-          <IconBriefcase className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <IconTrolley className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm max-w-md mx-auto leading-relaxed">{t.noBazaar}</p>
         </div>
       </div>
@@ -296,7 +296,7 @@ export const ExportShopPage: React.FC<Props> = ({
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <IconBriefcase className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <IconTrolley className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t.empty}</p>
         </div>
       ) : (
@@ -335,7 +335,7 @@ export const ExportShopPage: React.FC<Props> = ({
                       </div>
                     ) : (
                       <div className="w-full h-40 bg-gray-50 flex items-center justify-center">
-                        <IconBriefcase className="w-8 h-8 text-gray-200" />
+                        <IconTrolley className="w-8 h-8 text-gray-200" />
                       </div>
                     )}
                     <div className="p-4">
