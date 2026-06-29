@@ -11,6 +11,7 @@ import { CustomerMetaShopLocaleEditor } from './CustomerMetaShopLocaleEditor';
 import { IconGlobe, IconTrash, IconUpload, IconTag } from './Icons';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 import { sumOrderCommissions } from '../utils/metaShopCommission';
+import { clearCustomerMetaShopNav, loadCustomerMetaShopNav, saveCustomerMetaShopNav } from '../utils/metaShopPanelSession';
 
 interface Props {
   shops: MetaShop[];
@@ -32,8 +33,13 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   onUpdateOrder, soundEnabled = true, onSoundEnabledChange,
 }) => {
   const T = lang === 'fa';
-  const [selectedShopId, setSelectedShopId] = useState(shops[0]?.id || '');
-  const [tab, setTab] = useState<Tab>('info');
+  const userId = customerUser?.id || '';
+  const savedNav = loadCustomerMetaShopNav(userId);
+  const [selectedShopId, setSelectedShopId] = useState(() => {
+    if (savedNav?.shopId && shops.some(s => s.id === savedNav.shopId)) return savedNav.shopId;
+    return shops[0]?.id || '';
+  });
+  const [tab, setTab] = useState<Tab>(() => savedNav?.tab || 'info');
   const [draft, setDraft] = useState<Partial<MetaShop>>({});
   const [productsDraft, setProductsDraft] = useState<MetaShopProduct[]>([]);
   const [categoriesDraft, setCategoriesDraft] = useState<(string | MetaShopDirCat)[]>([]);
@@ -49,6 +55,24 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const seoRef = useRef<HTMLInputElement>(null);
 
   const shop = shops.find(s => s.id === selectedShopId) || loadedShop;
+
+  useEffect(() => {
+    if (!selectedShopId) return;
+    saveCustomerMetaShopNav(userId, {
+      shopId: selectedShopId,
+      tab,
+      portalTab: 'metashop',
+    });
+  }, [userId, selectedShopId, tab]);
+
+  useEffect(() => {
+    if (!selectedShopId) return;
+    if (!shops.some(s => s.id === selectedShopId)) {
+      const fallback = shops[0]?.id || '';
+      setSelectedShopId(fallback);
+      if (!fallback) clearCustomerMetaShopNav(userId);
+    }
+  }, [shops, selectedShopId, userId]);
   const shopOrders = useMemo(
     () => orders.filter(o => o.shopId === selectedShopId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [orders, selectedShopId],

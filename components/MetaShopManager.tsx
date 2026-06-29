@@ -23,6 +23,7 @@ import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { MetaShopOrdersHub } from './MetaShopOrdersHub';
+import { clearMetaShopManagerNav, loadMetaShopManagerNav, saveMetaShopManagerNav } from '../utils/metaShopPanelSession';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
@@ -162,15 +163,21 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 };
 
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
+  const savedNav = loadMetaShopManagerNav();
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>('list');
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>(() => {
+    if (savedNav?.mode === 'orders' || savedNav?.mode === 'all-orders') return savedNav.mode;
+    return 'list';
+  });
   const [draft, setDraft] = useState<MetaShop | null>(null);
   const [keywordEdits, setKeywordEdits] = useState<Record<string, string>>({});
   const [keywordSearch, setKeywordSearch] = useState('');
   const [listSearch, setListSearch] = useState('');
   const [keywordSaving, setKeywordSaving] = useState(false);
-  const [ordersShopId, setOrdersShopId] = useState<string | null>(null);
+  const [ordersShopId, setOrdersShopId] = useState<string | null>(() => (
+    savedNav?.mode === 'orders' ? (savedNav.ordersShopId ?? null) : null
+  ));
   const [referralsShopId, setReferralsShopId] = useState<string | null>(null);
   const [supplierCollabShopId, setSupplierCollabShopId] = useState<string | null>(null);
   const [analyticsShopId, setAnalyticsShopId] = useState<string | null>(null);
@@ -201,6 +208,28 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [cardTransOpen, setCardTransOpen] = useState<Record<string, boolean>>({});
   const T = lang === 'fa';
   const departments: Department[] = config.departments || [];
+
+  useEffect(() => {
+    if (mode === 'orders' || mode === 'all-orders') {
+      saveMetaShopManagerNav({ mode, ordersShopId: mode === 'orders' ? ordersShopId : null });
+    } else {
+      clearMetaShopManagerNav();
+    }
+  }, [mode, ordersShopId]);
+
+  useEffect(() => {
+    if (mode !== 'orders' || !ordersShopId) return;
+    if (!metaShops.some(s => s.id === ordersShopId)) {
+      setMode('list');
+      setOrdersShopId(null);
+    }
+  }, [metaShops, mode, ordersShopId]);
+
+  const backToList = () => {
+    clearMetaShopManagerNav();
+    setMode('list');
+    setOrdersShopId(null);
+  };
 
   const startKeywordsBulk = () => {
     const map: Record<string, string> = {};
@@ -1150,7 +1179,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         readonly={readonly}
         onUpdateOrder={onUpdateMetaShopOrder}
         onDeleteOrder={onDeleteMetaShopOrder}
-        onBack={() => setMode('list')}
+        onBack={backToList}
         sectionToggle={sectionToggle}
       />
     );
@@ -1163,7 +1192,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const sorted = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return (
       <div className="space-y-4 animate-fade-in">
-        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+        <button onClick={backToList} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
         <h3 className="text-lg font-bold text-gray-800">{t.ordersTitle} — {shop?.name}</h3>
         {sorted.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noOrders}</div> : (
           <div className="space-y-4">

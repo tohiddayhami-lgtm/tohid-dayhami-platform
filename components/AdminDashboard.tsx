@@ -16,6 +16,7 @@ import { InvoiceManager } from './InvoiceManager';
 import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
 import { MetaShopManager } from './MetaShopManager';
 import { canAccessMetaShop, canEditMetaShop, canDeleteMetaShopRecords, canDeleteBooths, filterMetaShopsForUser, filterMetaBazaarsForUser } from '../utils/metaShopAccess';
+import { shouldRestoreAdminMetaShopTab } from '../utils/metaShopPanelSession';
 import { TaskManager } from './TaskManager';
 import { MeetingCalendar } from './MeetingCalendar';
 import { PerformanceReports } from './PerformanceReports';
@@ -164,7 +165,9 @@ export const AdminDashboard: React.FC<Props> = ({
     return metaShopSupplierCollaborations.filter(r => ids.has(r.shopId));
   }, [visibleMetaShops, metaShopSupplierCollaborations]);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>(() => (
+    shouldRestoreAdminMetaShopTab() ? 'metashop' : 'overview'
+  ));
   const [meetingSubTab, setMeetingSubTab] = useState<'staff' | 'public'>('staff');
   const [seoForm, setSeoForm] = useState({ favicon: config.favicon || '', seoTitle: config.seoTitle || '', seoDescription: config.seoDescription || '', seoKeywords: config.seoKeywords || '', ogTitle: config.ogTitle || '', ogDescription: config.ogDescription || '', ogImage: config.ogImage || '', metaPortUrl: config.metaPortUrl || '' });
   const [faviconUploading, setFaviconUploading] = useState(false);

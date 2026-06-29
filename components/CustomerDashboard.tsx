@@ -7,6 +7,7 @@ import { personnelLabelById } from '../services/staffId';
 import { CustomerMetaShopPanel } from './CustomerMetaShopPanel';
 import { getOrderAlertSoundEnabled, setOrderAlertSoundEnabled, unlockOrderAlertAudio, isOrderAlertAudioSuspended } from '../utils/metaShopOrderAlertSound';
 import { useMetaShopOrderAlert } from '../utils/useMetaShopOrderAlert';
+import { loadCustomerMetaShopNav } from '../utils/metaShopPanelSession';
 
 interface Props {
   customerUser: CustomerAccount;
@@ -38,7 +39,11 @@ export const CustomerDashboard: React.FC<Props> = ({
 }) => {
   const hasMetaShop = (customerUser.metaShopIds?.length ?? 0) > 0 && metaShops.length > 0;
   const hasTickets = tickets.length > 0;
-  const [portalTab, setPortalTab] = useState<'tickets' | 'metashop'>(hasMetaShop && !hasTickets ? 'metashop' : 'tickets');
+  const savedCustomerNav = loadCustomerMetaShopNav(customerUser.id);
+  const [portalTab, setPortalTab] = useState<'tickets' | 'metashop'>(() => {
+    if (savedCustomerNav && hasMetaShop) return 'metashop';
+    return hasMetaShop && !hasTickets ? 'metashop' : 'tickets';
+  });
   const [selectedTicketId, setSelectedTicketId] = useState<string>(tickets[0]?.id || '');
   const [comment, setComment] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
