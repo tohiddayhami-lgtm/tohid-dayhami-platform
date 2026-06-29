@@ -9,7 +9,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'title', 'subtitle', 'collectionText',
   'phone', 'whatsapp', 'email', 'website', 'address', 'footerText',
   'seoTitle', 'seoDescription', 'seoImage',
-  'currency', 'displayCurrencies', 'defaultLang', 'languages', 'i18n',
+  'currency', 'displayCurrencies', 'defaultDisplayCurrency', 'defaultLang', 'languages', 'i18n',
   'categories', 'groupI18n',
   'hidePrices', 'hidePriceText',
   'priceMarkupType', 'priceMarkupValue',

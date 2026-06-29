@@ -5,12 +5,14 @@ import {
   CURRENCY_PRESETS,
   buildCrossRatePreview,
   currencyPresetLabel,
+  displayCurrencyLabel,
   formatMarketRate,
   formatRateEquation,
   inputValueFromStoredRate,
   normalizeDisplayCurrencies,
   parseMarketRateInput,
   preferredRateInputMode,
+  shopDisplayCurrencies,
   storedRateFromInput,
   suggestDisplayCurrency,
   type RateInputSide,
@@ -21,18 +23,22 @@ import type { MetaShop } from '../types';
 interface Props {
   baseCurrency: string;
   displayCurrencies: MetaShopDisplayCurrency[];
+  defaultDisplayCurrency?: string;
   lang: Language;
   onBaseChange: (code: string) => void;
   onDisplayCurrenciesChange: (list: MetaShopDisplayCurrency[]) => void;
+  onDefaultDisplayCurrencyChange?: (code: string | undefined) => void;
   compact?: boolean;
 }
 
 export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   baseCurrency,
   displayCurrencies,
+  defaultDisplayCurrency,
   lang,
   onBaseChange,
   onDisplayCurrenciesChange,
+  onDefaultDisplayCurrencyChange,
   compact,
 }) => {
   const T = lang === 'fa';
@@ -60,6 +66,14 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   }), [base, normalized]);
 
   const crossPreview = useMemo(() => buildCrossRatePreview(previewShop), [previewShop]);
+  const storefrontCurrencies = useMemo(() => shopDisplayCurrencies(previewShop), [previewShop]);
+  const resolvedDefault = defaultDisplayCurrency?.trim().toUpperCase() || base;
+
+  const setDefaultDisplay = (code: string) => {
+    if (!onDefaultDisplayCurrencyChange) return;
+    const c = code.trim().toUpperCase();
+    onDefaultDisplayCurrencyChange(c === base ? undefined : c);
+  };
 
   const setBase = (code: string) => {
     const next = code.trim().toUpperCase();
@@ -81,7 +95,9 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   };
 
   const removeCurrency = (idx: number) => {
+    const removed = normalized[idx]?.code?.trim().toUpperCase();
     onDisplayCurrenciesChange(normalized.filter((_, i) => i !== idx));
+    if (removed && resolvedDefault === removed) setDefaultDisplay(base);
   };
 
   return (
@@ -123,6 +139,26 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
         />
         <p className="text-[10px] text-gray-400 mt-1">{currencyPresetLabel(base, T ? 'fa' : 'en')}</p>
       </div>
+
+      {onDefaultDisplayCurrencyChange && (
+        <div>
+          <label className={lbl}>{T ? 'ارز پیش‌فرض نمایش (اول باز شدن فروشگاه)' : 'Default display currency (shop opens in)'}</label>
+          <select
+            className={fld + ' max-w-xs dir-ltr font-mono bg-white'}
+            value={resolvedDefault}
+            onChange={e => setDefaultDisplay(e.target.value)}
+          >
+            {storefrontCurrencies.map(dc => (
+              <option key={dc.code} value={dc.code}>
+                {dc.code} — {displayCurrencyLabel(dc, T ? 'fa' : 'en')}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-gray-400 mt-1">
+            {T ? 'مشتری می‌تواند در فروشگاه ارز دیگری انتخاب کند (مثل زبان).' : 'Visitors can switch currency in the shop (like language).'}
+          </p>
+        </div>
+      )}
 
       <div>
         <p className={lbl}>{T ? 'نرخ ارزها نسبت به پایه' : 'Rates relative to base'}</p>

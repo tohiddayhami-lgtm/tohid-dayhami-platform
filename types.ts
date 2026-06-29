@@ -1361,6 +1361,8 @@ export interface MetaShop {
   currency: string;
   /** Extra currencies visitors can switch to; rates are vs `currency` (base). */
   displayCurrencies?: MetaShopDisplayCurrency[];
+  /** Currency shown when the shop opens (visitor can still switch). Defaults to `currency`. */
+  defaultDisplayCurrency?: string;
   // contact / footer
   phone?: string;
   whatsapp?: string;   // default WhatsApp for all properties (per-property override in realEstate.agentWhatsapp)

@@ -273,7 +273,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   });
   const displayCurrencies = useMemo(() => shopDisplayCurrencies(shop), [shop]);
   const [viewCur, setViewCur] = useState(() => readViewCurrencyFromUrl(shop));
-  useEffect(() => { setViewCur(readViewCurrencyFromUrl(shop)); }, [shop.id, shop.currency]);
+  useEffect(() => { setViewCur(readViewCurrencyFromUrl(shop)); }, [shop.id, shop.currency, shop.defaultDisplayCurrency]);
   const pickViewCurrency = (code: string) => { setViewCur(code); writeViewCurrencyToUrl(code); };
   const [tab, setTab] = useState<string>('products');
 

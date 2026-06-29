@@ -74,6 +74,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const [uiLang, setUiLang] = useState<string>(initialLang);
   const displayCurrencies = useMemo(() => shopDisplayCurrencies(shop), [shop]);
   const [viewCur, setViewCur] = useState(() => readViewCurrencyFromUrl(shop));
+  useEffect(() => { setViewCur(readViewCurrencyFromUrl(shop)); }, [shop.id, shop.currency, shop.defaultDisplayCurrency]);
   const pickViewCurrency = (code: string) => { setViewCur(code); writeViewCurrencyToUrl(code); };
 
   const dir: 'rtl' | 'ltr' = isRtl(uiLang) ? 'rtl' : 'ltr';

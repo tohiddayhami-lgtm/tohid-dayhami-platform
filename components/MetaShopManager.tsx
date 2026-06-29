@@ -17,7 +17,7 @@ import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
 import { productHasPriceDrift, revertAllProductsToBase } from '../utils/metaShopPricing';
 import { AppModal } from './AppModal';
-import { normalizeDisplayCurrencies } from '../utils/metaShopCurrency';
+import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from '../utils/metaShopCurrency';
 import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
@@ -1497,12 +1497,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             <MetaShopCurrencyRatesEditor
               baseCurrency={draft.currency || 'USD'}
               displayCurrencies={draft.displayCurrencies || []}
+              defaultDisplayCurrency={draft.defaultDisplayCurrency}
               lang={lang}
-              onBaseChange={code => upd({
-                currency: code,
-                displayCurrencies: normalizeDisplayCurrencies(code, draft.displayCurrencies),
+              onBaseChange={code => {
+                const normalized = normalizeDisplayCurrencies(code, draft.displayCurrencies);
+                upd({
+                  currency: code,
+                  displayCurrencies: normalized,
+                  defaultDisplayCurrency: normalizeDefaultDisplayCurrency(code, normalized, draft.defaultDisplayCurrency),
+                });
+              }}
+              onDisplayCurrenciesChange={list => upd({
+                displayCurrencies: list,
+                defaultDisplayCurrency: normalizeDefaultDisplayCurrency(draft.currency || 'USD', list, draft.defaultDisplayCurrency),
               })}
-              onDisplayCurrenciesChange={list => upd({ displayCurrencies: list })}
+              onDefaultDisplayCurrencyChange={code => upd({ defaultDisplayCurrency: code })}
             />
           </div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>

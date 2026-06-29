@@ -235,12 +235,34 @@ export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisp
 };
 
 export const resolveViewCurrency = (shop: MetaShop, fromUrl?: string | null): string => {
-  const base = shopBaseCurrency(shop);
   const list = shopDisplayCurrencies(shop);
   const code = (fromUrl || '').trim().toUpperCase();
   if (code && list.some(c => c.code.trim().toUpperCase() === code)) return code;
-  return base;
+  return shopDefaultViewCurrency(shop);
 };
+
+/** Storefront opening currency (URL ?cur= overrides). */
+export function shopDefaultViewCurrency(shop: MetaShop): string {
+  const base = shopBaseCurrency(shop);
+  const codes = shopDisplayCurrencies(shop).map(c => c.code.trim().toUpperCase());
+  const pref = (shop.defaultDisplayCurrency || '').trim().toUpperCase();
+  if (pref && codes.includes(pref)) return pref;
+  return base;
+}
+
+export function normalizeDefaultDisplayCurrency(
+  baseCurrency: string,
+  displayCurrencies: MetaShopDisplayCurrency[] | undefined,
+  preferred?: string,
+): string | undefined {
+  const base = baseCurrency.trim().toUpperCase();
+  const extras = normalizeDisplayCurrencies(base, displayCurrencies);
+  const codes = [base, ...extras.map(c => c.code.trim().toUpperCase())];
+  const pref = (preferred || '').trim().toUpperCase();
+  if (!pref || !codes.includes(pref)) return undefined;
+  if (pref === base) return undefined;
+  return pref;
+}
 
 export const readViewCurrencyFromUrl = (shop: MetaShop): string => {
   try {

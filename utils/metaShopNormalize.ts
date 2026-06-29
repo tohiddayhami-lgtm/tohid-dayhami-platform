@@ -1,5 +1,5 @@
 import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaShopLang } from '../types';
-import { normalizeDisplayCurrencies } from './metaShopCurrency';
+import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -204,6 +204,10 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
       const base = String(raw.currency || 'OMR').trim().toUpperCase();
       const list = normalizeDisplayCurrencies(base, raw.displayCurrencies);
       return list.length ? list : undefined;
+    })(),
+    defaultDisplayCurrency: (() => {
+      const base = String(raw.currency || 'OMR').trim().toUpperCase();
+      return normalizeDefaultDisplayCurrency(base, raw.displayCurrencies, raw.defaultDisplayCurrency);
     })(),
     extraFees: raw.extraFees?.length ? raw.extraFees : undefined,
     discounts: raw.discounts?.length ? raw.discounts : undefined,

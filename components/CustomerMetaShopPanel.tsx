@@ -232,6 +232,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
       const localePatch: Partial<MetaShop> = {
         currency: draft.currency,
         displayCurrencies: draft.displayCurrencies,
+        defaultDisplayCurrency: draft.defaultDisplayCurrency,
         defaultLang: draft.defaultLang,
         languages: draft.languages,
         i18n: draft.i18n,
@@ -244,6 +245,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         ...prev,
         currency: localePatch.currency ?? prev.currency,
         displayCurrencies: localePatch.displayCurrencies ?? prev.displayCurrencies,
+        defaultDisplayCurrency: localePatch.defaultDisplayCurrency ?? prev.defaultDisplayCurrency,
         defaultLang: localePatch.defaultLang ?? prev.defaultLang,
         languages: localePatch.languages ?? prev.languages,
         i18n: localePatch.i18n ?? prev.i18n,

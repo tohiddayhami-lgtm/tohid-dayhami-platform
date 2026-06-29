@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { MetaShop, MetaShopLang } from '../types';
 import { Language } from '../App';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../utils/metaShopLang';
-import { normalizeDisplayCurrencies } from '../utils/metaShopCurrency';
+import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from '../utils/metaShopCurrency';
 import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
 import { IconPlus, IconTrash } from './Icons';
 
@@ -39,6 +39,7 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
   const shopLangs = draft.languages || [];
   const baseCurrency = (draft.currency || shop.currency || 'USD').trim().toUpperCase();
   const displayCurrencies = draft.displayCurrencies || [];
+  const defaultDisplayCurrency = draft.defaultDisplayCurrency ?? shop.defaultDisplayCurrency;
 
   const langOptions = useMemo((): MetaShopLang[] => {
     const configured = shopLangs.filter(l => l.code?.trim());
@@ -209,13 +210,22 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
         <MetaShopCurrencyRatesEditor
           baseCurrency={baseCurrency}
           displayCurrencies={displayCurrencies}
+          defaultDisplayCurrency={defaultDisplayCurrency}
           lang={lang}
           compact
-          onBaseChange={code => upd({
-            currency: code,
-            displayCurrencies: normalizeDisplayCurrencies(code, displayCurrencies),
+          onBaseChange={code => {
+            const normalized = normalizeDisplayCurrencies(code, displayCurrencies);
+            upd({
+              currency: code,
+              displayCurrencies: normalized,
+              defaultDisplayCurrency: normalizeDefaultDisplayCurrency(code, normalized, defaultDisplayCurrency),
+            });
+          }}
+          onDisplayCurrenciesChange={list => upd({
+            displayCurrencies: list,
+            defaultDisplayCurrency: normalizeDefaultDisplayCurrency(baseCurrency, list, defaultDisplayCurrency),
           })}
-          onDisplayCurrenciesChange={list => upd({ displayCurrencies: list })}
+          onDefaultDisplayCurrencyChange={code => upd({ defaultDisplayCurrency: code })}
         />
       </div>
 
