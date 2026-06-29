@@ -56,6 +56,7 @@ export const DICTIONARY = {
   fa: {
     startBtn: 'شروع مشاوره و خدمات',
     trackBtn: 'پیگیری درخواست',
+    exportShopBtn: 'فروشگاه صادراتی',
     newTicket: 'ثبت درخواست',
     tracking: 'پیگیری',
     expertPanel: 'پنل کارشناسان',
@@ -71,6 +72,7 @@ export const DICTIONARY = {
   en: {
     startBtn: 'Get Started',
     trackBtn: 'Track Request',
+    exportShopBtn: 'Export Shop',
     newTicket: 'New Request',
     tracking: 'Track',
     expertPanel: 'Staff Login',
@@ -1967,6 +1969,26 @@ const App: React.FC = () => {
                 {lang === 'fa' ? 'بازگشت' : 'Back'}
               </button>
             )}
+            <div className="hidden lg:flex items-center gap-2 border-s border-gray-200 ps-3 ms-1">
+              <button
+                onClick={goToRequest}
+                className="px-4 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-black transition-colors whitespace-nowrap"
+              >
+                {t.startBtn}
+              </button>
+              <button
+                onClick={() => setView('tracking')}
+                className="px-4 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                {t.trackBtn}
+              </button>
+              <button
+                onClick={() => setView('export-shops')}
+                className="px-4 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors whitespace-nowrap"
+              >
+                {t.exportShopBtn}
+              </button>
+            </div>
           </div>
 
           {/* Nav */}
@@ -1974,7 +1996,7 @@ const App: React.FC = () => {
             {[
               { id: 'new-ticket', label: t.newTicket,                           icon: <IconPlus      className="w-3.5 h-3.5" /> },
               { id: 'tracking',   label: t.tracking,                            icon: <IconSearch    className="w-3.5 h-3.5" /> },
-              { id: 'export-shops', label: lang === 'fa' ? 'فروشگاه بین المللی' : 'International Shop', icon: <IconBriefcase className="w-3.5 h-3.5" /> },
+              { id: 'export-shops', label: t.exportShopBtn, icon: <IconBriefcase className="w-3.5 h-3.5" /> },
               { id: 'news',       label: lang === 'fa' ? 'اخبار صادراتی' : 'Export News', icon: <IconNewspaper className="w-3.5 h-3.5" /> },
             ].map(item => (
               <button
@@ -2072,6 +2094,12 @@ const App: React.FC = () => {
                       className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                     >
                       {t.trackBtn}
+                    </button>
+                    <button
+                      onClick={() => setView('export-shops')}
+                      className="px-6 py-2.5 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+                    >
+                      {t.exportShopBtn}
                     </button>
                   </div>
                   </div>{/* end z-index wrapper */}
@@ -2423,7 +2451,7 @@ const App: React.FC = () => {
         {[
           { id: 'new-ticket', icon: <IconPlus className="w-5 h-5" />,      label: t.newTicket },
           { id: 'tracking',   icon: <IconSearch className="w-5 h-5" />,     label: t.tracking },
-          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'بین المللی' : 'Intl. Shop' },
+          { id: 'export-shops', icon: <IconBriefcase className="w-5 h-5" />, label: lang === 'fa' ? 'صادراتی' : 'Export' },
           { id: 'news',       icon: <IconNewspaper className="w-5 h-5" />,  label: lang === 'fa' ? 'اخبار' : 'News' },
           { id: 'admin',      icon: <IconLock className="w-5 h-5" />,       label: t.expertPanel },
         ].map(item => (
