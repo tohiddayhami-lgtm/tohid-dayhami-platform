@@ -1092,12 +1092,10 @@ const loadOneMetaShopChunk = async (chunkDocId: string): Promise<MetaShopProduct
 
 const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): Promise<MetaShopProductChunk[]> => {
   if (chunkCount && chunkCount > 0) {
-    const chunks: MetaShopProductChunk[] = [];
-    for (let i = 0; i < chunkCount; i++) {
-      const c = await loadOneMetaShopChunk(`${shopId}_${i}`);
-      if (c) chunks.push(c);
-    }
-    return chunks;
+    const loaded = await Promise.all(
+      Array.from({ length: chunkCount }, (_, i) => loadOneMetaShopChunk(`${shopId}_${i}`)),
+    );
+    return loaded.filter((c): c is MetaShopProductChunk => !!c);
   }
 
   try {
@@ -1184,6 +1182,9 @@ const attachMetaShopExtras = async (shop: MetaShop): Promise<MetaShop> => {
   }
   return graftBulkyMetaShopFields(shop, { ...extras, productRefs });
 };
+
+/** Attach offloaded extras to a shop shell already in memory (no extra slug query). */
+export const enrichMetaShopShell = (shop: MetaShop): Promise<MetaShop> => attachMetaShopExtras(shop);
 
 const saveMetaShopExtrasToCloud = async (shopId: string, extras: MetaShopExtrasPayload) => {
   const { extrasDoc, refChunks } = prepareExtrasForCloud(shopId, extras);
@@ -1482,20 +1483,29 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     intervalMs: 8_000,
   });
-// Fetch a single shop directly (public view, before the subscription warms up)
+/** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
+export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {
+  try {
+    const proxy = await checkProxyMode();
+    let shop: MetaShop | null = null;
+    if (proxy) {
+      shop = await proxyGet<MetaShop | null>('metaShops', { slug });
+    } else {
+      const q = query(collection(db, 'metaShops'), where('slug', '==', slug), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
+    }
+    if (!shop) return null;
+    return attachMetaShopExtras(shop);
+  } catch {
+    return null;
+  }
+};
+
+// Fetch a single shop with all products (admin / export — slower).
 export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> => {
-    try {
-        const proxy = await checkProxyMode();
-        let shop: MetaShop | null = null;
-        if (proxy) {
-            shop = await proxyGet<MetaShop | null>('metaShops', { slug });
-        } else {
-            const q = query(collection(db, "metaShops"), where("slug", "==", slug), limit(1));
-            const snap = await getDocs(q);
-            if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
-        }
-        return hydrateMetaShop(shop);
-    } catch { return null; }
+  const shell = await fetchMetaShopShellBySlug(slug);
+  return shell ? hydrateMetaShop(shell) : null;
 };
 
 // ── Meta Shop Orders ──

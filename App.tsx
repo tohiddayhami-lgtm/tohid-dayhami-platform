@@ -25,7 +25,7 @@ import {
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
-  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, getMetaShopBySlug, hydrateMetaShop,
+  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
@@ -33,6 +33,8 @@ import {
   getTicketById,
 } from './services/firebaseService';
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
+import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
+import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
 import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
@@ -337,6 +339,11 @@ const getInitialView = (): ViewState => {
   return 'landing';
 };
 
+const initialShopSlug = extractShopSlug();
+const initialCachedShop = (getInitialView() === 'metashop' && initialShopSlug)
+  ? readMetaShopShellCache(initialShopSlug)
+  : null;
+
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
   const [contactTick, setContactTick] = useState(0); // bumped to open the "Contact Us" tab inside TrackingView
@@ -363,10 +370,12 @@ const App: React.FC = () => {
   const [shopSlug, setShopSlug] = useState<string | null>(extractShopSlug);
   const [isEmbed] = useState<boolean>(extractEmbedFlag); // shop loaded inside an iframe (Google Sites / external site)
   const [catalogMode, setCatalogMode] = useState<boolean>(extractCatalogFlag); // shop link opened as a printable A4 PDF catalog (?catalog=1)
-  const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
-  const [shopLoading, setShopLoading] = useState(() => getInitialView() === 'metashop' && !!extractShopSlug());
-  const [shopResolved, setShopResolved] = useState(false);
+  const [publicShop, setPublicShop] = useState<MetaShop | null>(initialCachedShop);
+  const [shopLoading, setShopLoading] = useState(() => getInitialView() === 'metashop' && !!initialShopSlug && !initialCachedShop);
+  const [shopResolved, setShopResolved] = useState(!!initialCachedShop);
   const shopFetchSlugRef = useRef<string | null>(null);
+  const shopProductHydrateRef = useRef<string | null>(null);
+  const pendingInitialHydrationRef = useRef(!!initialCachedShop);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
   const [metaBazaarsReady, setMetaBazaarsReady] = useState(false);
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
@@ -1390,6 +1399,34 @@ const App: React.FC = () => {
     return `${s.id}:${s.productCount ?? 0}:${s.productChunkCount ?? 0}:${s.isActive !== false ? 1 : 0}:${s.hidePrices ? 1 : 0}`;
   }, [shopSlug, metaShops]);
 
+  const beginShopProductHydration = useCallback((shell: MetaShop) => {
+    if ((shell.products || []).length > 0 && !shopProductsNeedFullHydration(shell)) return;
+    if (!shopProductsNeedFullHydration(shell)) return;
+    if (shopProductHydrateRef.current === shell.id) return;
+    shopProductHydrateRef.current = shell.id;
+    const shopId = shell.id;
+    hydrateMetaShopProgressive(shell, products => {
+      setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
+    }).finally(() => {
+      if (shopProductHydrateRef.current === shopId) shopProductHydrateRef.current = null;
+    });
+  }, []);
+
+  const revealPublicShop = useCallback((shell: MetaShop) => {
+    if (shell.slug) writeMetaShopShellCache(shell.slug, shell);
+    setPublicShop(shell);
+    setShopLoading(false);
+    setShopResolved(true);
+    beginShopProductHydration(shell);
+  }, [beginShopProductHydration]);
+
+  // Cached shell from a prior visit — start product hydration immediately.
+  useEffect(() => {
+    if (!pendingInitialHydrationRef.current || !initialCachedShop) return;
+    pendingInitialHydrationRef.current = false;
+    beginShopProductHydration(initialCachedShop);
+  }, [beginShopProductHydration]);
+
   // ── Meta Shop: sync from subscription cache when available ──
   useEffect(() => {
     if (view !== 'metashop' || !shopSlug) return;
@@ -1398,25 +1435,17 @@ const App: React.FC = () => {
     shopFetchSlugRef.current = shopSlug;
 
     let cancelled = false;
-    setShopLoading(true);
-    setShopResolved(false);
-
     (async () => {
       try {
-        const resolved = (local.products || []).length > 0 ? local : await hydrateMetaShop(local);
-        if (!cancelled) setPublicShop(resolved);
+        const shell = local.extrasOffloaded ? await enrichMetaShopShell(local) : local;
+        if (!cancelled) revealPublicShop(shell);
       } catch {
-        if (!cancelled) setPublicShop(local);
-      } finally {
-        if (!cancelled) {
-          setShopLoading(false);
-          setShopResolved(true);
-        }
+        if (!cancelled) revealPublicShop(local);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [view, shopSlug, metaShopHydrateKey]);
+  }, [view, shopSlug, metaShopHydrateKey, revealPublicShop]);
 
   // ── Meta Shop: fetch single shop by slug (don't wait for full collection) ──
   useEffect(() => {
@@ -1425,6 +1454,7 @@ const App: React.FC = () => {
       setShopLoading(false);
       setShopResolved(false);
       shopFetchSlugRef.current = null;
+      shopProductHydrateRef.current = null;
       return;
     }
     if (metaShops.some(s => s.slug === shopSlug)) return;
@@ -1432,11 +1462,13 @@ const App: React.FC = () => {
     let cancelled = false;
     setShopLoading(true);
     setShopResolved(false);
-    getMetaShopBySlug(shopSlug).then(s => {
-      if (!cancelled) {
-        setPublicShop(s);
+    fetchMetaShopShellBySlug(shopSlug).then(shell => {
+      if (cancelled) return;
+      if (shell) {
+        revealPublicShop(shell);
+      } else {
+        setPublicShop(null);
         setShopLoading(false);
-        if (s) setShopResolved(true);
       }
     }).catch(() => {
       if (!cancelled) {
@@ -1445,7 +1477,7 @@ const App: React.FC = () => {
       }
     });
     return () => { cancelled = true; };
-  }, [view, shopSlug, metaShops]);
+  }, [view, shopSlug, metaShops, revealPublicShop]);
 
   // After the shops list has synced, stop waiting if the slug truly does not exist.
   useEffect(() => {
@@ -1933,6 +1965,10 @@ const App: React.FC = () => {
     const resolvedShop = hydratedShop ?? cachedShop ?? null;
 
     if (resolvedShop && resolvedShop.isActive !== false) {
+      const catalogWaiting = catalogMode
+        && (resolvedShop.productCount ?? 0) > 0
+        && (resolvedShop.products?.length ?? 0) < (resolvedShop.productCount ?? 0);
+      if (catalogWaiting) return <ShopShutterLoader lang={lang} />;
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
       if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
       return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
