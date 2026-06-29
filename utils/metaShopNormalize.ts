@@ -119,9 +119,10 @@ const normalizePageCard = (c: MetaShopPageCard & Record<string, unknown>): MetaS
   const i18n = { ...(c.i18n || {}) };
   if (!i18n.fa?.name && (c.name || c.nameFa)) i18n.fa = { ...(i18n.fa || {}), name: String(c.nameFa || c.name) };
   if (!i18n.fa?.desc && (c.desc || c.descFa)) i18n.fa = { ...(i18n.fa || {}), desc: String(c.descFa || c.desc) };
+  const image = isStorableImageUrl(c.image) ? c.image : undefined;
   return {
     id: String(c.id || `c-${Date.now()}`),
-    image: c.image,
+    image,
     name: String(c.name || c.nameFa || i18n.fa?.name || ''),
     desc: c.desc || c.descFa || i18n.fa?.desc || undefined,
     i18n: Object.keys(i18n).length ? i18n : undefined,
@@ -142,7 +143,7 @@ const normalizePage = (pg: MetaShopPage & Record<string, unknown>): MetaShopPage
     bodyEn: pg.bodyEn || i18n.en?.body || undefined,
     description: pg.description || pg.descriptionFa || undefined,
     descriptionEn: pg.descriptionEn || i18n.en?.description || undefined,
-    images: Array.isArray(pg.images) ? pg.images.filter(Boolean) : undefined,
+    images: Array.isArray(pg.images) ? pg.images.filter(isStorableImageUrl).slice(0, 12) : undefined,
     cards: pg.cards?.map(c => normalizePageCard(c as MetaShopPageCard & Record<string, unknown>)),
     i18n: Object.keys(i18n).length ? i18n : undefined,
   };
@@ -182,8 +183,8 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     title: raw.title || raw.titleFa || i18n.fa?.title || undefined,
     subtitle: raw.subtitle || raw.subtitleFa || i18n.fa?.subtitle || undefined,
     collectionText: raw.collectionText || raw.collectionTextFa || i18n.fa?.collectionText || undefined,
-    coverImage: raw.coverImage || undefined,
-    logo: raw.logo || undefined,
+    coverImage: isStorableImageUrl(raw.coverImage) ? raw.coverImage : undefined,
+    logo: isStorableImageUrl(raw.logo) ? raw.logo : undefined,
     phone: raw.phone || undefined,
     whatsapp: raw.whatsapp || undefined,
     email: raw.email || undefined,
@@ -211,10 +212,17 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     showStrikethroughPrice: raw.showStrikethroughPrice,
     groupI18n: raw.groupI18n && typeof raw.groupI18n === 'object' ? raw.groupI18n : undefined,
     supplierCollaborationEnabled: raw.supplierCollaborationEnabled,
-    floatingStickers: raw.floatingStickers?.length ? raw.floatingStickers : undefined,
+    floatingStickers: raw.floatingStickers?.length
+      ? raw.floatingStickers
+          .map(s => ({
+            ...s,
+            imageUrl: isStorableImageUrl(s.imageUrl) ? s.imageUrl : '',
+          }))
+          .filter(s => s.imageUrl)
+      : undefined,
     seoTitle: raw.seoTitle,
     seoDescription: raw.seoDescription,
-    seoImage: raw.seoImage || raw.coverImage || undefined,
+    seoImage: isStorableImageUrl(raw.seoImage) ? raw.seoImage : (isStorableImageUrl(raw.coverImage) ? raw.coverImage : undefined),
     directoryCats: raw.directoryCats,
     directoryCategories: raw.directoryCategories,
     directoryCategory: raw.directoryCategory,

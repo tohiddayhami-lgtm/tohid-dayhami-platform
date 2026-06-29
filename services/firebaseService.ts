@@ -18,6 +18,17 @@ import {
   type MetaShopProductChunk,
 } from '../utils/metaShopChunks';
 import {
+  META_SHOP_EXTRAS_COL,
+  META_SHOP_REF_CHUNKS_COL,
+  peelBulkyMetaShopFields,
+  graftBulkyMetaShopFields,
+  prepareExtrasForCloud,
+  mergeProductRefChunks,
+  extrasPayloadIsEmpty,
+  type MetaShopExtrasPayload,
+  type MetaShopRefChunk,
+} from '../utils/metaShopExtras';
+import {
   assembleShopFromBackup,
   backupChunkPrefix,
   backupMetaDocId,
@@ -1118,6 +1129,72 @@ const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
   }
 };
 
+const loadMetaShopExtrasDoc = async (shopId: string): Promise<MetaShopExtrasPayload | null> => {
+  try {
+    const proxy = await checkProxyMode();
+    if (proxy) return await proxyGet<MetaShopExtrasPayload | null>(META_SHOP_EXTRAS_COL, { doc: shopId });
+    const snap = await getDoc(doc(db, META_SHOP_EXTRAS_COL, shopId));
+    return snap.exists() ? (snap.data() as MetaShopExtrasPayload) : null;
+  } catch {
+    return null;
+  }
+};
+
+const loadMetaShopRefChunks = async (shopId: string, chunkCount: number): Promise<MetaShopRefChunk[]> => {
+  const chunks: MetaShopRefChunk[] = [];
+  for (let i = 0; i < chunkCount; i++) {
+    try {
+      const proxy = await checkProxyMode();
+      let row: MetaShopRefChunk | null = null;
+      if (proxy) {
+        row = await proxyGet<MetaShopRefChunk | null>(META_SHOP_REF_CHUNKS_COL, { doc: `${shopId}_ref_${i}` });
+      } else {
+        const snap = await getDoc(doc(db, META_SHOP_REF_CHUNKS_COL, `${shopId}_ref_${i}`));
+        row = snap.exists() ? (snap.data() as MetaShopRefChunk) : null;
+      }
+      if (row) chunks.push(row);
+    } catch { /* skip */ }
+  }
+  return chunks;
+};
+
+const deleteMetaShopRefChunks = async (shopId: string, keepCount = 0) => {
+  const existing = await loadMetaShopRefChunks(shopId, 64);
+  const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
+  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_REF_CHUNKS_COL, c.id)));
+  if (keepCount === 0 && !existing.length) {
+    for (let i = 0; i < 64; i++) {
+      try { await deleteDocCloud(META_SHOP_REF_CHUNKS_COL, `${shopId}_ref_${i}`); } catch { /* gone */ }
+    }
+  }
+};
+
+const deleteMetaShopExtrasDoc = async (shopId: string) => {
+  try { await deleteDocCloud(META_SHOP_EXTRAS_COL, shopId); } catch { /* gone */ }
+};
+
+const attachMetaShopExtras = async (shop: MetaShop): Promise<MetaShop> => {
+  if (!shop.extrasOffloaded) return shop;
+  const extras = await loadMetaShopExtrasDoc(shop.id);
+  if (!extras) return shop;
+  let productRefs = extras.productRefs;
+  const refCount = shop.productRefChunkCount ?? extras.productRefChunkCount ?? 0;
+  if (refCount > 0) {
+    productRefs = mergeProductRefChunks(await loadMetaShopRefChunks(shop.id, refCount));
+  }
+  return graftBulkyMetaShopFields(shop, { ...extras, productRefs });
+};
+
+const saveMetaShopExtrasToCloud = async (shopId: string, extras: MetaShopExtrasPayload) => {
+  const { extrasDoc, refChunks } = prepareExtrasForCloud(shopId, extras);
+  if (refChunks.length) {
+    await Promise.all(refChunks.map(c => setDocCloud(META_SHOP_REF_CHUNKS_COL, c.id, c)));
+  }
+  await deleteMetaShopRefChunks(shopId, refChunks.length);
+  await setDocCloud(META_SHOP_EXTRAS_COL, extrasDoc.id, extrasDoc);
+  return refChunks.length;
+};
+
 const fetchMetaShopDocRaw = async (shopId: string): Promise<MetaShop | null> => {
   try {
     const proxy = await checkProxyMode();
@@ -1131,24 +1208,25 @@ const fetchMetaShopDocRaw = async (shopId: string): Promise<MetaShop | null> => 
 
 export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop | null> => {
   if (!shop) return null;
-  if (!shopProductsNeedFullHydration(shop)) {
-    return { ...shop, products: shop.products || [] };
+  const base = await attachMetaShopExtras(shop);
+  if (!shopProductsNeedFullHydration(base)) {
+    return { ...base, products: base.products || [] };
   }
-  if ((shop.productChunkCount || 0) > 0) {
-    const chunks = await loadMetaShopProductChunks(shop.id, shop.productChunkCount);
+  if ((base.productChunkCount || 0) > 0) {
+    const chunks = await loadMetaShopProductChunks(base.id, base.productChunkCount);
     const merged = mergeProductChunks(chunks);
-    if (merged.length) return { ...shop, products: merged };
+    if (merged.length) return { ...base, products: merged };
   }
-  const orphanChunks = await loadMetaShopProductChunks(shop.id);
+  const orphanChunks = await loadMetaShopProductChunks(base.id);
   if (orphanChunks.length) {
     const merged = mergeProductChunks(orphanChunks);
-    if (merged.length) return { ...shop, products: merged };
+    if (merged.length) return { ...base, products: merged };
   }
-  if ((shop.productCount || 0) > 0) {
-    const raw = await fetchMetaShopDocRaw(shop.id);
-    if (raw?.products?.length) return { ...shop, products: raw.products };
+  if ((base.productCount || 0) > 0) {
+    const raw = await fetchMetaShopDocRaw(base.id);
+    if (raw?.products?.length) return { ...base, products: raw.products };
   }
-  return { ...shop, products: [] };
+  return { ...base, products: [] };
 };
 
 export type MetaShopSaveOptions = {
@@ -1169,31 +1247,32 @@ export const hydrateMetaShopProgressive = async (
   shop: MetaShop,
   onProgress?: (products: MetaShopProduct[], loadedChunks: number, totalChunks: number) => void,
 ): Promise<MetaShop> => {
-  if ((shop.products || []).length) {
-    const products = shop.products || [];
+  const base = await attachMetaShopExtras(shop);
+  if ((base.products || []).length) {
+    const products = base.products || [];
     onProgress?.(products, 1, 1);
-    return { ...shop, products };
+    return { ...base, products };
   }
-  let total = shop.productChunkCount || 0;
+  let total = base.productChunkCount || 0;
   let all: MetaShopProduct[] = [];
   if (total > 0) {
     for (let i = 0; i < total; i++) {
-      const chunk = await loadOneMetaShopChunk(`${shop.id}_${i}`);
+      const chunk = await loadOneMetaShopChunk(`${base.id}_${i}`);
       if (chunk?.products?.length) all = all.concat(chunk.products);
       onProgress?.(all, i + 1, total);
     }
   }
   if (!all.length) {
-    const orphan = await loadMetaShopProductChunks(shop.id);
+    const orphan = await loadMetaShopProductChunks(base.id);
     all = mergeProductChunks(orphan);
     onProgress?.(all, 1, Math.max(1, orphan.length));
   }
-  if (!all.length && (shop.productCount || 0) > 0) {
-    const raw = await fetchMetaShopDocRaw(shop.id);
+  if (!all.length && (base.productCount || 0) > 0) {
+    const raw = await fetchMetaShopDocRaw(base.id);
     all = raw?.products || [];
     onProgress?.(all, 1, 1);
   }
-  return { ...shop, products: all };
+  return { ...base, products: all };
 };
 
 export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOptions) => {
@@ -1213,7 +1292,20 @@ export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOpt
   }
 
   const chunks = splitProductsIntoChunks(normalized.id, products);
-  const shell = prepareMetaShopShell({ ...normalized, products }, products, chunks.length);
+  let shell = prepareMetaShopShell({ ...normalized, products }, products, chunks.length);
+  const peeled = peelBulkyMetaShopFields(shell);
+  shell = peeled.shell;
+  if (extrasPayloadIsEmpty(peeled.extras)) {
+    await deleteMetaShopExtrasDoc(normalized.id);
+    await deleteMetaShopRefChunks(normalized.id);
+    delete shell.extrasOffloaded;
+    delete shell.productRefChunkCount;
+  } else {
+    const refChunkCount = await saveMetaShopExtrasToCloud(normalized.id, peeled.extras);
+    if (refChunkCount > 0) shell.productRefChunkCount = refChunkCount;
+    else delete shell.productRefChunkCount;
+  }
+
   const shellBytes = metaShopPayloadBytes(shell);
   if (shellBytes > META_SHOP_FIRESTORE_MAX_BYTES) {
     throw new Error(
@@ -1378,6 +1470,8 @@ export const deleteMetaShopFromCloud = async (id: string) => {
         data = snap.exists() ? snap.data() : null;
     }
     await deleteMetaShopProductChunks(id);
+    await deleteMetaShopRefChunks(id);
+    await deleteMetaShopExtrasDoc(id);
     await deleteDocCloud('metaShops', id);
     logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
 };

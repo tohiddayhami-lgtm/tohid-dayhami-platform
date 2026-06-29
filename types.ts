@@ -1382,6 +1382,10 @@ export interface MetaShop {
   productChunkCount?: number;
   /** Lightweight product list for admin/search without loading chunks. */
   productRefs?: MetaShopProductRef[];
+  /** Bulky fields (pages, refs, …) live in metaShopExtras / metaShopRefChunks. */
+  extrasOffloaded?: boolean;
+  /** Product ref chunks in metaShopRefChunks (search index). */
+  productRefChunkCount?: number;
   products: MetaShopProduct[];
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   discounts?: MetaShopDiscount[]; // discount codes
