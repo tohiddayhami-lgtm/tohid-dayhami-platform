@@ -316,6 +316,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       inquiryFormHint: 'Enter your contact details to schedule a viewing.',
       namePh: 'Your full name', visitWhenPh: 'e.g. Saturday 10 AM', notesPhExtra: 'Any extra questions…',
       watchVideo: 'Watch video', pcs: 'pcs', offTag: ' off', cartEmptyErr: 'Cart is empty.',
+      goToCart: 'Go to cart',
       invalidDiscount: 'Invalid discount code.', minOrderDiscount: 'Minimum order for this code is',
       discountNoApply: 'This code does not apply to your cart items.',
       referProperty: 'Refer a property', referTitle: 'Refer a property to us',
@@ -365,6 +366,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       inquiryFormHint: 'اطلاعات تماس خود را وارد کنید تا هماهنگی بازدید انجام شود.',
       namePh: 'نام کامل', visitWhenPh: 'مثلاً شنبه ۱۰ صبح', notesPhExtra: 'سوال یا توضیح اضافه…',
       watchVideo: 'تماشای ویدئو', pcs: 'عدد', offTag: ' تخفیف', cartEmptyErr: 'سبد خالی است.',
+      goToCart: 'رفتن به سبد',
       invalidDiscount: 'کد تخفیف نامعتبر است.', minOrderDiscount: 'حداقل مبلغ سفارش برای این کد',
       discountNoApply: 'این کد برای اقلام سبد شما اعمال نمی‌شود.',
       referProperty: 'معرفی ملک', referTitle: 'معرفی ملک به ما',
@@ -414,6 +416,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       inquiryFormHint: 'أدخل بيانات الاتصال لترتيب المعاينة.',
       namePh: 'الاسم الكامل', visitWhenPh: 'مثلاً السبت ١٠ صباحاً', notesPhExtra: 'أسئلة أو ملاحظات إضافية…',
       watchVideo: 'مشاهدة الفيديو', pcs: 'قطعة', offTag: ' خصم', cartEmptyErr: 'السلة فارغة.',
+      goToCart: 'الذهاب إلى السلة',
       invalidDiscount: 'رمز الخصم غير صالح.', minOrderDiscount: 'الحد الأدنى للطلب لهذا الرمز',
       discountNoApply: 'هذا الرمز لا ينطبق على عناصر سلتك.',
       referProperty: 'إحالة عقار', referTitle: 'أحِل عقاراً إلينا',
@@ -452,6 +455,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       feesLabel: '附加费用', optionalFee: '(可选)', discountTitle: '折扣码', discountPh: '输入折扣码', apply: '应用',
       shipFree: '免费', shipContact: '请联系我们', currency: '货币',
       discountLine: '折扣', taxIncl: '含税', taxExcl: '税', footPhone: '电话：', footEmail: '邮箱：', footWebsite: '网站：',
+      goToCart: '查看购物车',
     },
   };
   const S = (k: string) => uiString(STRINGS, uiLang, k);
@@ -953,6 +957,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   };
   const setQty = (id: string, q: number) => setCart(c => { const n = { ...c }; if (q <= 0) delete n[id]; else n[id] = { ...n[id], qty: q }; return n; });
 
+  const openCart = () => {
+    setStep('cart');
+    setCartOpen(true);
+  };
+
   const submit = async () => {
     if (!form.customerName.trim() || !form.phone.trim()) { setError(t.incomplete); return; }
     if (cartItems.length === 0) { setError(S('cartEmptyErr')); return; }
@@ -1121,11 +1130,23 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             {hidden && (
               <div className="ms-card-calc">{fmtNum(qty, 0)} {p.unit ? p.unit : S('pcs')} · <b>{negLabel(p)}</b></div>
             )}
+            <button type="button" className={`ms-goto-cart ${big ? 'lg' : ''}`} onClick={openCart}>
+              <CartIcon s={big ? 18 : 16} /><span>{S('goToCart')}</span>
+              {cartCount > 0 && <span className="ms-goto-cart-badge">{cartCount}</span>}
+            </button>
           </>
         ) : (
-          <button type="button" className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>
-            <CartIcon s={big ? 18 : 16} /><span>{t.add}</span>
-          </button>
+          <div className="ms-buy-actions">
+            <button type="button" className={`ms-add ${big ? 'lg' : ''}`} onClick={() => addToCart(p)}>
+              <CartIcon s={big ? 18 : 16} /><span>{t.add}</span>
+            </button>
+            {cartCount > 0 && (
+              <button type="button" className={`ms-goto-cart icon-only ${big ? 'lg' : ''}`} onClick={openCart} title={S('goToCart')} aria-label={S('goToCart')}>
+                <CartIcon s={big ? 18 : 16} />
+                <span className="ms-goto-cart-badge">{cartCount}</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
     );
@@ -2186,6 +2207,14 @@ button.ms-foot-catalog:hover { transform:none; }
 @media (min-width:1000px){ .ms-featured-grid { grid-template-columns:repeat(3,1fr); } }
 .ms-card-feat { border-color:#fcd34d; box-shadow:0 4px 16px rgba(245,158,11,.18); }
 .ms-add { margin-top:10px; padding:11px 12px; background:var(--ms-primary); color:#fff; font-size:13px; font-weight:700; border:none; border-radius:10px; cursor:pointer; width:100%; box-shadow:0 2px 8px rgba(0,0,0,.12); display:inline-flex; align-items:center; justify-content:center; gap:8px; line-height:1.2; min-height:44px; -webkit-tap-highlight-color:transparent; }
+.ms-buy-actions { margin-top:10px; display:flex; gap:8px; align-items:stretch; }
+.ms-buy-actions .ms-add { margin-top:0; flex:1; min-width:0; }
+.ms-goto-cart { margin-top:10px; padding:11px 12px; background:#fff; color:var(--ms-primary); font-size:13px; font-weight:700; border:1.5px solid var(--ms-primary); border-radius:10px; cursor:pointer; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:8px; line-height:1.2; min-height:44px; -webkit-tap-highlight-color:transparent; }
+.ms-goto-cart.lg { margin-top:8px; padding:13px 16px; font-size:15px; min-height:48px; border-radius:12px; }
+.ms-goto-cart.icon-only { margin-top:0; width:auto; min-width:48px; padding:11px 14px; flex-shrink:0; position:relative; }
+.ms-goto-cart-badge { min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:var(--ms-primary); color:#fff; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; }
+.ms-goto-cart.icon-only .ms-goto-cart-badge { position:absolute; top:-6px; inset-inline-end:-4px; min-width:18px; height:18px; font-size:10px; border:2px solid #fff; }
+.ms-goto-cart:active { transform:scale(.98); }
 .ms-add.in { background:#10b981; }
 .ms-add.lg { margin-top:8px; padding:13px 16px; font-size:15px; min-height:48px; border-radius:12px; box-shadow:0 4px 14px color-mix(in srgb, var(--ms-primary) 35%, transparent); }
 .ms-add:active { transform:scale(.98); }
