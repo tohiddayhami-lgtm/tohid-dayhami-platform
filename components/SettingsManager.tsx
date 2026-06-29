@@ -563,8 +563,8 @@ function onFormSubmit(e) {
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">توضیحات زیر تیتر (Hero Subtitle)</label><textarea className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.landingHeroSubtitle} onChange={(e) => handleGeneralChange('landingHeroSubtitle', e.target.value)} rows={2} placeholder="مثال: اولین و بزرگترین پلتفرم هوشمند..." /></div>
               <div className="md:col-span-2"><label className="block text-sm font-bold text-gray-700 mb-2">متن کپی‌رایت فوتر</label><input className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.footerText} onChange={(e) => handleGeneralChange('footerText', e.target.value)} placeholder="© 1403 پلتفرم جامع..." /></div>
               <div className="md:col-span-2 border-t border-gray-100 pt-6 mt-2">
-                <h4 className="font-bold text-indigo-800 mb-2">صفحه فروشگاه صادراتی</h4>
-                <p className="text-xs text-gray-500 mb-3">فقط فروشگاه‌های بازارچه انتخاب‌شده در «فروشگاه صادراتی» نمایش داده می‌شوند. جستجو نیز محدود به همین بازارچه است.</p>
+                <h4 className="font-bold text-indigo-800 mb-2">صفحه فروشگاه بین‌المللی</h4>
+                <p className="text-xs text-gray-500 mb-3">فقط فروشگاه‌های بازارچه انتخاب‌شده در «فروشگاه بین‌المللی» نمایش داده می‌شوند. جستجو نیز محدود به همین بازارچه است.</p>
                 <label className="block text-sm font-bold text-gray-700 mb-2">بازارچه مرتبط</label>
                 <select
                   className="w-full max-w-md px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"

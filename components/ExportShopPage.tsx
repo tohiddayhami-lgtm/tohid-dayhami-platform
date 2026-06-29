@@ -77,7 +77,7 @@ export const ExportShopPage: React.FC<Props> = ({
   }, [bazaar, shopBySlug]);
 
   const t = {
-    title: fa ? 'فروشگاه صادراتی' : 'Export Shop',
+    title: fa ? 'فروشگاه بین المللی' : 'International Shop',
     subtitle: bazaar
       ? (fa ? `فروشگاه‌های ${bazaar.name}` : `Shops in ${bazaar.name}`)
       : (fa ? 'فروشگاه‌ها و محصولات صادراتی' : 'Export shops and products'),
@@ -85,8 +85,8 @@ export const ExportShopPage: React.FC<Props> = ({
     all: fa ? 'همه' : 'All',
     empty: fa ? 'فروشگاهی یافت نشد.' : 'No shops found.',
     noBazaar: fa
-      ? 'بازارچه‌ای برای «فروشگاه صادراتی» انتخاب نشده. از تنظیمات سیستم → عمومی، بازارچه مرتبط را مشخص کنید.'
-      : 'No bazaar is linked to the Export Shop page. Choose one in System Settings → General.',
+      ? 'بازارچه‌ای برای «فروشگاه بین‌المللی» انتخاب نشده. از تنظیمات سیستم → عمومی، بازارچه مرتبط را مشخص کنید.'
+      : 'No bazaar is linked to the International Shop page. Choose one in System Settings → General.',
     products: fa ? 'محصول' : 'products',
     services: fa ? 'خدمات' : 'Services',
     realestate: fa ? 'املاک' : 'Real Estate',
