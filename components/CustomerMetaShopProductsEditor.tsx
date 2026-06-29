@@ -19,6 +19,7 @@ interface Props {
   hidePrices?: boolean;
   hidePriceText?: string;
   showStrikethroughPrice?: boolean;
+  productImageFit?: 'cover' | 'contain';
   priceMarkupType?: PriceAdjustType;
   priceMarkupValue?: number;
   currency: string;
@@ -32,12 +33,12 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
-  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; showStrikethroughPrice?: boolean; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
+  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; showStrikethroughPrice?: boolean; productImageFit?: 'cover' | 'contain'; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, hidePrices, hidePriceText, showStrikethroughPrice, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, categories, groupI18n, hidePrices, hidePriceText, showStrikethroughPrice, productImageFit, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -233,6 +234,20 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
   return (
     <div className="space-y-4">
       {priceSettingsSection}
+      {!isRealEstate && onPriceSettingsChange && (
+        <div className="bg-white border border-gray-100 rounded-xl p-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 shrink-0">{T ? 'نمایش تصویر محصولات' : 'Product image display'}:</span>
+          <select
+            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none focus:border-indigo-500 min-w-[180px]"
+            value={productImageFit || 'cover'}
+            onChange={e => onPriceSettingsChange({ productImageFit: e.target.value === 'contain' ? 'contain' : undefined })}
+          >
+            <option value="cover">{T ? 'پر کردن کادر (برش)' : 'Fill frame (crop)'}</option>
+            <option value="contain">{T ? 'جا دادن کامل (fit)' : 'Fit inside frame'}</option>
+          </select>
+          <span className="text-[11px] text-gray-400">{T ? 'برای تصاویر بزرگ یا لینک خارجی، fit بهتر است' : 'Fit works better for large or external images'}</span>
+        </div>
+      )}
       {!isRealEstate && products.length > 0 && onPriceSettingsChange && (
         <MetaShopBulkPriceMarkupPanel
           T={T}
@@ -493,6 +508,19 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
                     />
                     <span className="text-xs text-gray-600">{T ? 'ناموجود — مشتری نمی‌تواند سفارش دهد' : 'Out of stock — customers cannot order'}</span>
                   </label>
+
+                  <div>
+                    <label className={lbl}>{T ? 'نمایش تصویر' : 'Image display'}</label>
+                    <select
+                      className={fld}
+                      value={p.imageFit || ''}
+                      onChange={e => updProduct(p.id, { imageFit: (e.target.value || undefined) as 'cover' | 'contain' | undefined })}
+                    >
+                      <option value="">{T ? 'پیش‌فرض فروشگاه' : 'Shop default'}</option>
+                      <option value="cover">{T ? 'پر کردن کادر' : 'Fill frame'}</option>
+                      <option value="contain">{T ? 'جا دادن کامل' : 'Fit inside'}</option>
+                    </select>
+                  </div>
 
                   {/* Product-level discount */}
                   <div className="bg-gray-50 rounded-xl p-3 space-y-2">

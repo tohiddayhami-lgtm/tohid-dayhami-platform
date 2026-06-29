@@ -14,6 +14,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'hidePrices', 'hidePriceText',
   'priceMarkupType', 'priceMarkupValue',
   'showStrikethroughPrice',
+  'productImageFit',
   'products', 'discounts',
 ] as const;
 
@@ -29,6 +30,7 @@ export const CUSTOMER_EDITABLE_PRODUCT_FIELDS = [
   'priceMarkupType', 'priceMarkupValue',
   'promoLabel',
   'showStrikethroughPrice',
+  'imageFit',
   'hidePrice', 'hidePriceText',
   'outOfStock',
 ] as const;
@@ -135,6 +137,7 @@ export function duplicateCustomerProduct(source: MetaShopProduct, lang: 'fa' | '
     promoLabel: source.promoLabel,
     priceTiers: source.priceTiers?.map(t => ({ ...t })),
     showStrikethroughPrice: source.showStrikethroughPrice,
+    imageFit: source.imageFit,
     group: source.group,
     subcategory: source.subcategory,
     unit: source.unit,
@@ -164,6 +167,7 @@ function buildCustomerNewProduct(p: MetaShopProduct): MetaShopProduct {
     priceMarkupValue: p.priceMarkupValue,
     promoLabel: p.promoLabel,
     showStrikethroughPrice: p.showStrikethroughPrice,
+    imageFit: p.imageFit,
     i18n: p.i18n,
     group: p.group,
     subcategory: p.subcategory,

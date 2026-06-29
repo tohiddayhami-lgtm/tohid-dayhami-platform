@@ -70,6 +70,7 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     videoUrl: p.videoUrl || undefined,
     promoLabel: p.promoLabel || undefined,
     showStrikethroughPrice: p.showStrikethroughPrice,
+    imageFit: p.imageFit === 'contain' || p.imageFit === 'cover' ? p.imageFit : undefined,
     priceMarkupType: p.priceMarkupType === 'percent' || p.priceMarkupType === 'amount' ? p.priceMarkupType : undefined,
     priceMarkupValue: p.priceMarkupValue != null ? Number(p.priceMarkupValue) : undefined,
     discountType: p.discountType === 'percent' || p.discountType === 'amount' ? p.discountType : undefined,
@@ -210,6 +211,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     priceMarkupType: raw.priceMarkupType === 'percent' || raw.priceMarkupType === 'amount' ? raw.priceMarkupType : undefined,
     priceMarkupValue: raw.priceMarkupValue != null ? Number(raw.priceMarkupValue) : undefined,
     showStrikethroughPrice: raw.showStrikethroughPrice,
+    productImageFit: raw.productImageFit === 'contain' ? 'contain' : raw.productImageFit === 'cover' ? 'cover' : undefined,
     groupI18n: raw.groupI18n && typeof raw.groupI18n === 'object' ? raw.groupI18n : undefined,
     supplierCollaborationEnabled: raw.supplierCollaborationEnabled,
     floatingStickers: raw.floatingStickers?.length

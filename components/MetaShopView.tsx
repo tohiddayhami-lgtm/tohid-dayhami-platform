@@ -11,6 +11,7 @@ import { normalizeShopCategories, categoryLabel, findCategoryEntry, translatePro
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
 import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
+import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -1140,9 +1141,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const re = p.realEstate;
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
     const stock = pStock(p);
+    const imgFitCls = productImageFitClass(shop, p);
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
-        <div className="ms-card-img" onClick={() => openDetail(p)}>
+        <div className={`ms-card-img ${imgFitCls}`} onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
           {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
           {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, reLang())}</span>}
@@ -1416,9 +1418,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               {(() => {
                 const imgs = detail.images || [];
                 const main = imgs[galIdx] || imgs[0];
+                const galFit = resolveProductImageFit(shop, detail);
+                const galCls = galFit === 'cover' ? 'ms-img-cover' : 'ms-img-contain';
+                const fitCls = productImageFitClass(shop, detail);
                 return (
                   <>
-                    <div className="ms-gal-main">
+                    <div className={`ms-gal-main ${galCls}`}>
                       {main ? <img src={main} alt={pName(detail)} decoding="async" /> : <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>}
                       {imgs.length > 1 && <>
                         <button className="ms-gal-nav prev" onClick={() => setGalIdx((galIdx - 1 + imgs.length) % imgs.length)}>‹</button>
@@ -1426,7 +1431,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                       </>}
                     </div>
                     {imgs.length > 1 && (
-                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" loading="lazy" decoding="async" /></button>)}</div>
+                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${fitCls} ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" loading="lazy" decoding="async" /></button>)}</div>
                     )}
                   </>
                 );
@@ -1530,7 +1535,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 <div className="ms-inq-layout">
                   <aside className="ms-inq-aside">
                     {inqImg ? (
-                      <div className="ms-inq-img-wrap"><img src={inqImg} alt="" /></div>
+                      <div className={`ms-inq-img-wrap ${productImageFitClass(shop, inquiryProp)}`}><img src={inqImg} alt="" /></div>
                     ) : (
                       <div className="ms-inq-img-wrap ms-inq-img-ph">{pName(inquiryProp).charAt(0)}</div>
                     )}
@@ -1789,7 +1794,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, hidden, optionText, cur }) => {
                 const showPrice = optionsOf(p).length > 0 || p.price != null;
                 return (
-                <div className="ms-citem" key={p.id}>
+                <div className={`ms-citem ${productImageFitClass(shop, p)}`} key={p.id}>
                   {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
                   <div className="ms-citem-info">
                     <div className="ms-citem-name">{pName(p)}</div>
@@ -2124,6 +2129,12 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-card:hover { box-shadow:0 12px 32px rgba(0,0,0,.13); transform:translateY(-4px); }
 .ms-card-img { position:relative; aspect-ratio:4/3; background:#f8fafc; cursor:zoom-in; overflow:hidden; }
 .ms-card-img img { width:100%; height:100%; object-fit:cover; }
+.ms-card-img.ms-img-contain img,
+.ms-inq-img-wrap.ms-img-contain img,
+.ms-thumb.ms-img-contain img,
+.ms-citem.ms-img-contain img { object-fit:contain; padding:6px; box-sizing:border-box; }
+.ms-gal-main.ms-img-contain img { object-fit:contain; }
+.ms-gal-main.ms-img-cover img { object-fit:cover; }
 .ms-noimg { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:800; color:#cbd5e1; background:#f1f5f9; }
 .ms-noimg.sm { width:56px; height:56px; font-size:20px; border-radius:8px; }
 .ms-noimg.lg { font-size:80px; }

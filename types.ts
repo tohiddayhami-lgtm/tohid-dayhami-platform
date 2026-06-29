@@ -1149,6 +1149,8 @@ export interface MetaShopProduct {
   promoLabel?: string;
   /** When price is lower than base: show old price struck through (undefined = inherit shop setting). */
   showStrikethroughPrice?: boolean;
+  /** Product thumbnail: cover (crop) or contain (fit full image). Undefined = inherit shop. */
+  imageFit?: 'cover' | 'contain';
   // Up to 3 named rate options, e.g. "1 day / 3 days / 10 days" or "EXW / FOB / CIF / DDP" or "with freight / without"
   // Each rate option may carry its OWN currency (e.g. a money-exchange buy/sell rate in different currencies)
   priceOptions?: { id: string; label: string; labelEn?: string; price: number; currency?: string; basePrice?: number }[];
@@ -1377,6 +1379,8 @@ export interface MetaShop {
   priceMarkupValue?: number;
   /** When a product price is below base: show struck-through old price (default true if unset). */
   showStrikethroughPrice?: boolean;
+  /** Default thumbnail fit for all products (cover = crop; contain = fit inside box). */
+  productImageFit?: 'cover' | 'contain';
   productCount?: number;
   /** Number of metaShopChunks docs holding products (0 = legacy inline products array). */
   productChunkCount?: number;

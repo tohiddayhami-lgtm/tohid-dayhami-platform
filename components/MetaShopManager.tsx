@@ -370,6 +370,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     priceLabelContact: 'Please contact us for the new price',
     priceLabelInherit: T ? 'مثل فروشگاه' : 'Same as shop',
     priceLabelTip: T ? 'وقتی قیمت مخفی است، این متن به‌جای «قابل مذاکره» نمایش داده می‌شود.' : 'Shown instead of «Negotiable» when the price is hidden.',
+    productImageFit: T ? 'نمایش تصویر محصولات' : 'Product image display',
+    imageFitCover: T ? 'پر کردن کادر (برش)' : 'Fill frame (crop)',
+    imageFitContain: T ? 'جا دادن کامل (fit)' : 'Fit inside frame',
+    imageFitInherit: T ? 'پیش‌فرض فروشگاه' : 'Shop default',
+    productImageFitTip: T ? 'برای تصاویر بزرگ یا لینک‌های خارجی، «جا دادن کامل» معمولاً بهتر است.' : 'For large or external URL images, «Fit inside frame» usually works better.',
     rateHint: T ? 'مثلا: ۱ روز / ۳ روز / ۱۰ روز — یا EXW / FOB / CIF — یا با کرایه / بدون کرایه. اگر تعریف کنی، مشتری یکی را انتخاب می‌کند و همان قیمت اعمال می‌شود.' : 'e.g. 1 day / 3 days / 10 days — or EXW / FOB / CIF — or with/without freight. If set, the customer picks one and that price applies.',
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
@@ -1959,6 +1964,19 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </select>
         </div>
         )}
+        {!isRealEstate && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 px-1" title={t.productImageFitTip}>
+          <span className="text-[11px] font-medium text-gray-500 shrink-0">{t.productImageFit}:</span>
+          <select
+            className={fld + ' flex-1 min-w-[160px]'}
+            value={draft.productImageFit || 'cover'}
+            onChange={e => setDraft(d => d ? { ...d, productImageFit: e.target.value === 'contain' ? 'contain' : undefined } : d)}
+          >
+            <option value="cover">{t.imageFitCover}</option>
+            <option value="contain">{t.imageFitContain}</option>
+          </select>
+        </div>
+        )}
         {!isRealEstate && draft.products.length > 0 && (
           <MetaShopBulkPriceMarkupPanel
             T={T}
@@ -2028,6 +2046,16 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                         <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
                       </select>
                     )}
+                    <select
+                      className="text-[10px] border border-gray-200 rounded px-1 py-0.5 max-w-[130px] text-gray-600"
+                      title={t.productImageFitTip}
+                      value={p.imageFit || ''}
+                      onChange={e => updProduct(idx, { imageFit: (e.target.value || undefined) as 'cover' | 'contain' | undefined })}
+                    >
+                      <option value="">{t.imageFitInherit}</option>
+                      <option value="cover">{t.imageFitCover}</option>
+                      <option value="contain">{t.imageFitContain}</option>
+                    </select>
                     {shopLangs().length > 0 && <button onClick={() => setTransOpen(s => ({ ...s, [p.id]: !s[p.id] }))} className={`text-[10px] px-1.5 py-0.5 rounded mt-1 ${transOpen[p.id] ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`} title={t.transBtn}>🌐 {t.transBtn}</button>}
                     <button onClick={() => removeProduct(idx)} className="text-red-400 hover:text-red-600 mt-1"><IconTrash className="w-4 h-4" /></button>
                   </div>
