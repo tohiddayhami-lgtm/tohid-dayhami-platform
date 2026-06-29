@@ -364,7 +364,7 @@ const App: React.FC = () => {
   const [isEmbed] = useState<boolean>(extractEmbedFlag); // shop loaded inside an iframe (Google Sites / external site)
   const [catalogMode, setCatalogMode] = useState<boolean>(extractCatalogFlag); // shop link opened as a printable A4 PDF catalog (?catalog=1)
   const [publicShop, setPublicShop] = useState<MetaShop | null>(null);
-  const [shopLoading, setShopLoading] = useState(false);
+  const [shopLoading, setShopLoading] = useState(() => getInitialView() === 'metashop' && !!extractShopSlug());
   const [shopResolved, setShopResolved] = useState(false);
   const shopFetchSlugRef = useRef<string | null>(null);
   const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
@@ -1436,17 +1436,26 @@ const App: React.FC = () => {
       if (!cancelled) {
         setPublicShop(s);
         setShopLoading(false);
-        setShopResolved(true);
+        if (s) setShopResolved(true);
       }
     }).catch(() => {
       if (!cancelled) {
         setPublicShop(null);
         setShopLoading(false);
-        setShopResolved(true);
       }
     });
     return () => { cancelled = true; };
   }, [view, shopSlug, metaShops]);
+
+  // After the shops list has synced, stop waiting if the slug truly does not exist.
+  useEffect(() => {
+    if (view !== 'metashop' || !shopSlug || shopResolved) return;
+    if (!metaShopsReady) return;
+    if (metaShops.some(s => s.slug === shopSlug)) return;
+    if (publicShop?.slug === shopSlug) return;
+    setShopLoading(false);
+    setShopResolved(true);
+  }, [view, shopSlug, shopResolved, metaShopsReady, metaShops, publicShop]);
 
   // ── Meta Bazaar: resolve public bazaar by slug ──
   useEffect(() => {
@@ -1928,8 +1937,12 @@ const App: React.FC = () => {
       if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
       return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
-    // Still resolving — shutter loader (never flash "not found" while loading)
-    if (shopSlug && (!shopResolved || shopLoading)) {
+    const shopPending = !!shopSlug && (
+      shopLoading
+      || !shopResolved
+      || (!resolvedShop && !metaShopsReady)
+    );
+    if (shopPending) {
       return <ShopShutterLoader lang={lang} />;
     }
     return (
