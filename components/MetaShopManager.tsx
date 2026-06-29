@@ -21,6 +21,7 @@ import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCu
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
+import { MetaShopOrdersHub } from './MetaShopOrdersHub';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
@@ -373,7 +374,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     addRate: T ? 'افزودن نرخ' : 'Add rate', optLabel: T ? 'عنوان (فارسی)' : 'Label (FA)', optLabelEn: T ? 'عنوان (انگلیسی)' : 'Label (EN)', optPrice: T ? 'قیمت' : 'Price',
     importHint: T ? 'JSON کاتالوگ یا فروشگاه را اینجا بچسبانید. محصولات، رنگ‌ها و اطلاعات شرکت خودکار وارد می‌شوند.' : 'Paste catalog or shop JSON. Products, colors and company info are imported automatically.',
     importBtn: T ? 'وارد کردن' : 'Import', importErr: T ? 'JSON نامعتبر است.' : 'Invalid JSON.',
-    ordersTitle: T ? 'سفارش‌ها' : 'Orders', allOrdersTitle: T ? 'همه سفارش‌ها' : 'All orders', allOrdersBtn: T ? 'همه درخواست‌ها' : 'All requests', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
+    ordersTitle: T ? 'سفارش‌ها' : 'Orders', allOrdersTitle: T ? 'مرکز مدیریت سفارش‌ها' : 'Orders command center', allOrdersBtn: T ? 'مرکز سفارش‌ها' : 'Orders hub', noOrders: T ? 'سفارشی ثبت نشده است.' : 'No orders yet.',
     oCode: T ? 'کد رهگیری' : 'Tracking', oCustomer: T ? 'مشتری' : 'Customer', oTotal: T ? 'مبلغ' : 'Total', oDate: T ? 'تاریخ' : 'Date', oStatus: T ? 'وضعیت' : 'Status', oItems: T ? 'اقلام' : 'Items',
     sNew: T ? 'جدید' : 'New', sProg: T ? 'در حال انجام' : 'In progress', sDone: T ? 'انجام شد' : 'Done', sCanc: T ? 'لغو شد' : 'Cancelled',
     referrals: T ? 'معرفی ملک' : 'Property referrals',
@@ -1144,34 +1145,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     );
   }
 
-  // ════════════ ALL ORDERS (master) ════════════
+  // ════════════ ORDERS HUB (master) ════════════
   if (mode === 'all-orders') {
-    const allOrders = [...metaShopOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const shopById = (id: string) => metaShops.find(s => s.id === id);
     return (
-      <div className="space-y-4 animate-fade-in">
-        {sectionToggle}
-        <button onClick={() => setMode('list')} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
-        <h3 className="text-lg font-bold text-gray-800">{t.allOrdersTitle} ({allOrders.length})</h3>
-        {allOrders.length === 0 ? <div className={card + ' text-center py-12 text-gray-400 text-sm'}>{t.noOrders}</div> : (
-          <div className="space-y-4">
-            {allOrders.map(o => (
-              <MetaShopOrderDetailCard
-                key={o.id}
-                order={o}
-                shop={shopById(o.shopId)}
-                shopBaseUrl={shopBaseUrl}
-                lang={lang}
-                showShopName
-                customerAccounts={customerAccounts}
-                commissionView="master"
-                onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
-                onDelete={!readonly && onDeleteMetaShopOrder ? () => confirmDeleteOrder(o.id) : undefined}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <MetaShopOrdersHub
+        metaShops={metaShops}
+        orders={metaShopOrders}
+        customerAccounts={customerAccounts}
+        shopBaseUrl={shopBaseUrl}
+        lang={lang}
+        readonly={readonly}
+        onUpdateOrder={onUpdateMetaShopOrder}
+        onDeleteOrder={onDeleteMetaShopOrder}
+        onBack={() => setMode('list')}
+        sectionToggle={sectionToggle}
+      />
     );
   }
 
