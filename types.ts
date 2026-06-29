@@ -1077,12 +1077,12 @@ export interface MetaShopDiscount {
   minOrder?: number;                     // optional minimum items subtotal to qualify
 }
 
-/** Visitor-facing currency with rate relative to shop.currency (1 base = rate × this currency). */
+/** Storefront currency: `rate` = market units of `code` per 1 unit of shop base (`shop.currency`). */
 export interface MetaShopDisplayCurrency {
   code: string;
   label?: string;
   labelEn?: string;
-  /** Multiply a base-currency amount by this to show in `code`. */
+  /** 1 shop.currency = `rate` × this currency (user-entered market rate). */
   rate: number;
 }
 

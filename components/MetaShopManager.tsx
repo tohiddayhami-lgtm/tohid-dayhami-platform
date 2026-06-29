@@ -17,7 +17,8 @@ import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
 import { productHasPriceDrift, revertAllProductsToBase } from '../utils/metaShopPricing';
 import { AppModal } from './AppModal';
-import { suggestDisplayCurrency, currencyPresetLabel } from '../utils/metaShopCurrency';
+import { normalizeDisplayCurrencies } from '../utils/metaShopCurrency';
+import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
@@ -700,20 +701,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const addFee = () => upd({ extraFees: [...fees(), { id: `fee-${Date.now()}`, label: '', amount: 0, currency: draft!.currency || 'OMR' }] });
   const updFee = (idx: number, patch: Partial<import('../types').MetaShopFee>) => setDraft(d => { if (!d) return d; const fs = [...(d.extraFees || [])]; fs[idx] = { ...fs[idx], ...patch }; return { ...d, extraFees: fs }; });
   const removeFee = (idx: number) => setDraft(d => d ? { ...d, extraFees: (d.extraFees || []).filter((_, i) => i !== idx) } : d);
-  const dispCurrencies = () => draft?.displayCurrencies || [];
-  const updDispCurrency = (idx: number, patch: Partial<import('../types').MetaShopDisplayCurrency>) => setDraft(d => {
-    if (!d) return d;
-    const list = [...(d.displayCurrencies || [])];
-    list[idx] = { ...list[idx], ...patch };
-    return { ...d, displayCurrencies: list };
-  });
-  const addDispCurrency = (code: string) => {
-    const c = code.trim().toUpperCase();
-    if (!c || dispCurrencies().some(x => x.code.trim().toUpperCase() === c)) return;
-    upd({ displayCurrencies: [...dispCurrencies(), suggestDisplayCurrency(draft!.currency || 'OMR', c)] });
-  };
-  const removeDispCurrency = (idx: number) => upd({ displayCurrencies: dispCurrencies().filter((_, i) => i !== idx) });
-
   // ── Pages editing ──
   const pages = () => draft?.pages || [];
   const addPage = () => upd({ pages: [...pages(), { id: `pg-${Date.now()}`, label: T ? 'صفحه جدید' : 'New Page', type: 'text', body: '', images: [], cards: [] }] });
@@ -1505,30 +1492,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             </div>
           </div>
           <div><label className={lbl}>{t.type}</label><select className={fld + ' bg-white'} value={draft.type} onChange={e => upd({ type: e.target.value as MetaShopType })}><option value="products">{t.typeProducts}</option><option value="services">{t.typeServices}</option><option value="realestate">{t.typeRealEstate}</option></select></div>
-          <div><label className={lbl}>{t.currency}</label><input className={fld + ' dir-ltr'} value={draft.currency} onChange={e => upd({ currency: e.target.value.toUpperCase() })} placeholder="OMR / USD / AED" /></div>
-          <div className="md:col-span-2 border border-slate-100 rounded-xl p-3 bg-slate-50/50">
-            <h5 className="text-sm font-bold text-gray-700 mb-1">{t.dispCurT}</h5>
-            <p className="text-xs text-gray-500 mb-3">{t.dispCurHint}</p>
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {['OMR', 'USD', 'AED', 'IRR', 'EUR', 'SAR'].map(code => (
-                <button key={code} type="button" onClick={() => addDispCurrency(code)} className="px-2 py-1 rounded-lg text-[11px] border border-gray-200 bg-white hover:bg-indigo-50 text-gray-600">{code}</button>
-              ))}
-            </div>
-            {dispCurrencies().length === 0 ? (
-              <p className="text-xs text-gray-400">{T ? 'فقط ارز پایه نمایش داده می‌شود. برای سوئیچر ارز، ارز اضافه کنید.' : 'Only the base currency is shown. Add currencies for a storefront switcher.'}</p>
-            ) : (
-              <div className="space-y-2">
-                {dispCurrencies().map((dc, idx) => (
-                  <div key={`${dc.code}-${idx}`} className="flex flex-wrap items-end gap-2 border border-gray-100 rounded-lg p-2 bg-white">
-                    <div className="w-20"><label className={lbl}>{t.dispCurCode}</label><input className={fld + ' dir-ltr font-mono'} value={dc.code} onChange={e => updDispCurrency(idx, { code: e.target.value.toUpperCase() })} /></div>
-                    <div className="flex-1 min-w-[100px]"><label className={lbl}>{t.dispCurName}</label><input className={fld} value={dc.label || ''} onChange={e => updDispCurrency(idx, { label: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'fa')} /></div>
-                    <div className="flex-1 min-w-[100px]"><label className={lbl}>{t.dispCurNameEn}</label><input className={fld + ' dir-ltr'} value={dc.labelEn || ''} onChange={e => updDispCurrency(idx, { labelEn: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'en')} /></div>
-                    <div className="w-28"><label className={lbl}>{t.dispCurRate}</label><input className={fld + ' dir-ltr'} type="number" step="any" value={dc.rate ?? ''} onChange={e => updDispCurrency(idx, { rate: parseFloat(e.target.value) || 0 })} /></div>
-                    <button type="button" onClick={() => removeDispCurrency(idx)} className="text-red-400 hover:text-red-600 pb-2"><IconTrash className="w-4 h-4" /></button>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="md:col-span-2 border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+            <MetaShopCurrencyRatesEditor
+              baseCurrency={draft.currency || 'USD'}
+              displayCurrencies={draft.displayCurrencies || []}
+              lang={lang}
+              onBaseChange={code => upd({
+                currency: code,
+                displayCurrencies: normalizeDisplayCurrencies(code, draft.displayCurrencies),
+              })}
+              onDisplayCurrenciesChange={list => upd({ displayCurrencies: list })}
+            />
           </div>
           <div><label className={lbl}>{t.defLang}</label><select className={fld + ' bg-white'} value={draft.defaultLang || langOptions()[0].code} onChange={e => upd({ defaultLang: e.target.value })}>{langOptions().map(l => <option key={l.code} value={l.code}>{l.name || l.code}</option>)}</select></div>
           <div className="md:col-span-2">

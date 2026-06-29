@@ -15,13 +15,17 @@ const PRESET_LABELS: Record<string, { fa: string; en: string }> = {
   CNY: { fa: 'یوآن چین', en: 'Chinese Yuan' },
 };
 
-/** Approximate rates: 1 unit of base → target (editable in admin). */
+/** Suggested market rates: 1 unit of base → target (editable in admin). */
 export const DEFAULT_RATES_FROM: Record<string, Record<string, number>> = {
-  OMR: { USD: 2.597, AED: 9.54, IRR: 110000 },
-  USD: { OMR: 0.385, AED: 3.67, IRR: 42000 },
-  AED: { OMR: 0.105, USD: 0.272, IRR: 11500 },
-  IRR: { OMR: 0.0000091, USD: 0.000024, AED: 0.000087 },
+  EUR: { USD: 1.17, OMR: 0.445, AED: 4.31, SAR: 4.40, GBP: 0.86 },
+  USD: { EUR: 0.854, OMR: 0.3846, AED: 3.6725, SAR: 3.75 },
+  OMR: { USD: 2.60, EUR: 2.25, AED: 9.55, SAR: 9.75 },
+  AED: { OMR: 0.105, USD: 0.272, EUR: 0.23, SAR: 1.02 },
+  SAR: { OMR: 0.102, USD: 0.267, AED: 0.98, EUR: 0.227 },
+  IRR: { USD: 0.000024, OMR: 0.0000091, AED: 0.000087 },
 };
+
+export const CURRENCY_PRESETS = ['OMR', 'USD', 'AED', 'EUR', 'SAR', 'GBP', 'IRR', 'CNY', 'QAR', 'KWD', 'BHD'];
 
 export const currencyPresetLabel = (code: string, lang: string): string => {
   const c = code.trim().toUpperCase();
@@ -36,37 +40,88 @@ export const displayCurrencyLabel = (entry: MetaShopDisplayCurrency, lang: strin
   return entry.labelEn?.trim() || entry.label?.trim() || currencyPresetLabel(code, lang);
 };
 
-export const shopDisplayCurrencies = (shop: MetaShop): MetaShopDisplayCurrency[] => {
-  const base = (shop.currency || 'USD').trim().toUpperCase();
-  const extras = (shop.displayCurrencies || []).filter(c => c.code?.trim() && (c.rate ?? 0) > 0);
-  const hasBase = extras.some(c => c.code.trim().toUpperCase() === base);
-  const list: MetaShopDisplayCurrency[] = hasBase
-    ? []
-    : [{ code: base, label: currencyPresetLabel(base, 'fa'), labelEn: currencyPresetLabel(base, 'en'), rate: 1 }];
-  extras.forEach(c => {
-    const code = c.code.trim().toUpperCase();
-    if (list.some(x => x.code.toUpperCase() === code)) return;
-    list.push({ ...c, code, rate: c.rate });
-  });
-  return list;
-};
+export const shopBaseCurrency = (shop: MetaShop): string =>
+  (shop.currency || 'USD').trim().toUpperCase();
 
-const rateTo = (shop: MetaShop, targetCode: string): number => {
-  const base = (shop.currency || 'USD').trim().toUpperCase();
-  const target = targetCode.trim().toUpperCase();
-  if (target === base) return 1;
-  const entry = (shop.displayCurrencies || []).find(c => c.code.trim().toUpperCase() === target);
+/** Parse user-entered market rate (no scientific notation in UI). */
+export function parseMarketRateInput(raw: string): number {
+  const s = String(raw || '').replace(/,/g, '').trim();
+  if (!s) return 0;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
+}
+
+/** Format rate for display — never scientific notation. */
+export function formatMarketRate(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const abs = Math.abs(value);
+  let decimals = 6;
+  if (abs >= 1000) decimals = 2;
+  else if (abs >= 1) decimals = 6;
+  else if (abs >= 0.01) decimals = 6;
+  else decimals = 8;
+  let s = value.toFixed(decimals);
+  s = s.replace(/\.?0+$/, '');
+  if (s.includes('e') || s.includes('E')) {
+    s = value.toLocaleString('en-US', { maximumFractionDigits: decimals, useGrouping: false });
+  }
+  return s;
+}
+
+export function formatRateEquation(base: string, target: string, rate: number): string {
+  const r = formatMarketRate(rate);
+  if (!r) return '';
+  return `1 ${base.trim().toUpperCase()} = ${r} ${target.trim().toUpperCase()}`;
+}
+
+/** Stored rate: how many units of `code` equal 1 unit of shop base currency. */
+export function baseRateFromShop(shop: MetaShop, code: string): number {
+  const base = shopBaseCurrency(shop);
+  const c = code.trim().toUpperCase();
+  if (c === base) return 1;
+  const entry = (shop.displayCurrencies || []).find(x => x.code.trim().toUpperCase() === c);
   return entry?.rate ?? 0;
-};
+}
 
-export const convertFromBase = (amount: number, shop: MetaShop, targetCode: string): number => {
-  const r = rateTo(shop, targetCode);
-  if (r <= 0) return amount;
-  const decimals = targetCode.toUpperCase() === 'IRR' ? 0 : 2;
-  const n = amount * r;
-  const f = 10 ** decimals;
-  return Math.round(n * f) / f;
-};
+/**
+ * Cross rate: units of `to` per 1 unit of `from`.
+ * rate(from, to) = rate(base, to) / rate(base, from)
+ */
+export function crossRate(shop: MetaShop, fromCode: string, toCode: string): number {
+  const from = fromCode.trim().toUpperCase();
+  const to = toCode.trim().toUpperCase();
+  if (from === to) return 1;
+  const rFrom = baseRateFromShop(shop, from);
+  const rTo = baseRateFromShop(shop, to);
+  if (rFrom <= 0 || rTo <= 0) return 0;
+  return rTo / rFrom;
+}
+
+export function decimalPlacesForCurrency(code: string): number {
+  return code.trim().toUpperCase() === 'IRR' ? 0 : 2;
+}
+
+export function roundForCurrency(amount: number, code: string): number {
+  const dp = decimalPlacesForCurrency(code);
+  const f = 10 ** dp;
+  return Math.round(amount * f) / f;
+}
+
+/** Convert amount between any two configured currencies. */
+export function convertAmount(
+  amount: number,
+  fromCode: string,
+  toCode: string,
+  shop: MetaShop,
+): number {
+  const rate = crossRate(shop, fromCode, toCode);
+  if (rate <= 0) return roundForCurrency(amount, toCode);
+  return roundForCurrency(amount * rate, toCode);
+}
+
+export const convertFromBase = (amount: number, shop: MetaShop, targetCode: string): number =>
+  convertAmount(amount, shopBaseCurrency(shop), targetCode, shop);
 
 export const formatShopAmount = (
   amount: number,
@@ -74,22 +129,74 @@ export const formatShopAmount = (
   viewCurrency: string,
   shop: MetaShop,
 ): string => {
-  const base = (shop.currency || 'USD').trim().toUpperCase();
+  const base = shopBaseCurrency(shop);
   const src = (sourceCurrency || base).trim().toUpperCase();
   const view = (viewCurrency || base).trim().toUpperCase();
-  let n = amount;
-  if (src === base && view !== base) n = convertFromBase(amount, shop, view);
-  else if (src !== view) {
-    const decimals = src === 'IRR' ? 0 : 2;
-    const f = 10 ** decimals;
-    n = Math.round(amount * f) / f;
-    return `${src} ${formatMetaShopNumber(n, decimals)}`;
-  }
-  const decimals = view === 'IRR' ? 0 : 2;
-  const f = 10 ** decimals;
-  n = Math.round(n * f) / f;
+  const n = convertAmount(amount, src, view, shop);
+  const decimals = decimalPlacesForCurrency(view);
   return `${view} ${formatMetaShopNumber(n, decimals)}`;
 };
+
+export const normalizeDisplayCurrencies = (
+  baseCurrency: string,
+  list: MetaShopDisplayCurrency[] | undefined,
+): MetaShopDisplayCurrency[] => {
+  const base = baseCurrency.trim().toUpperCase();
+  const seen = new Set<string>();
+  const out: MetaShopDisplayCurrency[] = [];
+  for (const raw of list || []) {
+    const code = raw.code?.trim().toUpperCase();
+    if (!code || code === base || seen.has(code)) continue;
+    const rate = Number(raw.rate);
+    if (!Number.isFinite(rate) || rate <= 0) continue;
+    seen.add(code);
+    out.push({
+      code,
+      label: raw.label?.trim() || undefined,
+      labelEn: raw.labelEn?.trim() || undefined,
+      rate,
+    });
+  }
+  return out;
+};
+
+export const shopDisplayCurrencies = (shop: MetaShop): MetaShopDisplayCurrency[] => {
+  const base = shopBaseCurrency(shop);
+  const extras = normalizeDisplayCurrencies(base, shop.displayCurrencies);
+  return [
+    {
+      code: base,
+      label: currencyPresetLabel(base, 'fa'),
+      labelEn: currencyPresetLabel(base, 'en'),
+      rate: 1,
+    },
+    ...extras,
+  ];
+};
+
+export type CrossRateRow = { from: string; to: string; rate: number; direct: boolean };
+
+/** Pairwise rates for admin preview (all storefront currencies). */
+export function buildCrossRatePreview(shop: MetaShop): CrossRateRow[] {
+  const codes = shopDisplayCurrencies(shop).map(c => c.code.trim().toUpperCase());
+  const base = shopBaseCurrency(shop);
+  const rows: CrossRateRow[] = [];
+  for (let i = 0; i < codes.length; i++) {
+    for (let j = 0; j < codes.length; j++) {
+      if (i === j) continue;
+      const from = codes[i];
+      const to = codes[j];
+      const rate = crossRate(shop, from, to);
+      if (rate <= 0) continue;
+      const direct = from === base || to === base;
+      rows.push({ from, to, rate, direct });
+    }
+  }
+  return rows.sort((a, b) => {
+    if (a.direct !== b.direct) return a.direct ? -1 : 1;
+    return a.from.localeCompare(b.from) || a.to.localeCompare(b.to);
+  });
+}
 
 export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisplayCurrency => {
   const b = base.trim().toUpperCase();
@@ -102,9 +209,6 @@ export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisp
     rate: c === b ? 1 : rate,
   };
 };
-
-export const shopBaseCurrency = (shop: MetaShop): string =>
-  (shop.currency || 'USD').trim().toUpperCase();
 
 export const resolveViewCurrency = (shop: MetaShop, fromUrl?: string | null): string => {
   const base = shopBaseCurrency(shop);
@@ -127,19 +231,16 @@ export const writeViewCurrencyToUrl = (code: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set('cur', code.trim().toUpperCase());
     history.replaceState(null, '', url.toString());
-  } catch {}
+  } catch { /* ignore */ }
 };
 
 export const feeCurrency = (fee: { currency?: string }, shop: MetaShop): string =>
   (fee.currency || shop.currency || 'USD').trim().toUpperCase();
 
-/** Convert a fee amount into the shop base currency (for order totals / tax). */
 export const feeAmountInBase = (fee: { amount?: number; currency?: string }, shop: MetaShop): number => {
   const base = shopBaseCurrency(shop);
   const amount = fee.amount || 0;
   const cur = feeCurrency(fee, shop);
   if (cur === base || amount === 0) return amount;
-  const rate = rateTo(shop, cur);
-  if (rate <= 0) return amount;
-  return Math.round((amount / rate) * 100) / 100;
+  return convertAmount(amount, cur, base, shop);
 };

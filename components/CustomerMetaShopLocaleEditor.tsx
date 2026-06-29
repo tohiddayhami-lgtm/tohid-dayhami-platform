@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { MetaShop, MetaShopLang, MetaShopDisplayCurrency } from '../types';
+import { MetaShop, MetaShopLang } from '../types';
 import { Language } from '../App';
 import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../utils/metaShopLang';
-import { currencyPresetLabel, suggestDisplayCurrency } from '../utils/metaShopCurrency';
+import { normalizeDisplayCurrencies } from '../utils/metaShopCurrency';
+import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
 import { IconPlus, IconTrash } from './Icons';
 
 interface Props {
@@ -27,8 +28,6 @@ const LANG_PRESETS: MetaShopLang[] = [
   { code: 'es', name: 'Español' },
   { code: 'hi', name: 'हिन्दी' },
 ];
-
-const CUR_PRESETS = ['OMR', 'USD', 'AED', 'IRR', 'EUR', 'SAR', 'GBP', 'CNY', 'QAR', 'KWD', 'BHD'];
 
 export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
   shop, draft, lang, saving, saved, onChange, onSave,
@@ -84,19 +83,6 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
   };
 
   const removeLang = (idx: number) => upd({ languages: shopLangs.filter((_, i) => i !== idx) });
-
-  const addDisplayCurrency = (code: string) => {
-    const c = code.trim().toUpperCase();
-    if (!c || c === baseCurrency) return;
-    if (displayCurrencies.some(x => x.code.trim().toUpperCase() === c)) return;
-    upd({ displayCurrencies: [...displayCurrencies, suggestDisplayCurrency(baseCurrency, c)] });
-  };
-
-  const updDisplayCurrency = (idx: number, patch: Partial<MetaShopDisplayCurrency>) => {
-    const list = [...displayCurrencies];
-    list[idx] = { ...list[idx], ...patch };
-    upd({ displayCurrencies: list });
-  };
 
   return (
     <div className="space-y-6">
@@ -219,108 +205,18 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
         )}
       </div>
 
-      {/* ── Currencies ── */}
-      <div className="bg-white border border-gray-100 rounded-xl p-5 space-y-4 shadow-sm">
-        <div>
-          <h3 className="text-sm font-bold text-gray-800">{T ? 'ارز نمایش' : 'Display currency'}</h3>
-          <p className="text-xs text-gray-400 mt-1">
-            {T
-              ? 'ارز اصلی قیمت‌ها در پنل شماست. ارزهای دیگر برای سوییچ مشتری در فروشگاه — نرخ تبدیل را وارد کنید.'
-              : 'Base currency is how you set prices. Extra currencies let visitors switch — enter conversion rates.'}
-          </p>
-        </div>
-
-        <div>
-          <label className={lbl}>{T ? 'ارز اصلی (پایه)' : 'Base currency'}</label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {CUR_PRESETS.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => upd({ currency: c })}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium border transition-colors ${
-                  baseCurrency === c
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-          <input
-            className={fld + ' dir-ltr max-w-[140px] font-mono uppercase'}
-            value={draft.currency || shop.currency || ''}
-            onChange={e => upd({ currency: e.target.value.toUpperCase() })}
-            placeholder="USD"
-          />
-          <p className="text-[10px] text-gray-400 mt-1">
-            {currencyPresetLabel(baseCurrency, T ? 'fa' : 'en')}
-          </p>
-        </div>
-
-        <div>
-          <p className={lbl}>{T ? 'ارزهای دیگر (چندارزی)' : 'Extra currencies (multi-currency)'}</p>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {CUR_PRESETS.filter(c => c !== baseCurrency).map(c => {
-              const added = displayCurrencies.some(x => x.code.trim().toUpperCase() === c);
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  disabled={added}
-                  onClick={() => addDisplayCurrency(c)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-mono border ${
-                    added ? 'bg-gray-100 text-gray-400 border-gray-100' : 'bg-white border-gray-200 hover:border-emerald-400 text-gray-600'
-                  }`}
-                >
-                  + {c}
-                </button>
-              );
-            })}
-          </div>
-
-          {displayCurrencies.length === 0 ? (
-            <p className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3">
-              {T ? `فقط ${baseCurrency} نمایش داده می‌شود. برای چندارزی، ارز اضافه کنید.` : `Only ${baseCurrency} shown. Add currencies for multi-currency.`}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {displayCurrencies.map((dc, idx) => (
-                <div key={`${dc.code}-${idx}`} className="p-3 rounded-xl border border-gray-100 bg-emerald-50/30 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono font-bold text-sm text-emerald-800">{dc.code}</span>
-                    <button type="button" onClick={() => upd({ displayCurrencies: displayCurrencies.filter((_, i) => i !== idx) })} className="text-gray-300 hover:text-red-500">
-                      <IconTrash className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-500">
-                    {T ? `۱ ${baseCurrency} =` : `1 ${baseCurrency} =`}
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      className="mx-1.5 w-24 px-2 py-1 rounded border border-gray-200 text-xs dir-ltr inline-block"
-                      value={dc.rate ?? ''}
-                      onChange={e => updDisplayCurrency(idx, { rate: parseFloat(e.target.value) || 0 })}
-                    />
-                    {dc.code}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className={lbl}>{T ? 'نام (فارسی)' : 'Label (FA)'}</label>
-                      <input className={fld + ' text-xs'} value={dc.label || ''} onChange={e => updDisplayCurrency(idx, { label: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'fa')} />
-                    </div>
-                    <div>
-                      <label className={lbl}>{T ? 'نام (English)' : 'Label (EN)'}</label>
-                      <input className={fld + ' text-xs dir-ltr'} value={dc.labelEn || ''} onChange={e => updDisplayCurrency(idx, { labelEn: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'en')} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+        <MetaShopCurrencyRatesEditor
+          baseCurrency={baseCurrency}
+          displayCurrencies={displayCurrencies}
+          lang={lang}
+          compact
+          onBaseChange={code => upd({
+            currency: code,
+            displayCurrencies: normalizeDisplayCurrencies(code, displayCurrencies),
+          })}
+          onDisplayCurrenciesChange={list => upd({ displayCurrencies: list })}
+        />
       </div>
 
       <div className="flex justify-end">
