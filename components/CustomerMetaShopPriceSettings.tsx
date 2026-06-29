@@ -1,19 +1,58 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Language } from '../App';
+import { MetaShopLang } from '../types';
+import { DEFAULT_PRODUCT_LANGS } from '../utils/metaShopLang';
 
 interface Props {
   hidePrices: boolean;
   hidePriceText?: string;
+  shopLangs?: MetaShopLang[];
+  shopI18n?: Record<string, Record<string, string>>;
   lang: Language;
-  onChange: (patch: { hidePrices?: boolean; hidePriceText?: string }) => void;
+  onChange: (patch: {
+    hidePrices?: boolean;
+    hidePriceText?: string;
+    i18n?: Record<string, Record<string, string>>;
+  }) => void;
 }
 
+const PRESET_FA = 'لطفاً برای قیمت جدید تماس بگیرید';
+const PRESET_EN = 'Please contact us for the new price';
+
 export const CustomerMetaShopPriceSettings: React.FC<Props> = ({
-  hidePrices, hidePriceText, lang, onChange,
+  hidePrices, hidePriceText, shopLangs = [], shopI18n, lang, onChange,
 }) => {
   const T = lang === 'fa';
   const showPrices = !hidePrices;
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-white';
+
+  const langOptions = useMemo(() => {
+    const configured = shopLangs.filter(l => l.code?.trim());
+    return configured.length ? configured : DEFAULT_PRODUCT_LANGS;
+  }, [shopLangs]);
+
+  const hidePriceForLang = (code: string): string => {
+    if (code === 'fa') return hidePriceText || '';
+    if (code === 'en') return shopI18n?.en?.hidePriceText ?? hidePriceText ?? '';
+    return shopI18n?.[code]?.hidePriceText || '';
+  };
+
+  const setHidePriceForLang = (code: string, value: string) => {
+    const trimmed = value.trim();
+    if (code === 'fa') {
+      onChange({ hidePriceText: trimmed || undefined });
+      return;
+    }
+    const i18n = { ...(shopI18n || {}) };
+    const row = { ...(i18n[code] || {}) };
+    if (trimmed) row.hidePriceText = trimmed;
+    else delete row.hidePriceText;
+    if (Object.keys(row).length) i18n[code] = row;
+    else delete i18n[code];
+    onChange({ i18n });
+  };
+
+  const applyPreset = (code: string, preset: string) => setHidePriceForLang(code, preset);
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm space-y-3">
@@ -48,27 +87,41 @@ export const CustomerMetaShopPriceSettings: React.FC<Props> = ({
       </div>
 
       {!showPrices && (
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">
-            {T ? 'متن جایگزین قیمت' : 'Text instead of price'}
-          </label>
-          <select
-            className={fld}
-            value={hidePriceText || ''}
-            onChange={e => onChange({ hidePriceText: e.target.value || undefined })}
-          >
-            <option value="">{T ? 'قابل مذاکره (پیش‌فرض)' : 'Negotiable (default)'}</option>
-            <option value="Please contact us for the new price">
-              {T ? 'لطفاً برای قیمت جدید تماس بگیرید' : 'Please contact us for the new price'}
-            </option>
-            <option value="تماس بگیرید">{T ? 'تماس بگیرید' : 'Contact us'}</option>
-          </select>
-          <input
-            className={fld + ' mt-2'}
-            placeholder={T ? 'یا متن دلخواه خودتان…' : 'Or your custom text…'}
-            value={hidePriceText && !['', 'Please contact us for the new price', 'تماس بگیرید'].includes(hidePriceText) ? hidePriceText : ''}
-            onChange={e => onChange({ hidePriceText: e.target.value || undefined })}
-          />
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-gray-600">
+            {T ? 'متن جایگزین قیمت (به ازای هر زبان)' : 'Text instead of price (per language)'}
+          </p>
+          {langOptions.map(lg => {
+            const code = lg.code;
+            const val = hidePriceForLang(code);
+            return (
+              <div key={code} className="rounded-lg border border-gray-100 bg-gray-50/60 p-3 space-y-2">
+                <label className="block text-xs font-bold text-indigo-700">{lg.name || code}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyPreset(code, '')}
+                    className={`text-[10px] px-2 py-1 rounded-md border ${!val ? 'bg-indigo-100 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-500'}`}
+                  >
+                    {T ? 'پیش‌فرض' : 'Default'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset(code, code === 'fa' || code === 'ar' ? PRESET_FA : PRESET_EN)}
+                    className="text-[10px] px-2 py-1 rounded-md border bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                  >
+                    {code === 'fa' || code === 'ar' ? PRESET_FA : PRESET_EN}
+                  </button>
+                </div>
+                <input
+                  className={fld}
+                  placeholder={T ? 'متن دلخواه…' : 'Custom text…'}
+                  value={val}
+                  onChange={e => setHidePriceForLang(code, e.target.value)}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

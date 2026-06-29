@@ -62,6 +62,22 @@ export const translateField = (
   return legacy || '';
 };
 
+/** Label when price is hidden — product override, then shop i18n, then built-in «negotiable». */
+export const resolveHidePriceLabel = (
+  uiLang: string,
+  shop: { hidePriceText?: string; i18n?: Record<string, Record<string, string>> },
+  product: { hidePriceText?: string; i18n?: Record<string, Record<string, string>> } | undefined,
+  negotiableFallback: string,
+): string => {
+  if (product) {
+    const fromProduct = translateField(product.i18n, 'hidePriceText', product.hidePriceText || '', uiLang);
+    if (fromProduct.trim()) return fromProduct;
+  }
+  const fromShop = translateField(shop.i18n, 'hidePriceText', shop.hidePriceText || '', uiLang);
+  if (fromShop.trim()) return fromShop;
+  return negotiableFallback;
+};
+
 /** Built-in UI chrome: exact lang → en → fa */
 export const uiString = (
   strings: Record<string, Record<string, string>>,

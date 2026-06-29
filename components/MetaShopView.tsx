@@ -5,7 +5,7 @@ import { buildProductSearchIndex, filterProductsBySearch } from '../utils/metaSh
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
 import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
-import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber } from '../utils/metaShopLang';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber, resolveHidePriceLabel } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
@@ -712,7 +712,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   // Price hidden → show «قابل مذاکره»; works per-product or shop-wide. Customer can still order a quantity.
   const priceHidden = (p: MetaShopProduct) => !!shop.hidePrices || !!p.hidePrice;
   // Label shown in place of the price: per-product override → shop-wide override → default «قابل مذاکره».
-  const negLabel = (p?: MetaShopProduct) => (p && p.hidePriceText) || shop.hidePriceText || t.negotiable;
+  const negLabel = (p?: MetaShopProduct) => resolveHidePriceLabel(uiLang, shop, p, t.negotiable);
   const optLabel = (p: MetaShopProduct, optId?: string): string => {
     const o = optionsOf(p).find(x => x.id === optId);
     if (!o) return '';

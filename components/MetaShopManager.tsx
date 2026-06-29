@@ -399,6 +399,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     hideAllPricesTip: T ? 'هیچ قیمتی در فروشگاه، کاتالوگ و فاکتور نمایش داده نمی‌شود؛ سفارش‌ها فقط تعداد را ثبت می‌کنند.' : 'No prices shown in the shop, catalog or invoices; orders capture quantities only.',
     priceLabel: T ? 'متن جای قیمت' : 'Price label', priceLabelDefault: T ? 'قابل مذاکره (پیش‌فرض)' : 'Negotiable (default)',
     priceLabelContact: 'Please contact us for the new price',
+    priceLabelI18n: T ? 'متن جای قیمت به ازای هر زبان' : 'Price label per language',
     priceLabelInherit: T ? 'مثل فروشگاه' : 'Same as shop',
     priceLabelTip: T ? 'وقتی قیمت مخفی است، این متن به‌جای «قابل مذاکره» نمایش داده می‌شود.' : 'Shown instead of «Negotiable» when the price is hidden.',
     productImageFit: T ? 'نمایش تصویر محصولات' : 'Product image display',
@@ -1978,12 +1979,43 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         </label>
         )}
         {!isRealEstate && (
-        <div className="flex items-center gap-2 mb-3 px-1" title={t.priceLabelTip}>
+        <div className="mb-3 px-1 space-y-2" title={t.priceLabelTip}>
           <span className="text-[11px] font-medium text-gray-500 shrink-0">{t.priceLabel}:</span>
-          <select className={fld + ' flex-1'} value={draft.hidePriceText || ''} onChange={e => setDraft(d => d ? { ...d, hidePriceText: e.target.value || undefined } : d)}>
-            <option value="">{t.priceLabelDefault}</option>
-            <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
-          </select>
+          {shopLangs().length > 0 ? (
+            <>
+              <p className="text-[10px] text-gray-400">{t.priceLabelI18n}</p>
+              {shopLangs().filter(l => l.code).map(lg => (
+                <div key={lg.code} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 w-20 shrink-0">{lg.name || lg.code}</span>
+                  {lg.code === 'fa' ? (
+                    <select className={fld + ' flex-1'} value={draft.hidePriceText || ''} onChange={e => setDraft(d => d ? { ...d, hidePriceText: e.target.value || undefined } : d)}>
+                      <option value="">{t.priceLabelDefault}</option>
+                      <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
+                    </select>
+                  ) : lg.code === 'en' ? (
+                    <input
+                      className={fld + ' flex-1'}
+                      placeholder={t.priceLabelContact}
+                      value={draft.i18n?.en?.hidePriceText ?? draft.hidePriceText ?? ''}
+                      onChange={e => updShopI18n('en', 'hidePriceText', e.target.value)}
+                    />
+                  ) : (
+                    <input
+                      className={fld + ' flex-1'}
+                      placeholder={t.priceLabelDefault}
+                      value={draft.i18n?.[lg.code]?.hidePriceText || ''}
+                      onChange={e => updShopI18n(lg.code, 'hidePriceText', e.target.value)}
+                    />
+                  )}
+                </div>
+              ))}
+            </>
+          ) : (
+            <select className={fld + ' flex-1'} value={draft.hidePriceText || ''} onChange={e => setDraft(d => d ? { ...d, hidePriceText: e.target.value || undefined } : d)}>
+              <option value="">{t.priceLabelDefault}</option>
+              <option value={t.priceLabelContact}>{t.priceLabelContact}</option>
+            </select>
+          )}
         </div>
         )}
         {!isRealEstate && (
@@ -2103,6 +2135,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                         <input className={fld} placeholder={t.pSubcat} value={p.i18n?.[lg.code]?.subcategory || ''} onChange={e => updProductI18n(idx, lg.code, 'subcategory', e.target.value)} />
                         <input className={fld} placeholder={t.pStock} value={p.i18n?.[lg.code]?.stockLabel || ''} onChange={e => updProductI18n(idx, lg.code, 'stockLabel', e.target.value)} />
                         <input className={fld + ' col-span-2'} placeholder={t.pDesc} value={p.i18n?.[lg.code]?.description || ''} onChange={e => updProductI18n(idx, lg.code, 'description', e.target.value)} />
+                        {(p.hidePrice || draft.hidePrices) && (
+                          <input className={fld} placeholder={t.priceLabel} value={p.i18n?.[lg.code]?.hidePriceText || ''} onChange={e => updProductI18n(idx, lg.code, 'hidePriceText', e.target.value)} />
+                        )}
                       </div>
                     ))}
                   </div>

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MetaShop, MetaShopProduct } from '../types';
 import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
-import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString } from '../utils/metaShopLang';
+import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, resolveHidePriceLabel } from '../utils/metaShopLang';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
@@ -207,7 +207,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
 
   // ── Price block ──
   const priceJsx = (p: MetaShopProduct) => {
-    if (priceHidden(p)) return <div className="msc-price-neg">{p.hidePriceText || shop.hidePriceText || s('negotiable')}</div>;
+    if (priceHidden(p)) return <div className="msc-price-neg">{resolveHidePriceLabel(uiLang, shop, p, s('negotiable'))}</div>;
     const opts = productPurchaseOptions(p, shop.type);
     if (opts.length) {
       return (

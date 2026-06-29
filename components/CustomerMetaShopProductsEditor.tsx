@@ -18,6 +18,7 @@ interface Props {
   groupI18n: Record<string, Record<string, string>>;
   hidePrices?: boolean;
   hidePriceText?: string;
+  shopI18n?: Record<string, Record<string, string>>;
   showStrikethroughPrice?: boolean;
   productImageFit?: 'cover' | 'contain';
   priceMarkupType?: PriceAdjustType;
@@ -33,12 +34,12 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
-  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; showStrikethroughPrice?: boolean; productImageFit?: 'cover' | 'contain'; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
+  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; i18n?: Record<string, Record<string, string>>; showStrikethroughPrice?: boolean; productImageFit?: 'cover' | 'contain'; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, hidePrices, hidePriceText, showStrikethroughPrice, productImageFit, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, categories, groupI18n, hidePrices, hidePriceText, shopI18n, showStrikethroughPrice, productImageFit, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -198,6 +199,8 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
     <CustomerMetaShopPriceSettings
       hidePrices={!!hidePrices}
       hidePriceText={hidePriceText}
+      shopLangs={shopLangs}
+      shopI18n={shopI18n}
       lang={lang}
       onChange={onPriceSettingsChange}
     />

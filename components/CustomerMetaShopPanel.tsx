@@ -230,6 +230,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
   const handlePriceSettingsChange = (patch: {
     hidePrices?: boolean;
     hidePriceText?: string;
+    i18n?: Record<string, Record<string, string>>;
     showStrikethroughPrice?: boolean;
     productImageFit?: 'cover' | 'contain';
     priceMarkupType?: import('../types').MetaShop['priceMarkupType'];
@@ -362,6 +363,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           groupI18n={groupI18nDraft}
           hidePrices={draft.hidePrices}
           hidePriceText={draft.hidePriceText}
+          shopI18n={draft.i18n}
           showStrikethroughPrice={draft.showStrikethroughPrice}
           productImageFit={draft.productImageFit}
           priceMarkupType={draft.priceMarkupType}

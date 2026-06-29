@@ -1127,7 +1127,7 @@ export interface MetaShopProduct {
   description?: string;
   images: string[];
   videoUrl?: string;       // optional product video (YouTube / Vimeo / direct mp4 link)
-  i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description } }
+  i18n?: Record<string, Record<string, string>>; // per-language overrides, e.g. { zh: { name, description, hidePriceText } }
   active?: boolean;
   featured?: boolean;      // highlight as a «ویژه» product (up to 3 shown in the featured rail)
   outOfStock?: boolean;    // mark as «در حال حاضر موجود نیست» → customer can browse it but cannot order it
@@ -1335,7 +1335,7 @@ export interface MetaShop {
   theme: MetaShopTheme;
   defaultLang?: string;        // language code the shop opens in (visitor can still toggle)
   languages?: MetaShopLang[];  // supported display languages (defaults to fa + en when absent)
-  i18n?: Record<string, Record<string, string>>; // shop-level per-language: { zh: { title, subtitle, collectionText } }
+  i18n?: Record<string, Record<string, string>>; // shop-level per-language: { zh: { title, subtitle, collectionText, hidePriceText, … } }
   // ── Directory / bazaar grouping (the "all shops" page) ──
   directoryCats?: MetaShopDirCat[];  // bilingual bazaar categories (a shop can appear under several)
   directorySub?: MetaShopDirCat;     // bilingual subcategory
