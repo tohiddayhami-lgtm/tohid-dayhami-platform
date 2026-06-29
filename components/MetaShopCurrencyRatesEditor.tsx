@@ -7,9 +7,13 @@ import {
   currencyPresetLabel,
   formatMarketRate,
   formatRateEquation,
+  inputValueFromStoredRate,
   normalizeDisplayCurrencies,
   parseMarketRateInput,
+  preferredRateInputMode,
+  storedRateFromInput,
   suggestDisplayCurrency,
+  type RateInputSide,
 } from '../utils/metaShopCurrency';
 import { IconTrash } from './Icons';
 import type { MetaShop } from '../types';
@@ -33,6 +37,7 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
 }) => {
   const T = lang === 'fa';
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+  const [rateModes, setRateModes] = useState<Record<string, RateInputSide>>({});
   const fld = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-indigo-500 bg-white';
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
@@ -87,8 +92,8 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
         </h5>
         <p className="text-xs text-gray-500 leading-relaxed">
           {T
-            ? `فقط نرخ واقعی بازار را وارد کنید: «۱ ${base} = چند واحد ارز دیگر». سیستم بقیه تبدیل‌ها و قیمت محصولات را خودکار محاسبه می‌کند.`
-            : `Enter real market rates only: «1 ${base} = how many units of each currency». All other conversions and product prices are calculated automatically.`}
+            ? `نرخ واقعی بازار را وارد کنید — هر دو جهت مجاز است: «۱ ${base} = …» یا «۱ ارز دیگر = … ${base}». مثلاً ۱ OMR = ۴۴۵۰۰۰ ${base}. سیستم بقیه تبدیل‌ها را خودکار محاسبه می‌کند.`
+            : `Enter real market rates — either direction works: «1 ${base} = …» or «1 other = … ${base}». E.g. 1 OMR = 445000 ${base}. All other conversions are computed automatically.`}
         </p>
       </div>
 
@@ -143,12 +148,32 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
         {normalized.length === 0 ? (
           <p className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3">
             {T
-              ? `فقط ${base} در فروشگاه نمایش داده می‌شود. برای چندارزی، ارز اضافه کنید و نرخ «۱ ${base} = …» را وارد کنید.`
-              : `Only ${base} is shown. Add currencies and enter «1 ${base} = …» rates.`}
+              ? `فقط ${base} در فروشگاه نمایش داده می‌شود. ارز اضافه کنید و نرخ بازار را به هر جهتی که راحت‌تر است وارد کنید.`
+              : `Only ${base} is shown. Add currencies and enter market rates in whichever direction is easier.`}
           </p>
         ) : (
           <div className="space-y-2">
-            {normalized.map((dc, idx) => (
+            {normalized.map((dc, idx) => {
+              const mode = rateModes[dc.code] ?? preferredRateInputMode(dc.rate);
+              const leftCur = mode === 'baseToCode' ? base : dc.code;
+              const rightCur = mode === 'baseToCode' ? dc.code : base;
+              const draftKey = `${dc.code}:${mode}`;
+              const displayVal = rateDrafts[draftKey] ?? (
+                dc.rate ? formatMarketRate(inputValueFromStoredRate(dc.rate, mode)) : ''
+              );
+
+              const flipMode = () => {
+                const next: RateInputSide = mode === 'baseToCode' ? 'codeToBase' : 'baseToCode';
+                setRateModes(m => ({ ...m, [dc.code]: next }));
+                setRateDrafts(d => {
+                  const nextDrafts = { ...d };
+                  delete nextDrafts[`${dc.code}:baseToCode`];
+                  delete nextDrafts[`${dc.code}:codeToBase`];
+                  return nextDrafts;
+                });
+              };
+
+              return (
               <div key={dc.code} className="p-3 rounded-xl border border-gray-100 bg-white space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono font-bold text-sm text-indigo-800">{dc.code}</span>
@@ -157,26 +182,35 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700" dir="ltr">
-                  <span className="font-mono whitespace-nowrap">1 {base} =</span>
+                  <button
+                    type="button"
+                    onClick={flipMode}
+                    title={T ? 'جابه‌جایی جهت نرخ' : 'Flip rate direction'}
+                    className="px-2 py-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 shrink-0"
+                  >
+                    ⇄
+                  </button>
+                  <span className="font-mono whitespace-nowrap">1 {leftCur} =</span>
                   <input
                     type="text"
                     inputMode="decimal"
-                    className="w-28 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm font-mono dir-ltr"
-                    value={rateDrafts[dc.code] ?? (dc.rate ? formatMarketRate(dc.rate) : '')}
+                    className="w-32 px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm font-mono dir-ltr"
+                    value={displayVal}
                     onChange={e => {
                       const v = e.target.value;
-                      setRateDrafts(d => ({ ...d, [dc.code]: v }));
+                      setRateDrafts(d => ({ ...d, [draftKey]: v }));
                       const parsed = parseMarketRateInput(v);
-                      if (parsed > 0) updCurrency(idx, { rate: parsed });
+                      const stored = storedRateFromInput(parsed, mode);
+                      if (stored > 0) updCurrency(idx, { rate: stored });
                     }}
                     onBlur={() => setRateDrafts(d => {
                       const next = { ...d };
-                      delete next[dc.code];
+                      delete next[draftKey];
                       return next;
                     })}
-                    placeholder="0.00"
+                    placeholder="0"
                   />
-                  <span className="font-mono font-semibold">{dc.code}</span>
+                  <span className="font-mono font-semibold">{rightCur}</span>
                 </div>
                 {!compact && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -191,7 +225,8 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

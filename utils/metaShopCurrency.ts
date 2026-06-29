@@ -75,6 +75,30 @@ export function formatRateEquation(base: string, target: string, rate: number): 
   return `1 ${base.trim().toUpperCase()} = ${r} ${target.trim().toUpperCase()}`;
 }
 
+/** How user enters rate: 1 base = X code, or 1 code = X base (stored always as base→code). */
+export type RateInputSide = 'baseToCode' | 'codeToBase';
+
+export function inverseMarketRate(rate: number): number {
+  if (!Number.isFinite(rate) || rate <= 0) return 0;
+  return 1 / rate;
+}
+
+export function storedRateFromInput(value: number, mode: RateInputSide): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return mode === 'baseToCode' ? value : inverseMarketRate(value);
+}
+
+export function inputValueFromStoredRate(storedRate: number, mode: RateInputSide): number {
+  if (!Number.isFinite(storedRate) || storedRate <= 0) return 0;
+  return mode === 'baseToCode' ? storedRate : inverseMarketRate(storedRate);
+}
+
+/** Pick the side that shows a more natural market number (usually ≥ 1). */
+export function preferredRateInputMode(storedRate: number): RateInputSide {
+  if (!Number.isFinite(storedRate) || storedRate <= 0) return 'baseToCode';
+  return storedRate < 1 ? 'codeToBase' : 'baseToCode';
+}
+
 /** Stored rate: how many units of `code` equal 1 unit of shop base currency. */
 export function baseRateFromShop(shop: MetaShop, code: string): number {
   const base = shopBaseCurrency(shop);
