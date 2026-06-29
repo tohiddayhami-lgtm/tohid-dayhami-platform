@@ -307,11 +307,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     dispCurHint: T ? 'ارز پایه فروشگاه بالا است. نرخ = چند واحد از این ارز معادل ۱ واحد ارز پایه (مثلاً ۱ ریال عمان = ۲٫۶ دلار → نرخ USD برابر ۲٫۶).' : 'Base currency is above. Rate = units of this currency per 1 base unit (e.g. 1 OMR = 2.6 USD → USD rate 2.6).',
     dispCurAdd: T ? 'افزودن ارز' : 'Add currency', dispCurCode: T ? 'کد ارز' : 'Code', dispCurName: T ? 'نام (فارسی)' : 'Name (FA)',
     dispCurNameEn: T ? 'نام (انگلیسی)' : 'Name (EN)', dispCurRate: T ? 'نرخ تبدیل' : 'Exchange rate',
-    taxT: T ? 'مالیات (VAT)' : 'Tax (VAT)', taxEnabled: T ? 'اعمال VAT در فاکتور' : 'Apply VAT on invoice',
+    taxT: T ? 'مالیات (VAT)' : 'Tax (VAT)', taxEnabled: T ? 'فعال‌سازی VAT در فروشگاه' : 'Enable VAT for this shop',
     taxRate: T ? 'درصد مالیات' : 'Tax rate (%)', taxMode: T ? 'حالت' : 'Mode',
     taxIncl: T ? 'تجمیعی (داخل قیمت) — Inclusive' : 'Inclusive (in prices)', taxExcl: T ? 'افزوده به جمع — Exclusive' : 'Exclusive (added on top)',
     taxLabelF: T ? 'عنوان مالیات (فارسی)' : 'Tax label (FA)', taxLabelEnF: T ? 'عنوان مالیات (انگلیسی)' : 'Tax label (EN)',
-    taxHint: T ? 'درصد و حالت مالیات را تنظیم کنید. با تیک «اعمال VAT» مشخص می‌کنید آیا در پیش‌فاکتور به‌صورت پیش‌فرض فعال باشد؛ مشتری می‌تواند در همان صفحه تیک را بردارد یا بزند.' : 'Set rate and mode. «Apply VAT» sets the default on the proforma; the customer can toggle it on the invoice preview.',
+    taxHint: T ? 'با خاموش کردن تیک، VAT در کل فروشگاه و پیش‌فاکتور مشتری نمایش داده نمی‌شود. درصد و حالت فقط وقتی تیک روشن است اعمال می‌شود.' : 'When unchecked, VAT is hidden everywhere for customers. Rate and mode apply only when enabled.',
     discT: T ? 'کدهای تخفیف' : 'Discount codes', discHint: T ? 'مشتری کد را در صفحه سفارش وارد می‌کند. می‌توانی کد دلخواه بنویسی یا تولید کنی، نوع درصدی/عددی، و دامنه‌ی اعمال (کل سفارش، محصولات خاص، یا دسته‌ها) را تعیین کنی.' : 'Customer enters the code at checkout. Use a custom code or generate one; percent/fixed; scope (whole order, specific products, or categories).',
     addDisc: T ? 'افزودن کد' : 'Add code', noDisc: T ? 'کد تخفیفی تعریف نشده است.' : 'No discount codes.', gen: T ? 'تولید کد' : 'Generate',
     discCode: T ? 'کد' : 'Code', discTypePercent: T ? 'درصدی (٪)' : 'Percent (%)', discTypeFixed: T ? 'عددی (مبلغ)' : 'Fixed amount', discValue: T ? 'مقدار' : 'Value',
@@ -1863,7 +1863,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             />
             <span>{t.taxEnabled}</span>
           </label>
-          <div className={`grid grid-cols-1 md:grid-cols-4 gap-3 items-end transition-opacity ${draft.taxRate ? '' : ''}`}>
+          <div className={`grid grid-cols-1 md:grid-cols-4 gap-3 items-end transition-opacity ${draft.taxEnabled !== false ? '' : 'opacity-50 pointer-events-none'}`}>
             <div><label className={lbl}>{t.taxRate}</label><input className={fld} type="number" value={draft.taxRate ?? ''} onChange={e => upd({ taxRate: parseFloat(e.target.value) || 0 })} placeholder="0" /></div>
             <div><label className={lbl}>{t.taxMode}</label><select className={fld + ' bg-white'} value={draft.taxInclusive ? 'incl' : 'excl'} onChange={e => upd({ taxInclusive: e.target.value === 'incl' })}><option value="excl">{t.taxExcl}</option><option value="incl">{t.taxIncl}</option></select></div>
             <div><label className={lbl}>{t.taxLabelF}</label><input className={fld} value={draft.taxLabel || ''} onChange={e => upd({ taxLabel: e.target.value })} placeholder={T ? 'مالیات بر ارزش افزوده' : ''} /></div>

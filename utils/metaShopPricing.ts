@@ -199,12 +199,14 @@ export function metaShopTaxAvailable(shop: Pick<MetaShop, 'taxRate'>): boolean {
   return metaShopTaxRateConfigured(shop) > 0;
 }
 
-/** Default VAT checkbox on proforma — legacy shops with a rate stay enabled. */
-export function metaShopTaxDefaultOn(shop: Pick<MetaShop, 'taxEnabled' | 'taxRate'>): boolean {
-  if (!metaShopTaxAvailable(shop)) return false;
+/** Whether VAT is active for this shop (admin toggle; no customer override). */
+export function metaShopTaxActive(shop: Pick<MetaShop, 'taxEnabled' | 'taxRate'>): boolean {
   if (shop.taxEnabled === false) return false;
-  return true;
+  return metaShopTaxAvailable(shop);
 }
+
+/** @deprecated use metaShopTaxActive */
+export const metaShopTaxDefaultOn = metaShopTaxActive;
 
 export function computeMetaShopTax(
   amountBeforeTax: number,

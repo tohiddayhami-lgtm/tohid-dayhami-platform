@@ -9,7 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
-import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxAvailable, metaShopTaxDefaultOn, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
+import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxActive, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
@@ -200,8 +200,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
-  const [includeVat, setIncludeVat] = useState(() => metaShopTaxDefaultOn(shop));
-  useEffect(() => { setIncludeVat(metaShopTaxDefaultOn(shop)); }, [shop.id, shop.taxEnabled, shop.taxRate]);
   useEffect(() => { setGalIdx(0); }, [detail]);
   useEffect(() => {
     if (!detail) return;
@@ -761,8 +759,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   // ── Tax (inclusive or exclusive, optional on invoice) ──
   const taxRate = metaShopTaxRateConfigured(shop);
   const taxInclusive = !!shop.taxInclusive;
+  const taxActive = metaShopTaxActive(shop);
   const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
-  const { taxAmount, finalTotal } = computeMetaShopTax(taxBase, shop, includeVat);
+  const { taxAmount, finalTotal } = computeMetaShopTax(taxBase, shop, taxActive);
 
   const applyDiscount = () => {
     const code = discountInput.trim();
@@ -974,9 +973,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        taxRate: includeVat && taxRate > 0 ? taxRate : undefined,
-        taxAmount: includeVat && taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
-        taxInclusive: includeVat && taxRate > 0 ? taxInclusive : undefined,
+        taxRate: taxActive && taxRate > 0 ? taxRate : undefined,
+        taxAmount: taxActive && taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
+        taxInclusive: taxActive && taxRate > 0 ? taxInclusive : undefined,
         total: finalTotal, currency: shop.currency,
       });
       setTracking(code);
@@ -1846,7 +1845,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                     })}
                   </tbody>
                 </table>
-                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || metaShopTaxAvailable(shop)) ? (
+                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxActive) ? (
                   <>
                     <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal, displayCur)}</b></div>
                     {(shop.discounts || []).length > 0 && (
@@ -1892,19 +1891,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                   </>
                 ) : null}
                 {!multiCur && discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount, displayCur)}</span></div>}
-                {!multiCur && metaShopTaxAvailable(shop) && (
-                  <label className="ms-inv-tax ms-inv-tax-toggle">
-                    <span className="ms-fee-left">
-                      <input type="checkbox" checked={includeVat} onChange={e => setIncludeVat(e.target.checked)} />
-                      <span>
-                        {t.applyVat} — {(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%
-                        {taxInclusive ? ` · ${t.taxIncl}` : ''})
-                      </span>
-                    </span>
-                    {includeVat && (
-                      <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
-                    )}
-                  </label>
+                {!multiCur && taxActive && (
+                  <div className="ms-inv-tax">
+                    <span>{(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%{taxInclusive ? ` · ${t.taxIncl}` : ''})</span>
+                    <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
+                  </div>
                 )}
                 <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? negLabel() : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {negLabel()}</span>}</b></div>
                 {shop.showInvoiceHint !== false && <p className="ms-inv-hint">{t.invHint}</p>}
@@ -2422,8 +2413,6 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-disc-err { color:#ef4444; font-size:11px; margin-top:5px; }
 .ms-inv-discount { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#047857; font-weight:700; }
 .ms-inv-tax { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#64748b; }
-.ms-inv-tax-toggle { cursor:pointer; gap:10px; flex-wrap:wrap; }
-.ms-inv-tax-toggle .ms-fee-left { display:flex; align-items:center; gap:8px; }
 .ms-inv-total { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:2px solid var(--ms-primary); font-size:15px; font-weight:800; color:#0f172a; }
 .ms-inv-hint { font-size:10px; color:#94a3b8; margin-top:8px; line-height:1.4; }
 /* track link */
