@@ -208,6 +208,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     extraFees: raw.extraFees?.length ? raw.extraFees : undefined,
     discounts: raw.discounts?.length ? raw.discounts : undefined,
     taxRate: raw.taxRate || undefined,
+    taxEnabled: raw.taxEnabled === false ? false : raw.taxEnabled === true ? true : undefined,
     taxInclusive: raw.taxInclusive,
     taxLabel: raw.taxLabel,
     taxLabelEn: raw.taxLabelEn,

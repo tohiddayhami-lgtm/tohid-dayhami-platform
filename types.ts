@@ -1394,6 +1394,7 @@ export interface MetaShop {
   extraFees?: MetaShopFee[]; // predefined checkout fees (shipping, packaging, ...)
   discounts?: MetaShopDiscount[]; // discount codes
   taxRate?: number;          // VAT/tax percentage (0 or undefined = no tax)
+  taxEnabled?: boolean;      // default VAT on proforma invoice (false = unchecked by default)
   taxInclusive?: boolean;    // true = tax already included in prices; false = added on top
   taxLabel?: string;         // e.g. "مالیات بر ارزش افزوده"
   taxLabelEn?: string;       // e.g. "VAT"

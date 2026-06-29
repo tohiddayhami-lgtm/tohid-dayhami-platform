@@ -189,3 +189,37 @@ export function promoLabelText(
 }
 
 export const PROMO_LABEL_PRESETS_FA = ['عرض خاص', 'پیشنهاد ویژه', 'Best offer', 'Hot deal', 'Limited offer'] as const;
+
+export function metaShopTaxRateConfigured(shop: Pick<MetaShop, 'taxRate'>): number {
+  const rate = shop.taxRate || 0;
+  return rate > 0 ? rate : 0;
+}
+
+export function metaShopTaxAvailable(shop: Pick<MetaShop, 'taxRate'>): boolean {
+  return metaShopTaxRateConfigured(shop) > 0;
+}
+
+/** Default VAT checkbox on proforma — legacy shops with a rate stay enabled. */
+export function metaShopTaxDefaultOn(shop: Pick<MetaShop, 'taxEnabled' | 'taxRate'>): boolean {
+  if (!metaShopTaxAvailable(shop)) return false;
+  if (shop.taxEnabled === false) return false;
+  return true;
+}
+
+export function computeMetaShopTax(
+  amountBeforeTax: number,
+  shop: Pick<MetaShop, 'taxRate' | 'taxInclusive'>,
+  includeTax: boolean,
+): { taxAmount: number; finalTotal: number } {
+  const base = Math.max(0, amountBeforeTax);
+  const rate = shop.taxRate || 0;
+  const taxInclusive = !!shop.taxInclusive;
+  if (!includeTax || rate <= 0) {
+    return { taxAmount: 0, finalTotal: base };
+  }
+  const taxAmount = taxInclusive
+    ? base - base / (1 + rate / 100)
+    : base * rate / 100;
+  const finalTotal = taxInclusive ? base : base + taxAmount;
+  return { taxAmount, finalTotal };
+}

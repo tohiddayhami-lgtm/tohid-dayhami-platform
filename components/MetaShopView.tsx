@@ -9,7 +9,7 @@ import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, transl
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
-import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice } from '../utils/metaShopPricing';
+import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxAvailable, metaShopTaxDefaultOn, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
@@ -200,6 +200,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
+  const [includeVat, setIncludeVat] = useState(() => metaShopTaxDefaultOn(shop));
+  useEffect(() => { setIncludeVat(metaShopTaxDefaultOn(shop)); }, [shop.id, shop.taxEnabled, shop.taxRate]);
   useEffect(() => { setGalIdx(0); }, [detail]);
   useEffect(() => {
     if (!detail) return;
@@ -304,7 +306,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       confirm: 'Confirm & submit order', tabProducts: 'Product List', tabServices: 'Services', subtotalLabel: 'Items subtotal',
       feesLabel: 'Additional fees', optionalFee: '(optional)', discountTitle: 'Discount code', discountPh: 'Enter discount code', apply: 'Apply',
       shipFree: 'Free', shipContact: 'Contact us', currency: 'Currency',
-      discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
+      discountLine: 'Discount', taxIncl: 'incl. tax', taxExcl: 'Tax', applyVat: 'Apply VAT', footPhone: 'Phone:', footEmail: 'Email:', footWebsite: 'Website:',
       catalog: 'PDF Catalog', downloadCatalog: 'Download PDF Catalog',
       addProperty: 'Request viewing', tabRealEstate: 'Properties', monthlyRent: 'Monthly rent', deposit: 'Deposit',
       specs: 'Specifications', faqTitle: 'FAQ', viewMap: 'View on map', virtualTour: 'Virtual tour', forSale: 'For sale',
@@ -353,7 +355,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       confirm: 'ثبت نهایی سفارش', tabProducts: 'محصولات', tabServices: 'خدمات', subtotalLabel: 'جمع اقلام',
       feesLabel: 'هزینه‌های اضافی', optionalFee: '(اختیاری)', discountTitle: 'کد تخفیف', discountPh: 'کد تخفیف را وارد کنید', apply: 'اعمال',
       shipFree: 'رایگان', shipContact: 'تماس بگیرید', currency: 'ارز',
-      discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
+      discountLine: 'تخفیف', taxIncl: 'شامل مالیات', taxExcl: 'مالیات', applyVat: 'اعمال مالیات (VAT)', footPhone: 'تلفن:', footEmail: 'ایمیل:', footWebsite: 'وب‌سایت:',
       catalog: 'کاتالوگ PDF', downloadCatalog: 'دانلود کاتالوگ PDF',
       addProperty: 'درخواست بازدید', tabRealEstate: 'املاک', monthlyRent: 'اجاره ماهانه', deposit: 'ودیعه',
       specs: 'مشخصات ملک', faqTitle: 'سوالات متداول', viewMap: 'مشاهده روی نقشه', virtualTour: 'تور مجازی', forSale: 'فروش',
@@ -756,12 +758,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     return Math.round(raw * 100) / 100;
   };
   const discountAmount = computeDiscount(appliedDiscount);
-  // ── Tax (inclusive or exclusive) ──
-  const taxRate = shop.taxRate || 0;
-  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
+  // ── Tax (inclusive or exclusive, optional on invoice) ──
+  const taxRate = metaShopTaxRateConfigured(shop);
   const taxInclusive = !!shop.taxInclusive;
-  const taxAmount = taxRate > 0 ? (taxInclusive ? taxBase - taxBase / (1 + taxRate / 100) : taxBase * taxRate / 100) : 0;
-  const finalTotal = taxInclusive ? taxBase : taxBase + taxAmount;
+  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
+  const { taxAmount, finalTotal } = computeMetaShopTax(taxBase, shop, includeVat);
 
   const applyDiscount = () => {
     const code = discountInput.trim();
@@ -973,9 +974,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        taxRate: taxRate > 0 ? taxRate : undefined,
-        taxAmount: taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
-        taxInclusive: taxRate > 0 ? taxInclusive : undefined,
+        taxRate: includeVat && taxRate > 0 ? taxRate : undefined,
+        taxAmount: includeVat && taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
+        taxInclusive: includeVat && taxRate > 0 ? taxInclusive : undefined,
         total: finalTotal, currency: shop.currency,
       });
       setTracking(code);
@@ -1845,7 +1846,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                     })}
                   </tbody>
                 </table>
-                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || taxRate > 0) ? (
+                {!multiCur && (shopFees.length > 0 || (shop.discounts || []).length > 0 || metaShopTaxAvailable(shop)) ? (
                   <>
                     <div className="ms-inv-subtotal"><span>{t.subtotalLabel}</span><b>{money(grandTotal, displayCur)}</b></div>
                     {(shop.discounts || []).length > 0 && (
@@ -1891,11 +1892,19 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                   </>
                 ) : null}
                 {!multiCur && discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount, displayCur)}</span></div>}
-                {!multiCur && taxRate > 0 && (
-                  <div className="ms-inv-tax">
-                    <span>{(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%{taxInclusive ? ` · ${t.taxIncl}` : ''})</span>
-                    <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
-                  </div>
+                {!multiCur && metaShopTaxAvailable(shop) && (
+                  <label className="ms-inv-tax ms-inv-tax-toggle">
+                    <span className="ms-fee-left">
+                      <input type="checkbox" checked={includeVat} onChange={e => setIncludeVat(e.target.checked)} />
+                      <span>
+                        {t.applyVat} — {(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%
+                        {taxInclusive ? ` · ${t.taxIncl}` : ''})
+                      </span>
+                    </span>
+                    {includeVat && (
+                      <span>{taxInclusive ? '' : '+ '}{money(taxAmount, displayCur)}</span>
+                    )}
+                  </label>
                 )}
                 <div className="ms-inv-total"><span>{t.total}</span><b>{allHidden ? negLabel() : (multiCur ? fmtTotals() : money(finalTotal, displayCur))}{!allHidden && anyHidden && <span className="ms-some-neg"> + {negLabel()}</span>}</b></div>
                 {shop.showInvoiceHint !== false && <p className="ms-inv-hint">{t.invHint}</p>}
@@ -2413,6 +2422,8 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-disc-err { color:#ef4444; font-size:11px; margin-top:5px; }
 .ms-inv-discount { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#047857; font-weight:700; }
 .ms-inv-tax { display:flex; justify-content:space-between; align-items:center; padding-top:6px; font-size:12px; color:#64748b; }
+.ms-inv-tax-toggle { cursor:pointer; gap:10px; flex-wrap:wrap; }
+.ms-inv-tax-toggle .ms-fee-left { display:flex; align-items:center; gap:8px; }
 .ms-inv-total { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:2px solid var(--ms-primary); font-size:15px; font-weight:800; color:#0f172a; }
 .ms-inv-hint { font-size:10px; color:#94a3b8; margin-top:8px; line-height:1.4; }
 /* track link */
