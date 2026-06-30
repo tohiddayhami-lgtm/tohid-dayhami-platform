@@ -6,7 +6,7 @@ import type {
   MetaShopPage,
   MetaShopProductRef,
 } from '../types';
-import { META_SHOP_CHUNK_MAX_BYTES } from './metaShopChunks';
+import { META_SHOP_CHUNK_MAX_BYTES, metaShopRefChunkDocBytes } from './metaShopChunks';
 
 export const META_SHOP_EXTRAS_COL = 'metaShopExtras';
 export const META_SHOP_REF_CHUNKS_COL = 'metaShopRefChunks';
@@ -50,8 +50,8 @@ type BulkyKey = (typeof BULKY_KEYS)[number];
 
 const payloadBytes = (obj: unknown) => new TextEncoder().encode(JSON.stringify(obj)).length;
 
-const refChunkBytes = (refs: MetaShopProductRef[]) =>
-  payloadBytes({ refs });
+const refChunkBytes = (shopId: string, chunkIndex: number, refs: MetaShopProductRef[]) =>
+  metaShopRefChunkDocBytes(shopId, chunkIndex, refs);
 
 /** Split lightweight product refs into Firestore-sized chunks. */
 export function splitProductRefsIntoChunks(shopId: string, refs: MetaShopProductRef[]): MetaShopRefChunk[] {
@@ -68,10 +68,8 @@ export function splitProductRefsIntoChunks(shopId: string, refs: MetaShopProduct
   };
 
   for (const ref of refs) {
-    const next = [...batch, ref];
-    if (batch.length > 0 && refChunkBytes(next) > META_SHOP_CHUNK_MAX_BYTES) flush();
+    if (batch.length > 0 && refChunkBytes(shopId, chunkIndex, [...batch, ref]) > META_SHOP_CHUNK_MAX_BYTES) flush();
     batch.push(ref);
-    if (refChunkBytes(batch) > META_SHOP_CHUNK_MAX_BYTES) flush();
   }
   flush();
   return chunks;

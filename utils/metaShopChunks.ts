@@ -1,8 +1,11 @@
 import type { MetaShop, MetaShopProduct, MetaShopProductRef } from '../types';
 import { META_SHOP_FIRESTORE_MAX_BYTES } from './metaShopNormalize';
 
-/** Per-chunk payload budget (Firestore doc max is 1 MiB). */
-export const META_SHOP_CHUNK_MAX_BYTES = 950_000;
+/**
+ * Target size for a full chunk document (id + shopId + chunkIndex + products).
+ * Firestore hard limit is 1 MiB; JSON UTF-8 underestimates protobuf encoding (~10%).
+ */
+export const META_SHOP_CHUNK_MAX_BYTES = 780_000;
 
 export interface MetaShopProductChunk {
   id: string;
@@ -11,28 +14,66 @@ export interface MetaShopProductChunk {
   products: MetaShopProduct[];
 }
 
-const chunkPayloadBytes = (products: MetaShopProduct[]) =>
-  new TextEncoder().encode(JSON.stringify({ products })).length;
+const payloadBytes = (obj: unknown) => new TextEncoder().encode(JSON.stringify(obj)).length;
 
-/** Split products into Firestore-sized chunks. */
+export const metaShopProductChunkDocBytes = (
+  shopId: string,
+  chunkIndex: number,
+  products: MetaShopProduct[],
+): number =>
+  payloadBytes({
+    id: `${shopId}_${chunkIndex}`,
+    shopId,
+    chunkIndex,
+    products,
+  });
+
+export const metaShopRefChunkDocBytes = (
+  shopId: string,
+  chunkIndex: number,
+  refs: MetaShopProductRef[],
+): number =>
+  payloadBytes({
+    id: `${shopId}_ref_${chunkIndex}`,
+    shopId,
+    chunkIndex,
+    refs,
+  });
+
+/** Split products into Firestore-sized chunks (measures the full chunk document). */
 export function splitProductsIntoChunks(shopId: string, products: MetaShopProduct[]): MetaShopProductChunk[] {
   if (!products.length) return [];
   const chunks: MetaShopProductChunk[] = [];
   let batch: MetaShopProduct[] = [];
   let chunkIndex = 0;
 
+  const batchBytes = () => metaShopProductChunkDocBytes(shopId, chunkIndex, batch);
+
   const flush = () => {
     if (!batch.length) return;
+    if (batchBytes() > META_SHOP_FIRESTORE_MAX_BYTES) {
+      const sample = batch[0];
+      throw new Error(
+        `محصول «${sample?.name || sample?.id || '?'}» برای ذخیره در Firebase بیش از حد بزرگ است. ` +
+        'توضیحات را کوتاه کنید یا فیلدهای تکراری import را حذف کنید.',
+      );
+    }
     chunks.push({ id: `${shopId}_${chunkIndex}`, shopId, chunkIndex, products: batch });
     chunkIndex += 1;
     batch = [];
   };
 
   for (const p of products) {
-    const next = [...batch, p];
-    if (batch.length > 0 && chunkPayloadBytes(next) > META_SHOP_CHUNK_MAX_BYTES) flush();
+    const soloBytes = metaShopProductChunkDocBytes(shopId, chunkIndex, [p]);
+    if (soloBytes > META_SHOP_FIRESTORE_MAX_BYTES) {
+      throw new Error(
+        `محصول «${p.name || p.id}» به‌تنهایی بزرگ‌تر از حد Firebase (۱ مگابایت) است. توضیحات یا i18n آن را کوتاه کنید.`,
+      );
+    }
+    if (batch.length > 0 && metaShopProductChunkDocBytes(shopId, chunkIndex, [...batch, p]) > META_SHOP_CHUNK_MAX_BYTES) {
+      flush();
+    }
     batch.push(p);
-    if (chunkPayloadBytes(batch) > META_SHOP_CHUNK_MAX_BYTES) flush();
   }
   flush();
   return chunks;

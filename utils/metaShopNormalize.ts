@@ -144,6 +144,9 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
   if (p.nameAr && !i18n.ar?.name) { i18n.ar = { ...(i18n.ar || {}), name: String(p.nameAr) }; }
   if (p.descriptionAr && !i18n.ar?.description) { i18n.ar = { ...(i18n.ar || {}), description: String(p.descriptionAr) }; }
   if (p.groupAr && !i18n.ar?.group) { i18n.ar = { ...(i18n.ar || {}), group: String(p.groupAr) }; }
+  if (p.nameEn && !i18n.en?.name) { i18n.en = { ...(i18n.en || {}), name: String(p.nameEn) }; }
+  if (p.descriptionEn && !i18n.en?.description) { i18n.en = { ...(i18n.en || {}), description: String(p.descriptionEn) }; }
+  if (p.groupEn && !i18n.en?.group) { i18n.en = { ...(i18n.en || {}), group: String(p.groupEn) }; }
 
   const price = Number(p.price) || 0;
   const packPrice = Number(p.packPrice) || 0;
@@ -181,7 +184,7 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     discountType: p.discountType === 'percent' || p.discountType === 'amount' ? p.discountType : undefined,
     discountValue: p.discountValue != null ? Number(p.discountValue) : undefined,
     origin: normalizeOrigin(p.origin),
-    i18n: Object.keys(i18n).length ? i18n : undefined,
+    i18n: undefined,
     priceOptions: p.priceOptions?.length
       ? p.priceOptions.map(o => ({
           id: String(o.id),
@@ -206,6 +209,13 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     realEstate: p.realEstate,
     searchKeywords: p.searchKeywords,
   };
+  if (i18n.fa) {
+    if (i18n.fa.name === out.name) delete i18n.fa.name;
+    if (i18n.fa.description === out.description) delete i18n.fa.description;
+    if (i18n.fa.group === out.group) delete i18n.fa.group;
+    if (!Object.keys(i18n.fa).length) delete i18n.fa;
+  }
+  out.i18n = Object.keys(i18n).length ? i18n : undefined;
   return out;
 };
 
