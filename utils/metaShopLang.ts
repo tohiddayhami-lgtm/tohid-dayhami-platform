@@ -48,18 +48,26 @@ export const legacyBilingual = (uiLang: string, faVal?: string, enVal?: string) 
   return enVal || faVal || '';
 };
 
-/** Per-item `i18n[lang][key]` with en → fa fallbacks for missing translations */
+/** Per-item `i18n[lang][key]` with sensible fallbacks (fa legacy before en i18n). */
 export const translateField = (
   i18n: Record<string, Record<string, string>> | undefined,
   key: string,
   legacy: string,
   uiLang: string,
 ) => {
-  if (i18n?.[uiLang]?.[key]) return i18n[uiLang][key];
-  if (uiLang !== 'en' && i18n?.en?.[key]) return i18n.en[key];
-  if (uiLang !== 'fa' && uiLang !== 'en' && i18n?.fa?.[key]) return i18n.fa[key];
-  if (uiLang === 'en') return legacyBilingual('en', legacy, '') || legacy;
-  return legacy || '';
+  const pick = (s?: string) => (s?.trim() ? s : '');
+  const fromUi = pick(i18n?.[uiLang]?.[key]);
+  if (fromUi) return fromUi;
+
+  // Persian UI: top-level legacy field is usually FA — use it before English i18n
+  if (uiLang === 'fa') {
+    return pick(legacy) || pick(i18n?.en?.[key]) || '';
+  }
+  if (uiLang === 'en') {
+    return pick(i18n?.en?.[key]) || pick(legacy) || pick(i18n?.fa?.[key]) || '';
+  }
+  // ar, zh, … — prefer FA default content over English
+  return pick(i18n?.fa?.[key]) || pick(legacy) || pick(i18n?.en?.[key]) || '';
 };
 
 /** Label when price is hidden — product override, then shop i18n, then built-in «negotiable». */
