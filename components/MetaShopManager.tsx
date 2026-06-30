@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent, CustomerAccount } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, type MetaShopSaveOptions } from '../services/firebaseService';
+import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, enrichMetaShopShell, type MetaShopSaveOptions } from '../services/firebaseService';
 import { shopNeedsProductHydration } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -348,6 +348,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     discMin: T ? 'حداقل مبلغ سفارش (اختیاری)' : 'Min order (optional)', selectProducts: T ? 'محصولات مشمول:' : 'Eligible products:', selectCats: T ? 'دسته‌های مشمول:' : 'Eligible categories:',
     primary: T ? 'رنگ اصلی' : 'Primary', coverC: T ? 'رنگ کاور' : 'Cover', coverText: T ? 'متن کاور' : 'Cover text', bg: T ? 'پس‌زمینه' : 'Background',
     collection: T ? 'متن بالای عنوان' : 'Collection text', heroTitle: T ? 'عنوان اصلی' : 'Title', heroSub: T ? 'زیرعنوان' : 'Subtitle',
+    coverI18n: T ? 'عنوان و متون کاور به زبان‌های دیگر' : 'Cover texts — other languages',
+    coverI18nHint: T ? 'ترجمه‌های واردشده از JSON اینجا نمایش داده می‌شوند. فارسی را در فیلدهای بالا ویرایش کنید.' : 'Translations from JSON import appear here. Edit Persian in the fields above.',
     coverImg: T ? 'تصویر کاور (پس‌زمینه)' : 'Cover image (background)', logo: T ? 'لوگو' : 'Logo', upload: T ? 'آپلود' : 'Upload', uploading: T ? 'در حال آپلود...' : 'Uploading...',
     orLink: T ? 'یا لینک تصویر' : 'or image URL', addLink: T ? 'افزودن لینک' : 'Add URL', imgUrlPh: T ? 'https://...  (لینک عکس)' : 'https://...  (image URL)',
     phone: T ? 'تلفن (پیش‌فرض همه ملک‌ها)' : 'Phone (default for all properties)',
@@ -553,15 +555,21 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     setProductsFullyLoaded(!shopNeedsProductHydration(s));
     setMode('editor');
     setDraft({ ...s, products: [...(s.products || [])] });
+    const shopId = s.id;
+    enrichMetaShopShell(s).then(shell => {
+      setDraft(d => (d && d.id === shopId ? { ...d, ...shell, products: d.products } : d));
+    }).catch(() => {});
     if (!shopNeedsProductHydration(s)) return;
     setProductsLoading(true);
-    const shopId = s.id;
     hydrateMetaShopProgressive(s, (products, loaded, total) => {
       setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
       if (loaded >= 1) setProductsLoading(false);
       setProductsSyncing(loaded < total);
     })
-      .then(() => setProductsFullyLoaded(true))
+      .then(full => {
+        setDraft(d => (d && d.id === shopId ? { ...d, ...full, products: full.products } : d));
+        setProductsFullyLoaded(true);
+      })
       .catch(() => {
         setProductsLoading(false);
         setProductsSyncing(false);
@@ -832,6 +840,33 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const defaultInvoiceHintPh = T
     ? 'این یک پیش‌فاکتور است؛ مبلغ نهایی پس از بررسی تأیید می‌شود.'
     : 'This is a proforma preview; the final amount is confirmed after review.';
+
+  type CoverI18nField = 'title' | 'subtitle' | 'collectionText' | 'cartButtonText' | 'orderThankYouText';
+  const coverLangField = (code: string, field: CoverI18nField): string => {
+    const fromI18n = draft?.i18n?.[code]?.[field];
+    if (fromI18n != null && fromI18n !== '') return fromI18n;
+    if (code === 'fa') {
+      if (field === 'title') return draft?.title || '';
+      if (field === 'subtitle') return draft?.subtitle || '';
+      if (field === 'collectionText') return draft?.collectionText || '';
+      if (field === 'cartButtonText') return draft?.cartButtonText || '';
+      if (field === 'orderThankYouText') return draft?.orderThankYouText || '';
+    }
+    return '';
+  };
+  const setCoverLangField = (code: string, field: CoverI18nField, val: string) => {
+    const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
+    i18n[code] = { ...(i18n[code] || {}), [field]: val };
+    const patch: Partial<MetaShop> = { i18n };
+    if (code === 'fa') {
+      if (field === 'title') patch.title = val;
+      else if (field === 'subtitle') patch.subtitle = val;
+      else if (field === 'collectionText') patch.collectionText = val;
+      else if (field === 'cartButtonText') patch.cartButtonText = val;
+      else if (field === 'orderThankYouText') patch.orderThankYouText = val;
+    }
+    upd(patch);
+  };
 
   const doImport = () => {
     try { const shop = importFromJson(importText, blankShop()); if (!shop.code) shop.code = uniqueShopCode(metaShops); setDraft(shop); setImportOpen(false); setImportText(''); setMode('editor'); }
@@ -1643,6 +1678,24 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <div><label className={lbl}>{t.collection}</label><input className={fld} value={draft.collectionText || ''} onChange={e => upd({ collectionText: e.target.value })} /></div>
           <div><label className={lbl}>{t.heroTitle}</label><input className={fld} value={draft.title || ''} onChange={e => upd({ title: e.target.value })} /></div>
           <div className="md:col-span-2"><label className={lbl}>{t.heroSub}</label><input className={fld} value={draft.subtitle || ''} onChange={e => upd({ subtitle: e.target.value })} /></div>
+          {pageEditorLangs().length > 0 && (
+            <div className="md:col-span-2 p-3 rounded-xl bg-emerald-50/60 border border-emerald-100">
+              <h5 className="text-sm font-bold text-gray-700 mb-1">{t.coverI18n}</h5>
+              <p className="text-xs text-gray-500 mb-3">{t.coverI18nHint}</p>
+              <div className="space-y-4">
+                {pageEditorLangs().map(lg => (
+                  <div key={lg.code} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-xl bg-white/80 border border-emerald-100/80">
+                    <div className="md:col-span-2 text-xs font-bold text-emerald-800">{lg.name || lg.code}</div>
+                    <div><label className={lbl}>{t.collection}</label><input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={coverLangField(lg.code, 'collectionText')} onChange={e => setCoverLangField(lg.code, 'collectionText', e.target.value)} /></div>
+                    <div><label className={lbl}>{t.heroTitle}</label><input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={coverLangField(lg.code, 'title')} onChange={e => setCoverLangField(lg.code, 'title', e.target.value)} /></div>
+                    <div className="md:col-span-2"><label className={lbl}>{t.heroSub}</label><input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={coverLangField(lg.code, 'subtitle')} onChange={e => setCoverLangField(lg.code, 'subtitle', e.target.value)} /></div>
+                    <div><label className={lbl}>{t.cartBtn}</label><input className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={coverLangField(lg.code, 'cartButtonText')} onChange={e => setCoverLangField(lg.code, 'cartButtonText', e.target.value)} /></div>
+                    <div className="md:col-span-2"><label className={lbl}>{t.thanksTxt}</label><textarea rows={2} className={fld + (!isRtlLang(lg.code, langOptions()) ? ' dir-ltr' : '')} value={coverLangField(lg.code, 'orderThankYouText')} onChange={e => setCoverLangField(lg.code, 'orderThankYouText', e.target.value)} /></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div><label className={lbl}>{t.coverImg}</label>
             <div className="flex items-center gap-2 mb-2">
               {draft.coverImage && <img src={draft.coverImage} className="w-14 h-10 object-cover rounded border" />}

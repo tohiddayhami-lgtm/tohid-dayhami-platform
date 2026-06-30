@@ -14,6 +14,110 @@ const stripSuffixFields = (obj: Record<string, unknown>, baseKeys: string[]) => 
   }
 };
 
+/** Merge flat `fieldFa` / `fieldAr` / `fieldEn` into i18n (import JSON compatibility). */
+const mergeRecordI18nSuffixes = (
+  i18n: Record<string, Record<string, string>>,
+  raw: Record<string, unknown>,
+  fields: readonly string[],
+): Record<string, Record<string, string>> => {
+  const out: Record<string, Record<string, string>> = { ...i18n };
+  for (const field of fields) {
+    for (const [lang, suffix] of [['fa', 'Fa'], ['ar', 'Ar'], ['en', 'En']] as const) {
+      const val = raw[`${field}${suffix}`] as string | undefined;
+      if (val?.trim()) {
+        out[lang] = { ...(out[lang] || {}), [field]: val.trim() };
+      }
+    }
+  }
+  return out;
+};
+
+const PAGE_I18N_FIELDS = ['label', 'body', 'description'] as const;
+const CARD_I18N_FIELDS = ['name', 'desc'] as const;
+
+const tabToPageId = (tab: Record<string, unknown>): string => {
+  const id = String(tab.id || '').trim();
+  if (id.startsWith('tab-')) return id.replace(/^tab-/, 'pg-');
+  if (id.startsWith('pg-')) return id;
+  const key = String(tab.pageKey || tab.slug || '').trim();
+  if (key) return `pg-${key.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')}`;
+  return `pg-${Date.now()}`;
+};
+
+const PAGE_KEY_ALIASES: Record<string, string[]> = {
+  aboutUs: ['pg-about', 'about'],
+  about: ['pg-about', 'about'],
+  gallery: ['pg-gallery', 'gallery'],
+  contactUs: ['pg-contact', 'contact'],
+  contact: ['pg-contact', 'contact'],
+  certificates: ['pg-certificates', 'certificates'],
+};
+
+const pageMatchesTab = (pg: MetaShopPage, tab: Record<string, unknown>): boolean => {
+  const tabId = tabToPageId(tab);
+  const rawTabId = String(tab.id || '').trim();
+  if (pg.id === tab.id || pg.id === tabId || pg.id === rawTabId.replace(/^tab-/, 'pg-')) return true;
+  const key = String(tab.pageKey || '').trim();
+  if (key) {
+    const aliases = PAGE_KEY_ALIASES[key] || [];
+    if (aliases.some(a => pg.id === a || pg.id.includes(a.replace(/^pg-/, '')))) return true;
+    const normalized = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+    if (pg.id === `pg-${key}` || pg.id === `pg-${normalized}`) return true;
+  }
+  const slug = String(tab.slug || '').trim();
+  if (slug && (pg.id === `pg-${slug}` || pg.id.replace(/^pg-/, '').startsWith(slug.split('-')[0]))) return true;
+  return false;
+};
+
+const SHOP_TAB_LABEL_TO_PAGE_IDS: Record<string, string[]> = {
+  aboutUsTabLabel: ['pg-about', 'pg-about-us'],
+  galleryTabLabel: ['pg-gallery', 'pg-photo-gallery'],
+  contactUsTabLabel: ['pg-contact', 'pg-contact-us'],
+  certificatesTabLabel: ['pg-certificates'],
+};
+
+const applyShopTabLabelsToPages = (
+  raw: Record<string, unknown>,
+  pages: MetaShopPage[],
+): MetaShopPage[] => {
+  if (!pages.length) return pages;
+  return pages.map(pg => {
+    for (const [key, ids] of Object.entries(SHOP_TAB_LABEL_TO_PAGE_IDS)) {
+      if (!ids.some(id => pg.id === id || pg.id.startsWith(id))) continue;
+      const labelI18n: Record<string, Record<string, string>> = { ...(pg.i18n || {}) };
+      for (const lang of ['fa', 'ar', 'en'] as const) {
+        const suffix = lang === 'fa' ? 'Fa' : lang === 'ar' ? 'Ar' : 'En';
+        const val = (raw[`${key}${suffix}`] as string | undefined)?.trim();
+        if (val) labelI18n[lang] = { ...(labelI18n[lang] || {}), label: val };
+      }
+      return { ...pg, i18n: labelI18n };
+    }
+    return pg;
+  });
+};
+
+const applyProductsTabFromTabs = (
+  raw: Record<string, unknown>,
+  i18n: Record<string, Record<string, string>>,
+): Record<string, Record<string, string>> => {
+  const tabs = raw.tabs;
+  if (!Array.isArray(tabs)) return i18n;
+  const pt = tabs.find((t: unknown) => {
+    const x = t as Record<string, unknown>;
+    return x?.type === 'products' || x?.pageKey === 'products';
+  }) as Record<string, unknown> | undefined;
+  if (!pt) return i18n;
+  const out = { ...i18n };
+  const merged = mergeRecordI18nSuffixes(out, pt, ['label']);
+  for (const lang of ['fa', 'ar', 'en'] as const) {
+    const label = merged[lang]?.label;
+    if (label) {
+      out[lang] = { ...(out[lang] || {}), productsTabLabel: label };
+    }
+  }
+  return out;
+};
+
 const normalizeOrigin = (origin: unknown) => {
   if (!origin || typeof origin !== 'object') return undefined;
   const o = origin as Record<string, string>;
@@ -118,9 +222,7 @@ const normalizeCategory = (c: unknown): string | { fa?: string; en?: string; ar?
 };
 
 const normalizePageCard = (c: MetaShopPageCard & Record<string, unknown>): MetaShopPageCard => {
-  const i18n = { ...(c.i18n || {}) };
-  if (!i18n.fa?.name && (c.name || c.nameFa)) i18n.fa = { ...(i18n.fa || {}), name: String(c.nameFa || c.name) };
-  if (!i18n.fa?.desc && (c.desc || c.descFa)) i18n.fa = { ...(i18n.fa || {}), desc: String(c.descFa || c.desc) };
+  const i18n = mergeRecordI18nSuffixes({ ...(c.i18n || {}) }, c, CARD_I18N_FIELDS);
   const image = isStorableImageUrl(c.image) ? c.image : undefined;
   return {
     id: String(c.id || `c-${Date.now()}`),
@@ -132,10 +234,7 @@ const normalizePageCard = (c: MetaShopPageCard & Record<string, unknown>): MetaS
 };
 
 const normalizePage = (pg: MetaShopPage & Record<string, unknown>): MetaShopPage => {
-  const i18n = { ...(pg.i18n || {}) };
-  if (!i18n.fa?.label && (pg.label || pg.labelFa)) i18n.fa = { ...(i18n.fa || {}), label: String(pg.labelFa || pg.label) };
-  if (!i18n.fa?.body && (pg.body || pg.bodyFa)) i18n.fa = { ...(i18n.fa || {}), body: String(pg.bodyFa || pg.body) };
-  if (!i18n.fa?.description && (pg.description || pg.descriptionFa)) i18n.fa = { ...(i18n.fa || {}), description: String(pg.descriptionFa || pg.description) };
+  const i18n = mergeRecordI18nSuffixes({ ...(pg.i18n || {}) }, pg, PAGE_I18N_FIELDS);
   return {
     id: String(pg.id || `pg-${Date.now()}`),
     label: String(pg.label || pg.labelFa || i18n.fa?.label || 'Page'),
@@ -151,6 +250,52 @@ const normalizePage = (pg: MetaShopPage & Record<string, unknown>): MetaShopPage
   };
 };
 
+/** Build / merge pages from native `pages[]` and optional `tabs[]` in import JSON. */
+const importPagesFromJson = (raw: Record<string, unknown>): MetaShopPage[] | undefined => {
+  let pages: MetaShopPage[] = Array.isArray(raw.pages)
+    ? raw.pages.map(p => normalizePage(p as MetaShopPage & Record<string, unknown>))
+    : [];
+
+  const tabs = raw.tabs;
+  if (Array.isArray(tabs) && tabs.length) {
+    const orderOf = new Map<string, number>();
+    for (const tab of tabs) {
+      if (!tab || typeof tab !== 'object') continue;
+      const t = tab as Record<string, unknown>;
+      if (t.type === 'products' || t.pageKey === 'products') continue;
+      const pid = tabToPageId(t);
+      const idx = pages.findIndex(p => pageMatchesTab(p, t));
+      const pageId = idx >= 0 ? pages[idx].id : pid;
+      orderOf.set(pageId, Number(t.order) || orderOf.size + 10);
+      const tabI18n = mergeRecordI18nSuffixes(
+        (t.i18n as Record<string, Record<string, string>>) || {},
+        t,
+        ['label'],
+      );
+      if (idx < 0) {
+        pages.push(normalizePage({
+          id: pid,
+          type: t.type === 'gallery' ? 'gallery' : 'text',
+          label: t.labelFa || t.label,
+          labelEn: t.labelEn,
+          i18n: tabI18n,
+          images: [],
+        } as MetaShopPage & Record<string, unknown>));
+      } else {
+        const pg = pages[idx];
+        pages[idx] = normalizePage({
+          ...pg,
+          i18n: mergeRecordI18nSuffixes(pg.i18n || {}, { ...pg, ...t }, PAGE_I18N_FIELDS),
+        } as MetaShopPage & Record<string, unknown>);
+      }
+    }
+    pages.sort((a, b) => (orderOf.get(a.id) ?? 999) - (orderOf.get(b.id) ?? 999));
+  }
+
+  pages = applyShopTabLabelsToPages(raw, pages);
+  return pages.length ? pages : undefined;
+};
+
 const normalizeLang = (l: MetaShopLang & Record<string, unknown>): MetaShopLang => ({
   code: String(l.code || '').trim(),
   name: String(l.name || l.label || l.code || '').trim(),
@@ -159,7 +304,7 @@ const normalizeLang = (l: MetaShopLang & Record<string, unknown>): MetaShopLang 
 
 /** Strip import bloat and fit large shops under Firestore's ~1MB doc limit. */
 export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown>): MetaShop => {
-  const i18n: Record<string, Record<string, string>> = { ...(raw.i18n || {}) };
+  let i18n: Record<string, Record<string, string>> = { ...(raw.i18n || {}) };
 
   for (const key of SHOP_I18N_KEYS) {
     const faVal = raw[`${key}Fa`] as string | undefined;
@@ -169,6 +314,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     if (arVal) { i18n.ar = { ...(i18n.ar || {}), [key]: arVal }; }
     if (enVal) { i18n.en = { ...(i18n.en || {}), [key]: enVal }; }
   }
+  i18n = applyProductsTabFromTabs(raw, i18n);
 
   const shop: MetaShop & Record<string, unknown> = {
     id: String(raw.id || `shop-${Date.now()}`),
@@ -251,7 +397,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     categories: Array.isArray(raw.categories)
       ? raw.categories.map(normalizeCategory).filter(c => (typeof c === 'string' ? c : c.fa || c.en))
       : undefined,
-    pages: Array.isArray(raw.pages) ? raw.pages.map(p => normalizePage(p as MetaShopPage & Record<string, unknown>)) : undefined,
+    pages: importPagesFromJson(raw),
     products: Array.isArray(raw.products)
       ? raw.products.map(p => normalizeMetaShopProduct(p as MetaShopProduct & Record<string, unknown>))
       : [],
