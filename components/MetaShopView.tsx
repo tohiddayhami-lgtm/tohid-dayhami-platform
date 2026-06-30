@@ -1127,9 +1127,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             {!hidden && curPrice != null && curPrice > 0 && (
               <div className="ms-card-calc">{fmtNum(qty, 0)} {p.unit ? p.unit : S('pcs')} × {money(curPrice, cur)} = <b>{money(curPrice * qty, cur)}</b></div>
             )}
-            {hidden && (
-              <div className="ms-card-calc">{fmtNum(qty, 0)} {p.unit ? p.unit : S('pcs')} · <b>{negLabel(p)}</b></div>
-            )}
             <button type="button" className={`ms-goto-cart ${big ? 'lg' : ''}`} onClick={openCart}>
               <CartIcon s={big ? 18 : 16} /><span>{S('goToCart')}</span>
               {cartCount > 0 && <span className="ms-goto-cart-badge">{cartCount}</span>}
