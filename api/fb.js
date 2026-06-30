@@ -17,6 +17,7 @@ const BASE       = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/d
 // ── Firestore REST → plain JS ──────────────────────────────────────────────
 
 function parseDoc(doc) {
+  if (!doc?.name) return { id: '', ...(doc?.fields ? parseFields(doc.fields) : {}) };
   const id = doc.name.split('/').pop();
   return { id, ...parseFields(doc.fields || {}) };
 }
@@ -128,7 +129,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { col, doc: docId, orderField, dir, lim, slug, whereField, whereEq, all } = req.query;
+  const { col, doc: docId, orderField, dir, lim, slug, whereField, whereEq, all: fetchAll } = req.query;
   if (!col) return res.status(400).json({ error: 'col required' });
 
   try {
@@ -146,7 +147,7 @@ export default async function handler(req, res) {
       const field = slug ? 'slug' : whereField;
       const value = slug || whereEq;
       if (field && value) {
-        if (all === '1' || all === 'true') {
+        if (fetchAll === '1' || fetchAll === 'true') {
           return res.json(await queryAllByField(col, String(field), String(value)));
         }
         const one = await queryByField(col, String(field), String(value));
@@ -158,27 +159,42 @@ export default async function handler(req, res) {
       // truncated to the first page and look "deleted" in the app.
       const pageSize = Math.min(Number(lim) || 300, 300);
       let listUrl = `${BASE}/${col}?key=${API_KEY}&pageSize=${pageSize}`;
-      if (orderField) listUrl += `&orderBy=${orderField}${dir === 'desc' ? ' desc' : ''}`;
-      let all = [];
+      if (orderField) {
+        const order = dir === 'desc' ? `${orderField} desc` : String(orderField);
+        listUrl += `&orderBy=${encodeURIComponent(order)}`;
+      }
+      const docs = [];
       let pageToken = null;
       let pages = 0;
       const MAX_PAGES = 50; // safety cap (~15000 docs)
       do {
         const pageUrl = pageToken ? `${listUrl}&pageToken=${encodeURIComponent(pageToken)}` : listUrl;
         const r = await fetch(pageUrl);
-        if (!r.ok) break;
+        if (!r.ok) {
+          const errBody = await r.text().catch(() => '');
+          return res.status(r.status >= 400 && r.status < 600 ? r.status : 502).json({
+            error: 'firestore_list_failed',
+            status: r.status,
+            detail: errBody.slice(0, 500),
+          });
+        }
         const data = await r.json();
-        if (Array.isArray(data.documents)) all = all.concat(data.documents);
+        if (Array.isArray(data.documents)) docs.push(...data.documents);
         pageToken = data.nextPageToken || null;
         pages++;
       } while (pageToken && pages < MAX_PAGES);
-      return res.json(all.map(parseDoc));
+      return res.json(docs.map(parseDoc));
     }
 
     // ── POST (setDoc) ─────────────────────────────────────────────────────
     if (req.method === 'POST') {
       if (!docId) return res.status(400).json({ error: 'doc required' });
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      let body;
+      try {
+        body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      } catch {
+        return res.status(400).json({ error: 'invalid_json' });
+      }
       const fsDoc = toFirestoreDoc(body);
       const r = await fetch(`${BASE}/${col}/${docId}?key=${API_KEY}`, {
         method: 'PATCH',
