@@ -1080,6 +1080,8 @@ export interface MetaShopDiscount {
 /** Storefront currency: `rate` = market units of `code` per 1 unit of shop base (`shop.currency`). */
 export interface MetaShopDisplayCurrency {
   code: string;
+  /** Shown left of prices in all languages (e.g. IRT, تومان). */
+  symbol?: string;
   label?: string;
   labelEn?: string;
   /** 1 shop.currency = `rate` × this currency (user-entered market rate). */
@@ -1362,6 +1364,8 @@ export interface MetaShop {
   /** Custom storefront label for base currency (e.g. «تومان» instead of IRR). */
   currencyLabel?: string;
   currencyLabelEn?: string;
+  /** Symbol/text shown left of prices for base currency — same in every language. */
+  currencySymbol?: string;
   /** Extra currencies visitors can switch to; rates are vs `currency` (base). */
   displayCurrencies?: MetaShopDisplayCurrency[];
   /** Currency shown when the shop opens (visitor can still switch). Defaults to `currency`. */

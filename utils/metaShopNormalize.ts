@@ -336,6 +336,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     currency: String(raw.currency || 'OMR').trim().toUpperCase(),
     currencyLabel: raw.currencyLabel ? String(raw.currencyLabel).trim() : undefined,
     currencyLabelEn: raw.currencyLabelEn ? String(raw.currencyLabelEn).trim() : undefined,
+    currencySymbol: raw.currencySymbol ? String(raw.currencySymbol).trim() : undefined,
     defaultLang: raw.defaultLang || 'fa',
     languages: Array.isArray(raw.languages) ? raw.languages.map(l => normalizeLang(l as MetaShopLang & Record<string, unknown>)).filter(l => l.code) : undefined,
     i18n: Object.keys(i18n).length ? i18n : undefined,

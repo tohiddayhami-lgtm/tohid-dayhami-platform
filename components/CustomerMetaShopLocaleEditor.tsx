@@ -211,6 +211,7 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
           baseCurrency={baseCurrency}
           baseCurrencyLabel={draft.currencyLabel ?? shop.currencyLabel}
           baseCurrencyLabelEn={draft.currencyLabelEn ?? shop.currencyLabelEn}
+          baseCurrencySymbol={draft.currencySymbol ?? shop.currencySymbol}
           displayCurrencies={displayCurrencies}
           defaultDisplayCurrency={defaultDisplayCurrency}
           lang={lang}

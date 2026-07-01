@@ -24,11 +24,12 @@ interface Props {
   baseCurrency: string;
   baseCurrencyLabel?: string;
   baseCurrencyLabelEn?: string;
+  baseCurrencySymbol?: string;
   displayCurrencies: MetaShopDisplayCurrency[];
   defaultDisplayCurrency?: string;
   lang: Language;
   onBaseChange: (code: string) => void;
-  onBaseLabelsChange?: (patch: { currencyLabel?: string; currencyLabelEn?: string }) => void;
+  onBaseLabelsChange?: (patch: { currencyLabel?: string; currencyLabelEn?: string; currencySymbol?: string }) => void;
   onDisplayCurrenciesChange: (list: MetaShopDisplayCurrency[]) => void;
   onDefaultDisplayCurrencyChange?: (code: string | undefined) => void;
   compact?: boolean;
@@ -38,6 +39,7 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   baseCurrency,
   baseCurrencyLabel,
   baseCurrencyLabelEn,
+  baseCurrencySymbol,
   displayCurrencies,
   defaultDisplayCurrency,
   lang,
@@ -145,27 +147,38 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
         />
         <p className="text-[10px] text-gray-400 mt-1">{currencyPresetLabel(base, T ? 'fa' : 'en')}</p>
         {onBaseLabelsChange && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+          <div className="space-y-2 mt-3">
             <div>
-              <label className={lbl}>{T ? 'نام نمایشی ارز پایه (فارسی)' : 'Base currency display name (FA)'}</label>
+              <label className={lbl}>{T ? 'نماد قیمت (کنار عدد — همه زبان‌ها)' : 'Price symbol (left of amount — all languages)'}</label>
               <input
-                className={fld + ' text-xs'}
-                value={baseCurrencyLabel || ''}
-                onChange={e => onBaseLabelsChange({ currencyLabel: e.target.value })}
-                placeholder={currencyPresetLabel(base, 'fa')}
+                className={fld + ' text-xs max-w-xs'}
+                value={baseCurrencySymbol || ''}
+                onChange={e => onBaseLabelsChange({ currencySymbol: e.target.value })}
+                placeholder={base}
               />
               <p className="text-[10px] text-gray-400 mt-0.5">
-                {T ? `مثلاً برای ${base}: «ریال»، «تومان»، «ریال عمان»` : `e.g. for ${base}: Rial, Toman, …`}
+                {T ? `مثلاً برای ${base}: «تومان»، «IRT»، «ریال» — در سمت چپ قیمت نمایش داده می‌شود` : `e.g. for ${base}: Toman, IRT, Rial — shown to the left of the price`}
               </p>
             </div>
-            <div>
-              <label className={lbl}>{T ? 'نام نمایشی (English)' : 'Display name (EN)'}</label>
-              <input
-                className={fld + ' text-xs dir-ltr'}
-                value={baseCurrencyLabelEn || ''}
-                onChange={e => onBaseLabelsChange({ currencyLabelEn: e.target.value })}
-                placeholder={currencyPresetLabel(base, 'en')}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className={lbl}>{T ? 'نام در منوی ارز (فارسی)' : 'Currency menu name (FA)'}</label>
+                <input
+                  className={fld + ' text-xs'}
+                  value={baseCurrencyLabel || ''}
+                  onChange={e => onBaseLabelsChange({ currencyLabel: e.target.value })}
+                  placeholder={currencyPresetLabel(base, 'fa')}
+                />
+              </div>
+              <div>
+                <label className={lbl}>{T ? 'نام در منوی ارز (English)' : 'Currency menu name (EN)'}</label>
+                <input
+                  className={fld + ' text-xs dir-ltr'}
+                  value={baseCurrencyLabelEn || ''}
+                  onChange={e => onBaseLabelsChange({ currencyLabelEn: e.target.value })}
+                  placeholder={currencyPresetLabel(base, 'en')}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -280,12 +293,24 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                   <span className="font-mono font-semibold">{rightCur}</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="sm:col-span-2">
+                    <label className={lbl}>{T ? 'نماد قیمت (کنار عدد — همه زبان‌ها)' : 'Price symbol (left of amount — all languages)'}</label>
+                    <input
+                      className={fld + ' text-xs max-w-xs'}
+                      value={dc.symbol || ''}
+                      onChange={e => updCurrency(idx, { symbol: e.target.value })}
+                      placeholder={dc.code}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {T ? `مثلاً ${dc.code} → «IRT» یا «تومان»` : `e.g. ${dc.code} → IRT or Toman`}
+                    </p>
+                  </div>
                   <div>
-                    <label className={lbl}>{T ? 'نام نمایشی (فارسی)' : 'Display name (FA)'}</label>
+                    <label className={lbl}>{T ? 'نام در منوی ارز (فارسی)' : 'Currency menu name (FA)'}</label>
                     <input className={fld + ' text-xs'} value={dc.label || ''} onChange={e => updCurrency(idx, { label: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'fa')} />
                   </div>
                   <div>
-                    <label className={lbl}>{T ? 'نام نمایشی (English)' : 'Display name (EN)'}</label>
+                    <label className={lbl}>{T ? 'نام در منوی ارز (English)' : 'Currency menu name (EN)'}</label>
                     <input className={fld + ' text-xs dir-ltr'} value={dc.labelEn || ''} onChange={e => updCurrency(idx, { labelEn: e.target.value })} placeholder={currencyPresetLabel(dc.code, 'en')} />
                   </div>
                 </div>

@@ -34,6 +34,23 @@ export const currencyPresetLabel = (code: string, lang: string): string => {
   return lang === 'fa' || lang === 'ar' ? p.fa : p.en;
 };
 
+export const currencyPriceSymbol = (shop: MetaShop, code: string): string => {
+  const c = code.trim().toUpperCase();
+  const base = shopBaseCurrency(shop);
+  if (c === base) {
+    return shop.currencySymbol?.trim()
+      || shop.currencyLabel?.trim()
+      || shop.currencyLabelEn?.trim()
+      || c;
+  }
+  const entry = (shop.displayCurrencies || []).find(x => x.code.trim().toUpperCase() === c);
+  if (!entry) return c;
+  return entry.symbol?.trim()
+    || entry.label?.trim()
+    || entry.labelEn?.trim()
+    || c;
+};
+
 export const displayCurrencyLabel = (entry: MetaShopDisplayCurrency, lang: string): string => {
   const code = entry.code.trim().toUpperCase();
   if (lang === 'fa' || lang === 'ar') return entry.label?.trim() || currencyPresetLabel(code, lang);
@@ -159,8 +176,9 @@ export const formatShopAmount = (
   const view = (viewCurrency || base).trim().toUpperCase();
   const n = convertAmount(amount, src, view, shop);
   const decimals = decimalPlacesForCurrency(view);
-  const label = currencyDisplayLabel(shop, view, uiLang);
-  return `${label} ${formatMetaShopNumber(n, decimals)}`;
+  const symbol = currencyPriceSymbol(shop, view);
+  const num = formatMetaShopNumber(n, decimals);
+  return `\u200E${symbol}\u00A0${num}`;
 };
 
 export const normalizeDisplayCurrencies = (
@@ -178,6 +196,7 @@ export const normalizeDisplayCurrencies = (
     seen.add(code);
     out.push({
       code,
+      symbol: raw.symbol?.trim() || undefined,
       label: raw.label?.trim() || undefined,
       labelEn: raw.labelEn?.trim() || undefined,
       rate,
@@ -192,6 +211,7 @@ export const shopDisplayCurrencies = (shop: MetaShop): MetaShopDisplayCurrency[]
   return [
     {
       code: base,
+      symbol: shop.currencySymbol?.trim() || undefined,
       label: shop.currencyLabel?.trim() || currencyPresetLabel(base, 'fa'),
       labelEn: shop.currencyLabelEn?.trim() || currencyPresetLabel(base, 'en'),
       rate: 1,
@@ -237,6 +257,7 @@ export const suggestDisplayCurrency = (base: string, code: string): MetaShopDisp
   const rate = DEFAULT_RATES_FROM[b]?.[c] ?? 1;
   return {
     code: c,
+    symbol: undefined,
     label: currencyPresetLabel(c, 'fa'),
     labelEn: currencyPresetLabel(c, 'en'),
     rate: c === b ? 1 : rate,
