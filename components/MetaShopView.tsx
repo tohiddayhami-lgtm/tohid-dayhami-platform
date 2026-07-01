@@ -12,6 +12,8 @@ import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, write
 import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxActive, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
+import { MetaShopProductImage } from './MetaShopProductImage';
+import { metaShopProductImageUrl } from '../utils/metaShopImage';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -515,6 +517,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   const productsPending = (shop.productCount ?? 0) > 0 && products.length === 0;
+  const productsHydrating = (shop.productCount ?? 0) > products.length && products.length > 0;
   const searchIndex = useMemo(() => buildProductSearchIndex(shop, products), [shop.id, shop.searchKeywords, products]);
 
   const commitSearch = useCallback((value: string) => {
@@ -534,6 +537,21 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     setSearchQuery('');
     composingRef.current = false;
     setIsComposing(false);
+  }, [shop.id]);
+
+  useEffect(() => {
+    const links: HTMLLinkElement[] = [];
+    const add = (rel: string, href: string) => {
+      const l = document.createElement('link');
+      l.rel = rel;
+      l.href = href;
+      if (rel === 'preconnect') l.crossOrigin = 'anonymous';
+      document.head.appendChild(l);
+      links.push(l);
+    };
+    add('dns-prefetch', 'https://img.kwcdn.com');
+    add('preconnect', 'https://img.kwcdn.com');
+    return () => links.forEach(l => l.remove());
   }, [shop.id]);
 
   const searchOutOfSync = !!search.trim() && search.trim() !== searchQuery;
@@ -1150,7 +1168,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   };
 
   // Single product card — reused by the featured rail and the main grid.
-  const productCard = (p: MetaShopProduct, opts: { featured?: boolean } = {}) => {
+  const productCard = (p: MetaShopProduct, opts: { featured?: boolean; priority?: boolean } = {}) => {
     const optId = selOptId(p);
     const stored = wasReferencePrice(p, optId);
     const final = unitPrice(p, optId);
@@ -1163,7 +1181,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className={`ms-card-img ${imgFitCls}`} onClick={() => openDetail(p)}>
-          {p.images && p.images[0] ? <img src={p.images[0]} alt={pName(p)} loading="lazy" /> : <div className="ms-noimg">{pName(p).charAt(0)}</div>}
+          {p.images && p.images[0] ? (
+            <MetaShopProductImage src={p.images[0]} alt={pName(p)} priority={opts.priority} />
+          ) : (
+            <div className="ms-noimg">{pName(p).charAt(0)}</div>
+          )}
           {p.outOfStock && <span className="ms-oos-badge">{t.outOfStock}</span>}
           {re && <span className="ms-group-badge" style={{ background: 'var(--ms-primary)' }}>{dealTypeLabel(re.dealType, reLang())}</span>}
           {!re && p.group && <span className="ms-group-badge">{pGroup(p)}</span>}
@@ -1328,7 +1350,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           <div className="ms-featured">
             <div className="ms-featured-head"><span className="ms-featured-star">★</span> {t.featuredTitle}</div>
             <div className="ms-featured-grid">
-              {featuredProducts.map(p => productCard(p, { featured: true }))}
+              {featuredProducts.map((p, i) => productCard(p, { featured: true, priority: i < 4 }))}
             </div>
           </div>
         )}
@@ -1342,8 +1364,11 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           <p className="ms-empty">{t.empty}</p>
         ) : (
           <>
+            {productsHydrating && (
+              <p className="ms-hydrate-hint">{S('loadingProducts')}</p>
+            )}
             <div className="ms-grid">
-              {visibleFiltered.map(p => productCard(p))}
+              {visibleFiltered.map((p, i) => productCard(p, { priority: i < 8 }))}
             </div>
             {filtered.length > gridShown && (
               <div className="ms-load-more-wrap">
@@ -1447,14 +1472,18 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 return (
                   <>
                     <div className={`ms-gal-main ${galCls}`}>
-                      {main ? <img src={main} alt={pName(detail)} decoding="async" /> : <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>}
+                      {main ? (
+                        <MetaShopProductImage src={main} alt={pName(detail)} priority width={720} />
+                      ) : (
+                        <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>
+                      )}
                       {imgs.length > 1 && <>
                         <button className="ms-gal-nav prev" onClick={() => setGalIdx((galIdx - 1 + imgs.length) % imgs.length)}>‹</button>
                         <button className="ms-gal-nav next" onClick={() => setGalIdx((galIdx + 1) % imgs.length)}>›</button>
                       </>}
                     </div>
                     {imgs.length > 1 && (
-                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${fitCls} ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={s} alt="" loading="lazy" decoding="async" /></button>)}</div>
+                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${fitCls} ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={metaShopProductImageUrl(s, 120) || s} alt="" loading="lazy" decoding="async" /></button>)}</div>
                     )}
                   </>
                 );
@@ -1818,7 +1847,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                 const showPrice = optionsOf(p).length > 0 || p.price != null;
                 return (
                 <div className={`ms-citem ${productImageFitClass(shop, p)}`} key={p.id}>
-                  {p.images && p.images[0] ? <img src={p.images[0]} alt="" /> : <div className="ms-noimg sm">{p.name.charAt(0)}</div>}
+                  {p.images && p.images[0] ? (
+                    <div className="ms-citem-thumb">
+                      <MetaShopProductImage src={p.images[0]} alt="" width={120} />
+                    </div>
+                  ) : (
+                    <div className="ms-noimg sm">{p.name.charAt(0)}</div>
+                  )}
                   <div className="ms-citem-info">
                     <div className="ms-citem-name">{pName(p)}</div>
                     {optionText && <div className="ms-citem-opt">{optionText}</div>}
@@ -2151,7 +2186,11 @@ button.ms-foot-catalog:hover { transform:none; }
 @media (hover:none) and (pointer:coarse){ .ms-card { transition:none; } }
 .ms-card:hover { box-shadow:0 12px 32px rgba(0,0,0,.13); transform:translateY(-4px); }
 .ms-card-img { position:relative; aspect-ratio:4/3; background:#f8fafc; cursor:zoom-in; overflow:hidden; }
-.ms-card-img img { width:100%; height:100%; object-fit:cover; }
+.ms-card-img img { width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s ease; }
+.ms-card-img img.is-loaded { opacity:1; }
+.ms-img-skeleton { position:absolute; inset:0; background:linear-gradient(90deg,#f1f5f9 0%,#e2e8f0 45%,#f1f5f9 90%); background-size:200% 100%; animation:ms-img-shimmer 1.1s ease-in-out infinite; pointer-events:none; }
+@keyframes ms-img-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.ms-hydrate-hint { text-align:center; font-size:12px; color:#64748b; margin:0 0 10px; padding:8px 12px; background:#f8fafc; border-radius:10px; border:1px solid #e2e8f0; }
 .ms-card-img.ms-img-contain img,
 .ms-inq-img-wrap.ms-img-contain img,
 .ms-thumb.ms-img-contain img,
@@ -2319,7 +2358,9 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-modal-x { position:absolute; top:12px; inset-inline-end:12px; z-index:10; width:36px; height:36px; border-radius:50%; border:none; background:rgba(15,23,42,.08); color:#475569; cursor:pointer; font-size:14px; }
 .ms-modal-gal { width:46%; background:#f8fafc; display:flex; flex-direction:column; flex-shrink:0; min-height:0; overflow:hidden; }
 .ms-gal-main { position:relative; flex:1; min-height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; overflow:hidden; }
-.ms-gal-main img { width:100%; height:100%; max-height:62vh; object-fit:contain; display:block; }
+.ms-gal-main img { width:100%; height:100%; max-height:62vh; object-fit:contain; display:block; opacity:0; transition:opacity .25s ease; }
+.ms-gal-main img.is-loaded { opacity:1; }
+.ms-gal-main .ms-img-skeleton { max-height:62vh; }
 .ms-gal-nav { position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; border:none; background:rgba(255,255,255,.9); color:#334155; font-size:22px; line-height:1; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center; }
 .ms-gal-nav.prev { inset-inline-start:8px; } .ms-gal-nav.next { inset-inline-end:8px; }
 .ms-thumbs { display:flex; gap:6px; padding:8px; overflow-x:auto; background:#fff; border-top:1px solid #eef0f3; scrollbar-width:none; flex-shrink:0; }
@@ -2384,6 +2425,10 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-drawer-body { flex:1; overflow-y:auto; padding:16px; }
 .ms-cart-empty { text-align:center; color:#94a3b8; padding:40px 20px; }
 .ms-citem { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid #f1f5f9; }
+.ms-citem-thumb { position:relative; width:56px; height:56px; flex-shrink:0; border-radius:8px; overflow:hidden; background:#f8fafc; }
+.ms-citem-thumb img { width:100%; height:100%; object-fit:cover; border-radius:8px; opacity:0; transition:opacity .25s ease; }
+.ms-citem-thumb img.is-loaded { opacity:1; }
+.ms-citem-thumb .ms-img-skeleton { border-radius:8px; }
 .ms-citem img { width:56px; height:56px; object-fit:cover; border-radius:8px; flex-shrink:0; }
 .ms-citem-info { flex:1; min-width:0; }
 .ms-citem-name { font-size:13px; font-weight:700; color:#0f172a; }

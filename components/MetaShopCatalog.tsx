@@ -7,6 +7,7 @@ import { normalizeShopCategories, categoryLabel, findCategoryEntry, translatePro
 import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
 import { productPurchaseOptions } from '../utils/metaShopPriceTiers';
+import { MetaShopProductImage } from './MetaShopProductImage';
 
 interface Props {
   shop: MetaShop;
@@ -249,7 +250,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     return (
       <article className="msc-prod msc-prod-re" key={p.id}>
         <div className="msc-prod-media">
-          {img ? <img src={img} alt={name} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
+          {img ? <MetaShopProductImage src={img} alt={name} priority={no <= 8} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
           <span className="msc-prod-no">{no}</span>
         </div>
         <div className="msc-prod-info">
@@ -293,7 +294,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     return (
       <article className="msc-prod" key={p.id}>
         <div className="msc-prod-media">
-          {img ? <img src={img} alt={name} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
+          {img ? <MetaShopProductImage src={img} alt={name} priority={no <= 8} /> : <div className="msc-noimg">{(name || '?').charAt(0)}</div>}
           <span className="msc-prod-no">{no}</span>
         </div>
         <div className="msc-prod-info">
@@ -589,8 +590,10 @@ const MSC_CSS = `
 .msc-grid{ flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:7mm; min-height:0; }
 .msc-prod{ border:1px solid rgba(0,0,0,.12); border-radius:3.5mm; overflow:hidden; display:flex; flex-direction:column;
   background:#fff; box-shadow:0 2px 9px rgba(0,0,0,.07); min-height:0; }
-.msc-prod-media{ position:relative; height:52mm; background:#fff; flex:none; border-bottom:1px solid rgba(0,0,0,.08); }
-.msc-prod-media img{ width:100%; height:100%; object-fit:contain; padding:2.5mm; display:block; }
+.msc-prod-media{ position:relative; height:52mm; background:#fff; flex:none; border-bottom:1px solid rgba(0,0,0,.08); overflow:hidden; }
+.msc-prod-media img{ width:100%; height:100%; object-fit:contain; padding:2.5mm; display:block; box-sizing:border-box; opacity:0; transition:opacity .25s ease; }
+.msc-prod-media img.is-loaded{ opacity:1; }
+.msc-prod-media .ms-img-skeleton{ padding:0; }
 .msc-noimg{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48pt; font-weight:900;
   color:var(--c-primary); opacity:.22; background:linear-gradient(135deg,#f8fafc,#eef2f7); }
 .msc-prod-no{ position:absolute; top:0; inset-inline-start:0; background:var(--c-primary); color:#fff; font-size:10.5pt; font-weight:800;

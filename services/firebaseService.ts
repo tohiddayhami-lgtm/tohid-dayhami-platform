@@ -1257,10 +1257,18 @@ export const hydrateMetaShopProgressive = async (
   let total = base.productChunkCount || 0;
   let all: MetaShopProduct[] = [];
   if (total > 0) {
-    for (let i = 0; i < total; i++) {
-      const chunk = await loadOneMetaShopChunk(`${base.id}_${i}`);
-      if (chunk?.products?.length) all = all.concat(chunk.products);
-      onProgress?.(all, i + 1, total);
+    const first = await loadOneMetaShopChunk(`${base.id}_0`);
+    if (first?.products?.length) all = all.concat(first.products);
+    onProgress?.(all, 1, total);
+
+    if (total > 1) {
+      const rest = await Promise.all(
+        Array.from({ length: total - 1 }, (_, i) => loadOneMetaShopChunk(`${base.id}_${i + 1}`)),
+      );
+      for (const chunk of rest) {
+        if (chunk?.products?.length) all = all.concat(chunk.products);
+      }
+      onProgress?.(all, total, total);
     }
   }
   if (!all.length) {

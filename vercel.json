@@ -37,6 +37,9 @@
   "functions": {
     "api/fb.js": {
       "maxDuration": 60
+    },
+    "api/ms-img.js": {
+      "maxDuration": 30
     }
   }
 }
