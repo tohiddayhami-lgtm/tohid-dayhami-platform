@@ -22,6 +22,8 @@ export default async function handler(req, res) {
     const allowed =
       host.includes('kwcdn.com')
       || host.endsWith('cloudfront.net')
+      || host.includes('firebasestorage.googleapis.com')
+      || host.endsWith('.firebasestorage.app')
       || /\.(jpg|jpeg|png|webp|gif)$/i.test(target.pathname);
     if (!allowed) {
       res.status(403).end();

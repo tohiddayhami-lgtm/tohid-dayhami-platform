@@ -28,6 +28,7 @@ import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProd
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
+import { metaShopProductImageUrl } from '../utils/metaShopImage';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
 
@@ -185,6 +186,22 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
+const mergeLoadedShopProducts = (local: MetaShopProduct[], loaded: MetaShopProduct[]): MetaShopProduct[] => {
+  if (!local.length) return loaded;
+  const byId = new Map(local.map(p => [p.id, p]));
+  const merged = loaded.map(p => {
+    const cur = byId.get(p.id);
+    if (!cur) return p;
+    const localImgs = cur.images || [];
+    const loadedImgs = p.images || [];
+    if (localImgs.length > loadedImgs.length) return { ...p, images: localImgs };
+    return p;
+  });
+  const loadedIds = new Set(loaded.map(p => p.id));
+  const extras = local.filter(p => !loadedIds.has(p.id));
+  return extras.length ? [...merged, ...extras] : merged;
+};
+
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onRestoreMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const savedNav = loadMetaShopManagerNav();
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
@@ -226,6 +243,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const seoImageInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
+  const productsDirtyRef = useRef(false);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
   const [dirCatFa, setDirCatFa] = useState('');
   const [dirCatEn, setDirCatEn] = useState('');
@@ -660,8 +678,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   };
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
 
-  const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
+  const startNew = () => { productsDirtyRef.current = false; setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => {
+    productsDirtyRef.current = false;
     setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
     setProductsSyncing(false);
     setProductsLoadFailed(false);
@@ -676,13 +695,25 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (!shopNeedsProductHydration(s)) return;
     setProductsLoading(true);
     loadMetaShopProductsFull(s, (products, loaded, total) => {
-      setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
+      setDraft(d => {
+        if (!d || d.id !== shopId) return d;
+        const next = productsDirtyRef.current
+          ? mergeLoadedShopProducts(d.products, products)
+          : products;
+        return { ...d, products: next };
+      });
       if (loaded >= 1) setProductsLoading(false);
       setProductsSyncing(loaded < total);
     })
       .then(full => {
         const loaded = full.products?.length ?? 0;
-        setDraft(d => (d && d.id === shopId ? { ...d, ...full, products: full.products || [] } : d));
+        setDraft(d => {
+          if (!d || d.id !== shopId) return d;
+          const nextProducts = productsDirtyRef.current
+            ? mergeLoadedShopProducts(d.products, full.products || [])
+            : (full.products || []);
+          return { ...d, ...full, products: nextProducts };
+        });
         if (loaded > 0 || expectedCount === 0) {
           setProductsFullyLoaded(true);
           setProductsLoadFailed(false);
@@ -817,7 +848,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (draft!.type === 'realestate') base.realEstate = defaultRealEstate();
     upd({ products: [...(draft!.products || []), base] });
   };
-  const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
+  const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => {
+    productsDirtyRef.current = true;
+    setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
+  };
   const featuredCount = (draft?.products || []).filter(p => p.featured).length;
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
   const updProductI18n = (idx: number, code: string, field: string, val: string) => {
@@ -2708,7 +2742,7 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
       <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
           <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group bg-gray-50">
-            <img src={src} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0.35'; }} />
+            <img src={metaShopProductImageUrl(src, 120) || src} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0.35'; }} />
             {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{T ? 'اصلی' : 'main'}</span>}
             <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>

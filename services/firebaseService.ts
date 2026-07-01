@@ -561,9 +561,15 @@ const uploadFileViaProxy = async (
 ): Promise<{ url: string; path: string }> => {
     onProgress?.(3);
 
-    const uploadFile = folder === 'images'
+    let uploadFile = folder === 'images'
         ? await compressImageToFile(file)
         : file;
+    if (folder === 'images' && uploadFile.size > STORAGE_PROXY_MAX_BYTES) {
+        uploadFile = await compressImageToFile(file, 1200, 0.72);
+    }
+    if (folder === 'images' && uploadFile.size > STORAGE_PROXY_MAX_BYTES) {
+        uploadFile = await compressImageToFile(file, 900, 0.62);
+    }
     const resolvedType = folder === 'images'
         ? 'image/jpeg'
         : contentType || uploadFile.type || 'application/octet-stream';
@@ -627,8 +633,8 @@ const uploadFileViaProxy = async (
 };
 
 const shouldPreferStorageProxy = async (file: File, folder: CentralStorageFolder): Promise<boolean> => {
-    if (file.size > STORAGE_PROXY_MAX_BYTES) return false;
     if (folder === 'images' || folder === 'uploads' || folder === 'temp') return true;
+    if (file.size > STORAGE_PROXY_MAX_BYTES) return false;
     return checkProxyMode();
 };
 
@@ -731,6 +737,10 @@ export const uploadFile = async (
     onProgress?: (progress: number) => void,
     contentType?: string
 ): Promise<{ url: string; path: string }> => {
+    if (folder === 'images' || folder === 'uploads' || folder === 'temp') {
+        return uploadFileViaProxy(file, folder, onProgress, contentType);
+    }
+
     if (await shouldPreferStorageProxy(file, folder)) {
         return uploadFileViaProxy(file, folder, onProgress, contentType);
     }
