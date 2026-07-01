@@ -1119,8 +1119,8 @@ const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): P
 const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
   const existing = await loadMetaShopProductChunks(shopId);
   const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
-  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_CHUNKS_COL, c.id)));
-  if (keepCount === 0 && !existing.length) {
+  await Promise.allSettled(toDelete.map(c => deleteDocCloud(META_SHOP_CHUNKS_COL, c.id)));
+  if (keepCount === 0) {
     for (let i = 0; i < 64; i++) {
       try { await deleteDocCloud(META_SHOP_CHUNKS_COL, `${shopId}_${i}`); } catch { /* already gone */ }
     }
@@ -1159,8 +1159,8 @@ const loadMetaShopRefChunks = async (shopId: string, chunkCount: number): Promis
 const deleteMetaShopRefChunks = async (shopId: string, keepCount = 0) => {
   const existing = await loadMetaShopRefChunks(shopId, 64);
   const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
-  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_REF_CHUNKS_COL, c.id)));
-  if (keepCount === 0 && !existing.length) {
+  await Promise.allSettled(toDelete.map(c => deleteDocCloud(META_SHOP_REF_CHUNKS_COL, c.id)));
+  if (keepCount === 0) {
     for (let i = 0; i < 64; i++) {
       try { await deleteDocCloud(META_SHOP_REF_CHUNKS_COL, `${shopId}_ref_${i}`); } catch { /* gone */ }
     }
@@ -1542,20 +1542,74 @@ export const hydrateMetaShopBackup = async (
   return assembleShopFromBackup(meta.shell, products);
 };
 
-export const deleteMetaShopFromCloud = async (id: string) => {
+const deleteAllMetaShopBackups = async (shopId: string) => {
+  for (const slot of META_SHOP_BACKUP_SLOT_NUMS) {
+    try { await deleteDocCloud(META_SHOP_BACKUPS_COL, backupMetaDocId(shopId, slot)); } catch { /* gone */ }
+    await deleteMetaShopBackupChunksForSlot(shopId, slot);
+  }
+  try {
     const proxy = await checkProxyMode();
-    let data: unknown = null;
     if (proxy) {
-        data = await proxyGet('metaShops', { doc: id });
+      const rows = await proxyGet<MetaShopBackupChunk[]>(META_SHOP_BACKUP_CHUNKS_COL, {
+        whereField: 'shopId',
+        whereEq: shopId,
+        all: true,
+      });
+      await Promise.allSettled(
+        (Array.isArray(rows) ? rows : []).map(c => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, c.id)),
+      );
     } else {
-        const snap = await getDoc(doc(db, 'metaShops', id));
-        data = snap.exists() ? snap.data() : null;
+      const q = query(collection(db, META_SHOP_BACKUP_CHUNKS_COL), where('shopId', '==', shopId));
+      const snap = await getDocs(q);
+      await Promise.allSettled(snap.docs.map(d => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, d.id)));
     }
-    await deleteMetaShopProductChunks(id);
-    await deleteMetaShopRefChunks(id);
-    await deleteMetaShopExtrasDoc(id);
-    await deleteDocCloud('metaShops', id);
-    logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
+  } catch { /* optional cleanup */ }
+};
+
+const purgeMetaShopRelatedDocs = async (shopId: string) => {
+  await deleteMetaShopProductChunks(shopId);
+  await deleteMetaShopRefChunks(shopId);
+  await deleteMetaShopExtrasDoc(shopId);
+  await deleteAllMetaShopBackups(shopId);
+};
+
+export const deleteMetaShopFromCloud = async (id: string, slugHint?: string) => {
+  const proxy = await checkProxyMode();
+  let data: unknown = null;
+  if (proxy) {
+    data = await proxyGet('metaShops', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'metaShops', id));
+    data = snap.exists() ? snap.data() : null;
+  }
+
+  const resolveDocId = async (): Promise<string> => {
+    if (data) return id;
+    if (slugHint) {
+      const bySlug = await fetchMetaShopShellBySlug(slugHint);
+      if (bySlug?.id) return bySlug.id;
+    }
+    return id;
+  };
+
+  const docId = await resolveDocId();
+  await purgeMetaShopRelatedDocs(docId);
+
+  try {
+    await deleteDocCloud('metaShops', docId);
+  } catch (err) {
+    if (slugHint && docId === id) {
+      const bySlug = await fetchMetaShopShellBySlug(slugHint);
+      if (bySlug?.id && bySlug.id !== id) {
+        await purgeMetaShopRelatedDocs(bySlug.id);
+        await deleteDocCloud('metaShops', bySlug.id);
+        logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', bySlug.id, data, 'metaShops');
+        return;
+      }
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  }
+  logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', docId, data, 'metaShops');
 };
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
   subscribeCollection<MetaShop>('metaShops', items => {
@@ -1563,6 +1617,7 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
   }, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     intervalMs: 8_000,
+    mergeDocId: true,
   });
 /** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
 export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {

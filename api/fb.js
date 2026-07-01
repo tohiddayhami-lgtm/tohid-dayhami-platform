@@ -18,8 +18,9 @@ const BASE       = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/d
 
 function parseDoc(doc) {
   if (!doc?.name) return { id: '', ...(doc?.fields ? parseFields(doc.fields) : {}) };
-  const id = doc.name.split('/').pop();
-  return { id, ...parseFields(doc.fields || {}) };
+  const docId = doc.name.split('/').pop();
+  // Firestore document id is canonical — inner `id` field must not override it (breaks delete).
+  return { ...(doc?.fields ? parseFields(doc.fields) : {}), id: docId };
 }
 
 function parseFields(fields) {
