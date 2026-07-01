@@ -91,7 +91,7 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
     (optCur?.trim()) || (p.currency?.trim()) || shop.currency;
   const money = (n?: number, sourceCur?: string) => {
     if (n == null) return '';
-    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop);
+    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, uiLang);
   };
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);

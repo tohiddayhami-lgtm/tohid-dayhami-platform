@@ -8,7 +8,7 @@ import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDeta
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber, resolveHidePriceLabel } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
-import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase, currencyDisplayLabel } from '../utils/metaShopCurrency';
 import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxActive, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
@@ -509,7 +509,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const theme = shop.theme;
   const money = (n?: number, sourceCur?: string) => {
     if (n == null) return '';
-    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop);
+    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, uiLang);
   };
   const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
 
@@ -1222,7 +1222,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               <select className="ms-cur-select" dir="ltr" value={viewCur} onChange={e => pickViewCurrency(e.target.value)} aria-label={S('currency')} title={S('currency')}>
                 {displayCurrencies.map(dc => {
                   const code = dc.code.trim().toUpperCase();
-                  return <option key={code} value={code}>{code}</option>;
+                  const name = currencyDisplayLabel(shop, code, uiLang);
+                  return (
+                    <option key={code} value={code}>
+                      {name !== code ? `${name} (${code})` : code}
+                    </option>
+                  );
                 })}
               </select>
             )}

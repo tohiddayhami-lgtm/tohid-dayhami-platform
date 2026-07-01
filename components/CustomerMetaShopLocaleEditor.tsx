@@ -209,6 +209,8 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
       <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
         <MetaShopCurrencyRatesEditor
           baseCurrency={baseCurrency}
+          baseCurrencyLabel={draft.currencyLabel ?? shop.currencyLabel}
+          baseCurrencyLabelEn={draft.currencyLabelEn ?? shop.currencyLabelEn}
           displayCurrencies={displayCurrencies}
           defaultDisplayCurrency={defaultDisplayCurrency}
           lang={lang}
@@ -221,6 +223,7 @@ export const CustomerMetaShopLocaleEditor: React.FC<Props> = ({
               defaultDisplayCurrency: normalizeDefaultDisplayCurrency(code, normalized, defaultDisplayCurrency),
             });
           }}
+          onBaseLabelsChange={patch => upd(patch)}
           onDisplayCurrenciesChange={list => upd({
             displayCurrencies: list,
             defaultDisplayCurrency: normalizeDefaultDisplayCurrency(baseCurrency, list, defaultDisplayCurrency),

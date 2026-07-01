@@ -152,13 +152,15 @@ export const formatShopAmount = (
   sourceCurrency: string,
   viewCurrency: string,
   shop: MetaShop,
+  uiLang = 'fa',
 ): string => {
   const base = shopBaseCurrency(shop);
   const src = (sourceCurrency || base).trim().toUpperCase();
   const view = (viewCurrency || base).trim().toUpperCase();
   const n = convertAmount(amount, src, view, shop);
   const decimals = decimalPlacesForCurrency(view);
-  return `${view} ${formatMetaShopNumber(n, decimals)}`;
+  const label = currencyDisplayLabel(shop, view, uiLang);
+  return `${label} ${formatMetaShopNumber(n, decimals)}`;
 };
 
 export const normalizeDisplayCurrencies = (
@@ -190,12 +192,19 @@ export const shopDisplayCurrencies = (shop: MetaShop): MetaShopDisplayCurrency[]
   return [
     {
       code: base,
-      label: currencyPresetLabel(base, 'fa'),
-      labelEn: currencyPresetLabel(base, 'en'),
+      label: shop.currencyLabel?.trim() || currencyPresetLabel(base, 'fa'),
+      labelEn: shop.currencyLabelEn?.trim() || currencyPresetLabel(base, 'en'),
       rate: 1,
     },
     ...extras,
   ];
+};
+
+export const currencyDisplayLabel = (shop: MetaShop, code: string, uiLang: string): string => {
+  const c = code.trim().toUpperCase();
+  const entry = shopDisplayCurrencies(shop).find(x => x.code.trim().toUpperCase() === c);
+  if (entry) return displayCurrencyLabel(entry, uiLang);
+  return c;
 };
 
 export type CrossRateRow = { from: string; to: string; rate: number; direct: boolean };

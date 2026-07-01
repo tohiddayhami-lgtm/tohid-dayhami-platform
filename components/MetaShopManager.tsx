@@ -1561,6 +1561,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <div className="md:col-span-2 border border-slate-100 rounded-xl p-4 bg-slate-50/50">
             <MetaShopCurrencyRatesEditor
               baseCurrency={draft.currency || 'USD'}
+              baseCurrencyLabel={draft.currencyLabel}
+              baseCurrencyLabelEn={draft.currencyLabelEn}
               displayCurrencies={draft.displayCurrencies || []}
               defaultDisplayCurrency={draft.defaultDisplayCurrency}
               lang={lang}
@@ -1572,6 +1574,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                   defaultDisplayCurrency: normalizeDefaultDisplayCurrency(code, normalized, draft.defaultDisplayCurrency),
                 });
               }}
+              onBaseLabelsChange={patch => upd(patch)}
               onDisplayCurrenciesChange={list => upd({
                 displayCurrencies: list,
                 defaultDisplayCurrency: normalizeDefaultDisplayCurrency(draft.currency || 'USD', list, draft.defaultDisplayCurrency),

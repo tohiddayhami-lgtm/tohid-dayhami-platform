@@ -1359,6 +1359,9 @@ export interface MetaShop {
   coverImage?: string;
   logo?: string;
   currency: string;
+  /** Custom storefront label for base currency (e.g. «تومان» instead of IRR). */
+  currencyLabel?: string;
+  currencyLabelEn?: string;
   /** Extra currencies visitors can switch to; rates are vs `currency` (base). */
   displayCurrencies?: MetaShopDisplayCurrency[];
   /** Currency shown when the shop opens (visitor can still switch). Defaults to `currency`. */
