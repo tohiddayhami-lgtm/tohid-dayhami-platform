@@ -15,7 +15,7 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
-import { productHasPriceDrift, revertAllProductsToBase } from '../utils/metaShopPricing';
+import { productHasPriceDrift, revertAllProductsToBase, appendPriceMarkupHistory } from '../utils/metaShopPricing';
 import { AppModal } from './AppModal';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from '../utils/metaShopCurrency';
 import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
@@ -2320,22 +2320,59 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             productCount={draft.products.length}
             products={draft.products}
             onMarkupChange={(type, value) => setDraft(d => d ? { ...d, priceMarkupType: type, priceMarkupValue: value } : d)}
-            onCommitToBasePrices={products => setDraft(d => d ? {
-              ...d,
-              products,
-              priceMarkupType: undefined,
-              priceMarkupValue: undefined,
-            } : d)}
+            onCommitToBasePrices={products => setDraft(d => {
+              if (!d) return d;
+              const type = d.priceMarkupType;
+              const value = d.priceMarkupValue;
+              return {
+                ...d,
+                products,
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+                priceMarkupHistory: type && value != null && value !== 0
+                  ? appendPriceMarkupHistory(d.priceMarkupHistory, {
+                    action: 'commit',
+                    markupType: type,
+                    markupValue: value,
+                    productCount: products.length,
+                    actor: backupActorName,
+                  })
+                  : d.priceMarkupHistory,
+              };
+            })}
+            priceMarkupHistory={draft.priceMarkupHistory}
+            onClearHistory={() => setDraft(d => d ? { ...d, priceMarkupHistory: undefined } : d)}
             showStrikethroughPrice={draft.showStrikethroughPrice !== false}
             onShowStrikethroughChange={val => setDraft(d => d ? { ...d, showStrikethroughPrice: val } : d)}
             hasTemporaryShopMarkup={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) !== 0}
             hasDriftedProducts={draft.products.some(productHasPriceDrift)}
-            onClearTemporaryMarkup={() => setDraft(d => d ? { ...d, priceMarkupType: undefined, priceMarkupValue: undefined } : d)}
+            onClearTemporaryMarkup={() => setDraft(d => {
+              if (!d || !d.priceMarkupType || (d.priceMarkupValue ?? 0) === 0) {
+                return d ? { ...d, priceMarkupType: undefined, priceMarkupValue: undefined } : d;
+              }
+              return {
+                ...d,
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+                priceMarkupHistory: appendPriceMarkupHistory(d.priceMarkupHistory, {
+                  action: 'temporary_clear',
+                  markupType: d.priceMarkupType,
+                  markupValue: d.priceMarkupValue,
+                  productCount: d.products.length,
+                  actor: backupActorName,
+                }),
+              };
+            })}
             onRevertAllToBase={() => setDraft(d => d ? {
               ...d,
               products: revertAllProductsToBase(d.products),
               priceMarkupType: undefined,
               priceMarkupValue: undefined,
+              priceMarkupHistory: appendPriceMarkupHistory(d.priceMarkupHistory, {
+                action: 'revert_all',
+                productCount: d.products.length,
+                actor: backupActorName,
+              }),
             } : d)}
           />
         )}

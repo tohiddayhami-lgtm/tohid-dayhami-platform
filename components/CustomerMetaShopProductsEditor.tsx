@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { MetaShopProduct, MetaShopLang, MetaShopType, MetaShopDirCat } from '../types';
+import { MetaShopProduct, MetaShopLang, MetaShopType, MetaShopDirCat, MetaShopPriceMarkupHistoryEntry } from '../types';
 import { Language } from '../App';
 import { uploadFileWithProgress } from '../services/firebaseService';
 import { DEFAULT_PRODUCT_LANGS, isRtlLang } from '../utils/metaShopLang';
@@ -10,7 +10,7 @@ import { CustomerMetaShopPriceSettings } from './CustomerMetaShopPriceSettings';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { IconSearch, IconTrash, IconUpload, IconPlus, IconCopy } from './Icons';
-import { productHasPriceDrift, revertAllProductsToBase, type PriceAdjustType } from '../utils/metaShopPricing';
+import { productHasPriceDrift, revertAllProductsToBase, appendPriceMarkupHistory, type PriceAdjustType } from '../utils/metaShopPricing';
 
 interface Props {
   products: MetaShopProduct[];
@@ -23,6 +23,8 @@ interface Props {
   productImageFit?: 'cover' | 'contain';
   priceMarkupType?: PriceAdjustType;
   priceMarkupValue?: number;
+  priceMarkupHistory?: MetaShopPriceMarkupHistoryEntry[];
+  markupActor?: string;
   currency: string;
   shopType?: MetaShopType;
   shopSlug: string;
@@ -34,12 +36,22 @@ interface Props {
   saved?: boolean;
   onProductsChange: (products: MetaShopProduct[]) => void;
   onCategoriesChange: (categories: (string | MetaShopDirCat)[], groupI18n: Record<string, Record<string, string>>, products: MetaShopProduct[]) => void;
-  onPriceSettingsChange?: (patch: { hidePrices?: boolean; hidePriceText?: string; i18n?: Record<string, Record<string, string>>; showStrikethroughPrice?: boolean; productImageFit?: 'cover' | 'contain'; priceMarkupType?: PriceAdjustType; priceMarkupValue?: number }) => void;
+  onPriceSettingsChange?: (patch: {
+    hidePrices?: boolean;
+    hidePriceText?: string;
+    i18n?: Record<string, Record<string, string>>;
+    showStrikethroughPrice?: boolean;
+    productImageFit?: 'cover' | 'contain';
+    priceMarkupType?: PriceAdjustType;
+    priceMarkupValue?: number;
+    priceMarkupHistory?: MetaShopPriceMarkupHistoryEntry[];
+  }) => void;
   onSave: () => void;
 }
 
 export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
-  products, categories, groupI18n, hidePrices, hidePriceText, shopI18n, showStrikethroughPrice, productImageFit, priceMarkupType, priceMarkupValue, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
+  products, categories, groupI18n, hidePrices, hidePriceText, shopI18n, showStrikethroughPrice, productImageFit,
+  priceMarkupType, priceMarkupValue, priceMarkupHistory, markupActor, currency, shopType, shopSlug, shopBaseUrl, shopLangs = [], lang,
   loading, saving, saved, onProductsChange, onCategoriesChange, onPriceSettingsChange, onSave,
 }) => {
   const T = lang === 'fa';
@@ -260,17 +272,57 @@ export const CustomerMetaShopProductsEditor: React.FC<Props> = ({
           products={products}
           onMarkupChange={(type, value) => onPriceSettingsChange({ priceMarkupType: type, priceMarkupValue: value })}
           onCommitToBasePrices={nextProducts => {
+            if (priceMarkupType && priceMarkupValue != null && priceMarkupValue !== 0) {
+              onPriceSettingsChange?.({
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+                priceMarkupHistory: appendPriceMarkupHistory(priceMarkupHistory, {
+                  action: 'commit',
+                  markupType: priceMarkupType,
+                  markupValue: priceMarkupValue,
+                  productCount: nextProducts.length,
+                  actor: markupActor,
+                }),
+              });
+            } else {
+              onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
+            }
             onProductsChange(nextProducts);
-            onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
           }}
+          priceMarkupHistory={priceMarkupHistory}
+          onClearHistory={() => onPriceSettingsChange?.({ priceMarkupHistory: undefined })}
           showStrikethroughPrice={showStrikethroughPrice !== false}
           onShowStrikethroughChange={val => onPriceSettingsChange?.({ showStrikethroughPrice: val })}
           hasTemporaryShopMarkup={!!priceMarkupType && (priceMarkupValue ?? 0) !== 0}
           hasDriftedProducts={products.some(productHasPriceDrift)}
-          onClearTemporaryMarkup={() => onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined })}
+          onClearTemporaryMarkup={() => {
+            if (priceMarkupType && (priceMarkupValue ?? 0) !== 0) {
+              onPriceSettingsChange?.({
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+                priceMarkupHistory: appendPriceMarkupHistory(priceMarkupHistory, {
+                  action: 'temporary_clear',
+                  markupType: priceMarkupType,
+                  markupValue: priceMarkupValue,
+                  productCount: products.length,
+                  actor: markupActor,
+                }),
+              });
+            } else {
+              onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
+            }
+          }}
           onRevertAllToBase={() => {
             onProductsChange(revertAllProductsToBase(products));
-            onPriceSettingsChange?.({ priceMarkupType: undefined, priceMarkupValue: undefined });
+            onPriceSettingsChange?.({
+              priceMarkupType: undefined,
+              priceMarkupValue: undefined,
+              priceMarkupHistory: appendPriceMarkupHistory(priceMarkupHistory, {
+                action: 'revert_all',
+                productCount: products.length,
+                actor: markupActor,
+              }),
+            });
           }}
         />
       )}

@@ -189,6 +189,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         hidePriceText: draft.hidePriceText,
         priceMarkupType: draft.priceMarkupType,
         priceMarkupValue: draft.priceMarkupValue,
+        priceMarkupHistory: draft.priceMarkupHistory,
         showStrikethroughPrice: draft.showStrikethroughPrice,
         productImageFit: draft.productImageFit,
       });
@@ -202,6 +203,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
         hidePriceText: draft.hidePriceText,
         priceMarkupType: draft.priceMarkupType,
         priceMarkupValue: draft.priceMarkupValue,
+        priceMarkupHistory: draft.priceMarkupHistory,
         showStrikethroughPrice: draft.showStrikethroughPrice,
         productImageFit: draft.productImageFit,
       } : prev);
@@ -235,6 +237,7 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
     productImageFit?: 'cover' | 'contain';
     priceMarkupType?: import('../types').MetaShop['priceMarkupType'];
     priceMarkupValue?: number;
+    priceMarkupHistory?: import('../types').MetaShop['priceMarkupHistory'];
   }) => {
     upd(patch);
   };
@@ -368,6 +371,8 @@ export const CustomerMetaShopPanel: React.FC<Props> = ({
           productImageFit={draft.productImageFit}
           priceMarkupType={draft.priceMarkupType}
           priceMarkupValue={draft.priceMarkupValue}
+          priceMarkupHistory={draft.priceMarkupHistory}
+          markupActor={customerUser?.company || customerUser?.name}
           currency={shopBaseCurrency}
           shopType={shop.type}
           shopSlug={shop.slug}

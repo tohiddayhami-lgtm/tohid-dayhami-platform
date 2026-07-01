@@ -13,6 +13,7 @@ export const CUSTOMER_EDITABLE_SHOP_FIELDS = [
   'categories', 'groupI18n',
   'hidePrices', 'hidePriceText',
   'priceMarkupType', 'priceMarkupValue',
+  'priceMarkupHistory',
   'showStrikethroughPrice',
   'productImageFit',
   'products', 'discounts',
@@ -52,6 +53,7 @@ export function pickCustomerEditableFields(shop: MetaShop): Partial<MetaShop> {
       else if (key === 'displayCurrencies') (out as MetaShop).displayCurrencies = [...(val as MetaShop['displayCurrencies'] || [])];
       else if (key === 'categories') (out as MetaShop).categories = [...(val as MetaShop['categories'] || [])];
       else if (key === 'groupI18n') (out as MetaShop).groupI18n = { ...(val as MetaShop['groupI18n']) };
+      else if (key === 'priceMarkupHistory') (out as MetaShop).priceMarkupHistory = [...(val as MetaShop['priceMarkupHistory'] || [])];
       else (out as Record<string, unknown>)[key] = val;
     }
   }
