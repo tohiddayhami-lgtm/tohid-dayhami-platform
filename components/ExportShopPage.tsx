@@ -3,6 +3,7 @@ import { MetaShop, MetaBazaar, MetaBazaarNode, MetaShopProduct } from '../types'
 import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
+import { collectBazaarDisplayShops, collectShopsFromBazaarNode } from '../utils/bazaarShopResolve';
 import { IconSearch, IconTrolley } from './Icons';
 import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
@@ -21,29 +22,6 @@ interface Props {
 const PAGE_SIZE = 9;
 const ALL = '__all__';
 const MIN_SEARCH = 2;
-
-const collectShopsFromNode = (node: MetaBazaarNode, shopBySlug: Record<string, MetaShop>): MetaShop[] => {
-  const acc: MetaShop[] = [];
-  const seen = new Set<string>();
-  const walk = (n: MetaBazaarNode) => {
-    (n.shopSlugs || []).forEach(sl => {
-      const s = shopBySlug[sl];
-      if (s && s.isActive !== false && !seen.has(s.id)) { seen.add(s.id); acc.push(s); }
-    });
-    (n.children || []).forEach(walk);
-  };
-  walk(node);
-  return acc;
-};
-
-const collectAllBazaarShops = (bazaar: MetaBazaar, shopBySlug: Record<string, MetaShop>): MetaShop[] => {
-  const acc: MetaShop[] = [];
-  const seen = new Set<string>();
-  (bazaar.tree || []).forEach(n => collectShopsFromNode(n, shopBySlug).forEach(s => {
-    if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); }
-  }));
-  return acc;
-};
 
 const matchingProducts = (shop: MetaShop, q: string): MetaShopProduct[] => {
   if (!q || q.length < MIN_SEARCH) return [];
@@ -65,16 +43,12 @@ export const ExportShopPage: React.FC<Props> = ({
   const [page, setPage] = useState(1);
   const [bazaarPath, setBazaarPath] = useState<string[]>([]);
 
-  const shopBySlug = useMemo(() => {
-    const m: Record<string, MetaShop> = {};
-    shops.filter(s => s.isActive !== false).forEach(s => { m[s.slug] = s; });
-    return m;
-  }, [shops]);
+  const liveShops = useMemo(() => shops.filter(s => s.isActive !== false), [shops]);
 
   const bazaarShopPool = useMemo(() => {
     if (!bazaar) return [];
-    return collectAllBazaarShops(bazaar, shopBySlug);
-  }, [bazaar, shopBySlug]);
+    return collectBazaarDisplayShops(bazaar, liveShops);
+  }, [bazaar, liveShops]);
 
   const t = {
     title: fa ? 'فروشگاه صادراتی' : 'Export Shop',
@@ -127,14 +101,14 @@ export const ExportShopPage: React.FC<Props> = ({
         activeNode = cursor.find(n => n.id === id);
         cursor = activeNode?.children || [];
       }
-      if (activeNode) pool = collectShopsFromNode(activeNode, shopBySlug);
+      if (activeNode) pool = collectShopsFromBazaarNode(activeNode, liveShops);
     }
 
     if (!q) return sortShopsForBazaar(pool, bazaar);
     if (q.length < MIN_SEARCH) return sortShopsForBazaar(pool, bazaar);
 
     return sortShopsForBazaar(pool.filter(s => shopMatchesSearch(s, q)), bazaar);
-  }, [bazaar, bazaarShopPool, bazaarPath, shopBySlug, search]);
+  }, [bazaar, bazaarShopPool, bazaarPath, liveShops, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -287,7 +261,7 @@ export const ExportShopPage: React.FC<Props> = ({
               options={lvl.nodes.map(n => ({
                 key: n.id,
                 label: bLbl(n.label, fa),
-                count: collectShopsFromNode(n, shopBySlug).length,
+                count: collectShopsFromBazaarNode(n, liveShops).length,
               }))}
             />
           ))}
