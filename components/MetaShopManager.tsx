@@ -2534,7 +2534,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                           <button onClick={() => removePageImage(idx, i)} className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 leading-none opacity-0 group-hover:opacity-100">✕</button>
                         </div>
                       ))}
-                      <PageImageUploader onUpload={url => addPageImage(idx, url)} />
+                      <PageImageUploader onUpload={url => addPageImage(idx, url)} lang={lang} />
                     </div>
                   </div>
                 )}
@@ -2549,7 +2549,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <div className="space-y-2">
                       {(pg.cards || []).map((c, cIdx) => (
                         <div key={c.id} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2 bg-gray-50/50">
-                          <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} />
+                          <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} lang={lang} />
                           <div className="flex-1 min-w-0">
                             <input className={fld + ' mb-1.5'} placeholder={t.cardName} value={c.name || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'name', e.target.value)} />
                             <textarea className={fld} rows={2} placeholder={t.cardDesc} value={c.desc || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'desc', e.target.value)} />
@@ -2589,38 +2589,109 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   );
 };
 
+// Track image uploads with progress bar + success checkmark
+type ImageUploadTrack = {
+  id: string;
+  label: string;
+  progress: number;
+  status: 'uploading' | 'done' | 'error';
+  error?: string;
+};
+
+const startImageUpload = (
+  file: File,
+  onUrl: (url: string) => void,
+  setTracks: React.Dispatch<React.SetStateAction<ImageUploadTrack[]>>,
+  lang: Language,
+) => {
+  const T = lang === 'fa';
+  const id = `up-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  setTracks(prev => [...prev, { id, label: file.name, progress: 0, status: 'uploading' }]);
+  const stallTimer = window.setTimeout(() => {
+    setTracks(prev => prev.map(t => (
+      t.id === id && t.status === 'uploading' && t.progress < 5
+        ? { ...t, status: 'error', error: T ? 'اتصال کند یا قطع — دوباره تلاش کنید یا لینک URL بچسبانید' : 'Slow or blocked connection — retry or paste a URL' }
+        : t
+    )));
+  }, 45_000);
+  uploadFileWithProgress(
+    file,
+    p => setTracks(prev => prev.map(t => (t.id === id ? { ...t, progress: Math.round(p) } : t))),
+    url => {
+      window.clearTimeout(stallTimer);
+      onUrl(url);
+      setTracks(prev => prev.map(t => (t.id === id ? { ...t, status: 'done', progress: 100 } : t)));
+      window.setTimeout(() => setTracks(prev => prev.filter(t => t.id !== id)), 2800);
+    },
+    err => {
+      window.clearTimeout(stallTimer);
+      setTracks(prev => prev.map(t => (t.id === id ? { ...t, status: 'error', error: err.message } : t)));
+    },
+    'images',
+  );
+};
+
+const ImageUploadProgressList: React.FC<{ tracks: ImageUploadTrack[]; lang: Language }> = ({ tracks, lang }) => {
+  if (!tracks.length) return null;
+  const T = lang === 'fa';
+  return (
+    <div className="mt-1.5 space-y-1 w-full">
+      {tracks.map(t => (
+        <div key={t.id} className="rounded-md border border-gray-100 bg-gray-50 px-1.5 py-1">
+          <div className="flex items-center gap-1 text-[10px] text-gray-600 min-w-0">
+            <span className="truncate flex-1" title={t.label}>{t.label}</span>
+            {t.status === 'uploading' && <span className="shrink-0 tabular-nums text-indigo-600">{t.progress}%</span>}
+            {t.status === 'done' && <span className="shrink-0 text-emerald-600 font-bold flex items-center gap-0.5"><IconCheck className="w-3 h-3" />{T ? 'آپلود شد' : 'Done'}</span>}
+            {t.status === 'error' && <span className="shrink-0 text-red-500 font-bold">✕</span>}
+          </div>
+          {t.status === 'uploading' && (
+            <div className="mt-0.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 transition-[width] duration-200 ease-out" style={{ width: `${Math.max(t.progress, 4)}%` }} />
+            </div>
+          )}
+          {t.status === 'error' && t.error && <p className="text-[9px] text-red-500 mt-0.5 leading-snug">{t.error}</p>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // Page image adder (upload OR paste URL)
-const PageImageUploader: React.FC<{ onUpload: (url: string) => void }> = ({ onUpload }) => {
+const PageImageUploader: React.FC<{ onUpload: (url: string) => void; lang: Language }> = ({ onUpload, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [up, setUp] = useState(false);
+  const [tracks, setTracks] = useState<ImageUploadTrack[]>([]);
   const [url, setUrl] = useState('');
+  const uploading = tracks.some(t => t.status === 'uploading');
   return (
     <div className="flex flex-col gap-1 w-16">
-      <div onClick={() => !up && ref.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
-        {up ? <span className="text-[9px]">...</span> : <IconUpload className="w-4 h-4" />}
+      <div onClick={() => !uploading && ref.current?.click()} className={`w-16 h-16 rounded-lg border-2 border-dashed bg-gray-50 flex items-center justify-center text-gray-300 ${uploading ? 'border-indigo-300 bg-indigo-50 cursor-wait' : 'border-gray-300 hover:bg-gray-100 cursor-pointer'}`}>
+        {uploading ? <span className="text-[9px] text-indigo-600 font-bold">…</span> : <IconUpload className="w-4 h-4" />}
       </div>
+      <ImageUploadProgressList tracks={tracks} lang={lang} />
       <div className="flex gap-0.5">
         <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (url.trim()) { onUpload(url.trim()); setUrl(''); } } }} />
         <button onClick={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
       </div>
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) startImageUpload(f, onUpload, setTracks, lang); e.target.value = ''; }} />
     </div>
   );
 };
 
 // Card image (upload OR paste URL)
-const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void }> = ({ image, onUpload, onClear }) => {
+const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void; lang: Language }> = ({ image, onUpload, onClear, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [up, setUp] = useState(false);
+  const [tracks, setTracks] = useState<ImageUploadTrack[]>([]);
   const [url, setUrl] = useState('');
+  const uploading = tracks.some(t => t.status === 'uploading');
   return (
     <div className="shrink-0 w-12">
-      <div onClick={() => !up && ref.current?.click()} className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
-        {image ? <img src={image} className="w-full h-full object-contain" /> : (up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3.5 h-3.5" />)}
+      <div onClick={() => !uploading && ref.current?.click()} className={`w-12 h-12 rounded-lg border-2 border-dashed bg-white overflow-hidden flex items-center justify-center text-gray-300 ${uploading ? 'border-indigo-300 cursor-wait' : 'border-gray-300 hover:bg-gray-100 cursor-pointer'}`}>
+        {image ? <img src={image} className="w-full h-full object-contain" alt="" /> : (uploading ? <span className="text-[8px] text-indigo-600">…</span> : <IconUpload className="w-3.5 h-3.5" />)}
       </div>
-      {image ? <button onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
+      <ImageUploadProgressList tracks={tracks} lang={lang} />
+      {image ? <button type="button" onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
         : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && url.trim()) { e.preventDefault(); onUpload(url.trim()); setUrl(''); } }} onBlur={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} />}
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) startImageUpload(f, onUpload, setTracks, lang); e.target.value = ''; }} />
     </div>
   );
 };
@@ -2628,35 +2699,52 @@ const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => v
 // Multi-image gallery uploader for a product (upload several OR paste image URLs; first = main)
 const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) => void; lang: Language }> = ({ images, onChange, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [up, setUp] = useState(false);
+  const [tracks, setTracks] = useState<ImageUploadTrack[]>([]);
   const [url, setUrl] = useState('');
-  const handleFiles = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const arr = Array.from(files);
-    setUp(true);
-    let remaining = arr.length;
-    const collected: string[] = [];
-    const done = () => { if (--remaining === 0) { onChange([...images, ...collected]); setUp(false); } };
-    arr.forEach(f => uploadFileWithProgress(f, () => {}, u => { collected.push(u); done(); }, err => { alert(err.message); done(); }, 'images'));
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const uploading = tracks.some(t => t.status === 'uploading');
+
+  const appendImage = (u: string) => {
+    const next = [...imagesRef.current, u];
+    imagesRef.current = next;
+    onChange(next);
   };
-  const addUrl = () => { const u = url.trim(); if (!u) return; onChange([...images, u]); setUrl(''); };
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files?.length) return;
+    Array.from(files).forEach(f => startImageUpload(f, appendImage, setTracks, lang));
+  };
+
+  const addUrl = () => {
+    const u = url.trim();
+    if (!u) return;
+    appendImage(u);
+    setUrl('');
+  };
+
   return (
-    <div className="shrink-0 w-[150px]">
+    <div className="shrink-0 w-[min(100%,200px)]">
       <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
-          <div key={i} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
-            <img src={src} className="w-full h-full object-cover" />
+          <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
+            <img src={src} className="w-full h-full object-cover" alt="" />
             {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{lang === 'fa' ? 'اصلی' : 'main'}</span>}
-            <button onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
+            <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>
         ))}
-        <div onClick={() => !up && ref.current?.click()} className="w-[34px] h-[34px] rounded border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300" title={lang === 'fa' ? 'آپلود' : 'Upload'}>
-          {up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3 h-3" />}
+        <div
+          onClick={() => !uploading && ref.current?.click()}
+          className={`w-[34px] h-[34px] rounded border-2 border-dashed flex items-center justify-center ${uploading ? 'border-indigo-400 bg-indigo-50 text-indigo-500 cursor-wait' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-300 cursor-pointer'}`}
+          title={lang === 'fa' ? 'آپلود عکس' : 'Upload image'}
+        >
+          {uploading ? <span className="text-[8px] font-bold">…</span> : <IconUpload className="w-3 h-3" />}
         </div>
       </div>
+      <ImageUploadProgressList tracks={tracks} lang={lang} />
       <div className="flex gap-1 mt-1">
-        <input className="flex-1 min-w-0 px-1.5 py-1 rounded border border-gray-200 text-[10px] outline-none dir-ltr" placeholder={lang === 'fa' ? 'لینک عکس' : 'image URL'} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
-        <button onClick={addUrl} disabled={!url.trim()} className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500 shrink-0"><IconPlus className="w-3 h-3" /></button>
+        <input className="flex-1 min-w-0 px-1.5 py-1 rounded border border-gray-200 text-[10px] outline-none dir-ltr focus:border-indigo-400" placeholder={lang === 'fa' ? 'لینک عکس' : 'image URL'} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
+        <button type="button" onClick={addUrl} disabled={!url.trim()} className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500 shrink-0"><IconPlus className="w-3 h-3" /></button>
       </div>
       <input type="file" ref={ref} className="hidden" accept="image/*" multiple onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
     </div>
