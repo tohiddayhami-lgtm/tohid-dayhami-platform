@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { MetaShop, MetaBazaar, MetaBazaarNode } from '../types';
 import { shopCodeOf } from './shopCode';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
-import { collectBazaarDisplayShops, collectShopsFromBazaarNode } from '../utils/bazaarShopResolve';
 import { shopSearchHaystack, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { Language } from '../App';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
@@ -138,19 +137,30 @@ export const MetaShopDirectory: React.FC<Props> = ({ shops, lang, onOpenShop, ti
 
   // ════════════ BAZAAR MODE (curated multi-level tree) ════════════
   if (bazaar) {
+    const shopBySlug: Record<string, MetaShop> = {};
+    live.forEach(s => { shopBySlug[s.slug] = s; });
     const q = search.trim();
     const shopMatches = (s: MetaShop) => !q || textMatchesSearchQuery(`${shopSearchHaystack(s)} ${shopCodeOf(s)}`, q);
     const bLbl = (c?: { fa?: string; en?: string }) => c ? (T ? (c.fa || c.en) : (c.en || c.fa)) || '' : '';
     const accentCover = bazaar.theme?.cover || '#1f2a18';
 
-    const collectShops = (node: MetaBazaarNode): MetaShop[] =>
-      collectShopsFromBazaarNode(node, live).filter(s => shopMatches(s));
+    // Collect all shops under a node (itself + all descendants), de-duplicated, filtered by search
+    const collectShops = (node: MetaBazaarNode): MetaShop[] => {
+      const acc: MetaShop[] = [];
+      const seen = new Set<string>();
+      const walk = (n: MetaBazaarNode) => {
+        (n.shopSlugs || []).forEach(sl => { const s = shopBySlug[sl]; if (s && !seen.has(s.id) && shopMatches(s)) { seen.add(s.id); acc.push(s); } });
+        (n.children || []).forEach(walk);
+      };
+      walk(node);
+      return acc;
+    };
 
     // Drill-down levels: only follow EXPLICIT selections (depth 0 defaults to first root).
     // The grid shows the AGGREGATE of the active node's whole subtree, so a node never looks empty
     // just because its first child is empty — selecting a country shows all its shops.
     const tree = bazaar.tree || [];
-    const allTreeShops = (): MetaShop[] => collectBazaarDisplayShops(bazaar, live).filter(shopMatches);
+    const allTreeShops = (): MetaShop[] => { const acc: MetaShop[] = []; const seen = new Set<string>(); tree.forEach(n => collectShops(n).forEach(s => { if (!seen.has(s.id)) { seen.add(s.id); acc.push(s); } })); return acc; };
     const levels: { depth: number; nodes: MetaBazaarNode[]; selectedId?: string }[] = [];
     let cursor: MetaBazaarNode[] = tree;
     let activeNode: MetaBazaarNode | undefined;

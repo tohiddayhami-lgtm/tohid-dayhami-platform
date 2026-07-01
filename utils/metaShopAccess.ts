@@ -37,12 +37,11 @@ export const filterMetaShopsForUser = (user: Personnel, shops: MetaShop[]): Meta
   return shops.filter(s => canViewMetaShopRecord(user, s));
 };
 
-const collectBazaarShopSlugsFromTree = (bazaar: MetaBazaar): string[] => {
+const collectBazaarShopSlugs = (bazaar: MetaBazaar): string[] => {
   const slugs = new Set<string>();
   const walk = (nodes: MetaBazaarNode[] | undefined) => {
     for (const n of nodes || []) {
-      (n.shopSlugs || []).forEach(sl => { if (sl) slugs.add(sl); });
-      if ((n as { shopSlug?: string }).shopSlug) slugs.add((n as { shopSlug?: string }).shopSlug!);
+      if (n.shopSlug) slugs.add(n.shopSlug);
       walk(n.children);
     }
   };
@@ -67,7 +66,7 @@ export const filterMetaBazaarsForUser = (
   const visibleSlugs = new Set(visibleShops.map(s => s.slug));
 
   return bazaars.filter(bazaar => {
-    const slugs = collectBazaarShopSlugsFromTree(bazaar);
+    const slugs = collectBazaarShopSlugs(bazaar);
     if (!slugs.length) return !hasPersonnelShopFilter;
     return slugs.some(slug => visibleSlugs.has(slug));
   });

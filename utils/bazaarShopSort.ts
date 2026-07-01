@@ -1,5 +1,4 @@
 import type { MetaBazaar, MetaBazaarNode, MetaShop } from '../types';
-import { normalizeBazaarTreeSlugs } from './bazaarShopResolve';
 
 export const MAX_BAZAAR_FEATURED_SHOPS = 6;
 
@@ -44,13 +43,11 @@ export const sortShopsForBazaar = (shops: MetaShop[], bazaar: MetaBazaar | null 
 };
 
 export const pruneBazaarShopMeta = (bazaar: MetaBazaar): MetaBazaar => {
-  const linked = new Set(collectBazaarShopSlugs(bazaar.tree || []).map(s => s.toLowerCase()));
-  const featured = (bazaar.featuredShopSlugs || [])
-    .filter(sl => linked.has(sl.toLowerCase()))
-    .slice(0, MAX_BAZAAR_FEATURED_SHOPS);
+  const linked = new Set(collectBazaarShopSlugs(bazaar.tree || []));
+  const featured = (bazaar.featuredShopSlugs || []).filter(sl => linked.has(sl)).slice(0, MAX_BAZAAR_FEATURED_SHOPS);
   const priorities: Record<string, number> = {};
   for (const [slug, val] of Object.entries(bazaar.shopPriorities || {})) {
-    if (!linked.has(slug.toLowerCase())) continue;
+    if (!linked.has(slug)) continue;
     if (typeof val === 'number' && Number.isFinite(val)) priorities[slug] = val;
   }
   return {
@@ -59,9 +56,6 @@ export const pruneBazaarShopMeta = (bazaar: MetaBazaar): MetaBazaar => {
     shopPriorities: Object.keys(priorities).length ? priorities : undefined,
   };
 };
-
-export const prepareBazaarForSave = (bazaar: MetaBazaar, shops: MetaShop[]): MetaBazaar =>
-  pruneBazaarShopMeta(normalizeBazaarTreeSlugs(bazaar, shops));
 
 export const toggleBazaarFeaturedShop = (bazaar: MetaBazaar, slug: string): MetaBazaar => {
   const cur = [...(bazaar.featuredShopSlugs || [])];

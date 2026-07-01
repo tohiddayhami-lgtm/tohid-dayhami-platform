@@ -11,12 +11,11 @@ import {
   MAX_BAZAAR_FEATURED_SHOPS,
   collectBazaarShopSlugs,
   isBazaarFeaturedShop,
-  prepareBazaarForSave,
+  pruneBazaarShopMeta,
   setBazaarShopPriority,
   sortShopsForBazaar,
   toggleBazaarFeaturedShop,
 } from '../utils/bazaarShopSort';
-import { collectBazaarDisplayShops, ensureShopInBazaarTree } from '../utils/bazaarShopResolve';
 import { shopMatchesSearch, textMatchesSearchQuery } from '../utils/metaShopSearch';
 import { shopCodeOf } from './shopCode';
 
@@ -97,7 +96,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     nodes: T ? 'تعداد گره‌ها' : 'nodes', deleteConfirm: T ? 'این بازارچه حذف شود؟' : 'Delete this bazaar?', invalid: T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.',
     levels: T ? 'سطوح' : 'Levels',
     structure: T ? 'ساختار دسته‌بندی' : 'Category structure',
-    structureHint: T ? 'دسته‌ها را اضافه کنید و با دکمه «فروشگاه‌ها» هر مغازه را به گره وصل کنید — بدون این اتصال در «فروشگاه بین‌المللی» نمایش داده نمی‌شود.' : 'Add categories and use «Shops» on each node to link stores — unlinked shops do not appear on the International Shop page.',
+    structureHint: T ? 'دسته‌ها را اضافه/ویرایش/حذف کنید و فروشگاه‌ها را به هر گره وصل کنید.' : 'Add/edit/delete categories and attach shops to any node.',
     levelNames: T ? 'نام سطوح' : 'Level names', addLevel: T ? 'افزودن سطح' : 'Add level',
     addRoot: T ? 'افزودن دسته اصلی' : 'Add top category', addChild: T ? 'زیرمجموعه' : 'Subcategory', delNode: T ? 'حذف' : 'Delete',
     shopsBtn: T ? 'فروشگاه‌ها' : 'Shops', noTree: T ? 'هنوز دسته‌ای اضافه نشده. «افزودن دسته اصلی» را بزنید.' : 'No categories yet. Click “Add top category”.',
@@ -109,8 +108,8 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     newCatFa: T ? 'دسته جدید' : 'New category',
     shopOrder: T ? 'اولویت و فروشگاه‌های ویژه' : 'Shop order & featured',
     shopOrderHint: T
-      ? 'فروشگاه باید به یک دسته در ساختار بالا وصل باشد تا در صفحه عمومی نمایش داده شود. ستاره‌دار کردن، فروشگاه را خودکار به اولین دسته وصل می‌کند. عدد اولویت بیشتر = نمایش زودتر (بعد از ویژه‌ها).'
-      : 'A shop must be linked to a category above to appear publicly. Starring auto-links it to the first category. Higher priority = shown earlier (after featured).',
+      ? 'فروشگاه‌های ستاره‌دار (حداکثر ۶) بالاتر از همه نمایش داده می‌شوند. عدد اولویت بیشتر = نمایش زودتر (بعد از ویژه‌ها).'
+      : 'Starred shops (max 6) appear first. Higher priority number = shown earlier (after featured).',
     priority: T ? 'اولویت' : 'Priority',
     featured: T ? 'ویژه' : 'Featured',
     featuredCount: (n: number) => T ? `${n}/${MAX_BAZAAR_FEATURED_SHOPS} ویژه` : `${n}/${MAX_BAZAAR_FEATURED_SHOPS} featured`,
@@ -169,7 +168,7 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     if (bazaars.some(b => b.id !== draft.id && b.slug === slug)) { alert(T ? 'این شناسه قبلاً استفاده شده.' : 'Slug already used.'); return; }
     setSaving(true);
-    try { await onSave(prepareBazaarForSave({ ...draft, slug }, shops)); closeDraft(); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
+    try { await onSave(pruneBazaarShopMeta({ ...draft, slug })); closeDraft(); } catch { alert(T ? 'خطا در ذخیره' : 'Save failed'); } finally { setSaving(false); }
   };
 
   const uniqueSlug = (base: string, excludeId?: string) => {
@@ -270,19 +269,22 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
 
   const linkedBazaarShops = useMemo(() => {
     if (!draft) return [] as MetaShop[];
-    return sortShopsForBazaar(collectBazaarDisplayShops(draft, shops), draft);
-  }, [draft, shops]);
-
-  const orderableShops = useMemo(() => {
-    const list = shops.filter(s => s.isActive !== false);
+    const slugs = collectBazaarShopSlugs(draft.tree || []);
+    const bySlug = new Map(shops.map(s => [s.slug, s]));
+    const list = slugs.map(sl => bySlug.get(sl)).filter((s): s is MetaShop => !!s);
     return sortShopsForBazaar(list, draft);
-  }, [shops, draft]);
+  }, [draft, shops]);
 
   const filterShopList = (list: MetaShop[], q: string) => {
     const trimmed = q.trim();
     if (!trimmed) return list;
     return list.filter(s => shopMatchesSearch(s, trimmed) || textMatchesSearchQuery(shopCodeOf(s), trimmed));
   };
+
+  const filteredLinkedShops = useMemo(
+    () => filterShopList(linkedBazaarShops, shopSearch),
+    [linkedBazaarShops, shopSearch],
+  );
 
   const bazaarSearchHaystack = (b: MetaBazaar) =>
     [b.name, b.slug, b.title?.fa, b.title?.en, b.subtitle?.fa, b.subtitle?.en].filter(Boolean).join(' ');
@@ -296,15 +298,12 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
   const toggleFeaturedShop = (slug: string) => {
     setDraft(d => {
       if (!d) return d;
-      const featured = isBazaarFeaturedShop(slug, d);
-      if (featured) return toggleBazaarFeaturedShop(d, slug);
       const cur = d.featuredShopSlugs || [];
       if (!cur.includes(slug) && cur.length >= MAX_BAZAAR_FEATURED_SHOPS) {
         alert(t.featuredFull);
         return d;
       }
-      const linked = ensureShopInBazaarTree(d, slug);
-      return toggleBazaarFeaturedShop(linked, slug);
+      return toggleBazaarFeaturedShop(d, slug);
     });
   };
 
@@ -431,8 +430,8 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
             </span>
           </div>
           <p className="text-xs text-gray-500 mb-3">{t.shopOrderHint}</p>
-          {orderableShops.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">{t.noShops}</p>
+          {linkedBazaarShops.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">{t.noLinkedShops}</p>
           ) : (
             <>
               <div className="relative mb-3 max-w-sm">
@@ -446,20 +445,16 @@ export const MetaBazaarManager: React.FC<Props> = ({ bazaars, shops, lang, shopB
                 />
               </div>
               <div className="space-y-2 max-h-72 overflow-y-auto">
-              {filterShopList(orderableShops, shopSearch).length === 0 ? (
+              {filteredLinkedShops.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-4">{t.searchEmpty}</p>
-              ) : filterShopList(orderableShops, shopSearch).map(shop => {
+              ) : filteredLinkedShops.map(shop => {
                 const featured = draft ? isBazaarFeaturedShop(shop.slug, draft) : false;
-                const linked = draft ? collectBazaarShopSlugs(draft.tree || []).some(sl => sl.toLowerCase() === shop.slug.toLowerCase()) : false;
                 const priority = draft?.shopPriorities?.[shop.slug] ?? 0;
                 return (
                   <div key={shop.id} className={`flex flex-wrap items-center gap-2 p-2.5 rounded-xl border ${featured ? 'border-amber-200 bg-amber-50/60' : 'border-gray-100 bg-gray-50/80'}`}>
                     <div className="flex-1 min-w-[140px]">
                       <div className="text-sm font-bold text-gray-900">{shop.name}</div>
                       <div className="text-[10px] text-gray-400 font-mono dir-ltr">{shop.slug}</div>
-                      {!linked && (
-                        <div className="text-[10px] text-rose-600 font-semibold mt-0.5">{T ? 'هنوز به دسته وصل نشده' : 'Not linked to a category'}</div>
-                      )}
                     </div>
                     <label className="flex items-center gap-1.5 text-xs text-gray-600">
                       <span className="font-semibold">{t.priority}</span>
