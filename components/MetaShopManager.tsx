@@ -189,12 +189,13 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
 const mergeLoadedShopProducts = (local: MetaShopProduct[], loaded: MetaShopProduct[]): MetaShopProduct[] => {
   if (!local.length) return loaded;
   const byId = new Map(local.map(p => [p.id, p]));
-  const merged = loaded.map(p => {
-    const cur = byId.get(p.id);
+  const merged = loaded.map((p, idx) => {
+    const cur = byId.get(p.id) || local[idx];
     if (!cur) return p;
     const localImgs = cur.images || [];
     const loadedImgs = p.images || [];
-    if (localImgs.length > loadedImgs.length) return { ...p, images: localImgs };
+    const hasLocalOnly = localImgs.some(u => u.startsWith('blob:') || !loadedImgs.includes(u));
+    if (localImgs.length > loadedImgs.length || hasLocalOnly) return { ...p, images: localImgs };
     return p;
   });
   const loadedIds = new Set(loaded.map(p => p.id));
@@ -2699,6 +2700,18 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
     onChange(next);
   };
 
+  const replaceImage = (from: string, to: string) => {
+    const next = imagesRef.current.map(img => (img === from ? to : img));
+    imagesRef.current = next;
+    onChange(next);
+  };
+
+  const removeImage = (target: string) => {
+    const next = imagesRef.current.filter(img => img !== target);
+    imagesRef.current = next;
+    onChange(next);
+  };
+
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
@@ -2712,15 +2725,20 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
 
     arr.forEach((f, i) => {
       const itemId = batch[i].id;
+      const previewUrl = URL.createObjectURL(f);
+      appendImage(previewUrl);
       uploadFileWithProgress(
         f,
         p => setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, progress: p } : it))),
         u => {
-          appendImage(u);
+          replaceImage(previewUrl, u);
+          URL.revokeObjectURL(previewUrl);
           setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'done', progress: 100 } : it)));
           window.setTimeout(() => setUploads(prev => prev.filter(it => it.id !== itemId)), 2500);
         },
         err => {
+          removeImage(previewUrl);
+          URL.revokeObjectURL(previewUrl);
           const msg = err.message || (T ? 'آپلود ناموفق' : 'Upload failed');
           setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'error', error: msg } : it)));
           alert(msg);
@@ -2742,7 +2760,7 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
       <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
           <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group bg-gray-50">
-            <img src={metaShopProductImageUrl(src, 120) || src} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0.35'; }} />
+            <img src={src.startsWith('blob:') ? src : (metaShopProductImageUrl(src, 120) || src)} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0.35'; }} />
             {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{T ? 'اصلی' : 'main'}</span>}
             <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>
