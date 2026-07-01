@@ -40,9 +40,6 @@
     },
     "api/ms-img.js": {
       "maxDuration": 30
-    },
-    "api/storage-upload.js": {
-      "maxDuration": 60
     }
   }
 }

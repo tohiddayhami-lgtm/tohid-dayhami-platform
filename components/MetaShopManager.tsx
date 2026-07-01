@@ -28,7 +28,6 @@ import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProd
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
-import { metaShopProductImageUrl } from '../utils/metaShopImage';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
 
@@ -186,23 +185,6 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-const mergeLoadedShopProducts = (local: MetaShopProduct[], loaded: MetaShopProduct[]): MetaShopProduct[] => {
-  if (!local.length) return loaded;
-  const byId = new Map(local.map(p => [p.id, p]));
-  const merged = loaded.map((p, idx) => {
-    const cur = byId.get(p.id) || local[idx];
-    if (!cur) return p;
-    const localImgs = cur.images || [];
-    const loadedImgs = p.images || [];
-    const hasLocalOnly = localImgs.some(u => u.startsWith('blob:') || !loadedImgs.includes(u));
-    if (localImgs.length > loadedImgs.length || hasLocalOnly) return { ...p, images: localImgs };
-    return p;
-  });
-  const loadedIds = new Set(loaded.map(p => p.id));
-  const extras = local.filter(p => !loadedIds.has(p.id));
-  return extras.length ? [...merged, ...extras] : merged;
-};
-
 export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onRestoreMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const savedNav = loadMetaShopManagerNav();
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
@@ -244,7 +226,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const seoImageInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
-  const productsDirtyRef = useRef(false);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
   const [dirCatFa, setDirCatFa] = useState('');
   const [dirCatEn, setDirCatEn] = useState('');
@@ -679,9 +660,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   };
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
 
-  const startNew = () => { productsDirtyRef.current = false; setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
+  const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
   const startEdit = (s: MetaShop) => {
-    productsDirtyRef.current = false;
     setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
     setProductsSyncing(false);
     setProductsLoadFailed(false);
@@ -696,25 +676,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (!shopNeedsProductHydration(s)) return;
     setProductsLoading(true);
     loadMetaShopProductsFull(s, (products, loaded, total) => {
-      setDraft(d => {
-        if (!d || d.id !== shopId) return d;
-        const next = productsDirtyRef.current
-          ? mergeLoadedShopProducts(d.products, products)
-          : products;
-        return { ...d, products: next };
-      });
+      setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
       if (loaded >= 1) setProductsLoading(false);
       setProductsSyncing(loaded < total);
     })
       .then(full => {
         const loaded = full.products?.length ?? 0;
-        setDraft(d => {
-          if (!d || d.id !== shopId) return d;
-          const nextProducts = productsDirtyRef.current
-            ? mergeLoadedShopProducts(d.products, full.products || [])
-            : (full.products || []);
-          return { ...d, ...full, products: nextProducts };
-        });
+        setDraft(d => (d && d.id === shopId ? { ...d, ...full, products: full.products || [] } : d));
         if (loaded > 0 || expectedCount === 0) {
           setProductsFullyLoaded(true);
           setProductsLoadFailed(false);
@@ -849,10 +817,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (draft!.type === 'realestate') base.realEstate = defaultRealEstate();
     upd({ products: [...(draft!.products || []), base] });
   };
-  const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => {
-    productsDirtyRef.current = true;
-    setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
-  };
+  const updProduct = (idx: number, patch: Partial<MetaShopProduct>) => setDraft(d => { if (!d) return d; const products = [...d.products]; products[idx] = { ...products[idx], ...patch }; return { ...d, products }; });
   const featuredCount = (draft?.products || []).filter(p => p.featured).length;
   const removeProduct = (idx: number) => setDraft(d => d ? { ...d, products: d.products.filter((_, i) => i !== idx) } : d);
   const updProductI18n = (idx: number, code: string, field: string, val: string) => {
@@ -2569,7 +2534,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                           <button onClick={() => removePageImage(idx, i)} className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 leading-none opacity-0 group-hover:opacity-100">✕</button>
                         </div>
                       ))}
-                      <PageImageUploader onUpload={url => addPageImage(idx, url)} lang={lang} />
+                      <PageImageUploader onUpload={url => addPageImage(idx, url)} />
                     </div>
                   </div>
                 )}
@@ -2584,7 +2549,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                     <div className="space-y-2">
                       {(pg.cards || []).map((c, cIdx) => (
                         <div key={c.id} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2 bg-gray-50/50">
-                          <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} lang={lang} />
+                          <CardImageUploader image={c.image} onUpload={url => updCard(idx, cIdx, { image: url })} onClear={() => updCard(idx, cIdx, { image: '' })} />
                           <div className="flex-1 min-w-0">
                             <input className={fld + ' mb-1.5'} placeholder={t.cardName} value={c.name || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'name', e.target.value)} />
                             <textarea className={fld} rows={2} placeholder={t.cardDesc} value={c.desc || ''} onChange={e => setCardLangField(idx, cIdx, 'fa', 'desc', e.target.value)} />
@@ -2625,197 +2590,73 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 };
 
 // Page image adder (upload OR paste URL)
-const PageImageUploader: React.FC<{ onUpload: (url: string) => void; lang?: Language }> = ({ onUpload, lang = 'fa' }) => {
+const PageImageUploader: React.FC<{ onUpload: (url: string) => void }> = ({ onUpload }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const [up, setUp] = useState(false);
   const [url, setUrl] = useState('');
-  const T = lang === 'fa';
   return (
     <div className="flex flex-col gap-1 w-16">
-      <div onClick={() => status !== 'uploading' && ref.current?.click()} className={`w-16 h-16 rounded-lg border-2 border-dashed cursor-pointer flex items-center justify-center ${status === 'uploading' ? 'border-indigo-300 bg-indigo-50 text-indigo-400' : status === 'done' ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-300'}`}>
-        {status === 'done' ? <IconCheck className="w-4 h-4" /> : status === 'uploading' ? <span className="text-[9px]">{progress}%</span> : <IconUpload className="w-4 h-4" />}
+      <div onClick={() => !up && ref.current?.click()} className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300">
+        {up ? <span className="text-[9px]">...</span> : <IconUpload className="w-4 h-4" />}
       </div>
-      {status === 'uploading' && (
-        <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-      {status === 'done' && <p className="text-[8px] text-emerald-600 text-center">{T ? '✓' : '✓'}</p>}
       <div className="flex gap-0.5">
-        <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (url.trim()) { onUpload(url.trim()); setUrl(''); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); } } }} />
-        <button type="button" onClick={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
+        <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (url.trim()) { onUpload(url.trim()); setUrl(''); } } }} />
+        <button onClick={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
       </div>
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setStatus('uploading'); setProgress(0); uploadFileWithProgress(f, setProgress, u => { onUpload(u); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); }, err => { alert(err.message); setStatus('error'); }, 'images'); } e.target.value = ''; }} />
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
     </div>
   );
 };
 
 // Card image (upload OR paste URL)
-const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void; lang?: Language }> = ({ image, onUpload, onClear, lang = 'fa' }) => {
+const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => void; onClear: () => void }> = ({ image, onUpload, onClear }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const [up, setUp] = useState(false);
   const [url, setUrl] = useState('');
-  const T = lang === 'fa';
   return (
     <div className="shrink-0 w-12">
-      <div onClick={() => !image && status !== 'uploading' && ref.current?.click()} className={`w-12 h-12 rounded-lg border-2 border-dashed overflow-hidden flex items-center justify-center cursor-pointer ${image ? 'border-gray-200 bg-white' : status === 'uploading' ? 'border-indigo-300 bg-indigo-50 text-indigo-400' : status === 'done' ? 'border-emerald-300 bg-emerald-50 text-emerald-600' : 'border-gray-300 bg-white hover:bg-gray-100 text-gray-300'}`}>
-        {image ? <img src={image} alt="" className="w-full h-full object-contain" /> : status === 'done' ? <IconCheck className="w-3.5 h-3.5" /> : status === 'uploading' ? <span className="text-[8px]">{progress}%</span> : <IconUpload className="w-3.5 h-3.5" />}
+      <div onClick={() => !up && ref.current?.click()} className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 cursor-pointer overflow-hidden flex items-center justify-center text-gray-300">
+        {image ? <img src={image} className="w-full h-full object-contain" /> : (up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3.5 h-3.5" />)}
       </div>
-      {!image && status === 'uploading' && (
-        <div className="mt-0.5 h-1 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-      {image ? <button type="button" onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
-        : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && url.trim()) { e.preventDefault(); onUpload(url.trim()); setUrl(''); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); } }} onBlur={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); } }} />}
-      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setStatus('uploading'); setProgress(0); uploadFileWithProgress(f, setProgress, u => { onUpload(u); setStatus('done'); window.setTimeout(() => setStatus('idle'), 2000); }, err => { alert(err.message); setStatus('error'); }, 'images'); } e.target.value = ''; }} />
+      {image ? <button onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
+        : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && url.trim()) { e.preventDefault(); onUpload(url.trim()); setUrl(''); } }} onBlur={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} />}
+      <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setUp(true); uploadFileWithProgress(f, () => {}, u => { onUpload(u); setUp(false); }, err => { alert(err.message); setUp(false); }, 'images'); } e.target.value = ''; }} />
     </div>
   );
 };
 
 // Multi-image gallery uploader for a product (upload several OR paste image URLs; first = main)
-type GalleryUploadItem = {
-  id: string;
-  name: string;
-  status: 'uploading' | 'done' | 'error';
-  progress: number;
-  error?: string;
-};
-
 const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) => void; lang: Language }> = ({ images, onChange, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
-  const imagesRef = useRef(images);
+  const [up, setUp] = useState(false);
   const [url, setUrl] = useState('');
-  const [uploads, setUploads] = useState<GalleryUploadItem[]>([]);
-  const T = lang === 'fa';
-  const uploading = uploads.some(u => u.status === 'uploading');
-
-  imagesRef.current = images;
-
-  const appendImage = (url: string) => {
-    const next = [...imagesRef.current, url];
-    imagesRef.current = next;
-    onChange(next);
-  };
-
-  const replaceImage = (from: string, to: string) => {
-    const next = imagesRef.current.map(img => (img === from ? to : img));
-    imagesRef.current = next;
-    onChange(next);
-  };
-
-  const removeImage = (target: string) => {
-    const next = imagesRef.current.filter(img => img !== target);
-    imagesRef.current = next;
-    onChange(next);
-  };
-
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
-    const batch: GalleryUploadItem[] = arr.map((f, i) => ({
-      id: `pg-${Date.now()}-${i}`,
-      name: f.name,
-      status: 'uploading',
-      progress: 0,
-    }));
-    setUploads(prev => [...prev, ...batch]);
-
-    arr.forEach((f, i) => {
-      const itemId = batch[i].id;
-      const previewUrl = URL.createObjectURL(f);
-      appendImage(previewUrl);
-      uploadFileWithProgress(
-        f,
-        p => setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, progress: p } : it))),
-        u => {
-          replaceImage(previewUrl, u);
-          URL.revokeObjectURL(previewUrl);
-          setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'done', progress: 100 } : it)));
-          window.setTimeout(() => setUploads(prev => prev.filter(it => it.id !== itemId)), 2500);
-        },
-        err => {
-          removeImage(previewUrl);
-          URL.revokeObjectURL(previewUrl);
-          const msg = err.message || (T ? 'آپلود ناموفق' : 'Upload failed');
-          setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'error', error: msg } : it)));
-          alert(msg);
-        },
-        'images',
-      );
-    });
+    setUp(true);
+    let remaining = arr.length;
+    const collected: string[] = [];
+    const done = () => { if (--remaining === 0) { onChange([...images, ...collected]); setUp(false); } };
+    arr.forEach(f => uploadFileWithProgress(f, () => {}, u => { collected.push(u); done(); }, err => { alert(err.message); done(); }, 'images'));
   };
-
-  const addUrl = () => {
-    const u = url.trim();
-    if (!u) return;
-    appendImage(u);
-    setUrl('');
-  };
-
+  const addUrl = () => { const u = url.trim(); if (!u) return; onChange([...images, u]); setUrl(''); };
   return (
-    <div className="shrink-0 w-[170px]">
+    <div className="shrink-0 w-[150px]">
       <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
-          <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group bg-gray-50">
-            <img src={src.startsWith('blob:') ? src : (metaShopProductImageUrl(src, 120) || src)} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.opacity = '0.35'; }} />
-            {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{T ? 'اصلی' : 'main'}</span>}
-            <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
+          <div key={i} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
+            <img src={src} className="w-full h-full object-cover" />
+            {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{lang === 'fa' ? 'اصلی' : 'main'}</span>}
+            <button onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>
         ))}
-        <div
-          onClick={() => !uploading && ref.current?.click()}
-          className={`w-[34px] h-[34px] rounded border-2 border-dashed flex items-center justify-center ${uploading ? 'border-indigo-300 bg-indigo-50 text-indigo-400 cursor-wait' : 'border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer text-gray-300'}`}
-          title={T ? 'آپلود عکس' : 'Upload image'}
-        >
-          <IconUpload className="w-3 h-3" />
+        <div onClick={() => !up && ref.current?.click()} className="w-[34px] h-[34px] rounded border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-center text-gray-300" title={lang === 'fa' ? 'آپلود' : 'Upload'}>
+          {up ? <span className="text-[8px]">...</span> : <IconUpload className="w-3 h-3" />}
         </div>
       </div>
-
-      {uploads.length > 0 && (
-        <div className="mt-1.5 space-y-1">
-          {uploads.map(it => (
-            <div key={it.id} className="rounded-lg border border-gray-100 bg-gray-50 px-1.5 py-1">
-              <div className="flex items-center gap-1">
-                <span className={`shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
-                  it.status === 'done' ? 'bg-emerald-500 text-white'
-                    : it.status === 'error' ? 'bg-red-500 text-white'
-                    : 'bg-indigo-100 text-indigo-600'
-                }`}>
-                  {it.status === 'done' ? <IconCheck className="w-2.5 h-2.5" /> : it.status === 'error' ? '!' : '…'}
-                </span>
-                <span className="text-[9px] text-gray-600 truncate flex-1" title={it.name}>{it.name}</span>
-              </div>
-              {it.status === 'uploading' && (
-                <>
-                  <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${Math.max(it.progress, 2)}%` }} />
-                  </div>
-                  <p className="text-[9px] text-indigo-600 mt-0.5">
-                    {it.progress < 20
-                      ? (T ? 'در حال آماده‌سازی عکس…' : 'Preparing image…')
-                      : it.progress < 90
-                        ? (T ? 'در حال آپلود…' : 'Uploading…')
-                        : (T ? 'در حال ذخیره…' : 'Saving…')}
-                  </p>
-                </>
-              )}
-              {it.status === 'done' && (
-                <p className="text-[9px] text-emerald-600 mt-0.5 font-medium">{T ? '✓ اضافه شد' : '✓ Added'}</p>
-              )}
-              {it.status === 'error' && (
-                <p className="text-[9px] text-red-600 mt-0.5 leading-tight">{it.error || (T ? 'خطا' : 'Error')}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex gap-1 mt-1">
-        <input className="flex-1 min-w-0 px-1.5 py-1 rounded border border-gray-200 text-[10px] outline-none dir-ltr focus:border-indigo-400" placeholder={T ? 'لینک عکس' : 'image URL'} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
-        <button type="button" onClick={addUrl} disabled={!url.trim()} className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500 shrink-0"><IconPlus className="w-3 h-3" /></button>
+        <input className="flex-1 min-w-0 px-1.5 py-1 rounded border border-gray-200 text-[10px] outline-none dir-ltr" placeholder={lang === 'fa' ? 'لینک عکس' : 'image URL'} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
+        <button onClick={addUrl} disabled={!url.trim()} className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500 shrink-0"><IconPlus className="w-3 h-3" /></button>
       </div>
       <input type="file" ref={ref} className="hidden" accept="image/*" multiple onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
     </div>

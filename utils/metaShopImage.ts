@@ -1,10 +1,5 @@
 /** Hosts that often block hotlinking or are slow on mobile — serve via same-origin proxy. */
-const PROXY_HOSTS = [
-  'img.kwcdn.com',
-  'kwcdn.com',
-  'firebasestorage.googleapis.com',
-  'firebasestorage.app',
-];
+const PROXY_HOSTS = ['img.kwcdn.com', 'kwcdn.com'];
 
 export const needsMetaShopImageProxy = (url: string): boolean => {
   try {

@@ -449,53 +449,6 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.5): Promis
     });
 };
 
-/** Resize/compress image files before upload — keeps payloads small for slow networks. */
-export const compressImageToFile = (file: File, maxWidth = 1600, quality = 0.82): Promise<File> => {
-    return new Promise((resolve) => {
-        if (!file.type.startsWith('image/')) {
-            resolve(file);
-            return;
-        }
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                if (width > maxWidth) {
-                    height *= maxWidth / width;
-                    width = maxWidth;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    resolve(file);
-                    return;
-                }
-                ctx.drawImage(img, 0, 0, width, height);
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob) {
-                            resolve(file);
-                            return;
-                        }
-                        const base = file.name.replace(/\.[^.]+$/, '') || 'image';
-                        resolve(new File([blob], `${base}.jpg`, { type: 'image/jpeg' }));
-                    },
-                    'image/jpeg',
-                    quality,
-                );
-            };
-            img.onerror = () => resolve(file);
-        };
-        reader.onerror = () => resolve(file);
-    });
-};
-
 const sanitizeFileName = (fileName: string) => {
     const cleaned = fileName
         .trim()
@@ -514,234 +467,6 @@ const assertCentralStoragePath = (path: string) => {
 const buildCentralStoragePath = (fileName: string, folder: CentralStorageFolder = "uploads") => {
     const timestamp = Date.now();
     return `${storageFolders[folder]}/${timestamp}-${sanitizeFileName(fileName)}`;
-};
-
-/** Public-read objects — no token; avoids getDownloadURL hanging on slow/blocked Google APIs. */
-const publicStorageMediaUrl = (storagePath: string) =>
-    `https://firebasestorage.googleapis.com/v0/b/${CENTRAL_STORAGE_BUCKET}/o/${encodeURIComponent(storagePath)}?alt=media`;
-
-const resolveStorageDownloadUrl = async (
-    storageRef: ReturnType<typeof ref>,
-    storagePath: string,
-): Promise<string> => {
-    const fallback = publicStorageMediaUrl(storagePath);
-    try {
-        const tokenUrl = await Promise.race([
-            getDownloadURL(storageRef),
-            new Promise<never>((_, reject) => {
-                window.setTimeout(() => reject(new Error('getDownloadURL timeout')), 6_000);
-            }),
-        ]);
-        return tokenUrl || fallback;
-    } catch {
-        return fallback;
-    }
-};
-
-const _STORAGE_API = '/api/storage-upload';
-/** Vercel request body limit is ~4.5 MB; base64 adds ~33% overhead. */
-const STORAGE_PROXY_MAX_BYTES = 3 * 1024 * 1024;
-
-const blobToBase64 = (blob: Blob): Promise<string> =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const raw = reader.result as string;
-            resolve(raw.includes(',') ? raw.split(',')[1] : raw);
-        };
-        reader.onerror = () => reject(new Error('خواندن فایل ناموفق بود.'));
-        reader.readAsDataURL(blob);
-    });
-
-const imageMimeFromName = (name: string, fallback = 'image/png') => {
-    const ext = name.split('.').pop()?.toLowerCase();
-    if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
-    if (ext === 'webp') return 'image/webp';
-    if (ext === 'gif') return 'image/gif';
-    if (ext === 'png') return 'image/png';
-    return fallback;
-};
-
-const uploadFileViaProxyRaw = (
-    file: File,
-    folder: CentralStorageFolder,
-    onProgress?: (progress: number) => void,
-    contentType?: string,
-): Promise<{ url: string; path: string }> => {
-    const resolvedType = contentType
-        || file.type
-        || (folder === 'images' ? imageMimeFromName(file.name) : 'application/octet-stream');
-
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', _STORAGE_API);
-        xhr.setRequestHeader('X-File-Name', file.name);
-        xhr.setRequestHeader('X-Folder', folder);
-        xhr.setRequestHeader('X-Content-Type', resolvedType);
-        xhr.timeout = 90_000;
-        xhr.upload.onprogress = (e) => {
-            if (!e.lengthComputable) return;
-            onProgress?.(8 + (e.loaded / e.total) * 87);
-        };
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    const data = JSON.parse(xhr.responseText) as { url?: string; path?: string; error?: string; detail?: string };
-                    if (data.url && data.path) {
-                        onProgress?.(100);
-                        resolve({ url: data.url, path: data.path });
-                        return;
-                    }
-                    reject(new Error(data.detail || data.error || 'storage_proxy_failed'));
-                } catch {
-                    reject(new Error('پاسخ سرور آپلود نامعتبر بود.'));
-                }
-                return;
-            }
-            let msg = `آپلود ناموفق (${xhr.status})`;
-            try {
-                const data = JSON.parse(xhr.responseText) as { detail?: string; error?: string };
-                if (data.detail) msg = data.detail;
-                else if (data.error) msg = data.error;
-            } catch {}
-            reject(new Error(msg));
-        };
-        xhr.onerror = () => reject(new Error('اتصال به سرور آپلود قطع شد. اینترنت را بررسی کنید.'));
-        xhr.ontimeout = () => reject(new Error('آپلود بیش از حد طول کشید. دوباره تلاش کنید.'));
-        onProgress?.(5);
-        xhr.send(file);
-    });
-};
-
-const uploadFileViaProxyJson = async (
-    file: File,
-    folder: CentralStorageFolder,
-    onProgress?: (progress: number) => void,
-    contentType?: string,
-): Promise<{ url: string; path: string }> => {
-    const resolvedType = contentType
-        || file.type
-        || (folder === 'images' ? imageMimeFromName(file.name) : 'application/octet-stream');
-
-    onProgress?.(15);
-    const b64 = await blobToBase64(file);
-    const approxBytes = Math.ceil(b64.length * 0.75);
-    if (approxBytes > STORAGE_PROXY_MAX_BYTES) {
-        throw new Error('عکس خیلی بزرگ است. فایل کوچک‌تری انتخاب کنید.');
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 90_000);
-
-    try {
-        const r = await fetch(_STORAGE_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                fileName: file.name,
-                folder,
-                contentType: resolvedType,
-                encoding: 'base64',
-                data: b64,
-            }),
-            signal: controller.signal,
-        });
-        onProgress?.(95);
-        const data = await r.json().catch(() => ({})) as {
-            url?: string; path?: string; error?: string; detail?: string;
-        };
-        if (!r.ok || !data.url || !data.path) {
-            throw new Error(data.detail || data.error || `آپلود از سرور ناموفق (${r.status})`);
-        }
-        onProgress?.(100);
-        return { url: data.url, path: data.path };
-    } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-            throw new Error('آپلود از سرور بیش از حد طول کشید.');
-        }
-        throw err instanceof Error ? err : new Error('آپلود از سرور ناموفق بود.');
-    } finally {
-        clearTimeout(timer);
-    }
-};
-
-const uploadFileViaProxy = async (
-    file: File,
-    folder: CentralStorageFolder,
-    onProgress?: (progress: number) => void,
-    contentType?: string,
-): Promise<{ url: string; path: string }> => {
-    let toSend = file;
-    if (folder === 'images' && file.size > 2 * 1024 * 1024) {
-        try {
-            toSend = await Promise.race([
-                compressImageToFile(file),
-                new Promise<File>((resolve) => window.setTimeout(() => resolve(file), 6000)),
-            ]);
-        } catch {
-            toSend = file;
-        }
-    }
-
-    try {
-        return await uploadFileViaProxyRaw(toSend, folder, onProgress, contentType);
-    } catch (rawErr) {
-        console.warn('Raw storage proxy failed, trying JSON:', rawErr);
-        onProgress?.(10);
-        return uploadFileViaProxyJson(toSend, folder, onProgress, contentType);
-    }
-};
-
-const shouldPreferStorageProxy = async (file: File, folder: CentralStorageFolder): Promise<boolean> => {
-    if (folder === 'images' || folder === 'uploads' || folder === 'temp') return true;
-    if (file.size > STORAGE_PROXY_MAX_BYTES) return false;
-    return checkProxyMode();
-};
-
-const uploadFileDirect = (
-    file: File,
-    folder: CentralStorageFolder = "uploads",
-    onProgress?: (progress: number) => void,
-    contentType?: string
-): Promise<{ url: string; path: string }> => {
-    const path = buildCentralStoragePath(file.name, folder);
-    const storageRef = ref(storage, path);
-    const resolvedType = contentType
-        || (folder === "images" ? (file.type || "image/png") : undefined)
-        || (file.type || undefined);
-    const uploadTask = uploadBytesResumable(storageRef, file, resolvedType ? { contentType: resolvedType } : undefined);
-
-    return new Promise((resolve, reject) => {
-        uploadTask.on(
-            "state_changed",
-            (snapshot) => {
-                if (snapshot.state === "success") {
-                    onProgress?.(100);
-                    return;
-                }
-                if (!snapshot.totalBytes) return;
-                const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                onProgress?.(Math.min(pct, 99));
-            },
-            (error) => {
-                Object.assign(error, {
-                    storageBucket: CENTRAL_STORAGE_BUCKET,
-                    storagePath: path,
-                    fileSize: file.size,
-                });
-                reject(error);
-            },
-            async () => {
-                onProgress?.(100);
-                try {
-                    const url = await resolveStorageDownloadUrl(storageRef, path);
-                    resolve({ url, path });
-                } catch (err) {
-                    reject(err);
-                }
-            }
-        );
-    });
 };
 
 const pathFromDownloadUrl = (url: string) => {
@@ -768,11 +493,6 @@ const getStorageErrorMessage = (error: unknown) => {
     const sizeMb = Number.isFinite(fileSize) && fileSize > 0 ? (fileSize / (1024 * 1024)).toFixed(1) : "";
     const maxMb = (DOCUMENT_MAX_BYTES / (1024 * 1024)).toFixed(0);
 
-    if (!code) {
-        if (message) return message;
-        return "آپلود ناموفق. لطفاً اتصال اینترنت را بررسی کنید.";
-    }
-
     if (code === "storage/unauthorized") {
         const overLimit = Number.isFinite(fileSize) && fileSize >= DOCUMENT_MAX_BYTES;
         if (overLimit) {
@@ -796,35 +516,40 @@ const getStorageErrorMessage = (error: unknown) => {
     return `${message || "آپلود ناموفق. لطفاً اتصال اینترنت و تنظیمات Firebase Storage را بررسی کنید."} ${details}`;
 };
 
-export const uploadFile = async (
+export const uploadFile = (
     file: File,
     folder: CentralStorageFolder = "uploads",
     onProgress?: (progress: number) => void,
     contentType?: string
 ): Promise<{ url: string; path: string }> => {
-    if (folder === 'images' || folder === 'uploads' || folder === 'temp') {
-        return uploadFileViaProxy(file, folder, onProgress, contentType);
-    }
+    const path = buildCentralStoragePath(file.name, folder);
+    const storageRef = ref(storage, path);
+    const resolvedType = contentType
+        || (folder === "images" ? (file.type || "image/png") : undefined)
+        || (file.type || undefined);
+    const uploadTask = uploadBytesResumable(storageRef, file, resolvedType ? { contentType: resolvedType } : undefined);
 
-    if (await shouldPreferStorageProxy(file, folder)) {
-        return uploadFileViaProxy(file, folder, onProgress, contentType);
-    }
-
-    try {
-        return await Promise.race([
-            uploadFileDirect(file, folder, onProgress, contentType),
-            new Promise<never>((_, reject) => {
-                window.setTimeout(() => reject(new Error('direct_upload_timeout')), 90_000);
-            }),
-        ]);
-    } catch (directErr) {
-        if (file.size <= STORAGE_PROXY_MAX_BYTES) {
-            console.warn('Direct storage upload failed, trying proxy:', directErr);
-            onProgress?.(0);
-            return uploadFileViaProxy(file, folder, onProgress, contentType);
-        }
-        throw directErr;
-    }
+    return new Promise((resolve, reject) => {
+        uploadTask.on(
+            "state_changed",
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                onProgress?.(progress);
+            },
+            (error) => {
+                Object.assign(error, {
+                    storageBucket: CENTRAL_STORAGE_BUCKET,
+                    storagePath: path,
+                    fileSize: file.size,
+                });
+                reject(error);
+            },
+            async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve({ url, path });
+            }
+        );
+    });
 };
 
 export const getFileUrl = async (pathOrUrl: string) => {
