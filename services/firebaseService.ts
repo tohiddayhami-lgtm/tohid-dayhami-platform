@@ -469,6 +469,28 @@ const buildCentralStoragePath = (fileName: string, folder: CentralStorageFolder 
     return `${storageFolders[folder]}/${timestamp}-${sanitizeFileName(fileName)}`;
 };
 
+/** Public-read objects — no token; avoids getDownloadURL hanging on slow/blocked Google APIs. */
+const publicStorageMediaUrl = (storagePath: string) =>
+    `https://firebasestorage.googleapis.com/v0/b/${CENTRAL_STORAGE_BUCKET}/o/${encodeURIComponent(storagePath)}?alt=media`;
+
+const resolveStorageDownloadUrl = async (
+    storageRef: ReturnType<typeof ref>,
+    storagePath: string,
+): Promise<string> => {
+    const fallback = publicStorageMediaUrl(storagePath);
+    try {
+        const tokenUrl = await Promise.race([
+            getDownloadURL(storageRef),
+            new Promise<never>((_, reject) => {
+                window.setTimeout(() => reject(new Error('getDownloadURL timeout')), 6_000);
+            }),
+        ]);
+        return tokenUrl || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
 const pathFromDownloadUrl = (url: string) => {
     const parsed = new URL(url);
     const marker = "/o/";
@@ -533,8 +555,13 @@ export const uploadFile = (
         uploadTask.on(
             "state_changed",
             (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                onProgress?.(progress);
+                if (snapshot.state === "success") {
+                    onProgress?.(100);
+                    return;
+                }
+                if (!snapshot.totalBytes) return;
+                const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                onProgress?.(Math.min(pct, 99));
             },
             (error) => {
                 Object.assign(error, {
@@ -545,8 +572,13 @@ export const uploadFile = (
                 reject(error);
             },
             async () => {
-                const url = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve({ url, path });
+                onProgress?.(100);
+                try {
+                    const url = await resolveStorageDownloadUrl(storageRef, path);
+                    resolve({ url, path });
+                } catch (err) {
+                    reject(err);
+                }
             }
         );
     });

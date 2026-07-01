@@ -2735,9 +2735,14 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
                 <span className="text-[9px] text-gray-600 truncate flex-1" title={it.name}>{it.name}</span>
               </div>
               {it.status === 'uploading' && (
-                <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${Math.max(it.progress, 4)}%` }} />
-                </div>
+                <>
+                  <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${Math.max(it.progress, 4)}%` }} />
+                  </div>
+                  {it.progress >= 99 && (
+                    <p className="text-[9px] text-indigo-600 mt-0.5">{T ? 'در حال دریافت لینک…' : 'Getting link…'}</p>
+                  )}
+                </>
               )}
               {it.status === 'done' && (
                 <p className="text-[9px] text-emerald-600 mt-0.5 font-medium">{T ? '✓ اضافه شد' : '✓ Added'}</p>
