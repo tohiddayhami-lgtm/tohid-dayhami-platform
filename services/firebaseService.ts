@@ -449,6 +449,53 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.5): Promis
     });
 };
 
+/** Resize/compress image files before upload — keeps payloads small for slow networks. */
+export const compressImageToFile = (file: File, maxWidth = 1600, quality = 0.82): Promise<File> => {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/')) {
+            resolve(file);
+            return;
+        }
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(file);
+                    return;
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            resolve(file);
+                            return;
+                        }
+                        const base = file.name.replace(/\.[^.]+$/, '') || 'image';
+                        resolve(new File([blob], `${base}.jpg`, { type: 'image/jpeg' }));
+                    },
+                    'image/jpeg',
+                    quality,
+                );
+            };
+            img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+    });
+};
+
 const sanitizeFileName = (fileName: string) => {
     const cleaned = fileName
         .trim()
@@ -492,56 +539,91 @@ const resolveStorageDownloadUrl = async (
 };
 
 const _STORAGE_API = '/api/storage-upload';
-const STORAGE_PROXY_MAX_BYTES = 45 * 1024 * 1024;
+/** Vercel request body limit is ~4.5 MB; base64 adds ~33% overhead. */
+const STORAGE_PROXY_MAX_BYTES = 3 * 1024 * 1024;
 
-const uploadFileViaProxy = (
+const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const raw = reader.result as string;
+            resolve(raw.includes(',') ? raw.split(',')[1] : raw);
+        };
+        reader.onerror = () => reject(new Error('خواندن فایل ناموفق بود.'));
+        reader.readAsDataURL(blob);
+    });
+
+const uploadFileViaProxy = async (
     file: File,
     folder: CentralStorageFolder,
     onProgress?: (progress: number) => void,
     contentType?: string,
 ): Promise<{ url: string; path: string }> => {
-    const resolvedType = contentType
-        || (folder === 'images' ? (file.type || 'image/png') : undefined)
-        || (file.type || 'application/octet-stream');
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', _STORAGE_API);
-        xhr.setRequestHeader('X-File-Name', file.name);
-        xhr.setRequestHeader('X-Folder', folder);
-        xhr.setRequestHeader('X-Content-Type', resolvedType);
-        xhr.timeout = 120_000;
-        xhr.upload.onprogress = (e) => {
-            if (!e.lengthComputable) return;
-            const pct = (e.loaded / e.total) * 100;
-            onProgress?.(Math.min(pct, 99));
+    onProgress?.(3);
+
+    const uploadFile = folder === 'images'
+        ? await compressImageToFile(file)
+        : file;
+    const resolvedType = folder === 'images'
+        ? 'image/jpeg'
+        : contentType || uploadFile.type || 'application/octet-stream';
+
+    onProgress?.(12);
+
+    const b64 = await blobToBase64(uploadFile);
+    const approxBytes = Math.ceil(b64.length * 0.75);
+    if (approxBytes > STORAGE_PROXY_MAX_BYTES) {
+        throw new Error('عکس بعد از فشرده‌سازی هنوز بزرگ است. فایل کوچک‌تری انتخاب کنید.');
+    }
+
+    onProgress?.(22);
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 50_000);
+    let pct = 22;
+    const tick = window.setInterval(() => {
+        pct = Math.min(pct + 3, 85);
+        onProgress?.(pct);
+    }, 500);
+
+    try {
+        const r = await fetch(_STORAGE_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fileName: uploadFile.name || file.name,
+                folder,
+                contentType: resolvedType,
+                encoding: 'base64',
+                data: b64,
+            }),
+            signal: controller.signal,
+        });
+
+        onProgress?.(90);
+
+        const data = await r.json().catch(() => ({})) as {
+            url?: string;
+            path?: string;
+            error?: string;
+            detail?: string;
         };
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                    const data = JSON.parse(xhr.responseText) as { url?: string; path?: string; error?: string; detail?: string };
-                    if (data.url && data.path) {
-                        onProgress?.(100);
-                        resolve({ url: data.url, path: data.path });
-                        return;
-                    }
-                    reject(new Error(data.detail || data.error || 'storage_proxy_failed'));
-                } catch {
-                    reject(new Error('پاسخ سرور آپلود نامعتبر بود.'));
-                }
-                return;
-            }
-            let msg = `آپلود از سرور ناموفق (${xhr.status})`;
-            try {
-                const data = JSON.parse(xhr.responseText) as { detail?: string; error?: string };
-                if (data.detail) msg = data.detail;
-                else if (data.error) msg = data.error;
-            } catch {}
-            reject(new Error(msg));
-        };
-        xhr.onerror = () => reject(new Error('اتصال به سرور آپلود برقرار نشد. اینترنت یا فیلتر را بررسی کنید.'));
-        xhr.ontimeout = () => reject(new Error('آپلود از سرور بیش از حد طول کشید. فایل را کوچک‌تر کنید یا دوباره تلاش کنید.'));
-        xhr.send(file);
-    });
+
+        if (!r.ok || !data.url || !data.path) {
+            throw new Error(data.detail || data.error || `آپلود از سرور ناموفق (${r.status})`);
+        }
+
+        onProgress?.(100);
+        return { url: data.url, path: data.path };
+    } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+            throw new Error('آپلود از سرور بیش از حد طول کشید. اینترنت را بررسی کنید و دوباره تلاش کنید.');
+        }
+        throw err instanceof Error ? err : new Error('آپلود از سرور ناموفق بود.');
+    } finally {
+        clearTimeout(timer);
+        clearInterval(tick);
+    }
 };
 
 const shouldPreferStorageProxy = async (file: File, folder: CentralStorageFolder): Promise<boolean> => {
@@ -650,11 +732,7 @@ export const uploadFile = async (
     contentType?: string
 ): Promise<{ url: string; path: string }> => {
     if (await shouldPreferStorageProxy(file, folder)) {
-        try {
-            return await uploadFileViaProxy(file, folder, onProgress, contentType);
-        } catch (proxyErr) {
-            console.warn('Storage proxy upload failed, trying direct:', proxyErr);
-        }
+        return uploadFileViaProxy(file, folder, onProgress, contentType);
     }
 
     try {

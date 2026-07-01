@@ -1,11 +1,7 @@
 /**
  * Server-side Firebase Storage upload proxy.
- * Iranian users often cannot finish client uploads to firebasestorage.googleapis.com
- * even when Firestore works via /api/fb. Vercel relays the file bytes instead.
- *
- * POST /api/storage-upload
- * Headers: X-File-Name, X-Folder (images|uploads|documents|temp), X-Content-Type
- * Body: raw file bytes
+ * Accepts JSON { fileName, folder, contentType, encoding: 'base64', data }
+ * or raw bytes with X-File-Name / X-Folder / X-Content-Type headers.
  */
 
 const STORAGE_BUCKET = 'calculator-55611.firebasestorage.app';
@@ -20,7 +16,7 @@ const FOLDERS = {
 
 const IMAGE_MAX_BYTES = 50 * 1024 * 1024;
 const DOCUMENT_MAX_BYTES = 120 * 1024 * 1024;
-const PROXY_MAX_BYTES = 45 * 1024 * 1024; // Vercel request body limit (~4.5 MB on hobby; allow headroom)
+const PROXY_MAX_BYTES = 4.5 * 1024 * 1024;
 
 function sanitizeFileName(name) {
   const cleaned = String(name || 'file')
@@ -34,7 +30,20 @@ function publicMediaUrl(storagePath) {
   return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(storagePath)}?alt=media`;
 }
 
-async function readBody(req) {
+function parseJsonBody(req) {
+  if (!req.body) return null;
+  if (typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function readRawBody(req) {
   if (Buffer.isBuffer(req.body)) return req.body;
   if (typeof req.body === 'string') return Buffer.from(req.body, 'binary');
   const chunks = [];
@@ -50,29 +59,41 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
-  const fileName = req.headers['x-file-name'];
-  const folder = String(req.headers['x-folder'] || 'uploads');
-  const contentType = String(req.headers['x-content-type'] || 'application/octet-stream');
-
-  if (!fileName) return res.status(400).json({ error: 'x_file_name_required' });
-
-  const folderPath = FOLDERS[folder];
-  if (!folderPath) return res.status(400).json({ error: 'invalid_folder' });
-
+  const contentTypeHeader = String(req.headers['content-type'] || '');
+  let fileName;
+  let folder;
+  let contentType;
   let body;
+
   try {
-    body = await readBody(req);
+    if (contentTypeHeader.includes('application/json')) {
+      const payload = parseJsonBody(req);
+      if (!payload?.data) return res.status(400).json({ error: 'data_required' });
+      fileName = payload.fileName;
+      folder = String(payload.folder || 'uploads');
+      contentType = String(payload.contentType || 'application/octet-stream');
+      body = Buffer.from(String(payload.data), payload.encoding === 'base64' ? 'base64' : 'utf8');
+    } else {
+      fileName = req.headers['x-file-name'];
+      folder = String(req.headers['x-folder'] || 'uploads');
+      contentType = String(req.headers['x-content-type'] || 'application/octet-stream');
+      body = await readRawBody(req);
+    }
   } catch (e) {
     return res.status(400).json({ error: 'body_read_failed', detail: String(e) });
   }
 
+  if (!fileName) return res.status(400).json({ error: 'file_name_required' });
+
+  const folderPath = FOLDERS[folder];
+  if (!folderPath) return res.status(400).json({ error: 'invalid_folder' });
   if (!body?.length) return res.status(400).json({ error: 'empty_body' });
 
   const maxBytes = folder === 'documents' ? DOCUMENT_MAX_BYTES : IMAGE_MAX_BYTES;
   if (body.length > PROXY_MAX_BYTES) {
     return res.status(413).json({
       error: 'proxy_body_too_large',
-      detail: `Max ${Math.round(PROXY_MAX_BYTES / (1024 * 1024))}MB via server proxy. Use a smaller file or compress the image.`,
+      detail: `Max ${Math.round(PROXY_MAX_BYTES / (1024 * 1024))}MB via server proxy.`,
     });
   }
   if (body.length > maxBytes) {

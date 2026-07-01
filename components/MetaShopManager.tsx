@@ -2739,11 +2739,15 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
               {it.status === 'uploading' && (
                 <>
                   <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${Math.max(it.progress, 4)}%` }} />
+                    <div className="h-full bg-indigo-500 transition-all duration-200" style={{ width: `${Math.max(it.progress, 2)}%` }} />
                   </div>
-                  {it.progress >= 99 && (
-                    <p className="text-[9px] text-indigo-600 mt-0.5">{T ? 'در حال دریافت لینک…' : 'Getting link…'}</p>
-                  )}
+                  <p className="text-[9px] text-indigo-600 mt-0.5">
+                    {it.progress < 20
+                      ? (T ? 'در حال آماده‌سازی عکس…' : 'Preparing image…')
+                      : it.progress < 90
+                        ? (T ? 'در حال آپلود…' : 'Uploading…')
+                        : (T ? 'در حال ذخیره…' : 'Saving…')}
+                  </p>
                 </>
               )}
               {it.status === 'done' && (
