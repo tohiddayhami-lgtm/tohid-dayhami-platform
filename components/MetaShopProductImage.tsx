@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { metaShopProductImageUrl, metaShopProductImageDirect } from '../utils/metaShopImage';
 import type { MetaShopImageFit } from '../utils/metaShopImageFit';
-import { acquireMetaShopImageSlot, releaseMetaShopImageSlot } from '../utils/metaShopImageQueue';
 
 interface Props {
   src?: string;
@@ -14,26 +13,28 @@ interface Props {
   objectFit?: MetaShopImageFit;
 }
 
+/** Best URL to try first (proxy for hotlink-blocked CDNs, direct otherwise). */
+const primaryImageSrc = (src: string | undefined, width: number): string => {
+  const direct = metaShopProductImageDirect(src);
+  if (!direct) return '';
+  return metaShopProductImageUrl(direct, width) || direct;
+};
+
 export const MetaShopProductImage: React.FC<Props> = ({
   src, alt, priority, width = 480, className = '', objectFit = 'cover',
 }) => {
   const direct = metaShopProductImageDirect(src);
-  const proxied = direct ? metaShopProductImageUrl(direct, width) : '';
   const hostRef = useRef<HTMLSpanElement>(null);
-  const slotHeld = useRef(false);
-
   const [visible, setVisible] = useState(!!priority);
-  const [ready, setReady] = useState(false);
-  const [phase, setPhase] = useState<'direct' | 'proxy'>('direct');
+  const [imgSrc, setImgSrc] = useState(() => primaryImageSrc(src, width));
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setPhase('direct');
+    setImgSrc(primaryImageSrc(src, width));
     setLoaded(false);
     setFailed(false);
-    setReady(false);
-  }, [src]);
+  }, [src, width]);
 
   useEffect(() => {
     if (priority || visible) return;
@@ -52,30 +53,8 @@ export const MetaShopProductImage: React.FC<Props> = ({
     return () => io.disconnect();
   }, [priority, visible, src]);
 
-  useEffect(() => {
-    if (!visible || !direct) return;
-    let cancelled = false;
-    acquireMetaShopImageSlot(priority).then(() => {
-      if (cancelled) {
-        releaseMetaShopImageSlot();
-        return;
-      }
-      slotHeld.current = true;
-      setReady(true);
-    });
-    return () => {
-      cancelled = true;
-      if (slotHeld.current) {
-        slotHeld.current = false;
-        releaseMetaShopImageSlot();
-      }
-    };
-  }, [visible, direct, priority, src]);
-
   if (!direct) return null;
 
-  const imgSrc = phase === 'proxy' && proxied ? proxied : direct;
-  const showImg = visible && ready && !failed;
   const fitStyle: React.CSSProperties = {
     objectFit,
     width: '100%',
@@ -83,13 +62,28 @@ export const MetaShopProductImage: React.FC<Props> = ({
     ...(objectFit === 'contain' ? { padding: 6, boxSizing: 'border-box' as const } : {}),
   };
 
+  const handleError = () => {
+    const proxied = metaShopProductImageUrl(direct, width);
+    if (imgSrc !== direct && direct) {
+      setImgSrc(direct);
+      setLoaded(false);
+      return;
+    }
+    if (proxied && proxied !== direct && imgSrc !== proxied) {
+      setImgSrc(proxied);
+      setLoaded(false);
+      return;
+    }
+    setFailed(true);
+  };
+
   return (
     <span ref={hostRef} className="ms-img-host">
       {!loaded && !failed && <span className="ms-img-skeleton" aria-hidden="true" />}
       {failed && (
-        <span className="ms-noimg" title={alt || ''}>{(alt || '?').charAt(0)}</span>
+        <span className="ms-noimg" title={alt || direct}>{(alt || '?').charAt(0)}</span>
       )}
-      {showImg ? (
+      {visible && !failed && imgSrc ? (
         <img
           src={imgSrc}
           alt={alt || ''}
@@ -99,25 +93,8 @@ export const MetaShopProductImage: React.FC<Props> = ({
           fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
           referrerPolicy="no-referrer"
-          onLoad={() => {
-            setLoaded(true);
-            if (slotHeld.current) {
-              slotHeld.current = false;
-              releaseMetaShopImageSlot();
-            }
-          }}
-          onError={() => {
-            if (phase === 'direct' && proxied && proxied !== direct) {
-              setPhase('proxy');
-              setLoaded(false);
-              return;
-            }
-            setFailed(true);
-            if (slotHeld.current) {
-              slotHeld.current = false;
-              releaseMetaShopImageSlot();
-            }
-          }}
+          onLoad={() => setLoaded(true)}
+          onError={handleError}
         />
       ) : null}
     </span>

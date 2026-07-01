@@ -8,12 +8,26 @@ const PROXY_HOSTS = [
 
 /** Normalize pasted / imported image URLs for storage and display. */
 export const normalizeImageUrl = (raw: string | undefined): string => {
-  let s = String(raw || '').trim();
+  let s = String(raw || '').trim().replace(/^["']+|["']+$/g, '');
   if (!s) return '';
   if (s.startsWith('//')) s = `https:${s}`;
   else if (!/^https?:\/\//i.test(s)) s = `https://${s.replace(/^\/+/, '')}`;
   return s;
 };
+
+/** Resolve product image list from `images[]` or legacy single `image` field. */
+export const resolveProductImages = (raw: { images?: unknown; image?: unknown } | null | undefined): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw.images) && raw.images.length) {
+    return raw.images.map(i => normalizeImageUrl(String(i || ''))).filter(Boolean);
+  }
+  const single = normalizeImageUrl(String(raw.image || ''));
+  return single ? [single] : [];
+};
+
+/** First image URL for a product (supports legacy `image` field). */
+export const productMainImage = (raw: { images?: unknown; image?: unknown } | null | undefined): string =>
+  resolveProductImages(raw)[0] || '';
 
 export const needsMetaShopImageProxy = (url: string): boolean => {
   try {

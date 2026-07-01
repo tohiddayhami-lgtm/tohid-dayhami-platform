@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent, CustomerAccount } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive, loadMetaShopProductsFull, recoverMetaShopFromChunks, recoverAllMetaShopsProducts, probeMetaShopProductsAvailable, type MetaShopSaveOptions } from '../services/firebaseService';
+import { subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive, loadMetaShopProductsFull, recoverMetaShopFromChunks, recoverAllMetaShopsProducts, probeMetaShopProductsAvailable, uploadFileWithProgress, type MetaShopSaveOptions } from '../services/firebaseService';
 import { shopNeedsProductHydration, isShellOnlyMetaShopJson } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -2670,8 +2670,8 @@ const PageImageUploader: React.FC<{ onUpload: (url: string) => void; lang: Langu
       </div>
       <ImageUploadProgressList tracks={tracks} lang={lang} />
       <div className="flex gap-0.5">
-        <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (url.trim()) { onUpload(url.trim()); setUrl(''); } } }} />
-        <button onClick={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
+        <input className="flex-1 min-w-0 px-1 py-0.5 rounded border border-gray-200 text-[9px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const u = normalizeImageUrl(url.trim()); if (u) { onUpload(u); setUrl(''); } } }} />
+        <button type="button" onClick={() => { const u = normalizeImageUrl(url.trim()); if (u) { onUpload(u); setUrl(''); } }} disabled={!url.trim()} className="px-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-500"><IconPlus className="w-2.5 h-2.5" /></button>
       </div>
       <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) startImageUpload(f, onUpload, setTracks, lang); e.target.value = ''; }} />
     </div>
@@ -2687,11 +2687,11 @@ const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => v
   return (
     <div className="shrink-0 w-12">
       <div onClick={() => !uploading && ref.current?.click()} className={`w-12 h-12 rounded-lg border-2 border-dashed bg-white overflow-hidden flex items-center justify-center text-gray-300 ${uploading ? 'border-indigo-300 cursor-wait' : 'border-gray-300 hover:bg-gray-100 cursor-pointer'}`}>
-        {image ? <img src={image} className="w-full h-full object-contain" alt="" /> : (uploading ? <span className="text-[8px] text-indigo-600">…</span> : <IconUpload className="w-3.5 h-3.5" />)}
+        {image ? <img src={metaShopProductImageUrl(image, 96) || image} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : (uploading ? <span className="text-[8px] text-indigo-600">…</span> : <IconUpload className="w-3.5 h-3.5" />)}
       </div>
       <ImageUploadProgressList tracks={tracks} lang={lang} />
       {image ? <button type="button" onClick={onClear} className="text-[9px] text-red-400 w-full text-center">✕</button>
-        : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && url.trim()) { e.preventDefault(); onUpload(url.trim()); setUrl(''); } }} onBlur={() => { if (url.trim()) { onUpload(url.trim()); setUrl(''); } }} />}
+        : <input className="w-12 mt-0.5 px-1 py-0.5 rounded border border-gray-200 text-[8px] outline-none dir-ltr" placeholder="URL" value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const u = normalizeImageUrl(url.trim()); if (u) { onUpload(u); setUrl(''); } } }} onBlur={() => { const u = normalizeImageUrl(url.trim()); if (u) { onUpload(u); setUrl(''); } }} />}
       <input type="file" ref={ref} className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) startImageUpload(f, onUpload, setTracks, lang); e.target.value = ''; }} />
     </div>
   );
@@ -2700,18 +2700,20 @@ const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => v
 // Thumbnail for pasted / external image URLs in the product editor
 const EditorImageThumb: React.FC<{ src: string }> = ({ src }) => {
   const direct = normalizeImageUrl(src);
-  const proxied = direct ? metaShopProductImageUrl(direct, 80) : '';
-  const [phase, setPhase] = useState<'direct' | 'proxy' | 'fail'>('direct');
-  const imgSrc = phase === 'proxy' && proxied ? proxied : direct;
+  const initial = direct ? (metaShopProductImageUrl(direct, 120) || direct) : '';
+  const [imgSrc, setImgSrc] = useState(initial);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setPhase('direct');
+    const d = normalizeImageUrl(src);
+    setImgSrc(d ? (metaShopProductImageUrl(d, 120) || d) : '');
+    setFailed(false);
   }, [src]);
 
   if (!direct) {
     return <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-400 text-[10px]">!</div>;
   }
-  if (phase === 'fail') {
+  if (failed) {
     return (
       <div className="w-full h-full bg-amber-50 flex items-center justify-center text-amber-600 text-[8px] px-0.5 text-center leading-tight" title={direct}>
         ⚠
@@ -2725,8 +2727,11 @@ const EditorImageThumb: React.FC<{ src: string }> = ({ src }) => {
       alt=""
       referrerPolicy="no-referrer"
       onError={() => {
-        if (phase === 'direct' && proxied && proxied !== direct) setPhase('proxy');
-        else setPhase('fail');
+        if (imgSrc !== direct) {
+          setImgSrc(direct);
+          return;
+        }
+        setFailed(true);
       }}
     />
   );
@@ -2754,7 +2759,12 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
 
   const addUrl = () => {
     const u = normalizeImageUrl(url.trim());
-    if (!u || !/^https?:\/\//i.test(u)) return;
+    if (!u || !/^https?:\/\//i.test(u)) {
+      if (url.trim()) {
+        alert(lang === 'fa' ? 'لینک عکس معتبر نیست — با https:// شروع شود' : 'Invalid image URL — must start with https://');
+      }
+      return;
+    }
     appendImage(u);
     setUrl('');
   };

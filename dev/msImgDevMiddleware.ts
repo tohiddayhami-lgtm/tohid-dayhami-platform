@@ -1,23 +1,25 @@
-/** Proxy product images (Temu, Digikala, etc.) with correct Referer. */
-export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    res.status(405).end();
-    return;
-  }
+import type { Connect } from 'vite';
 
-  const raw = req.query.u;
-  if (!raw || typeof raw !== 'string') {
-    res.status(400).end();
-    return;
-  }
+/** Local dev handler mirroring api/ms-img.js (Vite does not run Vercel functions). */
+export const msImgDevMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
+  if (!req.url?.startsWith('/api/ms-img')) return next();
 
-  let target;
   try {
-    target = new URL(raw);
-    if (target.protocol !== 'https:') {
-      res.status(400).end();
+    const full = new URL(req.url, 'http://localhost');
+    const raw = full.searchParams.get('u');
+    if (!raw) {
+      res.statusCode = 400;
+      res.end();
       return;
     }
+
+    const target = new URL(raw);
+    if (target.protocol !== 'https:') {
+      res.statusCode = 400;
+      res.end();
+      return;
+    }
+
     const host = target.hostname.toLowerCase();
     const allowed =
       host.includes('kwcdn.com')
@@ -27,15 +29,11 @@ export default async function handler(req, res) {
       || host.endsWith('cloudfront.net')
       || /\.(jpg|jpeg|png|webp|gif|avif|bmp|svg)$/i.test(target.pathname);
     if (!allowed) {
-      res.status(403).end();
+      res.statusCode = 403;
+      res.end();
       return;
     }
-  } catch {
-    res.status(400).end();
-    return;
-  }
 
-  try {
     const referer = host.includes('digikala.com')
       ? 'https://www.digikala.com/'
       : host.includes('kwcdn.com')
@@ -52,20 +50,24 @@ export default async function handler(req, res) {
     });
 
     if (!upstream.ok) {
-      res.status(upstream.status === 404 ? 404 : 502).end();
+      res.statusCode = upstream.status === 404 ? 404 : 502;
+      res.end();
       return;
     }
 
     const ct = upstream.headers.get('content-type') || '';
     if (!ct.startsWith('image/')) {
-      res.status(502).end();
+      res.statusCode = 502;
+      res.end();
       return;
     }
 
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
-    res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
+    res.statusCode = 200;
+    res.end(Buffer.from(await upstream.arrayBuffer()));
   } catch {
-    res.status(502).end();
+    res.statusCode = 502;
+    res.end();
   }
-}
+};

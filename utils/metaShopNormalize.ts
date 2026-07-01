@@ -1,6 +1,6 @@
 import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaShopLang } from '../types';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
-import { normalizeImageUrl } from './metaShopImage';
+import { normalizeImageUrl, resolveProductImages } from './metaShopImage';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -133,10 +133,8 @@ const isStorableImageUrl = (url: unknown): url is string => {
   return /^https?:\/\//i.test(s);
 };
 
-const normalizeImages = (images: unknown): string[] =>
-  Array.isArray(images)
-    ? images.map(i => normalizeImageUrl(String(i || ''))).filter(isStorableImageUrl).slice(0, 6)
-    : [];
+const normalizeImages = (images: unknown, legacyImage?: unknown): string[] =>
+  resolveProductImages({ images, image: legacyImage }).filter(isStorableImageUrl).slice(0, 6);
 
 export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unknown>): MetaShopProduct => {
   const i18n = { ...(p.i18n || {}) };
@@ -162,7 +160,7 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
     subcategory: p.subcategory || undefined,
     description: p.description || p.descriptionFa || i18n.fa?.description || undefined,
     sku: p.sku || undefined,
-    images: normalizeImages(p.images),
+    images: normalizeImages(p.images, p.image),
     active: p.active !== false,
     featured: p.featured || undefined,
     outOfStock: p.outOfStock || undefined,
