@@ -1,18 +1,19 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, Fragment } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPage } from '../types';
 import { shopCodeOf } from './shopCode';
 import { buildProductSearchIndex, filterProductsBySearch } from '../utils/metaShopSearch';
 import { logMetaShopEvent, uploadFileWithProgress } from '../services/firebaseService';
 import { Language } from '../App';
-import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, formatMoney, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
+import { dealTypeLabel, propertyTypeLabel, realEstateCardSummary, realEstateDetailRows, realEstateFaqText, realEstateFaqs, resolveReText, DEAL_TYPE_LABEL, PROPERTY_TYPE_LABEL } from '../utils/metaShopRealEstate';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, formatMetaShopNumber, resolveHidePriceLabel } from '../utils/metaShopLang';
 import { resolvePropertyContact, telHref, waHref, openTel, openWhatsApp } from '../utils/metaShopContact';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
-import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase, currencyDisplayLabel } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency, feeCurrency, feeAmountInBase, currencyDisplayLabel } from '../utils/metaShopCurrency';
 import { markedUpPrice, promoLabelText, resolveShowStrikethroughPrice, anchorUnitPrice, anchorPackPrice, anchorOptionPrice, metaShopTaxActive, metaShopTaxRateConfigured, computeMetaShopTax } from '../utils/metaShopPricing';
 import { productPurchaseOptions, tierUnitsHint } from '../utils/metaShopPriceTiers';
 import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopImageFit';
 import { MetaShopProductImage } from './MetaShopProductImage';
+import { MetaShopMoney } from './MetaShopMoney';
 import { metaShopProductImageUrl } from '../utils/metaShopImage';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
@@ -493,27 +494,35 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const pSubcategory = (p: MetaShopProduct) => translateProductSubcategory(p.subcategory || '', uiLang, p.i18n, products);
   const catLabel = (key: string) => categoryLabel(findCategoryEntry(shop.categories, key), uiLang, shop);
 
-  const rePriceLabel = (p: MetaShopProduct): string | null => {
+  const theme = shop.theme;
+  const money = (n?: number, sourceCur?: string) => {
+    if (n == null) return null;
+    return (
+      <MetaShopMoney
+        amount={n}
+        shop={shop}
+        viewCurrency={viewCur}
+        sourceCurrency={sourceCur}
+        uiLang={uiLang}
+      />
+    );
+  };
+  const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
+
+  const rePriceLabel = (p: MetaShopProduct): React.ReactNode => {
     const re = p.realEstate;
     if (!re) return null;
     const cur = re.rentCurrency || p.currency || shop.currency;
-    const Lg = reLang();
     if (re.dealType === 'rent' || re.dealType === 'rent-short') {
-      const parts: string[] = [];
-      if (re.monthlyRent) parts.push(`${S('monthlyRent')}: ${formatMoney(re.monthlyRent, cur, Lg)}`);
-      if (re.deposit) parts.push(`${S('deposit')}: ${formatMoney(re.deposit, cur, Lg)}`);
-      return parts.join(' · ') || null;
+      const parts: React.ReactNode[] = [];
+      if (re.monthlyRent) parts.push(<Fragment key="rent">{S('monthlyRent')}: {money(re.monthlyRent, cur)}</Fragment>);
+      if (re.deposit) parts.push(<Fragment key="dep">{S('deposit')}: {money(re.deposit, cur)}</Fragment>);
+      if (!parts.length) return null;
+      return parts.reduce<React.ReactNode>((acc, part, i) => (i === 0 ? part : <>{acc} · {part}</>), null);
     }
-    if (p.price) return `${S('forSale')}: ${money(p.price, cur)}`;
+    if (p.price) return <>{S('forSale')}: {money(p.price, cur)}</>;
     return null;
   };
-
-  const theme = shop.theme;
-  const money = (n?: number, sourceCur?: string) => {
-    if (n == null) return '';
-    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, uiLang);
-  };
-  const fmtNum = (n: number, decimals = 2) => formatMetaShopNumber(n, decimals);
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
   const productsPending = (shop.productCount ?? 0) > 0 && products.length === 0;
@@ -758,7 +767,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const currencyList = Object.keys(totalsByCurrency);
   const multiCur = currencyList.length > 1;
   const displayCur = currencyList[0] || shop.currency;
-  const fmtTotals = (extra = 0) => currencyList.map((cur, i) => money(totalsByCurrency[cur] + (i === 0 ? extra : 0), cur)).join('  ·  ');
+  const fmtTotals = (extra = 0) => (
+    <>
+      {currencyList.map((cur, i) => (
+        <Fragment key={cur}>
+          {i > 0 && ' · '}
+          {money(totalsByCurrency[cur] + (i === 0 ? extra : 0), cur)}
+        </Fragment>
+      ))}
+    </>
+  );
   const shopFees = shop.extraFees || [];
   const activeFees = shopFees.filter(f => f.required || selectedFees[f.id]);
   const feesTotal = activeFees.reduce((a, f) => a + feeAmountInBase(f, shop), 0);
@@ -2211,10 +2229,14 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-meta { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:#64748b; padding:6px 0; border-top:1px solid #f1f5f9; }
 .ms-meta b { color:#334155; }
 .ms-prices { border-top:1px solid #f1f5f9; padding-top:10px; margin-top:auto; display:flex; flex-direction:column; gap:4px; }
-.ms-price-amt { font-weight:800; font-size:15px; color:#0f172a; direction:ltr; unicode-bidi:isolate; display:inline-block; }
+.ms-money { display:inline-flex; flex-direction:row; align-items:baseline; direction:ltr; unicode-bidi:isolate; gap:0.3em; white-space:nowrap; }
+.ms-money-cur { font-weight:inherit; }
+.ms-money-num { font-weight:inherit; font-variant-numeric:tabular-nums; }
+.ms-price-amt { font-weight:800; font-size:15px; color:#0f172a; }
 .ms-price-amt.ms-pack { font-size:13px; color:#475569; font-weight:700; }
 .ms-price-unit { font-size:10px; font-weight:400; color:#94a3b8; }
-.ms-price-was, .ms-opt-was, .ms-citem-price, .ms-card-calc, .ms-fee-amt, .ms-disc-amt { direction:ltr; unicode-bidi:isolate; }
+.ms-price-was .ms-money-num, .ms-opt-was .ms-money-num { text-decoration:line-through; }
+.ms-price-was, .ms-opt-was, .ms-citem-price, .ms-card-calc { unicode-bidi:isolate; }
 .ms-buy { margin-top:auto; }
 .ms-opts { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
 .ms-opt { display:flex; flex-direction:column; align-items:flex-start; gap:1px; border:1.5px solid #e2e8f0; background:#fff; border-radius:9px; padding:4px 9px; cursor:pointer; transition:all .15s; min-width:0; }

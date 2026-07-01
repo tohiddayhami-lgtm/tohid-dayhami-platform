@@ -4,9 +4,10 @@ import { shopCodeOf } from './shopCode';
 import { Language } from '../App';
 import { resolveShopLanguages, isRtlLang, localeForLang, legacyBilingual, translateField, translateStockLabel, uiString, resolveHidePriceLabel } from '../utils/metaShopLang';
 import { normalizeShopCategories, categoryLabel, findCategoryEntry, translateProductGroup, translateProductSubcategory } from '../utils/metaShopCategories';
-import { shopDisplayCurrencies, formatShopAmount, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
+import { shopDisplayCurrencies, readViewCurrencyFromUrl, writeViewCurrencyToUrl, shopBaseCurrency } from '../utils/metaShopCurrency';
 import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTypeLabel } from '../utils/metaShopRealEstate';
 import { productPurchaseOptions } from '../utils/metaShopPriceTiers';
+import { MetaShopMoney } from './MetaShopMoney';
 import { MetaShopProductImage } from './MetaShopProductImage';
 
 interface Props {
@@ -91,8 +92,16 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
   const curOf = (p: MetaShopProduct, optCur?: string) =>
     (optCur?.trim()) || (p.currency?.trim()) || shop.currency;
   const money = (n?: number, sourceCur?: string) => {
-    if (n == null) return '';
-    return formatShopAmount(n, sourceCur || shop.currency, viewCur, shop, uiLang);
+    if (n == null) return null;
+    return (
+      <MetaShopMoney
+        amount={n}
+        shop={shop}
+        viewCurrency={viewCur}
+        sourceCurrency={sourceCur}
+        uiLang={uiLang}
+      />
+    );
   };
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
@@ -620,7 +629,8 @@ const MSC_CSS = `
 .msc-prod-meta{ font-size:8.8pt; font-weight:600; color:var(--c-text); opacity:.85; line-height:1.4; flex:1 1 40mm; min-width:40mm;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .msc-prod-price{ font-weight:900; color:var(--c-primary); text-align:end; flex:0 1 auto; max-width:100%; margin-inline-start:auto; }
-.msc-price-main{ font-size:14pt; line-height:1.15; white-space:nowrap; direction:ltr; unicode-bidi:isolate; }
+.msc-price-main{ font-size:14pt; line-height:1.15; white-space:nowrap; }
+.msc-price-main .ms-money{ display:inline-flex; flex-direction:row; direction:ltr; gap:0.25em; }
 .msc-price-unit{ font-size:9pt; font-weight:600; opacity:.7; }
 .msc-price-pack{ display:block; font-size:8.6pt; font-weight:600; opacity:.7; }
 .msc-price-quote{ font-size:10.5pt; font-weight:800; color:var(--c-text); opacity:.7; font-style:italic; white-space:nowrap; }
