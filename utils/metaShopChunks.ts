@@ -135,4 +135,13 @@ export function shopProductsNeedFullHydration(shop: MetaShop): boolean {
   return (shop.productChunkCount || 0) > 0 || (shop.productCount || 0) > 0;
 }
 
+/** JSON export with empty products[] but server metadata — must not wipe chunks on re-import. */
+export function isShellOnlyMetaShopJson(json: Record<string, unknown>): boolean {
+  const products = json.products;
+  if (!Array.isArray(products) || products.length > 0) return false;
+  return (Number(json.productCount) || 0) > 0
+    || (Number(json.productChunkCount) || 0) > 0
+    || json.extrasOffloaded === true;
+}
+
 export { META_SHOP_FIRESTORE_MAX_BYTES };

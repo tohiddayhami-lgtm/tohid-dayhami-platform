@@ -1405,8 +1405,21 @@ const App: React.FC = () => {
     if (shopProductHydrateRef.current === shell.id) return;
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
+    const expectedCount = shell.productCount ?? 0;
     hydrateMetaShopProgressive(shell, products => {
       setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
+    }).then(full => {
+      if (shopProductHydrateRef.current !== shopId) return;
+      const loaded = full.products?.length ?? 0;
+      if (!loaded && expectedCount > 0) {
+        setPublicShop(prev => (
+          prev?.id === shopId
+            ? { ...prev, products: [], productCount: 0, productChunkCount: 0 }
+            : prev
+        ));
+      } else if (loaded) {
+        setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
+      }
     }).finally(() => {
       if (shopProductHydrateRef.current === shopId) shopProductHydrateRef.current = null;
     });

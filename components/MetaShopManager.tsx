@@ -3,7 +3,7 @@ import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, Met
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
 import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, enrichMetaShopShell, type MetaShopSaveOptions } from '../services/firebaseService';
-import { shopNeedsProductHydration } from '../utils/metaShopChunks';
+import { shopNeedsProductHydration, isShellOnlyMetaShopJson } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
 import { MetaExpoManager } from './MetaExpoManager';
@@ -75,8 +75,30 @@ const importFromJson = (raw: string, base: MetaShop): MetaShop => {
   const json = JSON.parse(raw);
   // Native MetaShop format (top-level products[]) — import everything, normalize products.
   if (json.products && Array.isArray(json.products)) {
-    const { _aiGuide, _instructions, ...clean } = json;
-    const products = json.products.map((p: any, i: number) => ({
+    const { _aiGuide, _instructions, products: rawProducts, ...clean } = json;
+    // Shell-only export (products live in metaShopChunks) — merge metadata without wiping products.
+    if (isShellOnlyMetaShopJson(json) && (base.products?.length || base.productCount || base.productChunkCount)) {
+      const {
+        products: _dropProducts,
+        productCount: _dropCount,
+        productChunkCount: _dropChunks,
+        productRefs: _dropRefs,
+        extrasOffloaded: _dropExtras,
+        productRefChunkCount: _dropRefChunks,
+        ...metaOnly
+      } = clean as Record<string, unknown>;
+      return normalizeMetaShopForCloud({
+        ...base,
+        ...metaOnly,
+        id: base.id,
+        createdAt: base.createdAt,
+        products: base.products || [],
+        productCount: base.productCount ?? (Number(json.productCount) || 0),
+        productChunkCount: base.productChunkCount ?? (Number(json.productChunkCount) || 0),
+        extrasOffloaded: base.extrasOffloaded ?? json.extrasOffloaded,
+      } as MetaShop);
+    }
+    const products = rawProducts.map((p: any, i: number) => ({
       ...p,
       id: p.id || `p-${Date.now()}-${i}`,
       images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
@@ -515,7 +537,20 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   // Download a single shop as a JSON file (re-importable / editable)
   const downloadShopJson = async (shop: MetaShop) => {
     const full = (await hydrateMetaShop(shop)) || shop;
-    const blob = new Blob([JSON.stringify(full, null, 2)], { type: 'application/json' });
+    if (!(full.products?.length) && (full.productCount ?? shop.productCount ?? 0) > 0) {
+      alert(T
+        ? 'محصولی روی سرور یافت نشد — فایل JSON فقط تنظیمات را دارد. از «بازیابی محصولات» یا پشتیبان کامل استفاده کنید.'
+        : 'No products on server — JSON will only contain settings. Use Recover products or a full backup.');
+    }
+    const exportDoc = {
+      ...full,
+      _exportNote: (full.products?.length)
+        ? undefined
+        : (T
+          ? 'این فایل بدون محصول است — برای import مجدد از پشتیبان کامل استفاده کنید.'
+          : 'Shell-only export — use a full backup to re-import products.'),
+    };
+    const blob = new Blob([JSON.stringify(exportDoc, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `metashop-${full.slug || full.id}.json`; a.click();
@@ -544,11 +579,25 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     r.onload = async ev => {
       try {
         const merged = importFromJson(String(ev.target?.result || ''), shop);
-        const updated: MetaShop = { ...merged, id: shop.id, slug: shop.slug, createdAt: shop.createdAt };
+        let updated: MetaShop = { ...merged, id: shop.id, slug: shop.slug, createdAt: shop.createdAt };
+        if (!(updated.products?.length) && ((updated.productCount ?? shop.productCount ?? 0) > 0 || (updated.productChunkCount ?? shop.productChunkCount ?? 0) > 0)) {
+          const hydrated = await hydrateMetaShop({ ...shop, ...updated });
+          if (hydrated?.products?.length) {
+            updated = { ...hydrated, ...updated, products: hydrated.products };
+          } else {
+            alert(T
+              ? 'این JSON محصول ندارد و chunk محصول روی سرور هم یافت نشد. فایل پشتیبان کامل (با آرایه products) را import کنید یا از «بازیابی محصولات» استفاده کنید.'
+              : 'This JSON has no products and server chunks were not found. Import a full backup with a products array, or use Recover products.');
+            return;
+          }
+        }
         await onSaveMetaShop(updated);
         if (draft && draft.id === shop.id) setDraft(updated);
         alert(T ? 'فروشگاه با موفقیت به‌روزرسانی شد.' : 'Shop updated successfully.');
-      } catch { alert(T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.'); }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '';
+        alert(msg || (T ? 'فایل JSON نامعتبر است.' : 'Invalid JSON file.'));
+      }
     };
     r.readAsText(file);
   };
