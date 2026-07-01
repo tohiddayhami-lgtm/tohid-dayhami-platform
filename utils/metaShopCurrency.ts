@@ -6,6 +6,7 @@ const PRESET_LABELS: Record<string, { fa: string; en: string }> = {
   USD: { fa: 'دلار آمریکا', en: 'US Dollar' },
   AED: { fa: 'درهم امارات', en: 'UAE Dirham' },
   IRR: { fa: 'ریال ایران', en: 'Iranian Rial' },
+  IRT: { fa: 'تومان', en: 'Iranian Toman' },
   EUR: { fa: 'یورو', en: 'Euro' },
   GBP: { fa: 'پوند انگلیس', en: 'British Pound' },
   SAR: { fa: 'ریال سعودی', en: 'Saudi Riyal' },
@@ -18,14 +19,15 @@ const PRESET_LABELS: Record<string, { fa: string; en: string }> = {
 /** Suggested market rates: 1 unit of base → target (editable in admin). */
 export const DEFAULT_RATES_FROM: Record<string, Record<string, number>> = {
   EUR: { USD: 1.17, OMR: 0.445, AED: 4.31, SAR: 4.40, GBP: 0.86 },
-  USD: { EUR: 0.854, OMR: 0.3846, AED: 3.6725, SAR: 3.75 },
+  USD: { EUR: 0.854, OMR: 0.3846, AED: 3.6725, SAR: 3.75, IRT: 420000, IRR: 4200000 },
   OMR: { USD: 2.60, EUR: 2.25, AED: 9.55, SAR: 9.75 },
   AED: { OMR: 0.105, USD: 0.272, EUR: 0.23, SAR: 1.02 },
   SAR: { OMR: 0.102, USD: 0.267, AED: 0.98, EUR: 0.227 },
-  IRR: { USD: 0.000024, OMR: 0.0000091, AED: 0.000087 },
+  IRR: { USD: 0.000024, OMR: 0.0000091, AED: 0.000087, IRT: 0.00024 },
+  IRT: { USD: 0.0000024, OMR: 0.00000091, AED: 0.0000087, IRR: 10 },
 };
 
-export const CURRENCY_PRESETS = ['OMR', 'USD', 'AED', 'EUR', 'SAR', 'GBP', 'IRR', 'CNY', 'QAR', 'KWD', 'BHD'];
+export const CURRENCY_PRESETS = ['OMR', 'USD', 'AED', 'EUR', 'SAR', 'GBP', 'IRR', 'IRT', 'CNY', 'QAR', 'KWD', 'BHD'];
 
 export const currencyPresetLabel = (code: string, lang: string): string => {
   const c = code.trim().toUpperCase();
@@ -123,7 +125,8 @@ export function crossRate(shop: MetaShop, fromCode: string, toCode: string): num
 }
 
 export function decimalPlacesForCurrency(code: string): number {
-  return code.trim().toUpperCase() === 'IRR' ? 0 : 2;
+  const c = code.trim().toUpperCase();
+  return c === 'IRR' || c === 'IRT' ? 0 : 2;
 }
 
 export function roundForCurrency(amount: number, code: string): number {
@@ -147,6 +150,30 @@ export function convertAmount(
 export const convertFromBase = (amount: number, shop: MetaShop, targetCode: string): number =>
   convertAmount(amount, shopBaseCurrency(shop), targetCode, shop);
 
+/** LTR isolate — keeps currency label visually left of the amount in RTL layouts. */
+const LRI = '\u2066';
+const PDI = '\u2069';
+
+export type ShopAmountParts = { label: string; amount: string };
+
+export const formatShopAmountParts = (
+  amount: number,
+  sourceCurrency: string,
+  viewCurrency: string,
+  shop: MetaShop,
+  uiLang = 'fa',
+): ShopAmountParts => {
+  const base = shopBaseCurrency(shop);
+  const src = (sourceCurrency || base).trim().toUpperCase();
+  const view = (viewCurrency || base).trim().toUpperCase();
+  const n = convertAmount(amount, src, view, shop);
+  const decimals = decimalPlacesForCurrency(view);
+  return {
+    label: currencyDisplayLabel(shop, view, uiLang),
+    amount: formatMetaShopNumber(n, decimals),
+  };
+};
+
 export const formatShopAmount = (
   amount: number,
   sourceCurrency: string,
@@ -154,13 +181,8 @@ export const formatShopAmount = (
   shop: MetaShop,
   uiLang = 'fa',
 ): string => {
-  const base = shopBaseCurrency(shop);
-  const src = (sourceCurrency || base).trim().toUpperCase();
-  const view = (viewCurrency || base).trim().toUpperCase();
-  const n = convertAmount(amount, src, view, shop);
-  const decimals = decimalPlacesForCurrency(view);
-  const label = currencyDisplayLabel(shop, view, uiLang);
-  return `${label} ${formatMetaShopNumber(n, decimals)}`;
+  const { label, amount: num } = formatShopAmountParts(amount, sourceCurrency, viewCurrency, shop, uiLang);
+  return `${LRI}${label} ${num}${PDI}`;
 };
 
 export const normalizeDisplayCurrencies = (

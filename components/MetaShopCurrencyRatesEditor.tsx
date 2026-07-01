@@ -54,6 +54,18 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   const lbl = 'block text-xs font-medium text-gray-500 mb-1';
 
   const base = baseCurrency.trim().toUpperCase() || 'USD';
+  const uiLang = lang === 'fa' ? 'fa' : 'en';
+  const labelForCode = (code: string, entry?: MetaShopDisplayCurrency): string => {
+    const c = code.trim().toUpperCase();
+    if (c === base) {
+      if (uiLang === 'fa') return baseCurrencyLabel?.trim() || currencyPresetLabel(c, uiLang);
+      return baseCurrencyLabelEn?.trim() || baseCurrencyLabel?.trim() || currencyPresetLabel(c, uiLang);
+    }
+    if (entry && entry.code.trim().toUpperCase() === c) return displayCurrencyLabel(entry, uiLang);
+    const found = normalized.find(x => x.code.trim().toUpperCase() === c);
+    if (found) return displayCurrencyLabel(found, uiLang);
+    return currencyPresetLabel(c, uiLang);
+  };
   const normalized = useMemo(
     () => normalizeDisplayCurrencies(base, displayCurrencies),
     [base, displayCurrencies],
@@ -240,6 +252,9 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                 });
               };
 
+              const leftLabel = labelForCode(leftCur, dc);
+              const rightLabel = labelForCode(rightCur, dc);
+
               return (
               <div key={dc.code} className="p-3 rounded-xl border border-gray-100 bg-white space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -257,7 +272,11 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                   >
                     ⇄
                   </button>
-                  <span className="font-mono whitespace-nowrap">1 {leftCur} =</span>
+                  <span className="whitespace-nowrap shrink-0">
+                    <span className="font-semibold text-gray-800">{leftLabel}</span>
+                    <span className="text-[10px] text-gray-400 font-mono ms-1">({leftCur})</span>
+                    <span className="text-gray-500 ms-1">=</span>
+                  </span>
                   <input
                     type="text"
                     inputMode="decimal"
@@ -277,7 +296,10 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
                     })}
                     placeholder="0"
                   />
-                  <span className="font-mono font-semibold">{rightCur}</span>
+                  <span className="whitespace-nowrap shrink-0">
+                    <span className="font-semibold text-gray-800">{rightLabel}</span>
+                    <span className="text-[10px] text-gray-400 font-mono ms-1">({rightCur})</span>
+                  </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
