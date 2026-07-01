@@ -1238,9 +1238,77 @@ export type MetaShopSaveOptions = {
 /** Try to restore products from chunk docs when shell metadata was wiped by mistake. */
 export const recoverMetaShopFromChunks = async (shop: MetaShop): Promise<MetaShop | null> => {
   const hydrated = await hydrateMetaShop(shop);
-  if (!hydrated?.products?.length) return null;
-  await saveMetaShopToCloud(hydrated);
+  if (hydrated?.products?.length) {
+    await saveMetaShopToCloud(hydrated);
+    return hydrated;
+  }
+  for (const slot of META_SHOP_BACKUP_SLOT_NUMS) {
+    const backup = await hydrateMetaShopBackup(shop.id, slot);
+    if (backup?.products?.length) {
+      const restored: MetaShop = {
+        ...backup,
+        id: shop.id,
+        slug: shop.slug,
+        createdAt: shop.createdAt,
+        code: shop.code || backup.code,
+      };
+      await saveMetaShopToCloud(restored);
+      return restored;
+    }
+  }
+  return null;
+};
+
+/** Load products from chunks and, if missing, from backup slots (read-only — no cloud save). */
+export const loadMetaShopProductsFull = async (
+  shop: MetaShop,
+  onProgress?: (products: MetaShop['products'], loadedChunks: number, totalChunks: number) => void,
+): Promise<MetaShop> => {
+  const hydrated = await hydrateMetaShopProgressive(shop, onProgress);
+  if ((hydrated.products?.length ?? 0) > 0) return hydrated;
+  for (const slot of META_SHOP_BACKUP_SLOT_NUMS) {
+    const backup = await hydrateMetaShopBackup(shop.id, slot);
+    if (backup?.products?.length) {
+      onProgress?.(backup.products, 1, 1);
+      return {
+        ...shop,
+        ...backup,
+        id: shop.id,
+        slug: shop.slug,
+        createdAt: shop.createdAt,
+        products: backup.products,
+      };
+    }
+  }
   return hydrated;
+};
+
+/** True when shell claims products exist and they are loadable from chunks / backups. */
+export const probeMetaShopProductsAvailable = async (shop: MetaShop): Promise<boolean> => {
+  if ((shop.productCount ?? 0) <= 0) return true;
+  const full = await loadMetaShopProductsFull(shop);
+  return (full.products?.length ?? 0) > 0;
+};
+
+export const recoverAllMetaShopsProducts = async (
+  shops: MetaShop[],
+  onProgress?: (index: number, total: number, shop: MetaShop, result: 'ok' | 'fail') => void,
+): Promise<{ recovered: MetaShop[]; failed: MetaShop[] }> => {
+  const targets = shops.filter(s => (s.productCount ?? 0) > 0);
+  const recovered: MetaShop[] = [];
+  const failed: MetaShop[] = [];
+  for (let i = 0; i < targets.length; i++) {
+    const s = targets[i];
+    const ok = await recoverMetaShopFromChunks(s);
+    if (ok) {
+      recovered.push(ok);
+      onProgress?.(i + 1, targets.length, s, 'ok');
+    } else {
+      failed.push(s);
+      onProgress?.(i + 1, targets.length, s, 'fail');
+    }
+  }
+  return { recovered, failed };
 };
 
 /** Load product chunks one-by-one so the UI can render the first batch immediately. */

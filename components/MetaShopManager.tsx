@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent, CustomerAccount } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { uploadFileWithProgress, fetchMetaShopEvents, hydrateMetaShopProgressive, hydrateMetaShop, recoverMetaShopFromChunks, enrichMetaShopShell, type MetaShopSaveOptions } from '../services/firebaseService';
+import { subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive, loadMetaShopProductsFull, recoverMetaShopFromChunks, recoverAllMetaShopsProducts, probeMetaShopProductsAvailable, type MetaShopSaveOptions } from '../services/firebaseService';
 import { shopNeedsProductHydration, isShellOnlyMetaShopJson } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -214,7 +214,10 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsSyncing, setProductsSyncing] = useState(false);
   const [productsFullyLoaded, setProductsFullyLoaded] = useState(false);
+  const [productsLoadFailed, setProductsLoadFailed] = useState(false);
   const [recoveringShopId, setRecoveringShopId] = useState<string | null>(null);
+  const [bulkRecovering, setBulkRecovering] = useState(false);
+  const [productProbe, setProductProbe] = useState<Record<string, 'pending' | 'ok' | 'missing'>>({});
   const [editorProductShown, setEditorProductShown] = useState(EDITOR_PRODUCT_PAGE_SIZE);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -247,6 +250,30 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
       setOrdersShopId(null);
     }
   }, [metaShops, mode, ordersShopId]);
+
+  // Detect shops whose shell says N products but chunks/backups are missing on the server.
+  useEffect(() => {
+    if (section !== 'shops' || mode !== 'list') return;
+    const targets = metaShops.filter(s => (s.productCount ?? 0) > 0);
+    if (!targets.length) return;
+    let cancelled = false;
+    const next: Record<string, 'pending' | 'ok' | 'missing'> = {};
+    targets.forEach(s => { next[s.id] = 'pending'; });
+    setProductProbe(prev => ({ ...prev, ...next }));
+    (async () => {
+      for (const s of targets) {
+        if (cancelled) return;
+        try {
+          const ok = await probeMetaShopProductsAvailable(s);
+          if (cancelled) return;
+          setProductProbe(prev => ({ ...prev, [s.id]: ok ? 'ok' : 'missing' }));
+        } catch {
+          if (!cancelled) setProductProbe(prev => ({ ...prev, [s.id]: 'missing' }));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [metaShops, section, mode]);
 
   const backToList = () => {
     clearMetaShopManagerNav();
@@ -559,17 +586,47 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const recoverShopProducts = async (shop: MetaShop) => {
     if (readonly) return;
-    if (!confirm(T ? 'تلاش برای بازیابی محصولات از سرور؟' : 'Try to recover products from the server?')) return;
+    if (!confirm(T ? 'تلاش برای بازیابی محصولات از chunk و پشتیبان؟' : 'Try to recover products from chunks and backups?')) return;
     setRecoveringShopId(shop.id);
     try {
       const ok = await recoverMetaShopFromChunks(shop);
-      alert(ok
-        ? (T ? `${ok.products.length} محصول بازیابی شد.` : `${ok.products.length} products recovered.`)
-        : (T ? 'محصولی در سرور یافت نشد. فایل JSON پشتیبان را با دکمه ⤒ JSON وارد کنید.' : 'No products found on server. Re-import your JSON backup with ⤒ JSON.'));
+      if (ok) {
+        setProductProbe(prev => ({ ...prev, [shop.id]: 'ok' }));
+        alert(T ? `${ok.products.length} محصول بازیابی و ذخیره شد.` : `${ok.products.length} products recovered and saved.`);
+      } else {
+        alert(T
+          ? 'محصولی یافت نشد (نه chunk و نه پشتیبان). فایل JSON کامل با آرایه products را import کنید.'
+          : 'No products found (chunks or backups). Import a full JSON with a products array.');
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : (T ? 'بازیابی ناموفق بود.' : 'Recovery failed.'));
     } finally {
       setRecoveringShopId(null);
+    }
+  };
+
+  const recoverAllBrokenShops = async () => {
+    if (readonly || bulkRecovering) return;
+    const broken = metaShops.filter(s => productProbe[s.id] === 'missing');
+    if (!broken.length) {
+      alert(T ? 'فروشگاه خرابی برای بازیابی یافت نشد.' : 'No broken shops to recover.');
+      return;
+    }
+    if (!confirm(T
+      ? `${broken.length} فروشگاه محصولاتشان روی سرور نیست. بازیابی از chunk/پشتیبان انجام شود؟`
+      : `${broken.length} shops are missing products on the server. Recover from chunks/backups?`)) return;
+    setBulkRecovering(true);
+    try {
+      const { recovered, failed } = await recoverAllMetaShopsProducts(broken);
+      const probePatch: Record<string, 'ok' | 'missing'> = {};
+      recovered.forEach(s => { probePatch[s.id] = 'ok'; });
+      failed.forEach(s => { probePatch[s.id] = 'missing'; });
+      setProductProbe(prev => ({ ...prev, ...probePatch }));
+      alert(T
+        ? `بازیابی: ${recovered.length} موفق، ${failed.length} ناموفق.`
+        : `Recovery: ${recovered.length} ok, ${failed.length} failed.`);
+    } finally {
+      setBulkRecovering(false);
     }
   };
 
@@ -607,27 +664,37 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const startEdit = (s: MetaShop) => {
     setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
     setProductsSyncing(false);
+    setProductsLoadFailed(false);
     setProductsFullyLoaded(!shopNeedsProductHydration(s));
     setMode('editor');
     setDraft({ ...s, products: [...(s.products || [])] });
     const shopId = s.id;
+    const expectedCount = s.productCount ?? 0;
     enrichMetaShopShell(s).then(shell => {
       setDraft(d => (d && d.id === shopId ? { ...d, ...shell, products: d.products } : d));
     }).catch(() => {});
     if (!shopNeedsProductHydration(s)) return;
     setProductsLoading(true);
-    hydrateMetaShopProgressive(s, (products, loaded, total) => {
+    loadMetaShopProductsFull(s, (products, loaded, total) => {
       setDraft(d => (d && d.id === shopId ? { ...d, products } : d));
       if (loaded >= 1) setProductsLoading(false);
       setProductsSyncing(loaded < total);
     })
       .then(full => {
-        setDraft(d => (d && d.id === shopId ? { ...d, ...full, products: full.products } : d));
-        setProductsFullyLoaded(true);
+        const loaded = full.products?.length ?? 0;
+        setDraft(d => (d && d.id === shopId ? { ...d, ...full, products: full.products || [] } : d));
+        if (loaded > 0 || expectedCount === 0) {
+          setProductsFullyLoaded(true);
+          setProductsLoadFailed(false);
+        } else {
+          setProductsFullyLoaded(false);
+          setProductsLoadFailed(true);
+        }
       })
       .catch(() => {
         setProductsLoading(false);
         setProductsSyncing(false);
+        setProductsLoadFailed(true);
       });
   };
 
@@ -709,6 +776,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     if (!draft) return;
     if (productsLoading || productsSyncing) {
       alert(T ? 'لطفاً تا بارگذاری کامل محصولات صبر کنید.' : 'Please wait until all products are loaded.');
+      return;
+    }
+    if (productsLoadFailed) {
+      alert(T
+        ? 'محصولات از سرور بارگذاری نشدند. ابتدا «بازیابی محصولات» را بزنید یا JSON کامل import کنید — ذخیره نکنید.'
+        : 'Products failed to load from the server. Use Recover or import full JSON first — do not save.');
       return;
     }
     if (shopNeedsProductHydration(draft) && !productsFullyLoaded) {
@@ -1145,6 +1218,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               </button>
             )}
             <button onClick={startKeywordsBulk} className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5"><IconSearch className="w-4 h-4" />{t.keywordsBulk}</button>
+            {!readonly && Object.values(productProbe).some(v => v === 'missing') && (
+              <button
+                type="button"
+                onClick={recoverAllBrokenShops}
+                disabled={bulkRecovering}
+                className="px-3 py-2 rounded-lg text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {bulkRecovering
+                  ? (T ? 'در حال بازیابی…' : 'Recovering…')
+                  : (T ? `↺ بازیابی همه (${Object.values(productProbe).filter(v => v === 'missing').length})` : `↺ Recover all (${Object.values(productProbe).filter(v => v === 'missing').length})`)}
+              </button>
+            )}
             <button onClick={() => { navigator.clipboard.writeText(`${shopBaseUrl}?shops=1`); setCopiedId('__bazaar__'); setTimeout(() => setCopiedId(null), 1800); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5">{copiedId === '__bazaar__' ? t.allShopsCopied : <><IconLink className="w-4 h-4" />{t.allShopsLink}</>}</button>
           {!readonly && <>
             <button onClick={() => { setImportOpen(true); setImportText(''); }} className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center gap-1.5"><IconUpload className="w-4 h-4" />{t.importJson}</button>
@@ -1193,6 +1278,9 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               const pendingRefs = refs.filter(r => r.status === 'pending').length;
               const collabs = supplierCollabsByShop[s.id] || [];
               const pendingCollabs = collabs.filter(r => r.status === 'pending').length;
+              const probeState = productProbe[s.id];
+              const productsBroken = probeState === 'missing';
+              const productsChecking = probeState === 'pending' && (s.productCount ?? 0) > 0;
               return (
                 <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                   <div className="h-20 flex items-center justify-center text-white font-bold relative" style={{ background: s.theme?.cover || '#334155', backgroundImage: s.coverImage ? `linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.45)), url(${s.coverImage})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
@@ -1205,9 +1293,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
                     <div className="text-[11px] text-gray-400">{(s.productCount ?? (s.products || []).length)} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
-                    {(s.productCount ?? 0) === 0 && (s.productRefs?.length ?? 0) > 0 && (
+                    {productsChecking && (
+                      <p className="text-[11px] text-gray-400">{T ? 'در حال بررسی محصولات…' : 'Checking products…'}</p>
+                    )}
+                    {productsBroken && (
                       <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
-                        {T ? '⚠ محصولات از دست رفته‌اند — بازیابی یا import JSON' : '⚠ Products missing — recover or import JSON'}
+                        {T ? '⚠ محصولات روی سرور نیستند (عدد روی کارت قدیمی است) — بازیابی یا import JSON کامل' : '⚠ Products missing on server (stale count on card) — recover or import full JSON'}
                       </p>
                     )}
                     {(s.searchKeywords?.length || 0) > 0 && (
@@ -1230,11 +1321,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       )}
                       <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
-                      {!readonly && (s.productCount ?? 0) === 0 && (
+                      {!readonly && productsBroken && (
                         <button
                           onClick={() => recoverShopProducts(s)}
                           disabled={recoveringShopId === s.id}
-                          title={T ? 'بازیابی محصولات از سرور' : 'Recover products from server'}
+                          title={T ? 'بازیابی محصولات از chunk/پشتیبان' : 'Recover products from chunks/backups'}
                           className="text-xs px-2 py-1.5 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50 disabled:opacity-50"
                         >
                           {recoveringShopId === s.id ? '…' : (T ? '↺ بازیابی' : '↺ Recover')}
@@ -1593,6 +1684,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           {!readonly && <button onClick={save} disabled={saving || productsLoading || productsSyncing} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
         </div>
       </div>
+
+      {productsLoadFailed && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 text-rose-900 text-sm px-4 py-3 space-y-2">
+          <p className="font-bold">{T ? '⚠ محصولات بارگذاری نشدند' : '⚠ Products failed to load'}</p>
+          <p className="text-xs text-rose-800">{T ? 'chunk محصول روی سرور نیست. ذخیره نکنید — ابتدا «↺ بازیابی» را بزنید یا JSON کامل import کنید.' : 'Product chunks are missing on the server. Do not save — use Recover or import full JSON first.'}</p>
+          {!readonly && (
+            <button type="button" onClick={() => recoverShopProducts(draft)} disabled={recoveringShopId === draft.id} className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">
+              {recoveringShopId === draft.id ? '…' : (T ? '↺ بازیابی محصولات' : '↺ Recover products')}
+            </button>
+          )}
+        </div>
+      )}
 
       {productsLoading && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm px-4 py-3">

@@ -25,7 +25,7 @@ import {
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
-  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive,
+  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, loadMetaShopProductsFull,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, restoreMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
@@ -1406,7 +1406,7 @@ const App: React.FC = () => {
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
     const expectedCount = shell.productCount ?? 0;
-    hydrateMetaShopProgressive(shell, products => {
+    loadMetaShopProductsFull(shell, products => {
       setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
     }).then(full => {
       if (shopProductHydrateRef.current !== shopId) return;
