@@ -2687,7 +2687,9 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
           window.setTimeout(() => setUploads(prev => prev.filter(it => it.id !== itemId)), 2500);
         },
         err => {
-          setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'error', error: err.message } : it)));
+          const msg = err.message || (T ? 'آپلود ناموفق' : 'Upload failed');
+          setUploads(prev => prev.map(it => (it.id === itemId ? { ...it, status: 'error', error: msg } : it)));
+          alert(msg);
         },
         'images',
       );
