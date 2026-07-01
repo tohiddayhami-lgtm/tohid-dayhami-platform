@@ -1386,7 +1386,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               <p className="ms-hydrate-hint">{S('loadingProducts')}</p>
             )}
             <div className="ms-grid">
-              {visibleFiltered.map((p, i) => productCard(p, { priority: i < 8 }))}
+              {visibleFiltered.map((p, i) => productCard(p, { priority: i < 12 }))}
             </div>
             {filtered.length > gridShown && (
               <div className="ms-load-more-wrap">
@@ -2204,7 +2204,9 @@ button.ms-foot-catalog:hover { transform:none; }
 @media (hover:none) and (pointer:coarse){ .ms-card { transition:none; } }
 .ms-card:hover { box-shadow:0 12px 32px rgba(0,0,0,.13); transform:translateY(-4px); }
 .ms-card-img { position:relative; aspect-ratio:4/3; background:#f8fafc; cursor:zoom-in; overflow:hidden; }
-.ms-card-img img { width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s ease; }
+.ms-img-host { position:absolute; inset:0; display:block; }
+.ms-card-img img { width:100%; height:100%; object-fit:cover; transition:opacity .25s ease; }
+.ms-card-img img.is-pending { opacity:0.4; }
 .ms-card-img img.is-loaded { opacity:1; }
 .ms-img-skeleton { position:absolute; inset:0; background:linear-gradient(90deg,#f1f5f9 0%,#e2e8f0 45%,#f1f5f9 90%); background-size:200% 100%; animation:ms-img-shimmer 1.1s ease-in-out infinite; pointer-events:none; }
 @keyframes ms-img-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }

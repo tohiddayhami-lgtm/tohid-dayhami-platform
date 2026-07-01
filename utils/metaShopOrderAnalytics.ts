@@ -7,6 +7,7 @@ export type OrderHubFilters = {
   status?: MetaShopOrder['status'] | '';
   period?: OrderPeriod;
   query?: string;
+  showArchived?: boolean;
 };
 
 export type RevenueByCurrency = Record<string, number>;
@@ -65,6 +66,7 @@ export function filterMetaShopOrders(
   const from = periodStart(filters.period || 'all');
 
   return orders.filter(o => {
+    if (!filters.showArchived && o.archivedAt) return false;
     if (filters.shopId && o.shopId !== filters.shopId) return false;
     if (filters.status && o.status !== filters.status) return false;
     if (from && new Date(o.createdAt).getTime() < from.getTime()) return false;

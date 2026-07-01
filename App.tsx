@@ -26,7 +26,7 @@ import {
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
   subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive,
-  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
+  subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, restoreMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
@@ -2455,7 +2455,8 @@ const App: React.FC = () => {
                     onSaveMetaShop={async (s, opts) => { await saveMetaShopToCloud(s, opts); }}
                     onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
-                    onDeleteMetaShopOrder={async (id) => { await deleteMetaShopOrderFromCloud(id); }}
+                    onDeleteMetaShopOrder={async (id) => { await deleteMetaShopOrderFromCloud(id, currentUser?.fullName || 'Admin'); }}
+                    onRestoreMetaShopOrder={async (id) => { await restoreMetaShopOrderInCloud(id, currentUser?.fullName || 'Admin'); }}
                     onUpdateMetaShopPropertyReferral={async (id, u) => { await updateMetaShopPropertyReferralInCloud(id, u); }}
                     onUpdateMetaShopSupplierCollaboration={async (id, u) => { await updateMetaShopSupplierCollaborationInCloud(id, u); }}
                     shopBaseUrl={`${window.location.origin}${window.location.pathname}`}

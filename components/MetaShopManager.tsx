@@ -44,6 +44,7 @@ interface Props {
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onDeleteMetaShopOrder?: (id: string) => Promise<void>;
+  onRestoreMetaShopOrder?: (id: string) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
   onUpdateMetaShopSupplierCollaboration?: (id: string, updates: Partial<MetaShopSupplierCollaboration>) => Promise<void>;
   metaBazaars?: MetaBazaar[];
@@ -162,7 +163,7 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onRestoreMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const savedNav = loadMetaShopManagerNav();
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
@@ -480,7 +481,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const ordersByShop = useMemo(() => {
     const m: Record<string, MetaShopOrder[]> = {};
-    metaShopOrders.forEach(o => { (m[o.shopId] = m[o.shopId] || []).push(o); });
+    metaShopOrders.filter(o => !o.archivedAt).forEach(o => { (m[o.shopId] = m[o.shopId] || []).push(o); });
+    return m;
+  }, [metaShopOrders]);
+  const archivedOrdersByShop = useMemo(() => {
+    const m: Record<string, MetaShopOrder[]> = {};
+    metaShopOrders.filter(o => !!o.archivedAt).forEach(o => { (m[o.shopId] = m[o.shopId] || []).push(o); });
     return m;
   }, [metaShopOrders]);
   const referralsByShop = useMemo(() => {
@@ -951,8 +957,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const confirmDeleteOrder = (orderId: string) => {
     if (!onDeleteMetaShopOrder) return;
     const msg = T
-      ? 'این سفارش برای همیشه حذف شود؟ این عمل قابل بازگشت نیست.'
-      : 'Permanently delete this order? This cannot be undone.';
+      ? 'این سفارش از لیست بایگانی شود؟ (داده‌ها در سیستم باقی می‌مانند و قابل بازیابی است.)'
+      : 'Archive this order? (Data is kept and can be restored.)';
     if (window.confirm(msg)) void onDeleteMetaShopOrder(orderId);
   };
 
@@ -1215,6 +1221,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         readonly={readonly}
         onUpdateOrder={onUpdateMetaShopOrder}
         onDeleteOrder={onDeleteMetaShopOrder}
+        onRestoreOrder={onRestoreMetaShopOrder}
         onBack={backToList}
         sectionToggle={sectionToggle}
       />
@@ -1225,6 +1232,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   if (mode === 'orders') {
     const shop = metaShops.find(s => s.id === ordersShopId);
     const orders = ordersShopId ? (ordersByShop[ordersShopId] || []) : [];
+    const archived = ordersShopId ? (archivedOrdersByShop[ordersShopId] || []) : [];
     const sorted = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return (
       <div className="space-y-4 animate-fade-in">
@@ -1242,7 +1250,26 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                 customerAccounts={customerAccounts}
                 commissionView="master"
                 onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
-                onDelete={!readonly && onDeleteMetaShopOrder ? () => confirmDeleteOrder(o.id) : undefined}
+                onDelete={!readonly && onDeleteMetaShopOrder && !o.archivedAt ? () => confirmDeleteOrder(o.id) : undefined}
+                onRestore={!readonly && onRestoreMetaShopOrder && o.archivedAt ? () => onRestoreMetaShopOrder(o.id) : undefined}
+              />
+            ))}
+          </div>
+        )}
+        {archived.length > 0 && (
+          <div className="space-y-3 pt-4 border-t border-gray-100">
+            <h4 className="text-sm font-bold text-gray-500">{T ? 'بایگانی‌شده' : 'Archived'}</h4>
+            {archived.map(o => (
+              <MetaShopOrderDetailCard
+                key={o.id}
+                order={o}
+                shop={shop}
+                shopBaseUrl={shopBaseUrl}
+                lang={lang}
+                customerAccounts={customerAccounts}
+                commissionView="master"
+                onStatusChange={status => onUpdateMetaShopOrder(o.id, { status })}
+                onRestore={!readonly && onRestoreMetaShopOrder ? () => onRestoreMetaShopOrder(o.id) : undefined}
               />
             ))}
           </div>

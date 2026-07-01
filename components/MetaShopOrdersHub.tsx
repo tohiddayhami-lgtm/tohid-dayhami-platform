@@ -23,6 +23,7 @@ interface Props {
   readonly?: boolean;
   onUpdateOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onDeleteOrder?: (id: string) => Promise<void>;
+  onRestoreOrder?: (id: string) => Promise<void>;
   onBack: () => void;
   sectionToggle?: React.ReactNode;
 }
@@ -46,7 +47,7 @@ const PERIOD_OPTIONS: { value: OrderPeriod; labelFa: string; labelEn: string }[]
 
 export const MetaShopOrdersHub: React.FC<Props> = ({
   metaShops, orders, customerAccounts = [], shopBaseUrl, lang, readonly,
-  onUpdateOrder, onDeleteOrder, onBack, sectionToggle,
+  onUpdateOrder, onDeleteOrder, onRestoreOrder, onBack, sectionToggle,
 }) => {
   const T = lang === 'fa';
   const [tab, setTab] = useState<HubTab>('report');
@@ -54,10 +55,11 @@ export const MetaShopOrdersHub: React.FC<Props> = ({
   const [status, setStatus] = useState<MetaShopOrder['status'] | ''>('');
   const [period, setPeriod] = useState<OrderPeriod>('all');
   const [query, setQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
   const filters: OrderHubFilters = useMemo(
-    () => ({ shopId: shopId || undefined, status, period, query }),
-    [shopId, status, period, query],
+    () => ({ shopId: shopId || undefined, status, period, query, showArchived }),
+    [shopId, status, period, query, showArchived],
   );
 
   const filtered = useMemo(() => filterMetaShopOrders(orders, filters), [orders, filters]);
@@ -74,8 +76,8 @@ export const MetaShopOrdersHub: React.FC<Props> = ({
   const confirmDeleteOrder = (orderId: string) => {
     if (!onDeleteOrder) return;
     const msg = T
-      ? 'این سفارش برای همیشه حذف شود؟'
-      : 'Permanently delete this order?';
+      ? 'این سفارش از لیست بایگانی شود؟ (داده‌ها در سیستم باقی می‌مانند و قابل بازیابی است.)'
+      : 'Archive this order? (Data is kept and can be restored.)';
     if (window.confirm(msg)) void onDeleteOrder(orderId);
   };
 
@@ -175,6 +177,10 @@ export const MetaShopOrdersHub: React.FC<Props> = ({
             />
           </div>
         </div>
+        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+          {T ? 'نمایش سفارش‌های بایگانی‌شده' : 'Show archived orders'}
+        </label>
         <p className="text-xs text-gray-400">
           {filtered.length} {T ? 'سفارش مطابق فیلتر' : 'orders match filters'}
           {summary.newCount > 0 && (
@@ -340,7 +346,8 @@ export const MetaShopOrdersHub: React.FC<Props> = ({
               customerAccounts={customerAccounts}
               commissionView="master"
               onStatusChange={status => onUpdateOrder(o.id, { status })}
-              onDelete={!readonly && onDeleteOrder ? () => confirmDeleteOrder(o.id) : undefined}
+              onDelete={!readonly && onDeleteOrder && !o.archivedAt ? () => confirmDeleteOrder(o.id) : undefined}
+              onRestore={!readonly && onRestoreOrder && o.archivedAt ? () => onRestoreOrder(o.id) : undefined}
             />
           ))}
         </div>

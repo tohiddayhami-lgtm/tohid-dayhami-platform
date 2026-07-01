@@ -10,8 +10,9 @@ interface Props {
   lang: Language;
   onStatusChange?: (status: MetaShopOrder['status']) => void;
   statusChangeDisabled?: boolean;
-  /** Admin only — permanently delete order */
+  /** Admin only — archive order (soft delete, data kept) */
   onDelete?: () => void;
+  onRestore?: () => void;
   /** Customer portal: acknowledge a new order → in_progress */
   onMarkReceived?: () => void;
   markReceivedBusy?: boolean;
@@ -29,7 +30,7 @@ const statusCls = (s: MetaShopOrder['status']) =>
     : 'bg-amber-100 text-amber-700';
 
 export const MetaShopOrderDetailCard: React.FC<Props> = ({
-  order, shop, shopBaseUrl, lang, onStatusChange, statusChangeDisabled, onDelete,
+  order, shop, shopBaseUrl, lang, onStatusChange, statusChangeDisabled, onDelete, onRestore,
   onMarkReceived, markReceivedBusy, showShopName,
   customerAccounts = [], commissionView, partnerCommissionPercent,
 }) => {
@@ -79,13 +80,27 @@ export const MetaShopOrderDetailCard: React.FC<Props> = ({
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-          {onDelete && (
+          {order.archivedAt && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 font-medium">
+              {T ? 'بایگانی‌شده' : 'Archived'}
+            </span>
+          )}
+          {onRestore && order.archivedAt && (
+            <button
+              type="button"
+              onClick={onRestore}
+              className="text-[10px] text-emerald-700 hover:text-emerald-900 font-medium px-2 py-0.5 rounded border border-emerald-100 hover:bg-emerald-50"
+            >
+              {T ? 'بازیابی' : 'Restore'}
+            </button>
+          )}
+          {onDelete && !order.archivedAt && (
             <button
               type="button"
               onClick={onDelete}
               className="text-[10px] text-red-500 hover:text-red-700 font-medium px-2 py-0.5 rounded border border-red-100 hover:border-red-200 hover:bg-red-50 transition-colors"
             >
-              {T ? 'حذف سفارش' : 'Delete order'}
+              {T ? 'بایگانی' : 'Archive'}
             </button>
           )}
           {onStatusChange ? (

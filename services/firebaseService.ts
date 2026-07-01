@@ -1493,14 +1493,14 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
   });
 /** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
 export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {
-  try {
-    const proxy = await checkProxyMode();
+    try {
+        const proxy = await checkProxyMode();
     let shop: MetaShop | null = null;
-    if (proxy) {
+        if (proxy) {
       shop = await proxyGet<MetaShop | null>('metaShops', { slug });
     } else {
       const q = query(collection(db, 'metaShops'), where('slug', '==', slug), limit(1));
-      const snap = await getDocs(q);
+        const snap = await getDocs(q);
       if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
     }
     if (!shop) return null;
@@ -1519,14 +1519,31 @@ export const getMetaShopBySlug = async (slug: string): Promise<MetaShop | null> 
 // ── Meta Shop Orders ──
 export const saveMetaShopOrderToCloud = async (order: MetaShopOrder) => {
     await setDocCloud('metaShopOrders', order.id, order);
-    logSystemAction('CREATE', 'MetaShopOrder', `سفارش جدید از ${order.customerName} (${order.shopName})`, order.customerName, order.id);
+    logSystemAction('CREATE', 'MetaShopOrder', `سفارش جدید از ${order.customerName} (${order.shopName})`, order.customerName, order.id, order, 'metaShopOrders');
 };
 export const updateMetaShopOrderInCloud = async (id: string, updates: Partial<MetaShopOrder>) => {
     await updateDocCloud('metaShopOrders', id, updates as Record<string, unknown>);
 };
-export const deleteMetaShopOrderFromCloud = async (id: string) => {
-    await deleteDocCloud('metaShopOrders', id);
-    logSystemAction('DELETE', 'MetaShopOrder', `سفارش ${id} حذف شد`, 'Master', id);
+/** Soft-archive — keeps full order in Firestore + system log backup (not permanent delete). */
+export const archiveMetaShopOrderInCloud = async (id: string, actorName = 'Master') => {
+    const proxy = await checkProxyMode();
+    let data: MetaShopOrder | null = null;
+    if (proxy) {
+        data = await proxyGet<MetaShopOrder | null>('metaShopOrders', { doc: id });
+    } else {
+        const snap = await getDoc(doc(db, 'metaShopOrders', id));
+        data = snap.exists() ? (snap.data() as MetaShopOrder) : null;
+    }
+    const patch = { archivedAt: new Date().toISOString(), archivedBy: actorName };
+    await updateDocCloud('metaShopOrders', id, patch);
+    logSystemAction('UPDATE', 'MetaShopOrder', `سفارش ${id} بایگانی شد (حذف نشد)`, actorName, id, data ? { ...data, ...patch } : patch, 'metaShopOrders');
+};
+export const restoreMetaShopOrderInCloud = async (id: string, actorName = 'Master') => {
+    await updateDocCloud('metaShopOrders', id, { archivedAt: null, archivedBy: null });
+    logSystemAction('UPDATE', 'MetaShopOrder', `سفارش ${id} از بایگانی بازگردانده شد`, actorName, id);
+};
+export const deleteMetaShopOrderFromCloud = async (id: string, actorName = 'Master') => {
+    await archiveMetaShopOrderInCloud(id, actorName);
 };
 export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) =>
   subscribeCollection<MetaShopOrder>('metaShopOrders', callback, {

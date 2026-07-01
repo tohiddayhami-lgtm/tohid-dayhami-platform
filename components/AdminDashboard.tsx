@@ -76,6 +76,7 @@ interface Props {
   onDeleteMetaShop?: (id: string) => Promise<void>;
   onUpdateMetaShopOrder?: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onDeleteMetaShopOrder?: (id: string) => Promise<void>;
+  onRestoreMetaShopOrder?: (id: string) => Promise<void>;
   onUpdateMetaShopPropertyReferral?: (id: string, updates: Partial<MetaShopPropertyReferral>) => Promise<void>;
   onUpdateMetaShopSupplierCollaboration?: (id: string, updates: Partial<MetaShopSupplierCollaboration>) => Promise<void>;
   shopBaseUrl?: string;
@@ -128,6 +129,7 @@ export const AdminDashboard: React.FC<Props> = ({
   onDeleteMetaShop,
   onUpdateMetaShopOrder,
   onDeleteMetaShopOrder,
+  onRestoreMetaShopOrder,
   onUpdateMetaShopPropertyReferral,
   onUpdateMetaShopSupplierCollaboration,
   shopBaseUrl = '',
@@ -1941,7 +1943,7 @@ export const AdminDashboard: React.FC<Props> = ({
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
         {activeTab === 'metashop' && hasMetaShopAccess && onSaveMetaShop && onDeleteMetaShop && onUpdateMetaShopOrder && (
-          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} metaShopSupplierCollaborations={visibleMetaShopSupplierCollaborations} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onDeleteMetaShopOrder={onDeleteMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} onUpdateMetaShopSupplierCollaboration={onUpdateMetaShopSupplierCollaboration} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} customerAccounts={customerAccounts} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} showAllOrders={isMaster} backupActorName={currentUser.fullName} />
+          <MetaShopManager metaShops={visibleMetaShops} metaShopOrders={visibleMetaShopOrders} metaShopReferrals={visibleMetaShopReferrals} metaShopSupplierCollaborations={visibleMetaShopSupplierCollaborations} personnel={personnel} config={config} lang={lang} shopBaseUrl={shopBaseUrl} onSaveMetaShop={onSaveMetaShop} onDeleteMetaShop={onDeleteMetaShop} onUpdateMetaShopOrder={onUpdateMetaShopOrder} onDeleteMetaShopOrder={onDeleteMetaShopOrder} onRestoreMetaShopOrder={onRestoreMetaShopOrder} onUpdateMetaShopPropertyReferral={onUpdateMetaShopPropertyReferral} onUpdateMetaShopSupplierCollaboration={onUpdateMetaShopSupplierCollaboration} metaBazaars={visibleMetaBazaars} onSaveMetaBazaar={onSaveMetaBazaar} onDeleteMetaBazaar={onDeleteMetaBazaar} customerAccounts={customerAccounts} readonly={!canEditMetaShopPanel} canDelete={canDeleteMetaShopPanel} canDeleteBooths={canDeleteBoothsInMetaShop} showAllOrders={isMaster} backupActorName={currentUser.fullName} />
         )}
         {activeTab === 'processes' && onSaveProcess && onDeleteProcess && (
           <ProcessManager processes={processes} personnel={personnel} currentUser={currentUser} onSave={onSaveProcess} onDelete={onDeleteProcess} lang={lang} />

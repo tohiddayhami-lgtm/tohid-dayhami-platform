@@ -1475,6 +1475,9 @@ export interface MetaShopOrder {
   partnerCommissionPercent?: number;
   partnerCommissionAmount?: number;
   via?: 'shop' | 'gsite';  // where the order was placed from: direct shop page, or an embedded Google Site / external site
+  /** Soft-archive — hidden from default admin lists; data kept in Firestore. */
+  archivedAt?: string;
+  archivedBy?: string;
 }
 
 /** Master-only checkpoint: up to 3 saved snapshots per MetaShop (stored in metaShopBackups). */
