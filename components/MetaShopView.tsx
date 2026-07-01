@@ -88,6 +88,7 @@ const HandshakeIcon = ({ s = 18 }: { s?: number }) => (
 );
 
 const PRODUCT_GRID_PAGE_SIZE = 24;
+const QUICK_PREVIEW_PRODUCTS = 10;
 
 const SUPPLIER_CATALOG_PDF_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -292,7 +293,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const STRINGS: Record<string, Record<string, string>> = {
     en: {
       cartBtn: 'Place Order', addProduct: 'Add to cart', addService: 'Add to request', added: 'Added ✓', all: 'All',
-      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', loadingProducts: 'Loading products…', loadMore: 'Load more', showingProducts: 'Showing {shown} of {total}', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
+      searchPh: 'Search products...', empty: 'No items found.', searchPending: 'Searching…', loadingProducts: 'Loading products…', loadingProductsProgress: 'Loading more products… ({loaded} of {total})', loadMore: 'Load more', showingProducts: 'Showing {shown} of {total}', cartTitle: 'Your Order', cartEmpty: 'No items yet.',
       qty: 'Qty', remove: 'Remove', total: 'Total', yourInfo: 'Your Information', name: 'Full Name', company: 'Company',
       phone: 'Mobile / WhatsApp', email: 'Email', country: 'Country', city: 'City / Destination', notes: 'Notes / Special requests',
       submit: 'Submit Order', submitting: 'Submitting...', incomplete: 'Please enter your name and phone.', err: 'Failed to submit. Please try again.',
@@ -342,7 +343,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
-      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', loadingProducts: 'در حال بارگذاری محصولات…', loadMore: 'مشاهده بیشتر', showingProducts: 'نمایش {shown} از {total}', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
+      searchPh: 'جستجوی محصولات...', empty: 'موردی یافت نشد.', searchPending: 'در حال جستجو…', loadingProducts: 'در حال بارگذاری محصولات…', loadingProductsProgress: 'در حال بارگذاری بقیه محصولات… ({loaded} از {total})', loadMore: 'مشاهده بیشتر', showingProducts: 'نمایش {shown} از {total}', cartTitle: 'سبد سفارش شما', cartEmpty: 'هنوز موردی اضافه نشده است.',
       qty: 'تعداد', remove: 'حذف', total: 'جمع کل', yourInfo: 'اطلاعات شما', name: 'نام و نام خانوادگی', company: 'شرکت',
       phone: 'موبایل / واتس‌اپ', email: 'ایمیل', country: 'کشور', city: 'شهر / مقصد', notes: 'توضیحات و درخواست‌های ویژه',
       submit: 'ثبت نهایی سفارش', submitting: 'در حال ثبت...', incomplete: 'لطفاً نام و شماره موبایل را وارد کنید.', err: 'خطا در ثبت سفارش. دوباره تلاش کنید.',
@@ -525,8 +526,14 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   };
 
   const products = useMemo(() => (shop.products || []).filter(p => p.active !== false), [shop.products]);
-  const productsPending = (shop.productCount ?? 0) > 0 && products.length === 0;
-  const productsHydrating = (shop.productCount ?? 0) > products.length && products.length > 0;
+  const totalExpected = Math.max(shop.productCount ?? 0, products.length);
+  const productsPending = totalExpected > 0 && products.length === 0;
+  const productsHydrating = totalExpected > products.length;
+  const hydrateProgressText = useMemo(() => {
+    const tpl = S('loadingProductsProgress');
+    if (!tpl.includes('{loaded}')) return S('loadingProducts');
+    return tpl.replace('{loaded}', String(products.length)).replace('{total}', String(totalExpected));
+  }, [products.length, totalExpected, uiLang, shop.id]);
   const searchIndex = useMemo(() => buildProductSearchIndex(shop, products), [shop.id, shop.searchKeywords, products]);
 
   const commitSearch = useCallback((value: string) => {
@@ -631,10 +638,13 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     setGridShown(PRODUCT_GRID_PAGE_SIZE);
   }, [searchQuery, activeCat, activeSub, shop.id]);
 
-  const visibleFiltered = useMemo(
-    () => filtered.slice(0, gridShown),
-    [filtered, gridShown],
-  );
+  const visibleFiltered = useMemo(() => {
+    const list = filtered.slice(0, gridShown);
+    if (productsHydrating && !searchQuery.trim()) {
+      return list.slice(0, QUICK_PREVIEW_PRODUCTS);
+    }
+    return list;
+  }, [filtered, gridShown, productsHydrating, searchQuery]);
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
 
@@ -1377,18 +1387,33 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         {searchBusy ? (
           <p className="ms-empty ms-search-pending">{S('searchPending')}</p>
         ) : productsPending ? (
-          <p className="ms-empty ms-search-pending">{S('loadingProducts')}</p>
+          <>
+            <p className="ms-hydrate-hint ms-hydrate-hint-pulse">{S('loadingProducts')}</p>
+            <div className="ms-grid">
+              {Array.from({ length: QUICK_PREVIEW_PRODUCTS }, (_, i) => (
+                <article key={`skel-${i}`} className="ms-card ms-card-skeleton" aria-hidden="true">
+                  <div className="ms-card-img ms-skel-img" />
+                  <div className="ms-card-body">
+                    <div className="ms-skel-line lg" />
+                    <div className="ms-skel-line sm" />
+                    <div className="ms-skel-line md" />
+                    <div className="ms-skel-price" />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         ) : filtered.length === 0 ? (
           <p className="ms-empty">{t.empty}</p>
         ) : (
           <>
             {productsHydrating && (
-              <p className="ms-hydrate-hint">{S('loadingProducts')}</p>
+              <p className="ms-hydrate-hint ms-hydrate-hint-pulse">{hydrateProgressText}</p>
             )}
             <div className="ms-grid">
-              {visibleFiltered.map((p, i) => productCard(p, { priority: i < 12 }))}
+              {visibleFiltered.map((p, i) => productCard(p, { priority: i < QUICK_PREVIEW_PRODUCTS }))}
             </div>
-            {filtered.length > gridShown && (
+            {!productsHydrating && filtered.length > gridShown && (
               <div className="ms-load-more-wrap">
                 <p className="ms-load-more-count">
                   {S('showingProducts')
@@ -2211,6 +2236,15 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-img-skeleton { position:absolute; inset:0; background:linear-gradient(90deg,#f1f5f9 0%,#e2e8f0 45%,#f1f5f9 90%); background-size:200% 100%; animation:ms-img-shimmer 1.1s ease-in-out infinite; pointer-events:none; }
 @keyframes ms-img-shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 .ms-hydrate-hint { text-align:center; font-size:12px; color:#64748b; margin:0 0 10px; padding:8px 12px; background:#f8fafc; border-radius:10px; border:1px solid #e2e8f0; }
+.ms-hydrate-hint-pulse { animation:ms-hydrate-pulse 1.4s ease-in-out infinite; }
+@keyframes ms-hydrate-pulse { 0%,100%{opacity:1} 50%{opacity:.65} }
+.ms-card-skeleton { pointer-events:none; }
+.ms-skel-img { background:linear-gradient(90deg,#f1f5f9 0%,#e2e8f0 45%,#f1f5f9 90%); background-size:200% 100%; animation:ms-img-shimmer 1.1s ease-in-out infinite; }
+.ms-skel-line { height:10px; border-radius:6px; background:#e2e8f0; margin-bottom:8px; }
+.ms-skel-line.lg { width:92%; height:12px; }
+.ms-skel-line.md { width:70%; }
+.ms-skel-line.sm { width:45%; height:8px; }
+.ms-skel-price { width:40%; height:16px; border-radius:6px; background:#e2e8f0; margin-top:10px; }
 .ms-card-img.ms-img-contain img,
 .ms-inq-img-wrap.ms-img-contain img,
 .ms-thumb.ms-img-contain img,
