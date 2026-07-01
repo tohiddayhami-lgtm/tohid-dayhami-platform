@@ -1206,11 +1206,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const reSummary = isRealEstate ? realEstateCardSummary(p, reLang()) : [];
     const stock = pStock(p);
     const imgFitCls = productImageFitClass(shop, p);
+    const imgFit = resolveProductImageFit(shop, p);
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className={`ms-card-img ${imgFitCls}`} onClick={() => openDetail(p)}>
           {p.images && p.images[0] ? (
-            <MetaShopProductImage src={p.images[0]} alt={pName(p)} priority={opts.priority} />
+            <MetaShopProductImage src={p.images[0]} alt={pName(p)} priority={opts.priority} objectFit={imgFit} />
           ) : (
             <div className="ms-noimg">{pName(p).charAt(0)}</div>
           )}
@@ -1516,7 +1517,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                   <>
                     <div className={`ms-gal-main ${galCls}`}>
                       {main ? (
-                        <MetaShopProductImage src={main} alt={pName(detail)} priority width={720} />
+                        <MetaShopProductImage src={main} alt={pName(detail)} priority width={720} objectFit={galFit} />
                       ) : (
                         <div className="ms-noimg lg">{pName(detail).charAt(0)}</div>
                       )}
@@ -1526,7 +1527,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                       </>}
                     </div>
                     {imgs.length > 1 && (
-                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${fitCls} ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={metaShopProductImageUrl(s, 120) || s} alt="" loading="lazy" decoding="async" /></button>)}</div>
+                      <div className="ms-thumbs">{imgs.map((s, i) => <button key={i} className={`ms-thumb ${fitCls} ${i === galIdx ? 'on' : ''}`} onClick={() => setGalIdx(i)}><img src={metaShopProductImageUrl(s, 120) || s} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" style={{ objectFit: galFit }} /></button>)}</div>
                     )}
                   </>
                 );
@@ -1888,11 +1889,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             <div className="ms-drawer-body">
               {cartItems.length === 0 ? <p className="ms-cart-empty">{t.cartEmpty}</p> : cartItems.map(({ p, qty, line, hidden, optionText, cur }) => {
                 const showPrice = optionsOf(p).length > 0 || p.price != null;
+                const cFit = resolveProductImageFit(shop, p);
                 return (
                 <div className={`ms-citem ${productImageFitClass(shop, p)}`} key={p.id}>
                   {p.images && p.images[0] ? (
                     <div className="ms-citem-thumb">
-                      <MetaShopProductImage src={p.images[0]} alt="" width={120} />
+                      <MetaShopProductImage src={p.images[0]} alt="" width={120} objectFit={cFit} />
                     </div>
                   ) : (
                     <div className="ms-noimg sm">{p.name.charAt(0)}</div>

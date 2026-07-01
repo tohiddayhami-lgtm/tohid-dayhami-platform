@@ -1,5 +1,6 @@
 import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaShopLang } from '../types';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
+import { normalizeImageUrl } from './metaShopImage';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -127,13 +128,15 @@ const normalizeOrigin = (origin: unknown) => {
 
 /** Keep only remote URLs — base64 blobs blow past Firestore's 1 MiB doc limit. */
 const isStorableImageUrl = (url: unknown): url is string => {
-  const s = String(url || '').trim();
+  const s = normalizeImageUrl(String(url || ''));
   if (!s || s.startsWith('data:') || s.startsWith('blob:')) return false;
-  return /^https?:\/\//i.test(s) || s.startsWith('//');
+  return /^https?:\/\//i.test(s);
 };
 
 const normalizeImages = (images: unknown): string[] =>
-  Array.isArray(images) ? images.filter(isStorableImageUrl).slice(0, 6) : [];
+  Array.isArray(images)
+    ? images.map(i => normalizeImageUrl(String(i || ''))).filter(isStorableImageUrl).slice(0, 6)
+    : [];
 
 export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unknown>): MetaShopProduct => {
   const i18n = { ...(p.i18n || {}) };

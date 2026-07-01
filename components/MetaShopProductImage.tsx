@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { metaShopProductImageUrl, metaShopProductImageDirect } from '../utils/metaShopImage';
+import type { MetaShopImageFit } from '../utils/metaShopImageFit';
 import { acquireMetaShopImageSlot, releaseMetaShopImageSlot } from '../utils/metaShopImageQueue';
 
 interface Props {
@@ -10,9 +11,12 @@ interface Props {
   /** Proxy width hint (card ~480, detail ~720) */
   width?: number;
   className?: string;
+  objectFit?: MetaShopImageFit;
 }
 
-export const MetaShopProductImage: React.FC<Props> = ({ src, alt, priority, width = 480, className = '' }) => {
+export const MetaShopProductImage: React.FC<Props> = ({
+  src, alt, priority, width = 480, className = '', objectFit = 'cover',
+}) => {
   const direct = metaShopProductImageDirect(src);
   const proxied = direct ? metaShopProductImageUrl(direct, width) : '';
   const hostRef = useRef<HTMLSpanElement>(null);
@@ -72,15 +76,25 @@ export const MetaShopProductImage: React.FC<Props> = ({ src, alt, priority, widt
 
   const imgSrc = phase === 'proxy' && proxied ? proxied : direct;
   const showImg = visible && ready && !failed;
+  const fitStyle: React.CSSProperties = {
+    objectFit,
+    width: '100%',
+    height: '100%',
+    ...(objectFit === 'contain' ? { padding: 6, boxSizing: 'border-box' as const } : {}),
+  };
 
   return (
     <span ref={hostRef} className="ms-img-host">
       {!loaded && !failed && <span className="ms-img-skeleton" aria-hidden="true" />}
+      {failed && (
+        <span className="ms-noimg" title={alt || ''}>{(alt || '?').charAt(0)}</span>
+      )}
       {showImg ? (
         <img
           src={imgSrc}
           alt={alt || ''}
           className={`${className} ${loaded ? 'is-loaded' : 'is-pending'}`.trim()}
+          style={fitStyle}
           loading={priority ? 'eager' : 'lazy'}
           fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"

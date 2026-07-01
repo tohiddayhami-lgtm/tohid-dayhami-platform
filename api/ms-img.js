@@ -21,8 +21,9 @@ export default async function handler(req, res) {
     const host = target.hostname.toLowerCase();
     const allowed =
       host.includes('kwcdn.com')
+      || host.includes('digikala.com')
       || host.endsWith('cloudfront.net')
-      || /\.(jpg|jpeg|png|webp|gif)$/i.test(target.pathname);
+      || /\.(jpg|jpeg|png|webp|gif|avif)$/i.test(target.pathname);
     if (!allowed) {
       res.status(403).end();
       return;
@@ -33,11 +34,17 @@ export default async function handler(req, res) {
   }
 
   try {
+    const referer = host.includes('digikala.com')
+      ? 'https://www.digikala.com/'
+      : host.includes('kwcdn.com')
+        ? 'https://www.temu.com/'
+        : `${target.origin}/`;
+
     const upstream = await fetch(target.toString(), {
       headers: {
         Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
         'User-Agent': 'Mozilla/5.0 (compatible; MetaShopImageProxy/1.0)',
-        Referer: 'https://www.temu.com/',
+        Referer: referer,
       },
       redirect: 'follow',
     });

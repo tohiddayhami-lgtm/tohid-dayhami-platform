@@ -28,6 +28,7 @@ import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProd
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
+import { normalizeImageUrl, metaShopProductImageUrl } from '../utils/metaShopImage';
 
 const EDITOR_PRODUCT_PAGE_SIZE = 25;
 
@@ -2696,6 +2697,41 @@ const CardImageUploader: React.FC<{ image?: string; onUpload: (url: string) => v
   );
 };
 
+// Thumbnail for pasted / external image URLs in the product editor
+const EditorImageThumb: React.FC<{ src: string }> = ({ src }) => {
+  const direct = normalizeImageUrl(src);
+  const proxied = direct ? metaShopProductImageUrl(direct, 80) : '';
+  const [phase, setPhase] = useState<'direct' | 'proxy' | 'fail'>('direct');
+  const imgSrc = phase === 'proxy' && proxied ? proxied : direct;
+
+  useEffect(() => {
+    setPhase('direct');
+  }, [src]);
+
+  if (!direct) {
+    return <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-400 text-[10px]">!</div>;
+  }
+  if (phase === 'fail') {
+    return (
+      <div className="w-full h-full bg-amber-50 flex items-center justify-center text-amber-600 text-[8px] px-0.5 text-center leading-tight" title={direct}>
+        ⚠
+      </div>
+    );
+  }
+  return (
+    <img
+      src={imgSrc}
+      className="w-full h-full object-contain bg-gray-50"
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (phase === 'direct' && proxied && proxied !== direct) setPhase('proxy');
+        else setPhase('fail');
+      }}
+    />
+  );
+};
+
 // Multi-image gallery uploader for a product (upload several OR paste image URLs; first = main)
 const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) => void; lang: Language }> = ({ images, onChange, lang }) => {
   const ref = useRef<HTMLInputElement>(null);
@@ -2717,8 +2753,8 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
   };
 
   const addUrl = () => {
-    const u = url.trim();
-    if (!u) return;
+    const u = normalizeImageUrl(url.trim());
+    if (!u || !/^https?:\/\//i.test(u)) return;
     appendImage(u);
     setUrl('');
   };
@@ -2727,8 +2763,8 @@ const ProductGallery: React.FC<{ images: string[]; onChange: (imgs: string[]) =>
     <div className="shrink-0 w-[min(100%,200px)]">
       <div className="grid grid-cols-4 gap-1">
         {images.map((src, i) => (
-          <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group">
-            <img src={src} className="w-full h-full object-cover" alt="" />
+          <div key={`${src}-${i}`} className="relative w-[34px] h-[34px] rounded overflow-hidden border border-gray-200 group bg-gray-50">
+            <EditorImageThumb src={src} />
             {i === 0 && <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[6px] text-center leading-tight">{lang === 'fa' ? 'اصلی' : 'main'}</span>}
             <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} className="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-3 h-3 leading-none opacity-0 group-hover:opacity-100">✕</button>
           </div>
