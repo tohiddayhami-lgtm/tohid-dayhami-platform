@@ -2211,9 +2211,8 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-meta { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:#64748b; padding:6px 0; border-top:1px solid #f1f5f9; }
 .ms-meta b { color:#334155; }
 .ms-prices { border-top:1px solid #f1f5f9; padding-top:10px; margin-top:auto; display:flex; flex-direction:column; gap:4px; }
-.ms-price-amt { font-weight:800; font-size:15px; color:#0f172a; direction:ltr; unicode-bidi:isolate; }
+.ms-price-amt { font-weight:800; font-size:15px; color:#0f172a; }
 .ms-price-amt.ms-pack { font-size:13px; color:#475569; font-weight:700; }
-.ms-price-was, .ms-opt-was, .ms-citem-price, .ms-card-calc, .ms-fee-amt, .ms-disc-amt, .ms-inv-subtotal b, .ms-inv-total b, .ms-summary b { direction:ltr; unicode-bidi:isolate; }
 .ms-price-unit { font-size:10px; font-weight:400; color:#94a3b8; }
 .ms-buy { margin-top:auto; }
 .ms-opts { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }

@@ -1563,7 +1563,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               baseCurrency={draft.currency || 'USD'}
               baseCurrencyLabel={draft.currencyLabel}
               baseCurrencyLabelEn={draft.currencyLabelEn}
-              baseCurrencySymbol={draft.currencySymbol}
               displayCurrencies={draft.displayCurrencies || []}
               defaultDisplayCurrency={draft.defaultDisplayCurrency}
               lang={lang}
