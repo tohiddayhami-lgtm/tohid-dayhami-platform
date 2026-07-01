@@ -15,6 +15,7 @@ import { productImageFitClass, resolveProductImageFit } from '../utils/metaShopI
 import { MetaShopProductImage } from './MetaShopProductImage';
 import { MetaShopMoney } from './MetaShopMoney';
 import { metaShopProductImageUrl, productMainImage, resolveProductImages } from '../utils/metaShopImage';
+import { resolveProductIncoterms, resolveProductOrigin } from '../utils/metaShopExportTerms';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
 interface OrderData {
@@ -1208,6 +1209,8 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const imgFitCls = productImageFitClass(shop, p);
     const mainImg = productMainImage(p);
     const imgFit = resolveProductImageFit(shop, p);
+    const pIncoterms = resolveProductIncoterms(shop, p);
+    const pOrigin = resolveProductOrigin(shop, p);
     return (
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className={`ms-card-img ${imgFitCls}`} onClick={() => openDetail(p)}>
@@ -1234,6 +1237,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             {re && <span className="ms-subcat-badge">{propertyTypeLabel(re.propertyType, reLang())}</span>}
             {p.subcategory && <span className="ms-subcat-badge">{pSubcategory(p)}</span>}
             {stock && <span className="ms-stock">{stock}</span>}
+            {pOrigin?.name && (
+              <span className="ms-origin-tag">
+                {pOrigin.flagUrl && <img src={pOrigin.flagUrl} alt="" />}{pOrigin.name}
+              </span>
+            )}
+            {pIncoterms.map(term => <span key={term} className="ms-incoterm">{term}</span>)}
           </div>
           {pDesc(p) && <p className="ms-desc">{pDesc(p)}</p>}
           {reSummary.length > 0 && (
@@ -1539,7 +1548,20 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
               {promoLabelText(detail, uiLang, shop.defaultLang || 'en') && (
                 <span className="ms-promo-inline">{promoLabelText(detail, uiLang, shop.defaultLang || 'en')}</span>
               )}
-              <div className="ms-badges">{detail.sku && <span className="ms-sku">{detail.sku}</span>}{detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}{pStock(detail) && <span className="ms-stock">{pStock(detail)}</span>}</div>
+              <div className="ms-badges">
+                {detail.sku && <span className="ms-sku">{detail.sku}</span>}
+                {detail.hsCode && <span className="ms-hs">HS: {detail.hsCode}</span>}
+                {pStock(detail) && <span className="ms-stock">{pStock(detail)}</span>}
+                {resolveProductOrigin(shop, detail)?.name && (() => {
+                  const o = resolveProductOrigin(shop, detail)!;
+                  return (
+                    <span className="ms-origin-tag">
+                      {o.flagUrl && <img src={o.flagUrl} alt="" />}{o.name}
+                    </span>
+                  );
+                })()}
+                {resolveProductIncoterms(shop, detail).map(term => <span key={term} className="ms-incoterm">{term}</span>)}
+              </div>
               {pDesc(detail) && <p className="ms-modal-desc">{pDesc(detail)}</p>}
               {(() => {
                 const v = videoEmbed(detail.videoUrl);
@@ -2265,6 +2287,9 @@ button.ms-foot-catalog:hover { transform:none; }
 .ms-sku { font-size:10px; font-family:ui-monospace,monospace; font-weight:700; padding:2px 7px; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:5px; }
 .ms-hs { font-size:10px; font-family:ui-monospace,monospace; padding:2px 7px; color:#64748b; }
 .ms-stock { font-size:10px; font-weight:900; padding:2px 8px; background:#ecfdf5; color:#047857; border:1px solid #bbf7d0; border-radius:999px; }
+.ms-incoterm { font-size:10px; font-weight:800; padding:2px 7px; background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; border-radius:5px; font-family:ui-monospace,monospace; letter-spacing:.02em; }
+.ms-origin-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:2px 8px; background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; border-radius:999px; }
+.ms-origin-tag img { height:10px; width:auto; border-radius:1px; }
 .ms-desc { font-size:12px; color:#64748b; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .ms-meta { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:#64748b; padding:6px 0; border-top:1px solid #f1f5f9; }
 .ms-meta b { color:#334155; }

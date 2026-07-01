@@ -1165,6 +1165,8 @@ export interface MetaShopProduct {
   stockLabel?: string;
   /** Extra search terms (comma-separated in admin) — site & international shop search. */
   searchKeywords?: string[];
+  /** Optional export contract terms (Incoterms), e.g. EXW, FOB, CIF, DDP — shown on storefront; optional per product. */
+  incoterms?: string[];
   // rich attributes
   colors?: MetaShopColorOption[];
   origin?: { name: string; flagUrl?: string };
@@ -1386,6 +1388,10 @@ export interface MetaShop {
   showStrikethroughPrice?: boolean;
   /** Default thumbnail fit for all products (cover = crop; contain = fit inside box). */
   productImageFit?: 'cover' | 'contain';
+  /** Shop-wide default Incoterms for new/empty products (EXW, FOB, CIF, DDP, …). */
+  defaultIncoterms?: string[];
+  /** Shop-wide default product origin when a product has none set. */
+  defaultOrigin?: { name: string; flagUrl?: string };
   productCount?: number;
   /** Number of metaShopChunks docs holding products (0 = legacy inline products array). */
   productChunkCount?: number;

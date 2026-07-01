@@ -1,6 +1,7 @@
 import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaShopLang } from '../types';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
 import { normalizeImageUrl, resolveProductImages } from './metaShopImage';
+import { normalizeIncoterms } from './metaShopExportTerms';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -209,6 +210,7 @@ export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unk
       : undefined,
     realEstate: p.realEstate,
     searchKeywords: p.searchKeywords,
+    incoterms: normalizeIncoterms(p.incoterms).length ? normalizeIncoterms(p.incoterms) : undefined,
   };
   if (i18n.fa) {
     if (i18n.fa.name === out.name) delete i18n.fa.name;
@@ -381,6 +383,8 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     priceMarkupValue: raw.priceMarkupValue != null ? Number(raw.priceMarkupValue) : undefined,
     showStrikethroughPrice: raw.showStrikethroughPrice,
     productImageFit: raw.productImageFit === 'contain' ? 'contain' : raw.productImageFit === 'cover' ? 'cover' : undefined,
+    defaultIncoterms: normalizeIncoterms(raw.defaultIncoterms).length ? normalizeIncoterms(raw.defaultIncoterms) : undefined,
+    defaultOrigin: normalizeOrigin(raw.defaultOrigin),
     groupI18n: raw.groupI18n && typeof raw.groupI18n === 'object' ? raw.groupI18n : undefined,
     supplierCollaborationEnabled: raw.supplierCollaborationEnabled,
     floatingStickers: raw.floatingStickers?.length

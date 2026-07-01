@@ -25,6 +25,7 @@ import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
 import { MetaShopOrdersHub } from './MetaShopOrdersHub';
 import { clearMetaShopManagerNav, loadMetaShopManagerNav, saveMetaShopManagerNav } from '../utils/metaShopPanelSession';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
+import { MetaShopBulkExportTermsPanel, MetaShopProductExportFields } from './MetaShopExportTermsEditor';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
@@ -2267,6 +2268,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </select>
         </div>
         )}
+        {!isRealEstate && !isServices && draft.products.length > 0 && (
+          <MetaShopBulkExportTermsPanel
+            T={T}
+            productCount={draft.products.length}
+            products={draft.products}
+            defaultIncoterms={draft.defaultIncoterms}
+            defaultOrigin={draft.defaultOrigin}
+            onProductsChange={products => setDraft(d => d ? { ...d, products } : d)}
+            onDefaultsChange={patch => setDraft(d => d ? { ...d, ...patch } : d)}
+          />
+        )}
         {!isRealEstate && draft.products.length > 0 && (
           <MetaShopBulkPriceMarkupPanel
             T={T}
@@ -2412,6 +2424,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       onI18nChange={(code, val) => updProductI18n(idx, code, 'promoLabel', val)}
                     />
                   </div>
+                )}
+
+                {/* Export terms & origin (products only) */}
+                {!isRealEstate && !isServices && (
+                  <MetaShopProductExportFields T={T} product={p} onChange={patch => updProduct(idx, patch)} />
                 )}
 
                 {/* Bulk price tiers (products) or rate options (services) */}

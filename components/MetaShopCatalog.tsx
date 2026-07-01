@@ -9,6 +9,8 @@ import { realEstateCardSummary, realEstateDetailRows, dealTypeLabel, propertyTyp
 import { productPurchaseOptions } from '../utils/metaShopPriceTiers';
 import { MetaShopMoney } from './MetaShopMoney';
 import { MetaShopProductImage } from './MetaShopProductImage';
+import { metaShopProductImageUrl, productMainImage, resolveProductImages } from '../utils/metaShopImage';
+import { resolveProductIncoterms, resolveProductOrigin } from '../utils/metaShopExportTerms';
 
 interface Props {
   shop: MetaShop;
@@ -312,11 +314,20 @@ export const MetaShopCatalog: React.FC<Props> = ({ shop, lang, autoPrint }) => {
             {p.sku && <span className="msc-tag">{s('sku')}: {p.sku}</span>}
             {p.hsCode && <span className="msc-tag">HS {p.hsCode}</span>}
             {p.subcategory && <span className="msc-tag soft">{pSubcat(p)}</span>}
-            {p.origin?.name && (
-              <span className="msc-tag origin">
-                {p.origin.flagUrl && <img src={p.origin.flagUrl} alt="" />}{p.origin.name}
-              </span>
-            )}
+            {(() => {
+              const o = resolveProductOrigin(shop, p);
+              const terms = resolveProductIncoterms(shop, p);
+              return (
+                <>
+                  {o?.name && (
+                    <span className="msc-tag origin">
+                      {o.flagUrl && <img src={o.flagUrl} alt="" />}{o.name}
+                    </span>
+                  )}
+                  {terms.map(term => <span key={term} className="msc-tag incoterm">{term}</span>)}
+                </>
+              );
+            })()}
           </div>
           {desc && <p className="msc-prod-desc">{desc}</p>}
           {feats.length > 0 && (
@@ -617,6 +628,7 @@ const MSC_CSS = `
 .msc-tag.soft{ color:var(--c-text); background:#f1f5f9; border-color:#e2e8f0; }
 .msc-tag.origin{ display:inline-flex; align-items:center; gap:4px; }
 .msc-tag.origin img{ height:9pt; width:auto; border-radius:1px; }
+.msc-tag.incoterm{ font-family:ui-monospace,monospace; font-weight:800; background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
 .msc-prod-desc{ flex:1 1 auto; min-height:0; font-size:9.4pt; line-height:1.5; color:var(--c-text); margin:0 0 2mm;
   overflow:hidden; word-break:break-word; text-align:justify; text-justify:inter-word; hyphens:auto; }
 .msc-prod-specs{ flex:none; font-size:8.8pt; line-height:1.4; color:var(--c-text); margin:0 0 2mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
