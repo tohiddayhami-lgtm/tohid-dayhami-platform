@@ -223,7 +223,7 @@ export const ExportShopPage: React.FC<Props> = ({
       {/* Hero — بازارچه انتخاب‌شده */}
       <header
         className="relative overflow-hidden rounded-b-2xl text-white text-center"
-        style={{ background: heroBackground, minHeight: bazaar.coverImage ? '220px' : '180px' }}
+        style={{ background: heroBackground, minHeight: bazaar?.coverImage ? '220px' : '180px' }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" aria-hidden />
         <button
@@ -234,7 +234,7 @@ export const ExportShopPage: React.FC<Props> = ({
           {fa ? 'بازگشت' : 'Back'}
         </button>
         <div className="relative z-[1] px-5 pt-12 pb-14 md:pt-14 md:pb-16 max-w-2xl mx-auto">
-          {bazaar.logo ? (
+          {bazaar?.logo ? (
             <img src={bazaar.logo} alt="" className="h-12 md:h-14 mx-auto mb-4 object-contain drop-shadow-md" />
           ) : (
             <div className="text-3xl mb-3 opacity-90" aria-hidden>🏪</div>
