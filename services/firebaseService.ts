@@ -2236,12 +2236,25 @@ export const logMetaShopEvent = async (
 
 // Admin, on-demand. Loads all visitor events for one shop (single-field equality query →
 // no composite index needed; sorted newest-first client-side).
+// Proxy-aware: without this, the report is always empty in Iran even though
+// visits ARE recorded (writes go through the proxy but reads didn't).
 export const fetchMetaShopEvents = async (shopId: string): Promise<MetaShopEvent[]> => {
     try {
-        const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(10000));
-        const snap = await getDocs(q);
-        return snap.docs.map(d => d.data() as MetaShopEvent)
-            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const proxy = await checkProxyMode();
+        let items: MetaShopEvent[] = [];
+        if (proxy) {
+            const rows = await proxyGet<MetaShopEvent[]>('metaShopEvents', {
+                whereField: 'shopId',
+                whereEq: shopId,
+                all: true,
+            });
+            items = Array.isArray(rows) ? rows : [];
+        } else {
+            const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(10000));
+            const snap = await getDocs(q);
+            items = snap.docs.map(d => d.data() as MetaShopEvent);
+        }
+        return items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     } catch { return []; }
 };
 

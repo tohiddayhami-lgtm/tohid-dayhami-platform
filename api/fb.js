@@ -95,6 +95,9 @@ async function queryByField(col, field, value) {
 }
 
 async function queryAllByField(col, field, value) {
+  // NOTE: no orderBy — Firestore drops documents missing the orderBy field,
+  // which silently hid collections like metaShopEvents (no chunkIndex).
+  // All callers sort client-side.
   const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -108,7 +111,6 @@ async function queryAllByField(col, field, value) {
             value: { stringValue: value },
           },
         },
-        orderBy: [{ field: { fieldPath: 'chunkIndex' } }],
       },
     }),
   });

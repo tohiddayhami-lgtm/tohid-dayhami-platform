@@ -328,6 +328,17 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     finally { setAnalyticsLoading(false); }
   };
 
+  // Live refresh while the visit report is open (poll — no listener needed).
+  useEffect(() => {
+    if (mode !== 'analytics' || !analyticsShopId) return;
+    let gone = false;
+    const timer = setInterval(async () => {
+      const events = await fetchMetaShopEvents(analyticsShopId);
+      if (!gone && events.length) setAnalyticsEvents(events);
+    }, 15_000);
+    return () => { gone = true; clearInterval(timer); };
+  }, [mode, analyticsShopId]);
+
   const t = {
     title: T ? 'متاشاپ' : 'Meta Shop', subtitle: T ? 'فروشگاه‌های آنلاین شما' : 'Your online shops',
     newShop: T ? 'فروشگاه جدید' : 'New Shop', importJson: T ? 'ساخت از JSON' : 'Import from JSON',
