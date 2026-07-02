@@ -1,4 +1,4 @@
-import { MetaShop, MetaShopProduct, MetaShopPriceMarkupHistoryEntry } from '../types';
+import { MetaShop, MetaShopProduct } from '../types';
 
 export type PriceAdjustType = 'percent' | 'amount';
 
@@ -224,79 +224,4 @@ export function computeMetaShopTax(
     : base * rate / 100;
   const finalTotal = taxInclusive ? base : base + taxAmount;
   return { taxAmount, finalTotal };
-}
-
-export const MAX_PRICE_MARKUP_HISTORY = 40;
-
-export function appendPriceMarkupHistory(
-  existing: MetaShopPriceMarkupHistoryEntry[] | undefined,
-  entry: Omit<MetaShopPriceMarkupHistoryEntry, 'id' | 'at'> & { at?: string },
-  max = MAX_PRICE_MARKUP_HISTORY,
-): MetaShopPriceMarkupHistoryEntry[] {
-  const row: MetaShopPriceMarkupHistoryEntry = {
-    id: `pmh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    at: entry.at || new Date().toISOString(),
-    action: entry.action,
-    markupType: entry.markupType,
-    markupValue: entry.markupValue,
-    productCount: entry.productCount,
-    actor: entry.actor?.trim() || undefined,
-  };
-  return [row, ...(existing || [])].slice(0, max);
-}
-
-export function normalizePriceMarkupHistory(raw: unknown): MetaShopPriceMarkupHistoryEntry[] {
-  if (!Array.isArray(raw)) return [];
-  const out: MetaShopPriceMarkupHistoryEntry[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const r = item as MetaShopPriceMarkupHistoryEntry;
-    const action = r.action;
-    if (action !== 'commit' && action !== 'revert_all' && action !== 'temporary_clear') continue;
-    out.push({
-      id: String(r.id || `pmh-${out.length}`),
-      at: String(r.at || new Date().toISOString()),
-      action,
-      markupType: r.markupType === 'percent' || r.markupType === 'amount' ? r.markupType : undefined,
-      markupValue: r.markupValue != null ? Number(r.markupValue) : undefined,
-      productCount: r.productCount != null ? Number(r.productCount) : undefined,
-      actor: r.actor ? String(r.actor) : undefined,
-    });
-    if (out.length >= MAX_PRICE_MARKUP_HISTORY) break;
-  }
-  return out;
-}
-
-export function formatPriceMarkupHistoryLine(entry: MetaShopPriceMarkupHistoryEntry, T: boolean): string {
-  const when = new Date(entry.at).toLocaleString(T ? 'fa-IR' : 'en-GB', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const actor = entry.actor ? (T ? ` — ${entry.actor}` : ` — ${entry.actor}`) : '';
-  const count = entry.productCount ?? 0;
-
-  if (entry.action === 'commit') {
-    const v = entry.markupValue ?? 0;
-    const inc = v > 0;
-    const abs = Math.abs(v);
-    if (entry.markupType === 'percent') {
-      return T
-        ? `${when}: ${inc ? 'افزایش' : 'کاهش'} ${abs}٪ سود/مارک‌آپ روی ${count} محصول (ثبت در قیمت پایه)${actor}`
-        : `${when}: ${inc ? '+' : ''}${v}% markup on ${count} products (committed to base)${actor}`;
-    }
-    return T
-      ? `${when}: ${inc ? 'افزایش' : 'کاهش'} ${abs} مبلغ روی ${count} محصول (ثبت در قیمت پایه)${actor}`
-      : `${when}: ${inc ? '+' : ''}${v} amount on ${count} products (committed to base)${actor}`;
-  }
-  if (entry.action === 'revert_all') {
-    return T
-      ? `${when}: برگشت ${count} محصول به قیمت پایه${actor}`
-      : `${when}: reverted ${count} products to base price${actor}`;
-  }
-  return T
-    ? `${when}: لغو تغییر موقت قیمت${actor}`
-    : `${when}: cleared temporary price adjustment${actor}`;
 }

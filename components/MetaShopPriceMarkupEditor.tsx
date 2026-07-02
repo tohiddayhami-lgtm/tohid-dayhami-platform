@@ -1,14 +1,6 @@
 import React from 'react';
-import { MetaShopProduct, MetaShopPriceMarkupHistoryEntry } from '../types';
-import {
-  commitMarkupToProducts,
-  productHasPriceDrift,
-  PROMO_LABEL_PRESETS_FA,
-  revertAllProductsToBase,
-  revertProductToBase,
-  formatPriceMarkupHistoryLine,
-  type PriceAdjustType,
-} from '../utils/metaShopPricing';
+import { MetaShopProduct } from '../types';
+import { commitMarkupToProducts, productHasPriceDrift, PROMO_LABEL_PRESETS_FA, revertAllProductsToBase, revertProductToBase, type PriceAdjustType } from '../utils/metaShopPricing';
 
 const fld = 'w-full px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-sm';
 
@@ -26,15 +18,12 @@ interface ShopBulkProps {
   onClearTemporaryMarkup?: () => void;
   hasTemporaryShopMarkup?: boolean;
   hasDriftedProducts?: boolean;
-  priceMarkupHistory?: MetaShopPriceMarkupHistoryEntry[];
-  onClearHistory?: () => void;
 }
 
 export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   T, markupType, markupValue, productCount, onMarkupChange, onCommitToBasePrices, products,
   showStrikethroughPrice = true, onShowStrikethroughChange,
   onRevertAllToBase, onClearTemporaryMarkup, hasTemporaryShopMarkup, hasDriftedProducts,
-  priceMarkupHistory = [], onClearHistory,
 }) => {
   const hasAdjust = !!markupType && markupValue != null && markupValue !== 0;
   const isDecrease = hasAdjust && (markupValue ?? 0) < 0;
@@ -164,35 +153,6 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
               {T ? '↺ برگشت همه به قیمت پایه' : '↺ Revert all to base prices'}
             </button>
           )}
-        </div>
-      )}
-      {priceMarkupHistory.length > 0 && (
-        <div className="border-t border-sky-200 pt-3 mt-1">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <p className="text-xs font-semibold text-sky-900">{T ? 'تاریخچه تغییر قیمت / سود' : 'Price markup history'}</p>
-            {onClearHistory && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!window.confirm(T ? 'تاریخچه پاک شود؟' : 'Clear history?')) return;
-                  onClearHistory();
-                }}
-                className="text-[10px] text-red-500 hover:text-red-700"
-              >
-                {T ? 'پاک کردن' : 'Clear'}
-              </button>
-            )}
-          </div>
-          <ul className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-            {priceMarkupHistory.map(entry => (
-              <li
-                key={entry.id}
-                className="text-[11px] text-sky-900/90 bg-white/70 border border-sky-100 rounded-lg px-2.5 py-1.5 leading-snug"
-              >
-                {formatPriceMarkupHistoryLine(entry, T)}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

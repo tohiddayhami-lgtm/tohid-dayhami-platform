@@ -2,7 +2,6 @@ import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaSho
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
 import { normalizeImageUrl, resolveProductImages } from './metaShopImage';
 import { normalizeIncoterms } from './metaShopExportTerms';
-import { normalizePriceMarkupHistory } from './metaShopPricing';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -382,10 +381,6 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     hidePriceText: raw.hidePriceText,
     priceMarkupType: raw.priceMarkupType === 'percent' || raw.priceMarkupType === 'amount' ? raw.priceMarkupType : undefined,
     priceMarkupValue: raw.priceMarkupValue != null ? Number(raw.priceMarkupValue) : undefined,
-    priceMarkupHistory: (() => {
-      const h = normalizePriceMarkupHistory(raw.priceMarkupHistory);
-      return h.length ? h : undefined;
-    })(),
     showStrikethroughPrice: raw.showStrikethroughPrice,
     productImageFit: raw.productImageFit === 'contain' ? 'contain' : raw.productImageFit === 'cover' ? 'cover' : undefined,
     defaultIncoterms: normalizeIncoterms(raw.defaultIncoterms).length ? normalizeIncoterms(raw.defaultIncoterms) : undefined,

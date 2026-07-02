@@ -4,7 +4,7 @@ import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
 import { IconSearch, IconTrolley } from './Icons';
-import { ExportPageSkeleton } from './ExportPageSkeleton';
+import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
@@ -183,14 +183,25 @@ export const ExportShopPage: React.FC<Props> = ({
   const typeLabel = (s: MetaShop) =>
     s.type === 'services' ? t.services : s.type === 'realestate' ? t.realestate : t.products;
 
-  const bazaarTitle = bazaar ? (bLbl(bazaar.title, fa) || bazaar.name) : t.title;
-  const heroSubtitle = bazaar ? bLbl(bazaar.subtitle, fa) : t.subtitle;
+  const bazaarTitle = bazaar ? (bLbl(bazaar.title, fa) || bazaar.name) : '';
+  const bazaarSubtitle = bazaar ? bLbl(bazaar.subtitle, fa) : '';
   const accentCover = bazaar?.theme?.cover || '#111827';
   const heroBackground = bazaar?.coverImage
     ? `linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.68)), url(${bazaar.coverImage}) center/cover no-repeat`
     : `linear-gradient(135deg, ${accentCover}, #374151)`;
 
-  if (!bazaar && !isLoading) {
+  if (isLoading) {
+    return (
+      <BazaarPassageLoader
+        lang={lang}
+        title={t.title}
+        primary={bazaar?.theme?.cover || '#5b6472'}
+        accent={bazaar?.theme?.coverText || '#cbd5e1'}
+      />
+    );
+  }
+
+  if (!bazaar) {
     return (
       <div className="animate-fade-in py-2">
         <div className="flex items-center justify-between mb-6">
@@ -223,7 +234,7 @@ export const ExportShopPage: React.FC<Props> = ({
       {/* Hero — بازارچه انتخاب‌شده */}
       <header
         className="relative overflow-hidden rounded-b-2xl text-white text-center"
-        style={{ background: heroBackground, minHeight: bazaar?.coverImage ? '220px' : '180px' }}
+        style={{ background: heroBackground, minHeight: bazaar.coverImage ? '220px' : '180px' }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" aria-hidden />
         <button
@@ -234,18 +245,18 @@ export const ExportShopPage: React.FC<Props> = ({
           {fa ? 'بازگشت' : 'Back'}
         </button>
         <div className="relative z-[1] px-5 pt-12 pb-14 md:pt-14 md:pb-16 max-w-2xl mx-auto">
-          {bazaar?.logo ? (
+          {bazaar.logo ? (
             <img src={bazaar.logo} alt="" className="h-12 md:h-14 mx-auto mb-4 object-contain drop-shadow-md" />
           ) : (
             <div className="text-3xl mb-3 opacity-90" aria-hidden>🏪</div>
           )}
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 mb-2">{t.title}</p>
           <h1 className="text-2xl md:text-3xl font-bold leading-tight drop-shadow-sm">{bazaarTitle}</h1>
-          {heroSubtitle && (
-            <p className="text-sm text-white/85 mt-2 leading-relaxed max-w-lg mx-auto">{heroSubtitle}</p>
+          {bazaarSubtitle && (
+            <p className="text-sm text-white/85 mt-2 leading-relaxed max-w-lg mx-auto">{bazaarSubtitle}</p>
           )}
           <span className="inline-block mt-4 text-xs font-semibold bg-white/15 border border-white/25 rounded-full px-4 py-1.5 backdrop-blur-sm">
-            {isLoading ? (fa ? 'در حال بارگذاری…' : 'Loading…') : t.count(bazaarShopPool.length)}
+            {t.count(bazaarShopPool.length)}
           </span>
         </div>
       </header>
@@ -283,9 +294,7 @@ export const ExportShopPage: React.FC<Props> = ({
         </div>
       )}
 
-      {isLoading ? (
-        <ExportPageSkeleton lang={lang} />
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <IconTrolley className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t.empty}</p>

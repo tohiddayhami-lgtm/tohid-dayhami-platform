@@ -35,16 +35,15 @@ import {
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
 import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
-import type { MetaShopReferralSubmit, MetaShopSupplierSubmit } from './components/MetaShopView';
-const MetaShopView = React.lazy(() => import('./components/MetaShopView').then(m => ({ default: m.MetaShopView })));
-const MetaShopCatalog = React.lazy(() => import('./components/MetaShopCatalog').then(m => ({ default: m.MetaShopCatalog })));
-const MetaShopDirectory = React.lazy(() => import('./components/MetaShopDirectory').then(m => ({ default: m.MetaShopDirectory })));
+import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
+import { MetaShopCatalog } from './components/MetaShopCatalog';
+import { MetaShopDirectory } from './components/MetaShopDirectory';
 import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
-import { ExportStandaloneSkeleton } from './components/ExportPageSkeleton';
+import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { ConsultationBookingLoader } from './components/ConsultationBookingLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
@@ -344,8 +343,6 @@ const initialShopSlug = extractShopSlug();
 const initialCachedShop = (getInitialView() === 'metashop' && initialShopSlug)
   ? readMetaShopShellCache(initialShopSlug)
   : null;
-/** Public shop links from Instagram — defer heavy admin Firebase listeners until after first paint. */
-const deferHeavyFirebaseSubs = getInitialView() === 'metashop' && !!initialShopSlug;
 
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
@@ -653,125 +650,109 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    let cancelled = false;
-    let cleanup: (() => void) | undefined;
-
-    const wireSubscriptions = () => {
-      if (cancelled) return;
-      const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
-      const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
-      const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
-      const unsubMessages = subscribeToMessages((data) => {
-        setMessages(prev => {
-          if (prev.length === 0) return data;
-          const prevById = new Map(prev.map(m => [m.id, m]));
-          return data.map(serverMsg => {
-            const local = prevById.get(serverMsg.id);
-            if (!local) return serverMsg;
-            const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
-            return {
-              ...serverMsg,
-              readBy: union(serverMsg.readBy, local.readBy),
-              archivedBy: union(serverMsg.archivedBy, local.archivedBy),
-              hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
-            };
-          });
+    const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
+    const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
+    const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
+    const unsubMessages = subscribeToMessages((data) => {
+      setMessages(prev => {
+        if (prev.length === 0) return data;
+        const prevById = new Map(prev.map(m => [m.id, m]));
+        return data.map(serverMsg => {
+          const local = prevById.get(serverMsg.id);
+          if (!local) return serverMsg;
+          const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
+          return {
+            ...serverMsg,
+            readBy: union(serverMsg.readBy, local.readBy),
+            archivedBy: union(serverMsg.archivedBy, local.archivedBy),
+            hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
+          };
         });
       });
-      const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
-      const unsubTasks = subscribeToTasks((data) => setTasks(data));
-      const markBookingHydrated = () => {
-        const h = bookingHydratedRef.current;
-        if (h.meetings && h.categories) setBookingDataReady(true);
-      };
-      const unsubMeetings = subscribeToMeetings((data) => {
-        setMeetings(data);
-        if (!bookingHydratedRef.current.meetings) {
-          bookingHydratedRef.current.meetings = true;
-          markBookingHydrated();
-        }
-      });
-      const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
-        setConsultantCategories(data);
-        if (!bookingHydratedRef.current.categories) {
-          bookingHydratedRef.current.categories = true;
-          markBookingHydrated();
-        }
-      });
-      const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
-      const unsubSettings = subscribeToSettings(
-        (cfg) => {
-          if (cfg) {
-            const LABEL_MIGRATIONS: Record<string, string> = {
-              'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
-              'Request Description & Product Info': 'Product Information',
-            };
-            const mergedFields = (cfg.formFields || []).map(field => {
-              if (!field.isSystem) return field;
-              const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
-              if (!def) return field;
-              return {
-                ...field,
-                label:         LABEL_MIGRATIONS[field.label] ?? field.label,
-                labelEn:       LABEL_MIGRATIONS[field.labelEn ?? ''] ?? (field.labelEn || def.labelEn),
-                placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
-                placeholderEn: field.placeholderEn || def.placeholderEn,
-                optionsEn:     field.optionsEn     || def.optionsEn,
-                required:      field.id === 'f8' ? false : field.required,
-              };
-            });
-            const merged = { ...cfg, formFields: mergedFields };
-            setAppConfig(merged);
-            writeCache(CACHE_KEYS.CONFIG, merged);
-          }
-        },
-        (srv) => {
-          if (srv) {
-            const normalized = srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }));
-            setServices(normalized);
-            setIsServicesLoaded(true);
-            writeCache(CACHE_KEYS.SERVICES, normalized);
-          }
-        },
-        (ppl) => {
-          if (ppl) {
-            const normalized = ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }));
-            setPersonnel(normalized);
-            setCurrentUser(prev => {
-              if (!prev) return prev;
-              const updated = normalized.find((p: Personnel) => p.id === prev.id);
-              if (updated) {
-                try { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(sanitizeData(updated))); } catch {}
-                return updated;
-              }
-              return prev;
-            });
-          }
-        }
-      );
-      const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
-      const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
-      const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
-      const unsubProcesses = subscribeToProcesses(setProcesses);
-      const unsubInvoices = subscribeToInvoices(setInvoices);
-      const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
-      const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
-      const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
-      const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
-      const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
-      cleanup = () => {
-        unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars();
-      };
+    });
+    const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
+    const unsubTasks = subscribeToTasks((data) => setTasks(data));
+    const markBookingHydrated = () => {
+      const h = bookingHydratedRef.current;
+      if (h.meetings && h.categories) setBookingDataReady(true);
     };
-
-    if (deferHeavyFirebaseSubs) {
-      const delayMs = initialCachedShop ? 2500 : 800;
-      const timer = window.setTimeout(wireSubscriptions, delayMs);
-      return () => { cancelled = true; clearTimeout(timer); cleanup?.(); };
-    }
-
-    wireSubscriptions();
-    return () => { cancelled = true; cleanup?.(); };
+    const unsubMeetings = subscribeToMeetings((data) => {
+      setMeetings(data);
+      if (!bookingHydratedRef.current.meetings) {
+        bookingHydratedRef.current.meetings = true;
+        markBookingHydrated();
+      }
+    });
+    const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
+      setConsultantCategories(data);
+      if (!bookingHydratedRef.current.categories) {
+        bookingHydratedRef.current.categories = true;
+        markBookingHydrated();
+      }
+    });
+    const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
+    const unsubSettings = subscribeToSettings(
+      (cfg) => {
+        if (cfg) {
+          const LABEL_MIGRATIONS: Record<string, string> = {
+            'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
+            'Request Description & Product Info': 'Product Information',
+          };
+          const mergedFields = (cfg.formFields || []).map(field => {
+            if (!field.isSystem) return field;
+            const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
+            if (!def) return field;
+            return {
+              ...field,
+              label:         LABEL_MIGRATIONS[field.label] ?? field.label,
+              labelEn:       LABEL_MIGRATIONS[field.labelEn ?? ''] ?? (field.labelEn || def.labelEn),
+              placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
+              placeholderEn: field.placeholderEn || def.placeholderEn,
+              optionsEn:     field.optionsEn     || def.optionsEn,
+              // "اطلاعات محصول" (Product Information) is now optional
+              required:      field.id === 'f8' ? false : field.required,
+            };
+          });
+          const merged = { ...cfg, formFields: mergedFields };
+          setAppConfig(merged);
+          writeCache(CACHE_KEYS.CONFIG, merged);
+        }
+      },
+      (srv) => {
+        if (srv) {
+          const normalized = srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }));
+          setServices(normalized);
+          setIsServicesLoaded(true);
+          writeCache(CACHE_KEYS.SERVICES, normalized);
+        }
+      },
+      (ppl) => {
+        if (ppl) {
+          const normalized = ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }));
+          setPersonnel(normalized);
+          setCurrentUser(prev => {
+            if (!prev) return prev;
+            const updated = normalized.find((p: Personnel) => p.id === prev.id);
+            if (updated) {
+              try { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(sanitizeData(updated))); } catch {}
+              return updated;
+            }
+            return prev;
+          });
+        }
+      }
+    );
+    const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
+    const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
+    const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
+    const unsubProcesses = subscribeToProcesses(setProcesses);
+    const unsubInvoices = subscribeToInvoices(setInvoices);
+    const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
+    const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
+    const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
+    const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
+    const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
+    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1425,53 +1406,28 @@ const App: React.FC = () => {
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
     const expectedCount = shell.productCount ?? 0;
-
-    // Retry hydration when the server claims products exist but a transient network /
-    // proxy failure (common in Iran) returns an empty set — never wipe a shop to "0 products"
-    // on a temporary glitch, otherwise the storefront looks permanently empty.
-    const MAX_ATTEMPTS = 4;
-    const attempt = (n: number): void => {
+    loadMetaShopProductsFull(shell, products => {
+      setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
+    }).then(full => {
       if (shopProductHydrateRef.current !== shopId) return;
-      loadMetaShopProductsFull(shell, products => {
-        if (shopProductHydrateRef.current !== shopId) return;
-        setPublicShop(prev => (prev?.id === shopId && (products?.length ?? 0) > 0 ? { ...prev, products } : prev));
-      }).then(full => {
-        if (shopProductHydrateRef.current !== shopId) return;
-        const loaded = full.products?.length ?? 0;
-        if (loaded) {
-          setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
-          shopProductHydrateRef.current = null;
-          return;
-        }
-        if (expectedCount > 0 && n < MAX_ATTEMPTS) {
-          setTimeout(() => attempt(n + 1), 600 * n); // backoff: 0.6s, 1.2s, 1.8s
-          return;
-        }
-        // Genuinely empty (no chunks/backup after retries). Keep counts intact so a later
-        // visit or the manual "بازیابی" flow can still recover — don't destroy metadata.
-        shopProductHydrateRef.current = null;
-      }).catch(() => {
-        if (shopProductHydrateRef.current !== shopId) return;
-        if (expectedCount > 0 && n < MAX_ATTEMPTS) {
-          setTimeout(() => attempt(n + 1), 600 * n);
-        } else {
-          shopProductHydrateRef.current = null;
-        }
-      });
-    };
-    attempt(1);
+      const loaded = full.products?.length ?? 0;
+      if (!loaded && expectedCount > 0) {
+        setPublicShop(prev => (
+          prev?.id === shopId
+            ? { ...prev, products: [], productCount: 0, productChunkCount: 0 }
+            : prev
+        ));
+      } else if (loaded) {
+        setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
+      }
+    }).finally(() => {
+      if (shopProductHydrateRef.current === shopId) shopProductHydrateRef.current = null;
+    });
   }, []);
 
   const revealPublicShop = useCallback((shell: MetaShop) => {
     if (shell.slug) writeMetaShopShellCache(shell.slug, shell);
-    // Preserve already-hydrated products when a later shell (e.g. a deferred subscription
-    // update) arrives for the same shop — otherwise the grid flickers back to empty.
-    setPublicShop(prev => {
-      if (prev?.id === shell.id && (prev.products?.length ?? 0) > 0 && (shell.products?.length ?? 0) === 0) {
-        return { ...shell, products: prev.products, productCount: prev.productCount ?? shell.productCount, productChunkCount: prev.productChunkCount ?? shell.productChunkCount };
-      }
-      return shell;
-    });
+    setPublicShop(shell);
     setShopLoading(false);
     setShopResolved(true);
     beginShopProductHydration(shell);
@@ -1526,34 +1482,15 @@ const App: React.FC = () => {
       } else {
         setPublicShop(null);
         setShopLoading(false);
-        setShopResolved(true);
       }
     }).catch(() => {
       if (!cancelled) {
         setPublicShop(null);
         setShopLoading(false);
-        setShopResolved(true);
       }
     });
     return () => { cancelled = true; };
   }, [view, shopSlug, metaShops, revealPublicShop]);
-
-  // Pick up shop shell prefetched by public/shop-bootstrap.js (may finish after React mount).
-  useEffect(() => {
-    if (view !== 'metashop' || !shopSlug || shopResolved || publicShop?.slug === shopSlug) return;
-    let attempts = 0;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = () => {
-      const cached = readMetaShopShellCache(shopSlug);
-      if (cached) {
-        revealPublicShop(cached);
-        return;
-      }
-      if (++attempts < 24) timer = setTimeout(poll, 250);
-    };
-    poll();
-    return () => clearTimeout(timer);
-  }, [view, shopSlug, shopResolved, publicShop, revealPublicShop]);
 
   // After the shops list has synced, stop waiting if the slug truly does not exist.
   useEffect(() => {
@@ -1941,7 +1878,7 @@ const App: React.FC = () => {
     const mapTitle = ready
       ? ((lang === 'fa' ? expo!.title?.fa : expo!.title?.en) || publicExpoMapBazaar!.name)
       : (lang === 'fa' ? 'نقشه رزرو' : 'Reservation map');
-    if (loading) return <ExportStandaloneSkeleton lang={lang} title={mapTitle} />;
+    if (loading) return <BazaarPassageLoader lang={lang} title={mapTitle} />;
     if (!ready) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
@@ -1970,7 +1907,7 @@ const App: React.FC = () => {
         } catch { return false; }
       })();
       return (
-        <React.Suspense fallback={<ExportStandaloneSkeleton lang={lang} title={expoTitle} />}>
+        <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={expoTitle} />}>
           <MetaverseExpoView
             bazaar={publicExpoBazaar}
             shops={metaShops}
@@ -2007,7 +1944,7 @@ const App: React.FC = () => {
     }
     const bzTitle = publicBazaar ? ((lang === 'fa' ? publicBazaar.title?.fa : publicBazaar.title?.en) || publicBazaar.name) : (lang === 'fa' ? 'بازارچه' : 'Bazaar');
     if (!ready) {
-      return <ExportStandaloneSkeleton lang={lang} title={bzTitle} />;
+      return <BazaarPassageLoader lang={lang} title={bzTitle} primary="#5b6472" accent="#cbd5e1" />;
     }
     return (
       <>
@@ -2026,13 +1963,11 @@ const App: React.FC = () => {
   // ── Public "all shops" bazaar/directory (full-screen takeover) ──
   if (view === 'shopsdir') {
     return (
-      <React.Suspense fallback={<ShopShutterLoader lang={lang} />}>
-        <MetaShopDirectory
-          shops={metaShops}
-          lang={lang}
-          onOpenShop={(slug) => openMetaShop(slug)}
-        />
-      </React.Suspense>
+      <MetaShopDirectory
+        shops={metaShops}
+        lang={lang}
+        onOpenShop={(slug) => openMetaShop(slug)}
+      />
     );
   }
 
@@ -2048,18 +1983,14 @@ const App: React.FC = () => {
         && (resolvedShop.products?.length ?? 0) < (resolvedShop.productCount ?? 0);
       if (catalogWaiting) return <ShopShutterLoader lang={lang} />;
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
-      if (catalogMode) return (
-        <React.Suspense fallback={<ShopShutterLoader lang={lang} />}>
-          <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />
-        </React.Suspense>
-      );
-      return (
-        <React.Suspense fallback={<ShopShutterLoader lang={lang} primary={resolvedShop.primaryColor} />}>
-          <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />
-        </React.Suspense>
-      );
+      if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
+      return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
     }
-    const shopPending = !!shopSlug && (shopLoading || !shopResolved);
+    const shopPending = !!shopSlug && (
+      shopLoading
+      || !shopResolved
+      || (!resolvedShop && !metaShopsReady)
+    );
     if (shopPending) {
       return <ShopShutterLoader lang={lang} />;
     }

@@ -1086,17 +1086,6 @@ export interface MetaShopDisplayCurrency {
   rate: number;
 }
 
-/** Log when bulk price markup is committed to base prices or reverted. */
-export interface MetaShopPriceMarkupHistoryEntry {
-  id: string;
-  at: string;
-  action: 'commit' | 'revert_all' | 'temporary_clear';
-  markupType?: 'percent' | 'amount';
-  markupValue?: number;
-  productCount?: number;
-  actor?: string;
-}
-
 // A predefined extra fee added at checkout (shipping, packaging, ...)
 export interface MetaShopFee {
   id: string;
@@ -1395,8 +1384,6 @@ export interface MetaShop {
   /** Shop-wide default price adjustment (% or fixed): positive = increase, negative = decrease. */
   priceMarkupType?: 'percent' | 'amount';
   priceMarkupValue?: number;
-  /** Recent bulk markup commits / reverts (newest first). */
-  priceMarkupHistory?: MetaShopPriceMarkupHistoryEntry[];
   /** When a product price is below base: show struck-through old price (default true if unset). */
   showStrikethroughPrice?: boolean;
   /** Default thumbnail fit for all products (cover = crop; contain = fit inside box). */

@@ -22,15 +22,8 @@ function isBrowserNavigation(request) {
   return false;
 }
 
-function isInAppSocialBrowser(request) {
-  const ua = request.headers.get('user-agent') || '';
-  // Instagram / Facebook in-app WebViews — always serve the SPA, never og-meta.
-  return /Instagram|FB_IAB|FBAN\/|FBAV\/|Messenger/i.test(ua);
-}
-
 function isPreviewCrawler(request) {
   const ua = request.headers.get('user-agent') || '';
-  if (isInAppSocialBrowser(request)) return false;
   if (CRAWLER_UA.test(ua)) return true;
   // WhatsApp link-preview fetch (not in-app browser): WhatsApp/x.x without browser Sec-Fetch headers.
   if (/^WhatsApp\/\d/i.test(ua) && !isBrowserNavigation(request)) return true;
