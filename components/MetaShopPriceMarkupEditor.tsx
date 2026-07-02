@@ -1,6 +1,7 @@
 import React from 'react';
 import { MetaShopProduct } from '../types';
 import { commitMarkupToProducts, productHasPriceDrift, PROMO_LABEL_PRESETS_FA, revertAllProductsToBase, revertProductToBase, type PriceAdjustType } from '../utils/metaShopPricing';
+import type { PriceHistoryAction } from '../utils/metaShopPriceHistory';
 
 const fld = 'w-full px-3 py-2 rounded-lg border border-gray-300 outline-none focus:border-indigo-500 text-sm';
 
@@ -18,12 +19,13 @@ interface ShopBulkProps {
   onClearTemporaryMarkup?: () => void;
   hasTemporaryShopMarkup?: boolean;
   hasDriftedProducts?: boolean;
+  onPriceAction?: (action: PriceHistoryAction) => void;
 }
 
 export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
   T, markupType, markupValue, productCount, onMarkupChange, onCommitToBasePrices, products,
   showStrikethroughPrice = true, onShowStrikethroughChange,
-  onRevertAllToBase, onClearTemporaryMarkup, hasTemporaryShopMarkup, hasDriftedProducts,
+  onRevertAllToBase, onClearTemporaryMarkup, hasTemporaryShopMarkup, hasDriftedProducts, onPriceAction,
 }) => {
   const hasAdjust = !!markupType && markupValue != null && markupValue !== 0;
   const isDecrease = hasAdjust && (markupValue ?? 0) < 0;
@@ -41,6 +43,7 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
         : `${isDecrease ? 'Decrease' : 'Increase'} base prices of ${productCount} products by ${absVal}${unit}? This cannot be auto-undone.`,
     )) return;
     onCommitToBasePrices(commitMarkupToProducts(products, markupType, markupValue!));
+    onPriceAction?.({ kind: 'bulk_commit', adjustType: markupType, adjustValue: markupValue!, productCount });
     onMarkupChange(undefined, undefined);
   };
 
@@ -137,7 +140,10 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
       {(onRevertAllToBase || onClearTemporaryMarkup) && (
         <div className="flex flex-wrap gap-2 pt-1 border-t border-sky-200">
           {onClearTemporaryMarkup && hasTemporaryShopMarkup && (
-            <button type="button" onClick={onClearTemporaryMarkup} className="text-xs px-3 py-2 rounded-lg border border-sky-300 bg-white text-sky-800 hover:bg-sky-100">
+            <button type="button" onClick={() => {
+              onPriceAction?.({ kind: 'bulk_temp_clear', adjustType: markupType, adjustValue: markupValue });
+              onClearTemporaryMarkup();
+            }} className="text-xs px-3 py-2 rounded-lg border border-sky-300 bg-white text-sky-800 hover:bg-sky-100">
               {T ? 'لغو تغییر موقت (بدون تغییر قیمت پایه)' : 'Clear temporary adjustment'}
             </button>
           )}
@@ -146,6 +152,7 @@ export const MetaShopBulkPriceMarkupPanel: React.FC<ShopBulkProps> = ({
               type="button"
               onClick={() => {
                 if (!window.confirm(T ? 'همه محصولات به قیمت پایه برگردند؟ تخفیف‌ها و تغییرات موقت هم پاک می‌شود.' : 'Revert all products to base prices? Temporary discounts/markups will be cleared.')) return;
+                onPriceAction?.({ kind: 'bulk_revert', productCount });
                 onRevertAllToBase();
               }}
               className="text-xs px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 font-semibold"
@@ -215,9 +222,10 @@ interface ProductMarkupProps {
   product: MetaShopProduct;
   onChange: (patch: Partial<MetaShopProduct>) => void;
   inheritsShop?: boolean;
+  onPriceAction?: (action: PriceHistoryAction) => void;
 }
 
-export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, product, onChange, inheritsShop }) => (
+export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, product, onChange, inheritsShop, onPriceAction }) => (
   <div className="bg-sky-50/80 border border-sky-100 rounded-xl p-3 space-y-2">
     <p className="text-xs font-semibold text-sky-900">
       {T ? 'تغییر قیمت این محصول (+/-)' : 'Price adjustment for this product (+/-)'}
@@ -269,6 +277,7 @@ export const MetaShopProductMarkupFields: React.FC<ProductMarkupProps> = ({ T, p
         type="button"
         onClick={() => {
           if (!window.confirm(T ? 'این محصول به قیمت پایه برگردد؟' : 'Revert this product to base price?')) return;
+          onPriceAction?.({ kind: 'product_revert', product });
           onChange(revertProductToBase(product));
         }}
         className="text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 w-fit"

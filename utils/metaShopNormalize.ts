@@ -2,6 +2,8 @@ import type { MetaShop, MetaShopPage, MetaShopPageCard, MetaShopProduct, MetaSho
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from './metaShopCurrency';
 import { normalizeImageUrl, resolveProductImages } from './metaShopImage';
 import { normalizeIncoterms } from './metaShopExportTerms';
+import { META_SHOP_PRICE_HISTORY_MAX } from './metaShopPriceHistory';
+import type { MetaShopPriceHistoryEntry } from '../types';
 
 const SHOP_I18N_KEYS = [
   'title', 'subtitle', 'collectionText', 'searchPlaceholder', 'cartButtonText',
@@ -136,6 +138,41 @@ const isStorableImageUrl = (url: unknown): url is string => {
 
 const normalizeImages = (images: unknown, legacyImage?: unknown): string[] =>
   resolveProductImages({ images, image: legacyImage }).filter(isStorableImageUrl).slice(0, 6);
+
+const normalizePriceHistory = (raw: unknown): MetaShopPriceHistoryEntry[] | undefined => {
+  if (!Array.isArray(raw) || !raw.length) return undefined;
+  const out: MetaShopPriceHistoryEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const e = item as MetaShopPriceHistoryEntry;
+    const kind = e.kind;
+    if (!kind || !e.at) continue;
+    out.push({
+      id: String(e.id || `ph-${out.length}`),
+      at: String(e.at),
+      by: e.by ? String(e.by) : undefined,
+      kind,
+      scope: e.scope === 'product' ? 'product' : 'shop',
+      productId: e.productId ? String(e.productId) : undefined,
+      productName: e.productName ? String(e.productName) : undefined,
+      adjustType: e.adjustType === 'percent' || e.adjustType === 'amount' ? e.adjustType : undefined,
+      adjustValue: e.adjustValue != null ? Number(e.adjustValue) : undefined,
+      productCount: e.productCount != null ? Number(e.productCount) : undefined,
+      currency: e.currency ? String(e.currency) : undefined,
+      summaryFa: e.summaryFa ? String(e.summaryFa) : undefined,
+      summaryEn: e.summaryEn ? String(e.summaryEn) : undefined,
+      details: Array.isArray(e.details)
+        ? e.details.slice(0, 12).map(d => ({
+            field: String(d.field || ''),
+            from: d.from != null ? Number(d.from) : undefined,
+            to: d.to != null ? Number(d.to) : undefined,
+          }))
+        : undefined,
+    });
+    if (out.length >= META_SHOP_PRICE_HISTORY_MAX) break;
+  }
+  return out.length ? out : undefined;
+};
 
 export const normalizeMetaShopProduct = (p: MetaShopProduct & Record<string, unknown>): MetaShopProduct => {
   const i18n = { ...(p.i18n || {}) };
@@ -381,6 +418,7 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     hidePriceText: raw.hidePriceText,
     priceMarkupType: raw.priceMarkupType === 'percent' || raw.priceMarkupType === 'amount' ? raw.priceMarkupType : undefined,
     priceMarkupValue: raw.priceMarkupValue != null ? Number(raw.priceMarkupValue) : undefined,
+    priceHistory: normalizePriceHistory(raw.priceHistory),
     showStrikethroughPrice: raw.showStrikethroughPrice,
     productImageFit: raw.productImageFit === 'contain' ? 'contain' : raw.productImageFit === 'cover' ? 'cover' : undefined,
     defaultIncoterms: normalizeIncoterms(raw.defaultIncoterms).length ? normalizeIncoterms(raw.defaultIncoterms) : undefined,

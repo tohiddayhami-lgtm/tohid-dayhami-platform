@@ -15,7 +15,7 @@ import { DEFAULT_PRODUCT_LANGS, DEFAULT_REALESTATE_LANGS, isRtlLang } from '../u
 import { MetaBazaar } from '../types';
 import { uniqueShopCode, shopCodeOf } from './shopCode';
 import { parseSearchKeywords, formatSearchKeywordsForInput, textMatchesSearchQuery, shopMatchesSearch } from '../utils/metaShopSearch';
-import { productHasPriceDrift, revertAllProductsToBase } from '../utils/metaShopPricing';
+import { productHasPriceDrift, revertAllProductsToBase, revertProductToBase } from '../utils/metaShopPricing';
 import { AppModal } from './AppModal';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from '../utils/metaShopCurrency';
 import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
@@ -26,6 +26,14 @@ import { MetaShopOrdersHub } from './MetaShopOrdersHub';
 import { clearMetaShopManagerNav, loadMetaShopManagerNav, saveMetaShopManagerNav } from '../utils/metaShopPanelSession';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { MetaShopBulkExportTermsPanel, MetaShopProductExportFields } from './MetaShopExportTermsEditor';
+import { MetaShopPriceHistoryPanel } from './MetaShopPriceHistoryPanel';
+import {
+  appendPriceHistory,
+  appendPriceHistoryMany,
+  cloneProductsBaseline,
+  detectManualPriceEdits,
+  type PriceHistoryAction,
+} from '../utils/metaShopPriceHistory';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
 import { Language } from '../App';
@@ -229,6 +237,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const seoImageInputRef = useRef<HTMLInputElement>(null);
   const jsonFileRef = useRef<HTMLInputElement>(null);
   const updateFileRef = useRef<HTMLInputElement>(null);
+  const priceBaselineRef = useRef<MetaShopProduct[] | null>(null);
+  const priceBaselineShopIdRef = useRef<string | null>(null);
   const [updateShop, setUpdateShop] = useState<MetaShop | null>(null);
   const [dirCatFa, setDirCatFa] = useState('');
   const [dirCatEn, setDirCatEn] = useState('');
@@ -665,8 +675,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   };
   const triggerUpdate = (shop: MetaShop) => { setUpdateShop(shop); updateFileRef.current?.click(); };
 
-  const startNew = () => { setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) }); setMode('editor'); };
+  const startNew = () => {
+    priceBaselineRef.current = null;
+    priceBaselineShopIdRef.current = null;
+    setDraft({ ...blankShop(), code: uniqueShopCode(metaShops) });
+    setMode('editor');
+  };
   const startEdit = (s: MetaShop) => {
+    priceBaselineRef.current = null;
+    priceBaselineShopIdRef.current = s.id;
     setEditorProductShown(EDITOR_PRODUCT_PAGE_SIZE);
     setProductsSyncing(false);
     setProductsLoadFailed(false);
@@ -701,6 +718,30 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         setProductsSyncing(false);
         setProductsLoadFailed(true);
       });
+  };
+
+  useEffect(() => {
+    if (!draft || mode !== 'editor' || draft.id !== priceBaselineShopIdRef.current) return;
+    if (priceBaselineRef.current) return;
+    if (shopNeedsProductHydration(draft) && !productsFullyLoaded) return;
+    priceBaselineRef.current = cloneProductsBaseline(draft.products || []);
+  }, [draft, mode, productsFullyLoaded]);
+
+  const refreshPriceBaseline = (products: MetaShopProduct[]) => {
+    priceBaselineRef.current = cloneProductsBaseline(products);
+  };
+
+  const logPriceAction = (action: PriceHistoryAction) => {
+    setDraft(d => {
+      if (!d) return d;
+      const currency = d.currency;
+      const withCurrency = action.kind === 'bulk_commit'
+        ? { ...action, currency }
+        : action.kind === 'manual_edit'
+          ? { ...action, currency }
+          : action;
+      return { ...d, priceHistory: appendPriceHistory(d.priceHistory, withCurrency, backupActorName) };
+    });
   };
 
   const draftProductGroups = useMemo(
@@ -802,8 +843,18 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     setSaving(true);
     try {
       const allowEmptyProducts = productsFullyLoaded && draft.products.length === 0;
-      await onSaveMetaShop({ ...draft, slug, code, isActive: draft.isActive !== false }, { allowEmptyProducts });
+      const manualActions = detectManualPriceEdits(priceBaselineRef.current, draft.products, draft.currency);
+      const priceHistory = appendPriceHistoryMany(draft.priceHistory, manualActions, backupActorName);
+      await onSaveMetaShop({
+        ...draft,
+        slug,
+        code,
+        isActive: draft.isActive !== false,
+        priceHistory,
+      }, { allowEmptyProducts });
       setMode('list'); setDraft(null);
+      priceBaselineRef.current = null;
+      priceBaselineShopIdRef.current = null;
     }
     catch (e) {
       const msg = e instanceof Error ? e.message : '';
@@ -2311,6 +2362,13 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           />
         )}
         {!isRealEstate && draft.products.length > 0 && (
+          <MetaShopPriceHistoryPanel
+            T={T}
+            history={draft.priceHistory}
+            onClear={!readonly ? () => setDraft(d => d ? { ...d, priceHistory: undefined } : d) : undefined}
+          />
+        )}
+        {!isRealEstate && draft.products.length > 0 && (
           <MetaShopBulkPriceMarkupPanel
             T={T}
             markupType={draft.priceMarkupType}
@@ -2318,23 +2376,31 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             productCount={draft.products.length}
             products={draft.products}
             onMarkupChange={(type, value) => setDraft(d => d ? { ...d, priceMarkupType: type, priceMarkupValue: value } : d)}
-            onCommitToBasePrices={products => setDraft(d => d ? {
-              ...d,
-              products,
-              priceMarkupType: undefined,
-              priceMarkupValue: undefined,
-            } : d)}
+            onCommitToBasePrices={products => {
+              refreshPriceBaseline(products);
+              setDraft(d => d ? {
+                ...d,
+                products,
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+              } : d);
+            }}
+            onPriceAction={logPriceAction}
             showStrikethroughPrice={draft.showStrikethroughPrice !== false}
             onShowStrikethroughChange={val => setDraft(d => d ? { ...d, showStrikethroughPrice: val } : d)}
             hasTemporaryShopMarkup={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) !== 0}
             hasDriftedProducts={draft.products.some(productHasPriceDrift)}
             onClearTemporaryMarkup={() => setDraft(d => d ? { ...d, priceMarkupType: undefined, priceMarkupValue: undefined } : d)}
-            onRevertAllToBase={() => setDraft(d => d ? {
-              ...d,
-              products: revertAllProductsToBase(d.products),
-              priceMarkupType: undefined,
-              priceMarkupValue: undefined,
-            } : d)}
+            onRevertAllToBase={() => {
+              const products = revertAllProductsToBase(draft.products);
+              refreshPriceBaseline(products);
+              setDraft(d => d ? {
+                ...d,
+                products,
+                priceMarkupType: undefined,
+                priceMarkupValue: undefined,
+              } : d);
+            }}
           />
         )}
         {isRealEstate && (
@@ -2446,6 +2512,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       product={p}
                       inheritsShop={!!draft.priceMarkupType && (draft.priceMarkupValue ?? 0) !== 0}
                       onChange={patch => updProduct(idx, patch)}
+                      onPriceAction={action => {
+                        logPriceAction(action);
+                        if (action.kind === 'product_revert' && priceBaselineRef.current) {
+                          const reverted = revertProductToBase(action.product);
+                          priceBaselineRef.current = priceBaselineRef.current.map(bp =>
+                            bp.id === reverted.id ? reverted : bp,
+                          );
+                        }
+                      }}
                     />
                     <MetaShopProductPromoLabelField
                       T={T}

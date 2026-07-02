@@ -22,6 +22,7 @@ export type MetaShopExtrasPayload = {
   extraFees?: MetaShopFee[];
   searchKeywords?: string[];
   directoryCategories?: string[];
+  priceHistory?: import('../types').MetaShopPriceHistoryEntry[];
   productRefs?: MetaShopProductRef[];
   /** When productRefs are chunked into metaShopRefChunks. */
   productRefChunkCount?: number;
@@ -44,6 +45,7 @@ const BULKY_KEYS = [
   'extraFees',
   'searchKeywords',
   'directoryCategories',
+  'priceHistory',
 ] as const;
 
 type BulkyKey = (typeof BULKY_KEYS)[number];

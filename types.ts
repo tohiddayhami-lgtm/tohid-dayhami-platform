@@ -1384,6 +1384,8 @@ export interface MetaShop {
   /** Shop-wide default price adjustment (% or fixed): positive = increase, negative = decrease. */
   priceMarkupType?: 'percent' | 'amount';
   priceMarkupValue?: number;
+  /** Price change audit log (bulk %, fixed amount, manual edits) — newest first. */
+  priceHistory?: MetaShopPriceHistoryEntry[];
   /** When a product price is below base: show struck-through old price (default true if unset). */
   showStrikethroughPrice?: boolean;
   /** Default thumbnail fit for all products (cover = crop; contain = fit inside box). */
@@ -1488,6 +1490,37 @@ export interface MetaShopOrder {
 
 /** Master-only checkpoint: up to 3 saved snapshots per MetaShop (stored in metaShopBackups). */
 export type MetaShopBackupSlotNum = 1 | 2 | 3;
+
+/** Logged price change on a MetaShop (bulk markup, revert, manual edit). */
+export type MetaShopPriceHistoryKind =
+  | 'bulk_commit'
+  | 'bulk_revert'
+  | 'bulk_temp_clear'
+  | 'product_revert'
+  | 'manual_edit';
+
+export interface MetaShopPriceHistoryDetail {
+  field: string;
+  from?: number;
+  to?: number;
+}
+
+export interface MetaShopPriceHistoryEntry {
+  id: string;
+  at: string;
+  by?: string;
+  kind: MetaShopPriceHistoryKind;
+  scope: 'shop' | 'product';
+  productId?: string;
+  productName?: string;
+  adjustType?: 'percent' | 'amount';
+  adjustValue?: number;
+  productCount?: number;
+  currency?: string;
+  summaryFa?: string;
+  summaryEn?: string;
+  details?: MetaShopPriceHistoryDetail[];
+}
 
 export interface MetaShopBackupMeta {
   id: string;
