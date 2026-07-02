@@ -1126,16 +1126,41 @@ const safeDeleteDocCloud = async (col: string, id: string) => {
   }
 };
 
+/** Parallel deletes with bounded concurrency (avoids hundreds of sequential proxy calls). */
+const deleteManyDocsCloud = async (col: string, ids: string[], concurrency = 16) => {
+  const unique = [...new Set(ids.map(id => String(id || '').trim()).filter(Boolean))];
+  if (!unique.length) return;
+  let i = 0;
+  const workers = Array.from({ length: Math.min(concurrency, unique.length) }, async () => {
+    while (i < unique.length) {
+      const id = unique[i++];
+      await safeDeleteDocCloud(col, id);
+    }
+  });
+  await Promise.all(workers);
+};
+
 const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
-  const existing = await loadMetaShopProductChunks(shopId);
+  if (keepCount > 0) {
+    const existing = await loadMetaShopProductChunks(shopId);
+    const ids = existing
+      .filter(c => (c.chunkIndex ?? 0) >= keepCount && c.id)
+      .map(c => c.id);
+    await deleteManyDocsCloud(META_SHOP_CHUNKS_COL, ids);
+    return;
+  }
+  await purgeMetaShopProductChunks(shopId);
+};
+
+const purgeMetaShopProductChunks = async (shopId: string, chunkCountHint = 0) => {
   const ids = new Set<string>();
-  for (const c of existing) {
-    if ((c.chunkIndex ?? 0) >= keepCount && c.id) ids.add(c.id);
-  }
-  if (keepCount === 0) {
-    for (let i = 0; i < 64; i++) ids.add(`${shopId}_${i}`);
-  }
-  await Promise.all([...ids].map(id => safeDeleteDocCloud(META_SHOP_CHUNKS_COL, id)));
+  const max = chunkCountHint > 0 ? chunkCountHint + 6 : 20;
+  for (let i = 0; i < max; i++) ids.add(`${shopId}_${i}`);
+  try {
+    const existing = await loadMetaShopProductChunks(shopId, chunkCountHint || undefined);
+    existing.forEach(c => { if (c.id) ids.add(c.id); });
+  } catch { /* best effort */ }
+  await deleteManyDocsCloud(META_SHOP_CHUNKS_COL, [...ids]);
 };
 
 const loadMetaShopExtrasDoc = async (shopId: string): Promise<MetaShopExtrasPayload | null> => {
@@ -1150,44 +1175,48 @@ const loadMetaShopExtrasDoc = async (shopId: string): Promise<MetaShopExtrasPayl
 };
 
 const loadMetaShopRefChunks = async (shopId: string, chunkCount: number): Promise<MetaShopRefChunk[]> => {
-  const chunks: MetaShopRefChunk[] = [];
-  for (let i = 0; i < chunkCount; i++) {
-    try {
-      const proxy = await checkProxyMode();
-      let row: MetaShopRefChunk | null = null;
-      if (proxy) {
-        row = await proxyGet<MetaShopRefChunk | null>(META_SHOP_REF_CHUNKS_COL, { doc: `${shopId}_ref_${i}` });
-      } else {
-        const snap = await getDoc(doc(db, META_SHOP_REF_CHUNKS_COL, `${shopId}_ref_${i}`));
-        row = snap.exists() ? (snap.data() as MetaShopRefChunk) : null;
-      }
-      if (row) chunks.push(row);
-    } catch { /* skip */ }
-  }
-  return chunks;
+  if (chunkCount <= 0) return [];
+  const loaded = await Promise.all(
+    Array.from({ length: chunkCount }, (_, i) =>
+      (async () => {
+        try {
+          const proxy = await checkProxyMode();
+          const docId = `${shopId}_ref_${i}`;
+          if (proxy) {
+            return await proxyGet<MetaShopRefChunk | null>(META_SHOP_REF_CHUNKS_COL, { doc: docId });
+          }
+          const snap = await getDoc(doc(db, META_SHOP_REF_CHUNKS_COL, docId));
+          return snap.exists() ? (snap.data() as MetaShopRefChunk) : null;
+        } catch {
+          return null;
+        }
+      })(),
+    ),
+  );
+  return loaded.filter((c): c is MetaShopRefChunk => !!c);
 };
 
 const deleteMetaShopRefChunks = async (shopId: string, keepCount = 0) => {
-  const existing = await loadMetaShopRefChunks(shopId, 64);
+  if (keepCount > 0) {
+    const existing = await loadMetaShopRefChunks(shopId, keepCount + 8);
+    const ids = existing
+      .filter(c => (c.chunkIndex ?? 0) >= keepCount && c.id)
+      .map(c => c.id);
+    await deleteManyDocsCloud(META_SHOP_REF_CHUNKS_COL, ids);
+    return;
+  }
+  await purgeMetaShopRefChunks(shopId);
+};
+
+const purgeMetaShopRefChunks = async (shopId: string, refChunkCountHint = 0) => {
   const ids = new Set<string>();
-  for (const c of existing) {
-    if ((c.chunkIndex ?? 0) >= keepCount && c.id) ids.add(c.id);
-  }
-  if (keepCount === 0) {
-    for (let i = 0; i < 64; i++) ids.add(`${shopId}_ref_${i}`);
-  }
-  await Promise.all([...ids].map(id => safeDeleteDocCloud(META_SHOP_REF_CHUNKS_COL, id)));
+  const max = refChunkCountHint > 0 ? refChunkCountHint + 4 : 12;
+  for (let i = 0; i < max; i++) ids.add(`${shopId}_ref_${i}`);
+  await deleteManyDocsCloud(META_SHOP_REF_CHUNKS_COL, [...ids]);
 };
 
 const deleteMetaShopExtrasDoc = async (shopId: string) => {
   await safeDeleteDocCloud(META_SHOP_EXTRAS_COL, shopId);
-};
-
-const deleteAllMetaShopBackups = async (shopId: string) => {
-  for (const slot of META_SHOP_BACKUP_SLOT_NUMS) {
-    await deleteMetaShopBackupChunksForSlot(shopId, slot);
-    await safeDeleteDocCloud(META_SHOP_BACKUPS_COL, backupMetaDocId(shopId, slot));
-  }
 };
 
 const attachMetaShopExtras = async (shop: MetaShop): Promise<MetaShop> => {
@@ -1439,6 +1468,7 @@ const loadOneMetaShopBackupChunk = async (chunkDocId: string): Promise<MetaShopB
 
 const deleteMetaShopBackupChunksForSlot = async (shopId: string, slot: MetaShopBackupSlotNum) => {
   const prefix = backupChunkPrefix(shopId, slot);
+  const ids = new Set<string>();
   try {
     const proxy = await checkProxyMode();
     if (proxy) {
@@ -1447,8 +1477,7 @@ const deleteMetaShopBackupChunksForSlot = async (shopId: string, slot: MetaShopB
         whereEq: shopId,
         all: true,
       });
-      const toDelete = (Array.isArray(rows) ? rows : []).filter(c => c.slot === slot);
-      await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, c.id)));
+      (Array.isArray(rows) ? rows : []).filter(c => c.slot === slot).forEach(c => ids.add(c.id));
     } else {
       const q = query(
         collection(db, META_SHOP_BACKUP_CHUNKS_COL),
@@ -1456,12 +1485,26 @@ const deleteMetaShopBackupChunksForSlot = async (shopId: string, slot: MetaShopB
         where('slot', '==', slot),
       );
       const snap = await getDocs(q);
-      await Promise.all(snap.docs.map(d => deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, d.id)));
+      snap.docs.forEach(d => ids.add(d.id));
     }
   } catch { /* best effort */ }
-  for (let i = 0; i < 64; i++) {
-    try { await deleteDocCloud(META_SHOP_BACKUP_CHUNKS_COL, `${prefix}_${i}`); } catch { /* gone */ }
-  }
+  for (let i = 0; i < 24; i++) ids.add(`${prefix}_${i}`);
+  await deleteManyDocsCloud(META_SHOP_BACKUP_CHUNKS_COL, [...ids]);
+};
+
+const purgeMetaShopRelatedDocs = async (
+  shopId: string,
+  hints: { productChunkCount?: number; productRefChunkCount?: number } = {},
+) => {
+  await Promise.all([
+    purgeMetaShopProductChunks(shopId, hints.productChunkCount ?? 0),
+    purgeMetaShopRefChunks(shopId, hints.productRefChunkCount ?? 0),
+    safeDeleteDocCloud(META_SHOP_EXTRAS_COL, shopId),
+    Promise.all(META_SHOP_BACKUP_SLOT_NUMS.map(async slot => {
+      await deleteMetaShopBackupChunksForSlot(shopId, slot);
+      await safeDeleteDocCloud(META_SHOP_BACKUPS_COL, backupMetaDocId(shopId, slot));
+    })),
+  ]);
 };
 
 export const fetchMetaShopBackupMeta = async (
@@ -1569,21 +1612,19 @@ export const deleteMetaShopFromCloud = async (id: string) => {
 
   const proxy = await checkProxyMode();
   let data: unknown = null;
+  let shell: MetaShop | null = null;
   try {
     if (proxy) {
       data = await proxyGet('metaShops', { doc: shopId });
+      shell = data as MetaShop | null;
     } else {
       const snap = await getDoc(doc(db, 'metaShops', shopId));
       data = snap.exists() ? snap.data() : null;
+      shell = data as MetaShop | null;
     }
   } catch {
-    /* proceed — still try to delete related docs */
+    /* proceed */
   }
-
-  await deleteMetaShopProductChunks(shopId);
-  await deleteMetaShopRefChunks(shopId);
-  await deleteMetaShopExtrasDoc(shopId);
-  await deleteAllMetaShopBackups(shopId);
 
   try {
     await deleteDocCloud('metaShops', shopId);
@@ -1601,6 +1642,11 @@ export const deleteMetaShopFromCloud = async (id: string) => {
   } catch {
     /* log failure must not undo a successful delete */
   }
+
+  void purgeMetaShopRelatedDocs(shopId, {
+    productChunkCount: shell?.productChunkCount ?? 0,
+    productRefChunkCount: shell?.productRefChunkCount ?? 0,
+  }).catch(e => console.warn('[metaShop] background purge failed', shopId, e));
 };
 
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>

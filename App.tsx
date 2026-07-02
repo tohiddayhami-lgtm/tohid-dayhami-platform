@@ -364,6 +364,7 @@ const App: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
   const [metaShopsReady, setMetaShopsReady] = useState(false);
+  const pendingDeletedMetaShopIdsRef = useRef(new Set<string>());
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
   const [metaShopReferrals, setMetaShopReferrals] = useState<MetaShopPropertyReferral[]>([]);
   const [metaShopSupplierCollaborations, setMetaShopSupplierCollaborations] = useState<MetaShopSupplierCollaboration[]>([]);
@@ -747,7 +748,11 @@ const App: React.FC = () => {
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
     const unsubProcesses = subscribeToProcesses(setProcesses);
     const unsubInvoices = subscribeToInvoices(setInvoices);
-    const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
+    const unsubMetaShops = subscribeToMetaShops((data) => {
+      const pending = pendingDeletedMetaShopIdsRef.current;
+      setMetaShops(pending.size ? data.filter(s => !pending.has(s.id)) : data);
+      setMetaShopsReady(true);
+    });
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
     const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
@@ -2466,7 +2471,19 @@ const App: React.FC = () => {
                     metaShopReferrals={metaShopReferrals}
                     metaShopSupplierCollaborations={metaShopSupplierCollaborations}
                     onSaveMetaShop={async (s, opts) => { await saveMetaShopToCloud(s, opts); }}
-                    onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
+                    onDeleteMetaShop={async (id) => {
+                      const prev = metaShops;
+                      pendingDeletedMetaShopIdsRef.current.add(id);
+                      setMetaShops(s => s.filter(x => x.id !== id));
+                      try {
+                        await deleteMetaShopFromCloud(id);
+                        window.setTimeout(() => pendingDeletedMetaShopIdsRef.current.delete(id), 60_000);
+                      } catch (e) {
+                        pendingDeletedMetaShopIdsRef.current.delete(id);
+                        setMetaShops(prev);
+                        throw e;
+                      }
+                    }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
                     onDeleteMetaShopOrder={async (id) => { await deleteMetaShopOrderFromCloud(id, currentUser?.fullName || 'Admin'); }}
                     onRestoreMetaShopOrder={async (id) => { await restoreMetaShopOrderInCloud(id, currentUser?.fullName || 'Admin'); }}
