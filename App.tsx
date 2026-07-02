@@ -44,7 +44,7 @@ import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
 // Tiny CSS-only "mall doors opening" loader (no 3D deps) — shown while the heavy chunk downloads.
-import { BazaarPassageLoader } from './components/BazaarPassageLoader';
+import { ExportStandaloneSkeleton } from './components/ExportPageSkeleton';
 import { ConsultationBookingLoader } from './components/ConsultationBookingLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
@@ -1916,7 +1916,7 @@ const App: React.FC = () => {
     const mapTitle = ready
       ? ((lang === 'fa' ? expo!.title?.fa : expo!.title?.en) || publicExpoMapBazaar!.name)
       : (lang === 'fa' ? 'نقشه رزرو' : 'Reservation map');
-    if (loading) return <BazaarPassageLoader lang={lang} title={mapTitle} />;
+    if (loading) return <ExportStandaloneSkeleton lang={lang} title={mapTitle} />;
     if (!ready) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
@@ -1945,7 +1945,7 @@ const App: React.FC = () => {
         } catch { return false; }
       })();
       return (
-        <React.Suspense fallback={<BazaarPassageLoader lang={lang} title={expoTitle} />}>
+        <React.Suspense fallback={<ExportStandaloneSkeleton lang={lang} title={expoTitle} />}>
           <MetaverseExpoView
             bazaar={publicExpoBazaar}
             shops={metaShops}
@@ -1982,7 +1982,7 @@ const App: React.FC = () => {
     }
     const bzTitle = publicBazaar ? ((lang === 'fa' ? publicBazaar.title?.fa : publicBazaar.title?.en) || publicBazaar.name) : (lang === 'fa' ? 'بازارچه' : 'Bazaar');
     if (!ready) {
-      return <BazaarPassageLoader lang={lang} title={bzTitle} primary="#5b6472" accent="#cbd5e1" />;
+      return <ExportStandaloneSkeleton lang={lang} title={bzTitle} />;
     }
     return (
       <>

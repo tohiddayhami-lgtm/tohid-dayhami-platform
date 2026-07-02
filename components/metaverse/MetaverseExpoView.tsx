@@ -22,7 +22,6 @@ import { VrEnvironmentCollision } from './VrEnvironmentCollision';
 import { VrWalkLocomotion, VrFlyLocomotion, VrFlyJumpLocomotion, VrFlyModeToggle } from './VrExpoLocomotion';
 import { ExpoFlyControls } from './ExpoFlyControls';
 import { EnvironmentEditToolbar, type EnvEditSelection, type EnvEditTransform } from './EnvironmentEditMode';
-import { BazaarPassageLoader } from '../BazaarPassageLoader';
 import { logMetaExpoEvent, markMetaExpoPresenceInactive, subscribeMetaExpoBoothReservations, subscribeMetaExpoPresence, upsertMetaExpoPresence } from '../../services/firebaseService';
 import { summarizeBoothReservations, type BoothReservationSummary } from '../../utils/boothReservationUtils';
 import { CanvasLabel } from './CanvasLabel';
@@ -674,8 +673,9 @@ export const MetaverseExpoView: React.FC<Props> = ({ bazaar, shops, lang: initia
       {/* Minimal container-ship loader (same as the Meta Shop pages) — fades out once the scene
           is ready, then unmounts. */}
       {!revealed && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 300, opacity: openDoors ? 0 : 1, transition: 'opacity .9s ease', pointerEvents: openDoors ? 'none' : 'auto' }}>
-          <BazaarPassageLoader lang={lang} title={bi(expo.title, lang, bazaar.name)} />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 300, opacity: openDoors ? 0 : 1, transition: 'opacity .9s ease', pointerEvents: openDoors ? 'none' : 'auto' }} className="flex flex-col items-center justify-center bg-gray-900 text-white" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden />
+          <p className="mt-4 text-sm text-white/75">{lang === 'fa' ? 'در حال بارگذاری نمایشگاه…' : 'Loading exhibition…'}</p>
         </div>
       )}
     </div>
