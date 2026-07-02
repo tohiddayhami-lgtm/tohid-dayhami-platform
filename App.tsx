@@ -1425,28 +1425,53 @@ const App: React.FC = () => {
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
     const expectedCount = shell.productCount ?? 0;
-    loadMetaShopProductsFull(shell, products => {
-      setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
-    }).then(full => {
+
+    // Retry hydration when the server claims products exist but a transient network /
+    // proxy failure (common in Iran) returns an empty set — never wipe a shop to "0 products"
+    // on a temporary glitch, otherwise the storefront looks permanently empty.
+    const MAX_ATTEMPTS = 4;
+    const attempt = (n: number): void => {
       if (shopProductHydrateRef.current !== shopId) return;
-      const loaded = full.products?.length ?? 0;
-      if (!loaded && expectedCount > 0) {
-        setPublicShop(prev => (
-          prev?.id === shopId
-            ? { ...prev, products: [], productCount: 0, productChunkCount: 0 }
-            : prev
-        ));
-      } else if (loaded) {
-        setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
-      }
-    }).finally(() => {
-      if (shopProductHydrateRef.current === shopId) shopProductHydrateRef.current = null;
-    });
+      loadMetaShopProductsFull(shell, products => {
+        if (shopProductHydrateRef.current !== shopId) return;
+        setPublicShop(prev => (prev?.id === shopId && (products?.length ?? 0) > 0 ? { ...prev, products } : prev));
+      }).then(full => {
+        if (shopProductHydrateRef.current !== shopId) return;
+        const loaded = full.products?.length ?? 0;
+        if (loaded) {
+          setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
+          shopProductHydrateRef.current = null;
+          return;
+        }
+        if (expectedCount > 0 && n < MAX_ATTEMPTS) {
+          setTimeout(() => attempt(n + 1), 600 * n); // backoff: 0.6s, 1.2s, 1.8s
+          return;
+        }
+        // Genuinely empty (no chunks/backup after retries). Keep counts intact so a later
+        // visit or the manual "بازیابی" flow can still recover — don't destroy metadata.
+        shopProductHydrateRef.current = null;
+      }).catch(() => {
+        if (shopProductHydrateRef.current !== shopId) return;
+        if (expectedCount > 0 && n < MAX_ATTEMPTS) {
+          setTimeout(() => attempt(n + 1), 600 * n);
+        } else {
+          shopProductHydrateRef.current = null;
+        }
+      });
+    };
+    attempt(1);
   }, []);
 
   const revealPublicShop = useCallback((shell: MetaShop) => {
     if (shell.slug) writeMetaShopShellCache(shell.slug, shell);
-    setPublicShop(shell);
+    // Preserve already-hydrated products when a later shell (e.g. a deferred subscription
+    // update) arrives for the same shop — otherwise the grid flickers back to empty.
+    setPublicShop(prev => {
+      if (prev?.id === shell.id && (prev.products?.length ?? 0) > 0 && (shell.products?.length ?? 0) === 0) {
+        return { ...shell, products: prev.products, productCount: prev.productCount ?? shell.productCount, productChunkCount: prev.productChunkCount ?? shell.productChunkCount };
+      }
+      return shell;
+    });
     setShopLoading(false);
     setShopResolved(true);
     beginShopProductHydration(shell);
