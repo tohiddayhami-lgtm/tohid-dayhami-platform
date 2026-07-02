@@ -1086,6 +1086,14 @@ export interface MetaShopDisplayCurrency {
   rate: number;
 }
 
+/** Global currency template per base currency — applied bulk to all shops sharing that base. */
+export interface MetaShopCurrencyPreset {
+  displayCurrencies: MetaShopDisplayCurrency[];
+  currencyLabel?: string;
+  currencyLabelEn?: string;
+  defaultDisplayCurrency?: string;
+}
+
 // A predefined extra fee added at checkout (shipping, packaging, ...)
 export interface MetaShopFee {
   id: string;
@@ -1785,6 +1793,8 @@ export interface AppConfig {
   heroBgImage?: string;
   /** MetaBazaar id whose tree powers the public «فروشگاه صادراتی» page (?page=export-shops). */
   exportShopBazaarId?: string;
+  /** Bulk MetaShop exchange-rate templates keyed by base currency (e.g. USD, OMR). */
+  metaShopCurrencyPresets?: Record<string, MetaShopCurrencyPreset>;
   /** Info box on public consultation booking page (?page=booking). */
   consultationPublicNoticeFa?: string;
   consultationPublicNoticeEn?: string;

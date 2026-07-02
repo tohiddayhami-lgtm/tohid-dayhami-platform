@@ -1,4 +1,4 @@
-import type { MetaShop, MetaShopDisplayCurrency } from '../types';
+import type { MetaShop, MetaShopDisplayCurrency, MetaShopCurrencyPreset } from '../types';
 import { formatMetaShopNumber } from './metaShopLang';
 
 const PRESET_LABELS: Record<string, { fa: string; en: string }> = {
@@ -321,3 +321,40 @@ export const feeAmountInBase = (fee: { amount?: number; currency?: string }, sho
   if (cur === base || amount === 0) return amount;
   return convertAmount(amount, cur, base, shop);
 };
+
+export function presetFromShop(shop: MetaShop): MetaShopCurrencyPreset {
+  const base = shopBaseCurrency(shop);
+  return {
+    displayCurrencies: normalizeDisplayCurrencies(base, shop.displayCurrencies),
+    currencyLabel: shop.currencyLabel,
+    currencyLabelEn: shop.currencyLabelEn,
+    defaultDisplayCurrency: shop.defaultDisplayCurrency,
+  };
+}
+
+export function applyCurrencyPresetToShop(shop: MetaShop, preset: MetaShopCurrencyPreset): MetaShop {
+  const base = shopBaseCurrency(shop);
+  const displayCurrencies = normalizeDisplayCurrencies(base, preset.displayCurrencies);
+  return {
+    ...shop,
+    currencyLabel: preset.currencyLabel,
+    currencyLabelEn: preset.currencyLabelEn,
+    displayCurrencies,
+    defaultDisplayCurrency: normalizeDefaultDisplayCurrency(base, displayCurrencies, preset.defaultDisplayCurrency),
+  };
+}
+
+export function resolveCurrencyPresets(
+  shops: MetaShop[],
+  stored?: Record<string, MetaShopCurrencyPreset>,
+): Record<string, MetaShopCurrencyPreset> {
+  const bases = [...new Set(shops.map(s => shopBaseCurrency(s)))].sort();
+  const out: Record<string, MetaShopCurrencyPreset> = { ...(stored || {}) };
+  for (const base of bases) {
+    if (out[base]?.displayCurrencies?.length) continue;
+    const sample = shops.find(s => shopBaseCurrency(s) === base);
+    if (sample) out[base] = presetFromShop(sample);
+    else if (!out[base]) out[base] = { displayCurrencies: [] };
+  }
+  return out;
+}

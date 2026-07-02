@@ -19,6 +19,7 @@ import { productHasPriceDrift, revertAllProductsToBase, revertProductToBase } fr
 import { AppModal } from './AppModal';
 import { normalizeDisplayCurrencies, normalizeDefaultDisplayCurrency } from '../utils/metaShopCurrency';
 import { MetaShopCurrencyRatesEditor } from './MetaShopCurrencyRatesEditor';
+import { MetaShopBulkCurrencyPanel } from './MetaShopBulkCurrencyPanel';
 import { normalizeMetaShopForCloud } from '../utils/metaShopNormalize';
 import { metaFromMetaShop } from '../utils/pageMeta';
 import { MetaShopOrderDetailCard } from './MetaShopOrderDetailCard';
@@ -50,6 +51,7 @@ interface Props {
   config: AppConfig;
   lang: Language;
   shopBaseUrl: string;
+  onUpdateConfig?: (config: AppConfig) => void | Promise<void>;
   onSaveMetaShop: (shop: MetaShop, opts?: MetaShopSaveOptions) => Promise<void>;
   onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
@@ -195,9 +197,9 @@ const buildPagesFromCatalog = (cc: any): import('../types').MetaShopPage[] => {
   return out;
 };
 
-export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onRestoreMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
+export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, metaShopReferrals = [], metaShopSupplierCollaborations = [], personnel, config, lang, shopBaseUrl, onUpdateConfig, onSaveMetaShop, onDeleteMetaShop, onUpdateMetaShopOrder, onDeleteMetaShopOrder, onRestoreMetaShopOrder, onUpdateMetaShopPropertyReferral, onUpdateMetaShopSupplierCollaboration, metaBazaars = [], onSaveMetaBazaar, onDeleteMetaBazaar, customerAccounts = [], readonly = false, canDelete = false, canDeleteBooths = false, showAllOrders = false, backupActorName = 'Master' }) => {
   const savedNav = loadMetaShopManagerNav();
-  const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads'>('shops');
+  const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads' | 'currency-rates'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
   const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>(() => {
     if (savedNav?.mode === 'orders' || savedNav?.mode === 'all-orders') return savedNav.mode;
@@ -1178,6 +1180,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const sectionToggle = (
     <div className="inline-flex bg-gray-100 rounded-lg p-1 mb-1 flex-wrap gap-1">
       <button type="button" onClick={() => setSection('shops')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'shops' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'فروشگاه‌ها' : 'Shops'}</button>
+      <button type="button" onClick={() => setSection('currency-rates')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'currency-rates' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'نرخ ارز' : 'Exchange rates'}</button>
       <button type="button" onClick={() => setSection('bazaars')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'bazaars' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'بازارچه‌ها' : 'Bazaars'}</button>
       <button type="button" onClick={() => setSection('expos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'expos' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'نمایشگاه‌های متاورسی' : 'Metaverse expos'}</button>
       <button type="button" onClick={() => setSection('uploads')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${section === 'uploads' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{T ? 'آپلود فایل‌ها' : 'File uploads'}</button>
@@ -1189,6 +1192,22 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
       <div className="space-y-4 animate-fade-in">
         {sectionToggle}
         <MetaShopFileUploader lang={lang} readonly={readonly} />
+      </div>
+    );
+  }
+
+  if (section === 'currency-rates' && onUpdateConfig) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {sectionToggle}
+        <MetaShopBulkCurrencyPanel
+          metaShops={metaShops}
+          config={config}
+          lang={lang}
+          readonly={readonly}
+          onUpdateConfig={onUpdateConfig}
+          onSaveMetaShop={onSaveMetaShop}
+        />
       </div>
     );
   }

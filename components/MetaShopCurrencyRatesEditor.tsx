@@ -32,6 +32,8 @@ interface Props {
   onDisplayCurrenciesChange: (list: MetaShopDisplayCurrency[]) => void;
   onDefaultDisplayCurrencyChange?: (code: string | undefined) => void;
   compact?: boolean;
+  /** When true, base currency is fixed (bulk preset per base). */
+  lockBase?: boolean;
 }
 
 export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
@@ -46,6 +48,7 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
   onDisplayCurrenciesChange,
   onDefaultDisplayCurrencyChange,
   compact,
+  lockBase = false,
 }) => {
   const T = lang === 'fa';
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
@@ -133,28 +136,34 @@ export const MetaShopCurrencyRatesEditor: React.FC<Props> = ({
 
       <div>
         <label className={lbl}>{T ? 'ارز پایه (قیمت‌ها با این ارز ثبت می‌شوند)' : 'Base currency (prices are stored in this currency)'}</label>
-        <div className="flex flex-wrap gap-2 mb-2">
-          {CURRENCY_PRESETS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setBase(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium border transition-colors ${
-                base === c
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-        <input
-          className={fld + ' dir-ltr max-w-[140px] font-mono uppercase'}
-          value={base}
-          onChange={e => setBase(e.target.value)}
-          placeholder="EUR"
-        />
+        {lockBase ? (
+          <p className="text-sm font-mono font-bold text-indigo-800 dir-ltr">{base}</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {CURRENCY_PRESETS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setBase(c)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-medium border transition-colors ${
+                    base === c
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <input
+              className={fld + ' dir-ltr max-w-[140px] font-mono uppercase'}
+              value={base}
+              onChange={e => setBase(e.target.value)}
+              placeholder="EUR"
+            />
+          </>
+        )}
         <p className="text-[10px] text-gray-400 mt-1">{currencyPresetLabel(base, T ? 'fa' : 'en')}</p>
         {onBaseLabelsChange && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
