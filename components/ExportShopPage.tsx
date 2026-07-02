@@ -4,7 +4,6 @@ import { shopCodeOf } from './shopCode';
 import { shopMatchesSearch, productMatchesSearch } from '../utils/metaShopSearch';
 import { sortShopsForBazaar, isBazaarFeaturedShop } from '../utils/bazaarShopSort';
 import { IconSearch, IconTrolley } from './Icons';
-import { BazaarPassageLoader } from './BazaarPassageLoader';
 import { Language } from '../App';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
 
@@ -15,7 +14,8 @@ interface Props {
   onBack: () => void;
   onOpenShop: (slug: string) => void;
   onOpenProduct: (shopSlug: string, productId: string) => void;
-  isLoading?: boolean;
+  /** When false, show inline placeholders instead of blocking the whole page. */
+  catalogSettled?: boolean;
 }
 
 const PAGE_SIZE = 9;
@@ -57,8 +57,20 @@ const matchingProducts = (shop: MetaShop, q: string): MetaShopProduct[] => {
 const bLbl = (c: { fa?: string; en?: string } | undefined, fa: boolean) =>
   fa ? (c?.fa || c?.en || '') : (c?.en || c?.fa || '');
 
+const ShopCardSkeleton: React.FC = () => (
+  <div className="border border-gray-100 rounded-xl overflow-hidden bg-white animate-pulse">
+    <div className="w-full h-40 bg-gray-100" />
+    <div className="p-4 space-y-2">
+      <div className="h-2.5 bg-gray-100 rounded w-1/4" />
+      <div className="h-4 bg-gray-200 rounded w-3/4" />
+      <div className="h-3 bg-gray-100 rounded w-full" />
+      <div className="h-3 bg-gray-100 rounded w-2/3" />
+    </div>
+  </div>
+);
+
 export const ExportShopPage: React.FC<Props> = ({
-  shops, bazaar, lang, onBack, onOpenShop, onOpenProduct, isLoading = false,
+  shops, bazaar, lang, onBack, onOpenShop, onOpenProduct, catalogSettled = true,
 }) => {
   const fa = lang === 'fa';
   const [search, setSearch] = useState('');
@@ -190,18 +202,7 @@ export const ExportShopPage: React.FC<Props> = ({
     ? `linear-gradient(to bottom, rgba(0,0,0,.42), rgba(0,0,0,.68)), url(${bazaar.coverImage}) center/cover no-repeat`
     : `linear-gradient(135deg, ${accentCover}, #374151)`;
 
-  if (isLoading) {
-    return (
-      <BazaarPassageLoader
-        lang={lang}
-        title={t.title}
-        primary={bazaar?.theme?.cover || '#5b6472'}
-        accent={bazaar?.theme?.coverText || '#cbd5e1'}
-      />
-    );
-  }
-
-  if (!bazaar) {
+  if (!bazaar && catalogSettled) {
     return (
       <div className="animate-fade-in py-2">
         <div className="flex items-center justify-between mb-6">
@@ -229,12 +230,14 @@ export const ExportShopPage: React.FC<Props> = ({
     if (action.href) window.location.assign(action.href);
   };
 
+  const showShopSkeletons = !catalogSettled && filtered.length === 0;
+
   return (
     <div className="animate-fade-in -mx-5">
-      {/* Hero — بازارچه انتخاب‌شده */}
+      {/* Hero — بازارچه انتخاب‌شده یا placeholder در حین بارگذاری */}
       <header
         className="relative overflow-hidden rounded-b-2xl text-white text-center"
-        style={{ background: heroBackground, minHeight: bazaar.coverImage ? '220px' : '180px' }}
+        style={{ background: heroBackground, minHeight: bazaar?.coverImage ? '220px' : '180px' }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30 pointer-events-none" aria-hidden />
         <button
@@ -251,12 +254,14 @@ export const ExportShopPage: React.FC<Props> = ({
             <div className="text-3xl mb-3 opacity-90" aria-hidden>🏪</div>
           )}
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70 mb-2">{t.title}</p>
-          <h1 className="text-2xl md:text-3xl font-bold leading-tight drop-shadow-sm">{bazaarTitle}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold leading-tight drop-shadow-sm">
+            {bazaar ? bazaarTitle : t.title}
+          </h1>
           {bazaarSubtitle && (
             <p className="text-sm text-white/85 mt-2 leading-relaxed max-w-lg mx-auto">{bazaarSubtitle}</p>
           )}
           <span className="inline-block mt-4 text-xs font-semibold bg-white/15 border border-white/25 rounded-full px-4 py-1.5 backdrop-blur-sm">
-            {t.count(bazaarShopPool.length)}
+            {bazaar ? t.count(bazaarShopPool.length) : (catalogSettled ? t.count(0) : '…')}
           </span>
         </div>
       </header>
@@ -294,7 +299,11 @@ export const ExportShopPage: React.FC<Props> = ({
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {showShopSkeletons ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }, (_, i) => <ShopCardSkeleton key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <IconTrolley className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t.empty}</p>

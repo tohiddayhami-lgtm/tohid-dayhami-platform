@@ -1649,11 +1649,55 @@ export const deleteMetaShopFromCloud = async (id: string) => {
   }).catch(e => console.warn('[metaShop] background purge failed', shopId, e));
 };
 
+const sortMetaShopsByCreated = (a: MetaShop, b: MetaShop) =>
+  new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+
+const sortMetaBazaarsByCreated = (a: MetaBazaar, b: MetaBazaar) =>
+  new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+
+/** One-shot list fetch — used to warm cache before polling delivers. */
+export const fetchMetaShopsList = async (): Promise<MetaShop[]> => {
+  try {
+    const proxy = await checkProxyMode();
+    let items: MetaShop[] = [];
+    if (proxy) {
+      const rows = await proxyGet<MetaShop[]>('metaShops', {});
+      items = Array.isArray(rows) ? rows : [];
+    } else {
+      const snap = await getDocs(collection(db, 'metaShops'));
+      items = snap.docs.map(d => {
+        const data = d.data() as MetaShop;
+        return { ...data, id: data.id || d.id };
+      });
+    }
+    return items.map(stripProductsForList).sort(sortMetaShopsByCreated);
+  } catch {
+    return [];
+  }
+};
+
+export const fetchMetaBazaarsList = async (): Promise<MetaBazaar[]> => {
+  try {
+    const proxy = await checkProxyMode();
+    let items: MetaBazaar[] = [];
+    if (proxy) {
+      const rows = await proxyGet<MetaBazaar[]>('metaBazaars', {});
+      items = Array.isArray(rows) ? rows : [];
+    } else {
+      const snap = await getDocs(collection(db, 'metaBazaars'));
+      items = snap.docs.map(d => d.data() as MetaBazaar);
+    }
+    return items.sort(sortMetaBazaarsByCreated);
+  } catch {
+    return [];
+  }
+};
+
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
   subscribeCollection<MetaShop>('metaShops', items => {
     callback(items.map(s => stripProductsForList(s)));
   }, {
-    sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    sort: sortMetaShopsByCreated,
     intervalMs: 8_000,
     mergeDocId: true,
   });

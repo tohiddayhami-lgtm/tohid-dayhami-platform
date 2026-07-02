@@ -25,7 +25,7 @@ import {
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
   subscribeToInvoices, saveInvoiceToCloud, deleteInvoiceFromCloud,
-  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, loadMetaShopProductsFull,
+  subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopsList, fetchMetaBazaarsList, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, loadMetaShopProductsFull,
   subscribeToMetaShopOrders, saveMetaShopOrderToCloud, updateMetaShopOrderInCloud, deleteMetaShopOrderFromCloud, restoreMetaShopOrderInCloud, lookupMetaShopOrders, lookupMetaShopOrdersByTracking,
   subscribeToMetaShopPropertyReferrals, saveMetaShopPropertyReferralToCloud, updateMetaShopPropertyReferralInCloud,
   subscribeToMetaShopSupplierCollaborations, saveMetaShopSupplierCollaborationToCloud, updateMetaShopSupplierCollaborationInCloud,
@@ -35,6 +35,7 @@ import {
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
 import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
+import { readMetaShopListCache, writeMetaShopListCache, readMetaBazaarListCache, writeMetaBazaarListCache } from './utils/metaShopListCache';
 import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
 import { MetaShopCatalog } from './components/MetaShopCatalog';
@@ -174,6 +175,8 @@ const STORAGE_KEYS = {
 };
 const CACHE_KEYS = { SERVICES: 'crm_cache_services', CONFIG: 'crm_cache_config' };
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+const initialMetaShopListCache = readMetaShopListCache();
+const initialMetaBazaarListCache = readMetaBazaarListCache();
 
 const readCache = <T,>(key: string): T | null => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) as T : null; } catch { return null; }
@@ -362,8 +365,8 @@ const App: React.FC = () => {
   const [teamBrainstormPosts, setTeamBrainstormPosts] = useState<TeamBrainstormPost[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [metaShops, setMetaShops] = useState<MetaShop[]>([]);
-  const [metaShopsReady, setMetaShopsReady] = useState(false);
+  const [metaShops, setMetaShops] = useState<MetaShop[]>(() => initialMetaShopListCache ?? []);
+  const [metaShopsReady, setMetaShopsReady] = useState(() => !!initialMetaShopListCache?.length);
   const pendingDeletedMetaShopIdsRef = useRef(new Set<string>());
   const [metaShopOrders, setMetaShopOrders] = useState<MetaShopOrder[]>([]);
   const [metaShopReferrals, setMetaShopReferrals] = useState<MetaShopPropertyReferral[]>([]);
@@ -377,8 +380,8 @@ const App: React.FC = () => {
   const shopFetchSlugRef = useRef<string | null>(null);
   const shopProductHydrateRef = useRef<string | null>(null);
   const pendingInitialHydrationRef = useRef(!!initialCachedShop);
-  const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>([]);
-  const [metaBazaarsReady, setMetaBazaarsReady] = useState(false);
+  const [metaBazaars, setMetaBazaars] = useState<MetaBazaar[]>(() => initialMetaBazaarListCache ?? []);
+  const [metaBazaarsReady, setMetaBazaarsReady] = useState(() => !!initialMetaBazaarListCache?.length);
   const [bazaarSlug, setBazaarSlug] = useState<string | null>(extractBazaarSlug);
   const [publicBazaar, setPublicBazaar] = useState<MetaBazaar | null>(null);
   const [bazaarLoading, setBazaarLoading] = useState(false);
@@ -748,17 +751,69 @@ const App: React.FC = () => {
     const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
     const unsubProcesses = subscribeToProcesses(setProcesses);
     const unsubInvoices = subscribeToInvoices(setInvoices);
-    const unsubMetaShops = subscribeToMetaShops((data) => {
+    const applyMetaShops = (data: MetaShop[]) => {
       const pending = pendingDeletedMetaShopIdsRef.current;
-      setMetaShops(pending.size ? data.filter(s => !pending.has(s.id)) : data);
+      const next = pending.size ? data.filter(s => !pending.has(s.id)) : data;
+      setMetaShops(next);
+      if (next.length) writeMetaShopListCache(next);
       setMetaShopsReady(true);
-    });
+    };
+    const applyMetaBazaars = (data: MetaBazaar[]) => {
+      setMetaBazaars(data);
+      if (data.length) writeMetaBazaarListCache(data);
+      setMetaBazaarsReady(true);
+    };
+
+    let catalogPrefetchDone = false;
+    const warmCatalogCache = () => {
+      if (catalogPrefetchDone) return;
+      void Promise.all([fetchMetaShopsList(), fetchMetaBazaarsList()]).then(([shops, bazaars]) => {
+        catalogPrefetchDone = true;
+        if (shops.length) applyMetaShops(shops);
+        else setMetaShopsReady(true);
+        if (bazaars.length) applyMetaBazaars(bazaars);
+        else setMetaBazaarsReady(true);
+      }).catch(() => {
+        setMetaShopsReady(true);
+        setMetaBazaarsReady(true);
+      });
+    };
+    if (!initialMetaShopListCache?.length || !initialMetaBazaarListCache?.length) {
+      warmCatalogCache();
+    }
+
+    const unsubMetaShops = subscribeToMetaShops(applyMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
     const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
-    const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
+    const unsubMetaBazaars = subscribeToMetaBazaars(applyMetaBazaars);
     return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars(); };
   }, []);
+
+  useEffect(() => {
+    if (view !== 'export-shops') return;
+    if (metaShops.length && metaBazaars.length) return;
+    let gone = false;
+    void Promise.all([fetchMetaShopsList(), fetchMetaBazaarsList()]).then(([shops, bazaars]) => {
+      if (gone) return;
+      if (shops.length) {
+        const pending = pendingDeletedMetaShopIdsRef.current;
+        const next = pending.size ? shops.filter(s => !pending.has(s.id)) : shops;
+        setMetaShops(next);
+        writeMetaShopListCache(next);
+      }
+      setMetaShopsReady(true);
+      if (bazaars.length) {
+        setMetaBazaars(bazaars);
+        writeMetaBazaarListCache(bazaars);
+      }
+      setMetaBazaarsReady(true);
+    }).catch(() => {
+      setMetaShopsReady(true);
+      setMetaBazaarsReady(true);
+    });
+    return () => { gone = true; };
+  }, [view, metaShops.length, metaBazaars.length]);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
   // Sends WhatsApp 1 hour before each upcoming meeting when browser is open.
@@ -2395,7 +2450,7 @@ const App: React.FC = () => {
                 }
                 lang={lang}
                 onBack={() => setView('landing')}
-                isLoading={!metaShopsReady || !metaBazaarsReady}
+                catalogSettled={metaShopsReady && metaBazaarsReady}
                 onOpenShop={(slug) => openMetaShopNewTab(slug)}
                 onOpenProduct={(slug, productId) => openMetaShopNewTab(slug, productId)}
               />
