@@ -2466,7 +2466,7 @@ const App: React.FC = () => {
                     metaShopReferrals={metaShopReferrals}
                     metaShopSupplierCollaborations={metaShopSupplierCollaborations}
                     onSaveMetaShop={async (s, opts) => { await saveMetaShopToCloud(s, opts); }}
-                    onDeleteMetaShop={async (id, slug) => { await deleteMetaShopFromCloud(id, slug); }}
+                    onDeleteMetaShop={async (id) => { await deleteMetaShopFromCloud(id); }}
                     onUpdateMetaShopOrder={async (id, u) => { await updateMetaShopOrderInCloud(id, u); }}
                     onDeleteMetaShopOrder={async (id) => { await deleteMetaShopOrderFromCloud(id, currentUser?.fullName || 'Admin'); }}
                     onRestoreMetaShopOrder={async (id) => { await restoreMetaShopOrderInCloud(id, currentUser?.fullName || 'Admin'); }}

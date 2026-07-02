@@ -43,7 +43,7 @@ interface Props {
   lang: Language;
   shopBaseUrl: string;
   onSaveMetaShop: (shop: MetaShop, opts?: MetaShopSaveOptions) => Promise<void>;
-  onDeleteMetaShop: (id: string, slug?: string) => Promise<void>;
+  onDeleteMetaShop: (id: string) => Promise<void>;
   onUpdateMetaShopOrder: (id: string, updates: Partial<MetaShopOrder>) => Promise<void>;
   onDeleteMetaShopOrder?: (id: string) => Promise<void>;
   onRestoreMetaShopOrder?: (id: string) => Promise<void>;
@@ -218,7 +218,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [productsFullyLoaded, setProductsFullyLoaded] = useState(false);
   const [productsLoadFailed, setProductsLoadFailed] = useState(false);
   const [recoveringShopId, setRecoveringShopId] = useState<string | null>(null);
-  const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
   const [bulkRecovering, setBulkRecovering] = useState(false);
   const [productProbe, setProductProbe] = useState<Record<string, 'pending' | 'ok' | 'missing'>>({});
   const [editorProductShown, setEditorProductShown] = useState(EDITOR_PRODUCT_PAGE_SIZE);
@@ -485,8 +484,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     refReferrer: T ? 'معرف' : 'Referrer', refRelation: T ? 'نسبت' : 'Relation',
     refPhotos: T ? 'عکس‌ها' : 'Photos', refEditShop: T ? 'ویرایش فروشگاه' : 'Edit shop',
     deleteConfirm: T ? 'این فروشگاه حذف شود؟' : 'Delete this shop?',
-    deleteFailed: T ? 'حذف فروشگاه ناموفق بود. دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.' : 'Could not delete shop. Try again or contact support.',
-    deleteNoPermission: T ? 'مجوز حذف فروشگاه ندارید — از مدیر بخواهید «حذف متاشاپ» را فعال کند.' : 'No permission to delete shops — ask admin to enable «Delete MetaShop».',
     linkLabel: T ? 'لینک عمومی:' : 'Public link:',
     // PDF catalog
     catalog: T ? 'کاتالوگ PDF' : 'PDF Catalog',
@@ -607,26 +604,6 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
       alert(e instanceof Error ? e.message : (T ? 'بازیابی ناموفق بود.' : 'Recovery failed.'));
     } finally {
       setRecoveringShopId(null);
-    }
-  };
-
-  const confirmDeleteShop = async (shop: MetaShop) => {
-    if (readonly || !canDelete) {
-      alert(t.deleteNoPermission);
-      return;
-    }
-    if (!window.confirm(t.deleteConfirm)) return;
-    setDeletingShopId(shop.id);
-    try {
-      await onDeleteMetaShop(shop.id, shop.slug);
-      if (draft?.id === shop.id) {
-        setDraft(null);
-        setMode('list');
-      }
-    } catch (e) {
-      alert(e instanceof Error ? e.message : t.deleteFailed);
-    } finally {
-      setDeletingShopId(null);
     }
   };
 
@@ -1358,17 +1335,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       )}
                       {!readonly && <button onClick={() => triggerUpdate(s)} title={t.updateJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
                       {!readonly && <button onClick={() => startEdit(s)} className="text-xs px-2 py-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50"><IconEdit className="w-3.5 h-3.5" /></button>}
-                      {!readonly && canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => void confirmDeleteShop(s)}
-                          disabled={deletingShopId === s.id}
-                          title={t.del}
-                          className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {deletingShopId === s.id ? '…' : <IconTrash className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
+                      {!readonly && canDelete && <button onClick={() => { if (confirm(t.deleteConfirm)) onDeleteMetaShop(s.id); }} className="text-xs px-2 py-1.5 rounded-lg text-red-400 hover:bg-red-50"><IconTrash className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
                 </div>
