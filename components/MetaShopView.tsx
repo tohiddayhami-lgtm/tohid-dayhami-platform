@@ -90,6 +90,7 @@ const HandshakeIcon = ({ s = 18 }: { s?: number }) => (
 
 const PRODUCT_GRID_PAGE_SIZE = 24;
 const QUICK_PREVIEW_PRODUCTS = 10;
+const CARD_IMAGE_WIDTH = 360;
 
 const SUPPLIER_CATALOG_PDF_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -646,6 +647,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     }
     return list;
   }, [filtered, gridShown, productsHydrating, searchQuery]);
+
+  useEffect(() => {
+    visibleFiltered.slice(0, 6).forEach(p => {
+      const url = metaShopProductImageUrl(productMainImage(p), CARD_IMAGE_WIDTH);
+      if (!url) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    });
+  }, [visibleFiltered, shop.id]);
 
   const selectCat = (c: string) => { setActiveCat(c); setActiveSub('all'); };
 
@@ -1215,7 +1226,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       <article className={`ms-card ${opts.featured ? 'ms-card-feat' : ''} ${p.outOfStock ? 'ms-card-oos' : ''}`} key={p.id}>
         <div className={`ms-card-img ${imgFitCls}`} onClick={() => openDetail(p)}>
           {mainImg ? (
-            <MetaShopProductImage src={mainImg} alt={pName(p)} priority={opts.priority} objectFit={imgFit} />
+            <MetaShopProductImage src={mainImg} alt={pName(p)} priority={opts.priority} width={CARD_IMAGE_WIDTH} objectFit={imgFit} />
           ) : (
             <div className="ms-noimg">{pName(p).charAt(0)}</div>
           )}

@@ -35,6 +35,7 @@ import {
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
 import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
+import { readMetaShopProductsCache, writeMetaShopProductsCache } from './utils/metaShopProductsCache';
 import { readMetaShopListCache, writeMetaShopListCache, readMetaBazaarListCache, writeMetaBazaarListCache } from './utils/metaShopListCache';
 import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
@@ -343,9 +344,13 @@ const getInitialView = (): ViewState => {
 };
 
 const initialShopSlug = extractShopSlug();
-const initialCachedShop = (getInitialView() === 'metashop' && initialShopSlug)
-  ? readMetaShopShellCache(initialShopSlug)
-  : null;
+const initialCachedShop = (() => {
+  if (getInitialView() !== 'metashop' || !initialShopSlug) return null;
+  const shell = readMetaShopShellCache(initialShopSlug);
+  if (!shell) return null;
+  const products = readMetaShopProductsCache(shell);
+  return products?.length ? { ...shell, products } : shell;
+})();
 
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
@@ -1460,13 +1465,20 @@ const App: React.FC = () => {
   }, [shopSlug, metaShops]);
 
   const beginShopProductHydration = useCallback((shell: MetaShop) => {
-    if ((shell.products || []).length > 0 && !shopProductsNeedFullHydration(shell)) return;
-    if (!shopProductsNeedFullHydration(shell)) return;
+    const cached = readMetaShopProductsCache(shell);
+    if (cached?.length && !(shell.products || []).length) {
+      setPublicShop(prev => (prev?.id === shell.id ? { ...prev, products: cached } : prev));
+    }
+    const working = cached?.length && !(shell.products || []).length
+      ? { ...shell, products: cached }
+      : shell;
+    if ((working.products || []).length > 0 && !shopProductsNeedFullHydration(working)) return;
+    if (!shopProductsNeedFullHydration(shell) && !(cached?.length)) return;
     if (shopProductHydrateRef.current === shell.id) return;
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
     const expectedCount = shell.productCount ?? 0;
-    loadMetaShopProductsFull(shell, products => {
+    loadMetaShopProductsFull(working, products => {
       setPublicShop(prev => (prev?.id === shopId ? { ...prev, products } : prev));
     }).then(full => {
       if (shopProductHydrateRef.current !== shopId) return;
@@ -1478,6 +1490,7 @@ const App: React.FC = () => {
             : prev
         ));
       } else if (loaded) {
+        writeMetaShopProductsCache(full, full.products || []);
         setPublicShop(prev => (prev?.id === shopId ? { ...prev, ...full, products: full.products } : prev));
       }
     }).finally(() => {

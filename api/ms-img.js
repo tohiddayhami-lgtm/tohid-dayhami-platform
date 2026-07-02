@@ -12,13 +12,14 @@ export default async function handler(req, res) {
   }
 
   let target;
+  let host = '';
   try {
     target = new URL(raw);
     if (target.protocol !== 'https:') {
       res.status(400).end();
       return;
     }
-    const host = target.hostname.toLowerCase();
+    host = target.hostname.toLowerCase();
     const allowed =
       host.includes('kwcdn.com')
       || host.includes('digikala.com')

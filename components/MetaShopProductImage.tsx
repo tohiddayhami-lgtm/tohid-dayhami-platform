@@ -7,7 +7,7 @@ interface Props {
   alt?: string;
   /** First visible cards — eager + high fetch priority */
   priority?: boolean;
-  /** Proxy width hint (card ~480, detail ~720) */
+  /** Proxy width hint (card ~360, detail ~720) */
   width?: number;
   className?: string;
   objectFit?: MetaShopImageFit;
@@ -21,7 +21,7 @@ const primaryImageSrc = (src: string | undefined, width: number): string => {
 };
 
 export const MetaShopProductImage: React.FC<Props> = ({
-  src, alt, priority, width = 480, className = '', objectFit = 'cover',
+  src, alt, priority, width = 400, className = '', objectFit = 'cover',
 }) => {
   const direct = metaShopProductImageDirect(src);
   const hostRef = useRef<HTMLSpanElement>(null);

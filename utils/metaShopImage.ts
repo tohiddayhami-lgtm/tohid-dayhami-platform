@@ -38,14 +38,34 @@ export const needsMetaShopImageProxy = (url: string): boolean => {
   }
 };
 
+const clampWidth = (w: number) => Math.min(1200, Math.max(64, Math.round(w)));
+
+/** Request a smaller file from CDNs that support URL transforms (Digikala OSS). */
+export const applyImageWidthHint = (url: string, width: number): string => {
+  const w = clampWidth(width);
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (host.includes('digikala.com') || host.includes('dkstatics')) {
+      u.searchParams.set(
+        'x-oss-process',
+        `image/resize,m_lfit,w_${w},h_${w}/format,webp/quality,q_85`,
+      );
+      return u.toString();
+    }
+  } catch { /* keep original */ }
+  return url;
+};
+
 /** Card/detail thumbnail — proxied for hotlink-blocked CDNs, direct otherwise. */
-export const metaShopProductImageUrl = (url: string | undefined, width = 480): string => {
+export const metaShopProductImageUrl = (url: string | undefined, width = 400): string => {
   const s = normalizeImageUrl(url);
   if (!s || !/^https?:\/\//i.test(s)) return '';
-  if (needsMetaShopImageProxy(s)) {
-    return `/api/ms-img?u=${encodeURIComponent(s)}&w=${width}`;
+  const sized = applyImageWidthHint(s, width);
+  if (needsMetaShopImageProxy(sized)) {
+    return `/api/ms-img?u=${encodeURIComponent(sized)}&w=${width}`;
   }
-  return s;
+  return sized;
 };
 
 export const metaShopProductImageDirect = (url: string | undefined): string => {

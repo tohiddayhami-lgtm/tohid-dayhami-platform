@@ -1364,43 +1364,51 @@ export const hydrateMetaShopProgressive = async (
   shop: MetaShop,
   onProgress?: (products: MetaShopProduct[], loadedChunks: number, totalChunks: number) => void,
 ): Promise<MetaShop> => {
-  const base = await attachMetaShopExtras(shop);
+  const chunkTotal = shop.productChunkCount || 0;
+  const needsChunks = !(shop.products || []).length && chunkTotal > 0;
+
+  const [base, firstChunk] = await Promise.all([
+    attachMetaShopExtras(shop),
+    needsChunks ? loadOneMetaShopChunk(`${shop.id}_0`) : Promise.resolve(null),
+  ]);
+
   if ((base.products || []).length) {
     const products = base.products || [];
     onProgress?.(products, 1, 1);
     return { ...base, products };
   }
-  let total = base.productChunkCount || 0;
+
+  let total = base.productChunkCount || chunkTotal || 0;
   let all: MetaShopProduct[] = [];
+
   if (total > 0) {
-    const first = await loadOneMetaShopChunk(`${base.id}_0`);
-    if (first?.products?.length) {
-      const batch = first.products;
-      if (batch.length > 10) {
-        onProgress?.(batch.slice(0, 10), 1, total);
-        await new Promise<void>(r => { requestAnimationFrame(() => r()); });
-      }
-      all = all.concat(batch);
+    if (firstChunk?.products?.length) {
+      all = all.concat(firstChunk.products);
       onProgress?.(all, 1, total);
     }
 
     if (total > 1) {
-      for (let i = 1; i < total; i++) {
-        const chunk = await loadOneMetaShopChunk(`${base.id}_${i}`);
+      const rest = await Promise.all(
+        Array.from({ length: total - 1 }, (_, i) => loadOneMetaShopChunk(`${base.id}_${i + 1}`)),
+      );
+      for (const chunk of rest) {
         if (chunk?.products?.length) all = all.concat(chunk.products);
-        onProgress?.(all, i + 1, total);
       }
+      onProgress?.(all, total, total);
+    } else if (!all.length && firstChunk?.products?.length) {
+      onProgress?.(all, 1, total);
     }
   }
+
   if (!all.length) {
     const orphan = await loadMetaShopProductChunks(base.id);
     all = mergeProductChunks(orphan);
-    onProgress?.(all, 1, Math.max(1, orphan.length));
+    if (all.length) onProgress?.(all, 1, Math.max(1, orphan.length));
   }
   if (!all.length && (base.productCount || 0) > 0) {
     const raw = await fetchMetaShopDocRaw(base.id);
     all = raw?.products || [];
-    onProgress?.(all, 1, 1);
+    if (all.length) onProgress?.(all, 1, 1);
   }
   return { ...base, products: all };
 };
