@@ -35,10 +35,11 @@ import {
 import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
 import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
 import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
-import { MetaShopView, type MetaShopReferralSubmit, type MetaShopSupplierSubmit } from './components/MetaShopView';
+import type { MetaShopReferralSubmit, MetaShopSupplierSubmit } from './components/MetaShopView';
+const MetaShopView = React.lazy(() => import('./components/MetaShopView').then(m => ({ default: m.MetaShopView })));
+const MetaShopCatalog = React.lazy(() => import('./components/MetaShopCatalog').then(m => ({ default: m.MetaShopCatalog })));
+const MetaShopDirectory = React.lazy(() => import('./components/MetaShopDirectory').then(m => ({ default: m.MetaShopDirectory })));
 import { generateReferralTrackingCode, generateSupplierTrackingCode } from './utils/metaShopReferral';
-import { MetaShopCatalog } from './components/MetaShopCatalog';
-import { MetaShopDirectory } from './components/MetaShopDirectory';
 import { ExpoReserveMapView } from './components/metaverse/ExpoReserveMapView';
 // Heavy 3D / WebXR viewer — lazy-loaded so three.js + R3F only ship to the public ?expo= route.
 const MetaverseExpoView = React.lazy(() => import('./components/metaverse/MetaverseExpoView').then(m => ({ default: m.MetaverseExpoView })));
@@ -343,6 +344,8 @@ const initialShopSlug = extractShopSlug();
 const initialCachedShop = (getInitialView() === 'metashop' && initialShopSlug)
   ? readMetaShopShellCache(initialShopSlug)
   : null;
+/** Public shop links from Instagram — defer heavy admin Firebase listeners until after first paint. */
+const deferHeavyFirebaseSubs = getInitialView() === 'metashop' && !!initialShopSlug;
 
 const App: React.FC = () => {
   const [view, setViewState] = useState<ViewState>(getInitialView);
@@ -650,109 +653,125 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
-    const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
-    const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
-    const unsubMessages = subscribeToMessages((data) => {
-      setMessages(prev => {
-        if (prev.length === 0) return data;
-        const prevById = new Map(prev.map(m => [m.id, m]));
-        return data.map(serverMsg => {
-          const local = prevById.get(serverMsg.id);
-          if (!local) return serverMsg;
-          const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
-          return {
-            ...serverMsg,
-            readBy: union(serverMsg.readBy, local.readBy),
-            archivedBy: union(serverMsg.archivedBy, local.archivedBy),
-            hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
-          };
-        });
-      });
-    });
-    const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
-    const unsubTasks = subscribeToTasks((data) => setTasks(data));
-    const markBookingHydrated = () => {
-      const h = bookingHydratedRef.current;
-      if (h.meetings && h.categories) setBookingDataReady(true);
-    };
-    const unsubMeetings = subscribeToMeetings((data) => {
-      setMeetings(data);
-      if (!bookingHydratedRef.current.meetings) {
-        bookingHydratedRef.current.meetings = true;
-        markBookingHydrated();
-      }
-    });
-    const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
-      setConsultantCategories(data);
-      if (!bookingHydratedRef.current.categories) {
-        bookingHydratedRef.current.categories = true;
-        markBookingHydrated();
-      }
-    });
-    const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
-    const unsubSettings = subscribeToSettings(
-      (cfg) => {
-        if (cfg) {
-          const LABEL_MIGRATIONS: Record<string, string> = {
-            'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
-            'Request Description & Product Info': 'Product Information',
-          };
-          const mergedFields = (cfg.formFields || []).map(field => {
-            if (!field.isSystem) return field;
-            const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
-            if (!def) return field;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+
+    const wireSubscriptions = () => {
+      if (cancelled) return;
+      const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
+      const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
+      const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
+      const unsubMessages = subscribeToMessages((data) => {
+        setMessages(prev => {
+          if (prev.length === 0) return data;
+          const prevById = new Map(prev.map(m => [m.id, m]));
+          return data.map(serverMsg => {
+            const local = prevById.get(serverMsg.id);
+            if (!local) return serverMsg;
+            const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
             return {
-              ...field,
-              label:         LABEL_MIGRATIONS[field.label] ?? field.label,
-              labelEn:       LABEL_MIGRATIONS[field.labelEn ?? ''] ?? (field.labelEn || def.labelEn),
-              placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
-              placeholderEn: field.placeholderEn || def.placeholderEn,
-              optionsEn:     field.optionsEn     || def.optionsEn,
-              // "اطلاعات محصول" (Product Information) is now optional
-              required:      field.id === 'f8' ? false : field.required,
+              ...serverMsg,
+              readBy: union(serverMsg.readBy, local.readBy),
+              archivedBy: union(serverMsg.archivedBy, local.archivedBy),
+              hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
             };
           });
-          const merged = { ...cfg, formFields: mergedFields };
-          setAppConfig(merged);
-          writeCache(CACHE_KEYS.CONFIG, merged);
+        });
+      });
+      const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
+      const unsubTasks = subscribeToTasks((data) => setTasks(data));
+      const markBookingHydrated = () => {
+        const h = bookingHydratedRef.current;
+        if (h.meetings && h.categories) setBookingDataReady(true);
+      };
+      const unsubMeetings = subscribeToMeetings((data) => {
+        setMeetings(data);
+        if (!bookingHydratedRef.current.meetings) {
+          bookingHydratedRef.current.meetings = true;
+          markBookingHydrated();
         }
-      },
-      (srv) => {
-        if (srv) {
-          const normalized = srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }));
-          setServices(normalized);
-          setIsServicesLoaded(true);
-          writeCache(CACHE_KEYS.SERVICES, normalized);
+      });
+      const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
+        setConsultantCategories(data);
+        if (!bookingHydratedRef.current.categories) {
+          bookingHydratedRef.current.categories = true;
+          markBookingHydrated();
         }
-      },
-      (ppl) => {
-        if (ppl) {
-          const normalized = ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }));
-          setPersonnel(normalized);
-          setCurrentUser(prev => {
-            if (!prev) return prev;
-            const updated = normalized.find((p: Personnel) => p.id === prev.id);
-            if (updated) {
-              try { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(sanitizeData(updated))); } catch {}
-              return updated;
-            }
-            return prev;
-          });
+      });
+      const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
+      const unsubSettings = subscribeToSettings(
+        (cfg) => {
+          if (cfg) {
+            const LABEL_MIGRATIONS: Record<string, string> = {
+              'شرح درخواست و اطلاعات محصول': 'اطلاعات محصول',
+              'Request Description & Product Info': 'Product Information',
+            };
+            const mergedFields = (cfg.formFields || []).map(field => {
+              if (!field.isSystem) return field;
+              const def = INITIAL_CONFIG.formFields.find(f => f.id === field.id);
+              if (!def) return field;
+              return {
+                ...field,
+                label:         LABEL_MIGRATIONS[field.label] ?? field.label,
+                labelEn:       LABEL_MIGRATIONS[field.labelEn ?? ''] ?? (field.labelEn || def.labelEn),
+                placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
+                placeholderEn: field.placeholderEn || def.placeholderEn,
+                optionsEn:     field.optionsEn     || def.optionsEn,
+                required:      field.id === 'f8' ? false : field.required,
+              };
+            });
+            const merged = { ...cfg, formFields: mergedFields };
+            setAppConfig(merged);
+            writeCache(CACHE_KEYS.CONFIG, merged);
+          }
+        },
+        (srv) => {
+          if (srv) {
+            const normalized = srv.map((s: any) => ({ ...s, price: typeof s.price === 'string' ? { amount: 0, currency: 'IRR' } : (s.price || { amount: 0, currency: 'IRR' }) }));
+            setServices(normalized);
+            setIsServicesLoaded(true);
+            writeCache(CACHE_KEYS.SERVICES, normalized);
+          }
+        },
+        (ppl) => {
+          if (ppl) {
+            const normalized = ppl.map((p: any) => ({ ...p, roles: Array.isArray(p.roles) ? p.roles : (p.role ? [p.role] : []), status: p.status || 'active', permissions: p.permissions || {} }));
+            setPersonnel(normalized);
+            setCurrentUser(prev => {
+              if (!prev) return prev;
+              const updated = normalized.find((p: Personnel) => p.id === prev.id);
+              if (updated) {
+                try { localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(sanitizeData(updated))); } catch {}
+                return updated;
+              }
+              return prev;
+            });
+          }
         }
-      }
-    );
-    const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
-    const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
-    const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
-    const unsubProcesses = subscribeToProcesses(setProcesses);
-    const unsubInvoices = subscribeToInvoices(setInvoices);
-    const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
-    const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
-    const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
-    const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
-    const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
-    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars(); };
+      );
+      const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
+      const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
+      const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
+      const unsubProcesses = subscribeToProcesses(setProcesses);
+      const unsubInvoices = subscribeToInvoices(setInvoices);
+      const unsubMetaShops = subscribeToMetaShops((data) => { setMetaShops(data); setMetaShopsReady(true); });
+      const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
+      const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
+      const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
+      const unsubMetaBazaars = subscribeToMetaBazaars((data) => { setMetaBazaars(data); setMetaBazaarsReady(true); });
+      cleanup = () => {
+        unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars();
+      };
+    };
+
+    if (deferHeavyFirebaseSubs) {
+      const delayMs = initialCachedShop ? 2500 : 800;
+      const timer = window.setTimeout(wireSubscriptions, delayMs);
+      return () => { cancelled = true; clearTimeout(timer); cleanup?.(); };
+    }
+
+    wireSubscriptions();
+    return () => { cancelled = true; cleanup?.(); };
   }, []);
 
   // ── Client-side meeting reminder timers ─────────────────────────────────────
@@ -1482,15 +1501,34 @@ const App: React.FC = () => {
       } else {
         setPublicShop(null);
         setShopLoading(false);
+        setShopResolved(true);
       }
     }).catch(() => {
       if (!cancelled) {
         setPublicShop(null);
         setShopLoading(false);
+        setShopResolved(true);
       }
     });
     return () => { cancelled = true; };
   }, [view, shopSlug, metaShops, revealPublicShop]);
+
+  // Pick up shop shell prefetched by public/shop-bootstrap.js (may finish after React mount).
+  useEffect(() => {
+    if (view !== 'metashop' || !shopSlug || shopResolved || publicShop?.slug === shopSlug) return;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () => {
+      const cached = readMetaShopShellCache(shopSlug);
+      if (cached) {
+        revealPublicShop(cached);
+        return;
+      }
+      if (++attempts < 24) timer = setTimeout(poll, 250);
+    };
+    poll();
+    return () => clearTimeout(timer);
+  }, [view, shopSlug, shopResolved, publicShop, revealPublicShop]);
 
   // After the shops list has synced, stop waiting if the slug truly does not exist.
   useEffect(() => {
@@ -1963,11 +2001,13 @@ const App: React.FC = () => {
   // ── Public "all shops" bazaar/directory (full-screen takeover) ──
   if (view === 'shopsdir') {
     return (
-      <MetaShopDirectory
-        shops={metaShops}
-        lang={lang}
-        onOpenShop={(slug) => openMetaShop(slug)}
-      />
+      <React.Suspense fallback={<ShopShutterLoader lang={lang} />}>
+        <MetaShopDirectory
+          shops={metaShops}
+          lang={lang}
+          onOpenShop={(slug) => openMetaShop(slug)}
+        />
+      </React.Suspense>
     );
   }
 
@@ -1983,14 +2023,18 @@ const App: React.FC = () => {
         && (resolvedShop.products?.length ?? 0) < (resolvedShop.productCount ?? 0);
       if (catalogWaiting) return <ShopShutterLoader lang={lang} />;
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
-      if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
-      return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;
+      if (catalogMode) return (
+        <React.Suspense fallback={<ShopShutterLoader lang={lang} />}>
+          <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />
+        </React.Suspense>
+      );
+      return (
+        <React.Suspense fallback={<ShopShutterLoader lang={lang} primary={resolvedShop.primaryColor} />}>
+          <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />
+        </React.Suspense>
+      );
     }
-    const shopPending = !!shopSlug && (
-      shopLoading
-      || !shopResolved
-      || (!resolvedShop && !metaShopsReady)
-    );
+    const shopPending = !!shopSlug && (shopLoading || !shopResolved);
     if (shopPending) {
       return <ShopShutterLoader lang={lang} />;
     }

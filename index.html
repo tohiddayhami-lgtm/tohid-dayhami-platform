@@ -11,14 +11,22 @@
     <meta property="og:title" content="پلتفرم توحید دیهمی" />
     <meta property="og:description" content="پلتفرم جامع صادراتی و بازرگانی توحید دیهمی" />
     <meta name="twitter:card" content="summary_large_image" />
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <!-- Prefetch shop shell before React — runs in parallel with JS bundle download -->
+    <script src="/shop-bootstrap.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" /></noscript>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Vazirmatn', 'sans-serif'],
+              sans: ['Vazirmatn', 'Tahoma', 'Segoe UI', 'system-ui', 'sans-serif'],
             },
             animation: {
               'fade-in': 'fadeIn 0.25s ease-out forwards',
@@ -39,11 +47,24 @@
       *, *::before, *::after { box-sizing: border-box; }
       html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
       body {
-        font-family: 'Vazirmatn', sans-serif;
+        font-family: 'Vazirmatn', Tahoma, 'Segoe UI', system-ui, sans-serif;
         background-color: #ffffff;
         color: #1d1d1f;
         font-size: 14px;
         line-height: 1.6;
+        margin: 0;
+      }
+      /* Instant loader while ?shop= link opens (before React) */
+      html.shop-boot-pending #root:empty::before {
+        content: 'در حال باز کردن فروشگاه…';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-size: 14px;
+        font-weight: 700;
+        color: #7a756c;
+        background: radial-gradient(120% 90% at 50% 0%, #fefdfb 0%, #f1efe9 70%, #e9e7e0 100%);
       }
       ::-webkit-scrollbar { width: 4px; height: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }

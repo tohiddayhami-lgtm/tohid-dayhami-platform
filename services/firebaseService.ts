@@ -1620,22 +1620,31 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
     mergeDocId: true,
   });
 /** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
-export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {
-    try {
-        const proxy = await checkProxyMode();
-    let shop: MetaShop | null = null;
-        if (proxy) {
-      shop = await proxyGet<MetaShop | null>('metaShops', { slug });
-    } else {
-      const q = query(collection(db, 'metaShops'), where('slug', '==', slug), limit(1));
-        const snap = await getDocs(q);
-      if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
-    }
-    if (!shop) return null;
-    return attachMetaShopExtras(shop);
-  } catch {
-    return null;
+const fetchMetaShopShellOnce = async (slug: string): Promise<MetaShop | null> => {
+  const proxy = await checkProxyMode();
+  let shop: MetaShop | null = null;
+  if (proxy) {
+    shop = await proxyGet<MetaShop | null>('metaShops', { slug });
+  } else {
+    const q = query(collection(db, 'metaShops'), where('slug', '==', slug), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) shop = snap.docs[0].data() as MetaShop;
   }
+  if (!shop) return null;
+  return attachMetaShopExtras(shop);
+};
+
+export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const shell = await fetchMetaShopShellOnce(slug);
+      if (shell) return shell;
+      if (attempt === 0) await new Promise(r => setTimeout(r, 400));
+    } catch {
+      if (attempt === 0) await new Promise(r => setTimeout(r, 400));
+    }
+  }
+  return null;
 };
 
 // Fetch a single shop with all products (admin / export — slower).
