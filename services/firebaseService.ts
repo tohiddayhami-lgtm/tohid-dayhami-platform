@@ -1116,15 +1116,26 @@ const loadMetaShopProductChunks = async (shopId: string, chunkCount?: number): P
   }
 };
 
+const safeDeleteDocCloud = async (col: string, id: string) => {
+  const docId = String(id || '').trim();
+  if (!docId) return;
+  try {
+    await deleteDocCloud(col, docId);
+  } catch (e) {
+    console.warn(`[metaShop] delete ${col}/${docId}`, e);
+  }
+};
+
 const deleteMetaShopProductChunks = async (shopId: string, keepCount = 0) => {
   const existing = await loadMetaShopProductChunks(shopId);
-  const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
-  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_CHUNKS_COL, c.id)));
-  if (keepCount === 0 && !existing.length) {
-    for (let i = 0; i < 64; i++) {
-      try { await deleteDocCloud(META_SHOP_CHUNKS_COL, `${shopId}_${i}`); } catch { /* already gone */ }
-    }
+  const ids = new Set<string>();
+  for (const c of existing) {
+    if ((c.chunkIndex ?? 0) >= keepCount && c.id) ids.add(c.id);
   }
+  if (keepCount === 0) {
+    for (let i = 0; i < 64; i++) ids.add(`${shopId}_${i}`);
+  }
+  await Promise.all([...ids].map(id => safeDeleteDocCloud(META_SHOP_CHUNKS_COL, id)));
 };
 
 const loadMetaShopExtrasDoc = async (shopId: string): Promise<MetaShopExtrasPayload | null> => {
@@ -1158,17 +1169,25 @@ const loadMetaShopRefChunks = async (shopId: string, chunkCount: number): Promis
 
 const deleteMetaShopRefChunks = async (shopId: string, keepCount = 0) => {
   const existing = await loadMetaShopRefChunks(shopId, 64);
-  const toDelete = existing.filter(c => (c.chunkIndex ?? 0) >= keepCount);
-  await Promise.all(toDelete.map(c => deleteDocCloud(META_SHOP_REF_CHUNKS_COL, c.id)));
-  if (keepCount === 0 && !existing.length) {
-    for (let i = 0; i < 64; i++) {
-      try { await deleteDocCloud(META_SHOP_REF_CHUNKS_COL, `${shopId}_ref_${i}`); } catch { /* gone */ }
-    }
+  const ids = new Set<string>();
+  for (const c of existing) {
+    if ((c.chunkIndex ?? 0) >= keepCount && c.id) ids.add(c.id);
   }
+  if (keepCount === 0) {
+    for (let i = 0; i < 64; i++) ids.add(`${shopId}_ref_${i}`);
+  }
+  await Promise.all([...ids].map(id => safeDeleteDocCloud(META_SHOP_REF_CHUNKS_COL, id)));
 };
 
 const deleteMetaShopExtrasDoc = async (shopId: string) => {
-  try { await deleteDocCloud(META_SHOP_EXTRAS_COL, shopId); } catch { /* gone */ }
+  await safeDeleteDocCloud(META_SHOP_EXTRAS_COL, shopId);
+};
+
+const deleteAllMetaShopBackups = async (shopId: string) => {
+  for (const slot of META_SHOP_BACKUP_SLOT_NUMS) {
+    await deleteMetaShopBackupChunksForSlot(shopId, slot);
+    await safeDeleteDocCloud(META_SHOP_BACKUPS_COL, backupMetaDocId(shopId, slot));
+  }
 };
 
 const attachMetaShopExtras = async (shop: MetaShop): Promise<MetaShop> => {
@@ -1543,26 +1562,54 @@ export const hydrateMetaShopBackup = async (
 };
 
 export const deleteMetaShopFromCloud = async (id: string) => {
-    const proxy = await checkProxyMode();
-    let data: unknown = null;
+  const shopId = String(id || '').trim();
+  if (!shopId) {
+    throw new Error('شناسه فروشگاه نامعتبر است — صفحه را رفرش کنید و دوباره تلاش کنید.');
+  }
+
+  const proxy = await checkProxyMode();
+  let data: unknown = null;
+  try {
     if (proxy) {
-        data = await proxyGet('metaShops', { doc: id });
+      data = await proxyGet('metaShops', { doc: shopId });
     } else {
-        const snap = await getDoc(doc(db, 'metaShops', id));
-        data = snap.exists() ? snap.data() : null;
+      const snap = await getDoc(doc(db, 'metaShops', shopId));
+      data = snap.exists() ? snap.data() : null;
     }
-    await deleteMetaShopProductChunks(id);
-    await deleteMetaShopRefChunks(id);
-    await deleteMetaShopExtrasDoc(id);
-    await deleteDocCloud('metaShops', id);
-    logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', id, data, 'metaShops');
+  } catch {
+    /* proceed — still try to delete related docs */
+  }
+
+  await deleteMetaShopProductChunks(shopId);
+  await deleteMetaShopRefChunks(shopId);
+  await deleteMetaShopExtrasDoc(shopId);
+  await deleteAllMetaShopBackups(shopId);
+
+  try {
+    await deleteDocCloud('metaShops', shopId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    throw new Error(
+      msg
+        ? `حذف فروشگاه ناموفق بود: ${msg}`
+        : 'حذف فروشگاه ناموفق بود — اتصال اینترنت یا مجوز حذف را بررسی کنید.',
+    );
+  }
+
+  try {
+    logSystemAction('DELETE', 'MetaShop', `فروشگاه حذف شد`, 'Master', shopId, data, 'metaShops');
+  } catch {
+    /* log failure must not undo a successful delete */
+  }
 };
+
 export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
   subscribeCollection<MetaShop>('metaShops', items => {
     callback(items.map(s => stripProductsForList(s)));
   }, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     intervalMs: 8_000,
+    mergeDocId: true,
   });
 /** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
 export const fetchMetaShopShellBySlug = async (slug: string): Promise<MetaShop | null> => {
