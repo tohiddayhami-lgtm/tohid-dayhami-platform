@@ -127,12 +127,13 @@ function _fsFields(fields: Record<string, Record<string, unknown>>): Record<stri
   return o;
 }
 
-const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; orderField?: string; dir?: 'asc' | 'desc'; whereField?: string; whereEq?: string; all?: boolean } = {}): Promise<T> => {
+const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; orderField?: string; dir?: 'asc' | 'desc'; whereField?: string; whereEq?: string; all?: boolean; lim?: number } = {}): Promise<T> => {
   const p = new URLSearchParams({ col });
   if (opts.doc) p.set('doc', opts.doc);
   if (opts.slug) p.set('slug', opts.slug);
   if (opts.orderField) p.set('orderField', opts.orderField);
   if (opts.dir) p.set('dir', opts.dir);
+  if (opts.lim) p.set('lim', String(opts.lim));
   if (opts.whereField && opts.whereEq) {
     p.set('whereField', opts.whereField);
     p.set('whereEq', opts.whereEq);
@@ -174,7 +175,8 @@ const proxyPoll = <T>(
       const data = await proxyGet<T[]>(col, { orderField: opts.orderField, dir: opts.dir });
       if (!stopped && Array.isArray(data)) callback(data);
     } catch {}
-    if (!stopped) timer = setTimeout(run, opts.intervalMs ?? 10_000);
+    // Full-collection polls cost 1 read per doc — keep intervals high.
+    if (!stopped) timer = setTimeout(run, opts.intervalMs ?? 45_000);
   };
 
   run();
@@ -212,7 +214,7 @@ function subscribeCollection<T>(
     inner = proxyPoll<T>(col, deliver, {
       orderField: opts?.orderField,
       dir: opts?.dir,
-      intervalMs: opts?.intervalMs ?? 8_000,
+      intervalMs: opts?.intervalMs ?? 45_000,
     });
   };
 
@@ -780,7 +782,7 @@ export const deleteTicketFromCloud = async (id: string) => {
 export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) =>
   subscribeCollection<Ticket>('tickets', callback, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
     mergeDocId: true,
   });
 
@@ -816,7 +818,7 @@ export const saveCustomersBulkToCloud = async (customers: Customer[]) => {
 };
 
 export const subscribeToCustomers = (callback: (customers: Customer[]) => void) =>
-  subscribeCollection<Customer>('customers', callback, { intervalMs: 10_000 });
+  subscribeCollection<Customer>('customers', callback, { intervalMs: 45_000 });
 
 export const findCustomerByLoyaltyCode = async (code: string): Promise<Customer | null> => {
     if (!code) return null;
@@ -924,7 +926,7 @@ export const subscribeToMessages = (callback: (msgs: InternalMessage[]) => void)
     callback(list.map(m => normalizeInternalMessage(m)));
   }, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    intervalMs: 6_000,
+    intervalMs: 30_000,
     mergeDocId: true,
   });
 
@@ -992,7 +994,7 @@ export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]
     callback(list.map(p => normalizeTeamBrainstormPost(p)));
   }, {
     sort: (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
     mergeDocId: true,
   });
 
@@ -1048,7 +1050,7 @@ export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
 export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) =>
   subscribeCollection<Invoice>('invoices', callback, {
     sort: (a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime(),
-    intervalMs: 10_000,
+    intervalMs: 45_000,
   });
 
 // ── Invoice section presets (named saves per section) ──
@@ -1073,7 +1075,7 @@ export const deleteInvoiceSectionPresetFromCloud = async (id: string) => {
 export const subscribeToInvoiceSectionPresets = (callback: (presets: InvoiceSectionPreset[]) => void) =>
   subscribeCollection<InvoiceSectionPreset>('invoice_presets', callback, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    intervalMs: 15_000,
+    intervalMs: 60_000,
   });
 
 // ── Meta Shops (online catalogs/shops) ──
@@ -1706,7 +1708,7 @@ export const subscribeToMetaShops = (callback: (shops: MetaShop[]) => void) =>
     callback(items.map(s => stripProductsForList(s)));
   }, {
     sort: sortMetaShopsByCreated,
-    intervalMs: 8_000,
+    intervalMs: 45_000,
     mergeDocId: true,
   });
 /** Shop shell only (metadata + extras) — products via hydrateMetaShopProgressive. */
@@ -1766,7 +1768,7 @@ export const deleteMetaShopOrderFromCloud = async (id: string, actorName = 'Mast
 export const subscribeToMetaShopOrders = (callback: (orders: MetaShopOrder[]) => void) =>
   subscribeCollection<MetaShopOrder>('metaShopOrders', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
   });
 // Customer order lookup by phone (public, no auth)
 export const lookupMetaShopOrders = async (phone: string): Promise<MetaShopOrder[]> => {
@@ -1796,7 +1798,7 @@ export const updateMetaShopPropertyReferralInCloud = async (id: string, updates:
 export const subscribeToMetaShopPropertyReferrals = (callback: (refs: MetaShopPropertyReferral[]) => void) =>
   subscribeCollection<MetaShopPropertyReferral>('metaShopPropertyReferrals', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
   });
 
 // ── Meta Shop supplier collaborations (product shops) ──
@@ -1810,7 +1812,7 @@ export const updateMetaShopSupplierCollaborationInCloud = async (id: string, upd
 export const subscribeToMetaShopSupplierCollaborations = (callback: (subs: MetaShopSupplierCollaboration[]) => void) =>
   subscribeCollection<MetaShopSupplierCollaboration>('metaShopSupplierCollaborations', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
   });
 
 // ── Meta Bazaars (curated multi-level shop directories) ──
@@ -1833,7 +1835,7 @@ export const deleteMetaBazaarFromCloud = async (id: string) => {
 export const subscribeToMetaBazaars = (callback: (bazaars: MetaBazaar[]) => void) =>
   subscribeCollection<MetaBazaar>('metaBazaars', callback, {
     sort: (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
   });
 export const getMetaBazaarBySlug = async (slug: string): Promise<MetaBazaar | null> => {
     try {
@@ -1874,7 +1876,7 @@ export const deleteTaskFromCloud = async (id: string) => {
 export const subscribeToTasks = (callback: (tasks: Task[]) => void) =>
   subscribeCollection<Task>('tasks', callback, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    intervalMs: 8_000,
+    intervalMs: 45_000,
   });
 
 export const saveMeetingToCloud = async (meeting: Meeting) => {
@@ -1901,7 +1903,7 @@ export const deleteMeetingFromCloud = async (id: string) => {
 };
 
 export const subscribeToMeetings = (callback: (meetings: Meeting[]) => void) =>
-  subscribeCollection<Meeting>('meetings', callback, { intervalMs: 10_000 });
+  subscribeCollection<Meeting>('meetings', callback, { intervalMs: 45_000 });
 
 const MAX_MEETING_PENDING_GUESTS = 100;
 
@@ -1986,7 +1988,7 @@ export const deleteConsultantCategoryFromCloud = async (id: string) => {
 export const subscribeToConsultantCategories = (callback: (cats: ConsultantCategory[]) => void) =>
     subscribeCollection<ConsultantCategory>('consultantCategories', callback, {
         sort: (a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999),
-        intervalMs: 15_000,
+        intervalMs: 60_000,
     });
 
 export const saveKPIToCloud = async (kpi: KPI) => {
@@ -2005,7 +2007,7 @@ export const deleteKPIFromCloud = async (id: string) => {
 };
 
 export const subscribeToKPIs = (callback: (kpis: KPI[]) => void) =>
-  subscribeCollection<KPI>('kpis', callback, { intervalMs: 10_000 });
+  subscribeCollection<KPI>('kpis', callback, { intervalMs: 45_000 });
 
 export const saveCustomFormToCloud = async (form: CustomForm, actorName: string) => {
     await setDocCloud('custom_forms', form.id, form);
@@ -2023,7 +2025,7 @@ export const deleteCustomFormFromCloud = async (id: string, actorName: string) =
 };
 
 export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) =>
-  subscribeCollection<CustomForm>('custom_forms', callback, { intervalMs: 10_000 });
+  subscribeCollection<CustomForm>('custom_forms', callback, { intervalMs: 45_000 });
 
 export const getTicketById = async (id: string): Promise<Ticket | null> => {
   const proxy = await checkProxyMode();
@@ -2097,7 +2099,7 @@ export const subscribeToSettings = (
 
   const startProxy = () => {
     inner?.();
-    inner = proxyPoll('settings', deliver, { intervalMs: 8_000 });
+    inner = proxyPoll('settings', deliver, { intervalMs: 120_000 });
   };
 
   checkProxyMode().then(proxy => {
@@ -2133,7 +2135,7 @@ export const subscribeToNews = (callback: (articles: NewsArticle[]) => void) =>
     sort: (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     orderField: 'publishedAt',
     dir: 'desc',
-    intervalMs: 12_000,
+    intervalMs: 60_000,
   });
 
 // ── Analytics ──────────────────────────────────────────────────────────────
@@ -2194,11 +2196,11 @@ export const logPageView = async (view: string, articleSlug?: string) => {
 };
 
 export const subscribeToAnalytics = (callback: (events: AnalyticsEvent[]) => void) =>
-  subscribeCollection<AnalyticsEvent>('analytics', list => callback(list.slice(0, 5000)), {
+  subscribeCollection<AnalyticsEvent>('analytics', list => callback(list.slice(0, 300)), {
     sort: (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     orderField: 'timestamp',
     dir: 'desc',
-    intervalMs: 15_000,
+    intervalMs: 120_000,
   });
 
 // ── Meta Shop visitor analytics ────────────────────────────────────────────
@@ -2255,14 +2257,17 @@ export const fetchMetaShopEvents = async (shopId: string): Promise<MetaShopEvent
                 whereField: 'shopId',
                 whereEq: shopId,
                 all: true,
+                lim: 500,
             });
             items = Array.isArray(rows) ? rows : [];
         } else {
-            const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(10000));
+            const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(500));
             const snap = await getDocs(q);
             items = snap.docs.map(d => d.data() as MetaShopEvent);
         }
-        return items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return items
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 500);
     } catch { return []; }
 };
 
@@ -2420,7 +2425,7 @@ export const subscribeMetaExpoBoothReservations = (
     let gone = false;
     checkProxyMode().then(proxy => {
         if (gone) return;
-        if (proxy) inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 4000 });
+        if (proxy) inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 15_000 });
         else {
             inner = onSnapshot(
                 query(collection(db, 'metaExpoBoothReservations'), where('bazaarId', '==', bazaarId), limit(2000)),
@@ -2429,7 +2434,7 @@ export const subscribeMetaExpoBoothReservations = (
                     if (gone) return;
                     forceProxyMode();
                     inner?.();
-                    inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 4000 });
+                    inner = proxyPoll<MetaExpoBoothReservation>('metaExpoBoothReservations', normalize, { intervalMs: 15_000 });
                 },
             );
         }
@@ -2468,7 +2473,7 @@ export const subscribeMetaExpoPresence = (
     let gone = false;
     checkProxyMode().then(proxy => {
         if (gone) return;
-        if (proxy) inner = proxyPoll<MetaExpoPresence>('metaExpoPresence', normalize, { intervalMs: 3000 });
+        if (proxy) inner = proxyPoll<MetaExpoPresence>('metaExpoPresence', normalize, { intervalMs: 12_000 });
         else {
             inner = onSnapshot(
                 query(collection(db, 'metaExpoPresence'), where('roomId', '==', roomId), limit(80)),
@@ -2477,7 +2482,7 @@ export const subscribeMetaExpoPresence = (
                     if (gone) return;
                     forceProxyMode();
                     inner?.();
-                    inner = proxyPoll<MetaExpoPresence>('metaExpoPresence', normalize, { intervalMs: 3000 });
+                    inner = proxyPoll<MetaExpoPresence>('metaExpoPresence', normalize, { intervalMs: 12_000 });
                 },
             );
         }
@@ -2499,7 +2504,7 @@ export const subscribeToNotificationLogs = (callback: (logs: NotificationLog[]) 
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     orderField: 'createdAt',
     dir: 'desc',
-    intervalMs: 12_000,
+    intervalMs: 60_000,
   });
 
 // ── Customer Accounts ──────────────────────────────────────────────────────
@@ -2516,7 +2521,7 @@ export const subscribeToCustomerAccounts = (callback: (accounts: CustomerAccount
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     orderField: 'createdAt',
     dir: 'desc',
-    intervalMs: 10_000,
+    intervalMs: 45_000,
   });
 
 // --- Company Processes ---
@@ -2526,7 +2531,7 @@ export const subscribeToProcesses = (callback: (processes: CompanyProcess[]) => 
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     orderField: 'createdAt',
     dir: 'desc',
-    intervalMs: 12_000,
+    intervalMs: 60_000,
   });
 
 export const saveProcess = async (process: CompanyProcess): Promise<void> => {

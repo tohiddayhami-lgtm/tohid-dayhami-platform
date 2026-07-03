@@ -94,25 +94,26 @@ async function queryByField(col, field, value) {
   return doc?.fields ? parseDoc(doc) : null;
 }
 
-async function queryAllByField(col, field, value) {
+async function queryAllByField(col, field, value, lim) {
   // NOTE: no orderBy — Firestore drops documents missing the orderBy field,
   // which silently hid collections like metaShopEvents (no chunkIndex).
-  // All callers sort client-side.
+  // All callers sort client-side. Optional lim caps reads (e.g. analytics).
+  const structuredQuery = {
+    from: [{ collectionId: col }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: field },
+        op: 'EQUAL',
+        value: { stringValue: value },
+      },
+    },
+  };
+  const n = Number(lim);
+  if (Number.isFinite(n) && n > 0) structuredQuery.limit = Math.min(n, 1000);
   const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: col }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: field },
-            op: 'EQUAL',
-            value: { stringValue: value },
-          },
-        },
-      },
-    }),
+    body: JSON.stringify({ structuredQuery }),
   });
   if (!r.ok) return [];
   const rows = await r.json();
@@ -150,7 +151,7 @@ export default async function handler(req, res) {
       const value = slug || whereEq;
       if (field && value) {
         if (fetchAll === '1' || fetchAll === 'true') {
-          return res.json(await queryAllByField(col, String(field), String(value)));
+          return res.json(await queryAllByField(col, String(field), String(value), lim));
         }
         const one = await queryByField(col, String(field), String(value));
         return res.json(one);

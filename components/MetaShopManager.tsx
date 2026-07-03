@@ -351,14 +351,15 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     finally { setAnalyticsLoading(false); }
   };
 
-  // Live refresh while the visit report is open (poll — no listener needed).
+  // Occasional refresh while the visit report is open (capped query — avoid burning reads).
   useEffect(() => {
     if (mode !== 'analytics' || !analyticsShopId) return;
     let gone = false;
     const timer = setInterval(async () => {
+      if (document.hidden) return;
       const events = await fetchMetaShopEvents(analyticsShopId);
       if (!gone && events.length) setAnalyticsEvents(events);
-    }, 15_000);
+    }, 60_000);
     return () => { gone = true; clearInterval(timer); };
   }, [mode, analyticsShopId]);
 

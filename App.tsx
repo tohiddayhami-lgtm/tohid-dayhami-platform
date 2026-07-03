@@ -658,48 +658,24 @@ const App: React.FC = () => {
     return () => { events.forEach(e => window.removeEventListener(e, updateActivity)); clearInterval(interval); };
   }, [currentUser]);
 
+  const applyMetaShops = useCallback((data: MetaShop[]) => {
+    const pending = pendingDeletedMetaShopIdsRef.current;
+    const next = pending.size ? data.filter(s => !pending.has(s.id)) : data;
+    setMetaShops(next);
+    if (next.length) writeMetaShopListCache(next);
+    setMetaShopsReady(true);
+  }, []);
+
+  const applyMetaBazaars = useCallback((data: MetaBazaar[]) => {
+    setMetaBazaars(data);
+    if (data.length) writeMetaBazaarListCache(data);
+    setMetaBazaarsReady(true);
+  }, []);
+
+  // ── Public / always-on: only settings + one-shot catalog warm.
+  // Never poll tickets/customers/messages/etc for anonymous MetaShop visitors —
+  // that was the main driver of 100M+ Firestore reads/month.
   useEffect(() => {
-    const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
-    const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
-    const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
-    const unsubMessages = subscribeToMessages((data) => {
-      setMessages(prev => {
-        if (prev.length === 0) return data;
-        const prevById = new Map(prev.map(m => [m.id, m]));
-        return data.map(serverMsg => {
-          const local = prevById.get(serverMsg.id);
-          if (!local) return serverMsg;
-          const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
-          return {
-            ...serverMsg,
-            readBy: union(serverMsg.readBy, local.readBy),
-            archivedBy: union(serverMsg.archivedBy, local.archivedBy),
-            hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
-          };
-        });
-      });
-    });
-    const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
-    const unsubTasks = subscribeToTasks((data) => setTasks(data));
-    const markBookingHydrated = () => {
-      const h = bookingHydratedRef.current;
-      if (h.meetings && h.categories) setBookingDataReady(true);
-    };
-    const unsubMeetings = subscribeToMeetings((data) => {
-      setMeetings(data);
-      if (!bookingHydratedRef.current.meetings) {
-        bookingHydratedRef.current.meetings = true;
-        markBookingHydrated();
-      }
-    });
-    const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
-      setConsultantCategories(data);
-      if (!bookingHydratedRef.current.categories) {
-        bookingHydratedRef.current.categories = true;
-        markBookingHydrated();
-      }
-    });
-    const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
     const unsubSettings = subscribeToSettings(
       (cfg) => {
         if (cfg) {
@@ -718,7 +694,6 @@ const App: React.FC = () => {
               placeholder:   (field.id === 'f8' && field.placeholder?.includes('ابعاد')) ? def.placeholder : field.placeholder,
               placeholderEn: field.placeholderEn || def.placeholderEn,
               optionsEn:     field.optionsEn     || def.optionsEn,
-              // "اطلاعات محصول" (Product Information) is now optional
               required:      field.id === 'f8' ? false : field.required,
             };
           });
@@ -751,29 +726,9 @@ const App: React.FC = () => {
         }
       }
     );
-    const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
-    const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
-    const unsubCustomerAccounts = subscribeToCustomerAccounts(setCustomerAccounts);
-    const unsubProcesses = subscribeToProcesses(setProcesses);
-    const unsubInvoices = subscribeToInvoices(setInvoices);
-    const applyMetaShops = (data: MetaShop[]) => {
-      const pending = pendingDeletedMetaShopIdsRef.current;
-      const next = pending.size ? data.filter(s => !pending.has(s.id)) : data;
-      setMetaShops(next);
-      if (next.length) writeMetaShopListCache(next);
-      setMetaShopsReady(true);
-    };
-    const applyMetaBazaars = (data: MetaBazaar[]) => {
-      setMetaBazaars(data);
-      if (data.length) writeMetaBazaarListCache(data);
-      setMetaBazaarsReady(true);
-    };
 
-    let catalogPrefetchDone = false;
-    const warmCatalogCache = () => {
-      if (catalogPrefetchDone) return;
+    if (!initialMetaShopListCache?.length || !initialMetaBazaarListCache?.length) {
       void Promise.all([fetchMetaShopsList(), fetchMetaBazaarsList()]).then(([shops, bazaars]) => {
-        catalogPrefetchDone = true;
         if (shops.length) applyMetaShops(shops);
         else setMetaShopsReady(true);
         if (bazaars.length) applyMetaBazaars(bazaars);
@@ -782,18 +737,101 @@ const App: React.FC = () => {
         setMetaShopsReady(true);
         setMetaBazaarsReady(true);
       });
-    };
-    if (!initialMetaShopListCache?.length || !initialMetaBazaarListCache?.length) {
-      warmCatalogCache();
+    } else {
+      setMetaShopsReady(true);
+      setMetaBazaarsReady(true);
     }
 
+    setIsLoadingData(false);
+    return () => { unsubSettings(); };
+  }, [applyMetaShops, applyMetaBazaars]);
+
+  // News only while the news page is open (not for every MetaShop visitor).
+  useEffect(() => {
+    if (view !== 'news') return;
+    const unsubNews = subscribeToNews((data) => { setNews(data); setIsLoadingNews(false); });
+    return () => unsubNews();
+  }, [view]);
+
+  // Booking data only on booking / admin (not public storefronts).
+  useEffect(() => {
+    if (view !== 'booking' && view !== 'admin') return;
+    const markBookingHydrated = () => {
+      const h = bookingHydratedRef.current;
+      if (h.meetings && h.categories) setBookingDataReady(true);
+    };
+    const unsubMeetings = subscribeToMeetings((data) => {
+      setMeetings(data);
+      if (!bookingHydratedRef.current.meetings) {
+        bookingHydratedRef.current.meetings = true;
+        markBookingHydrated();
+      }
+    });
+    const unsubConsultantCategories = subscribeToConsultantCategories((data) => {
+      setConsultantCategories(data);
+      if (!bookingHydratedRef.current.categories) {
+        bookingHydratedRef.current.categories = true;
+        markBookingHydrated();
+      }
+    });
+    return () => { unsubMeetings(); unsubConsultantCategories(); };
+  }, [view]);
+
+  // Partner accounts: only for admin login page / session restore / logged-in portal.
+  useEffect(() => {
+    const partnerSessionHint = (() => {
+      try { return !!localStorage.getItem(STORAGE_KEYS.CUSTOMER_SESSION); } catch { return false; }
+    })();
+    const needAccounts = !!currentUser || !!currentCustomerUser || partnerSessionHint || view === 'admin';
+    if (!needAccounts) return;
+    const unsub = subscribeToCustomerAccounts(setCustomerAccounts);
+    return () => unsub();
+  }, [currentUser?.id, currentCustomerUser?.id, view]);
+
+  // Heavy CRM / MetaShop admin streams — staff or partner portal only.
+  useEffect(() => {
+    if (!currentUser && !currentCustomerUser) return;
+
+    const unsubTickets = subscribeToTickets((data) => { setTickets(data); setIsLoadingData(false); });
+    const unsubCustomForms = subscribeToCustomForms((data) => setCustomForms(data));
+    const unsubCustomers = subscribeToCustomers((data) => setCustomers(data));
+    const unsubMessages = subscribeToMessages((data) => {
+      setMessages(prev => {
+        if (prev.length === 0) return data;
+        const prevById = new Map(prev.map(m => [m.id, m]));
+        return data.map(serverMsg => {
+          const local = prevById.get(serverMsg.id);
+          if (!local) return serverMsg;
+          const union = (a?: string[], b?: string[]) => Array.from(new Set([...(a || []), ...(b || [])]));
+          return {
+            ...serverMsg,
+            readBy: union(serverMsg.readBy, local.readBy),
+            archivedBy: union(serverMsg.archivedBy, local.archivedBy),
+            hiddenBy: union(serverMsg.hiddenBy, local.hiddenBy),
+          };
+        });
+      });
+    });
+    const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
+    const unsubTasks = subscribeToTasks((data) => setTasks(data));
+    const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
+    const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
+    const unsubProcesses = subscribeToProcesses(setProcesses);
+    const unsubInvoices = subscribeToInvoices(setInvoices);
     const unsubMetaShops = subscribeToMetaShops(applyMetaShops);
     const unsubMetaShopOrders = subscribeToMetaShopOrders(setMetaShopOrders);
     const unsubMetaShopReferrals = subscribeToMetaShopPropertyReferrals(setMetaShopReferrals);
     const unsubMetaShopSupplierCollabs = subscribeToMetaShopSupplierCollaborations(setMetaShopSupplierCollaborations);
     const unsubMetaBazaars = subscribeToMetaBazaars(applyMetaBazaars);
-    return () => { unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubSettings(); unsubMessages(); unsubTeamBrainstorm(); unsubTasks(); unsubMeetings(); unsubConsultantCategories(); unsubKPIs(); unsubNews(); unsubAnalytics(); unsubCustomerAccounts(); unsubProcesses(); unsubInvoices(); unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals(); unsubMetaShopSupplierCollabs(); unsubMetaBazaars(); };
-  }, []);
+
+    return () => {
+      unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubMessages();
+      unsubTeamBrainstorm(); unsubTasks(); unsubKPIs(); unsubAnalytics();
+      unsubProcesses(); unsubInvoices();
+      unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals();
+      unsubMetaShopSupplierCollabs(); unsubMetaBazaars();
+    };
+  }, [currentUser?.id, currentCustomerUser?.id, applyMetaShops, applyMetaBazaars]);
 
   useEffect(() => {
     if (view !== 'export-shops') return;
