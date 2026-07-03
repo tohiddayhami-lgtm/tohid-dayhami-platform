@@ -93,6 +93,12 @@ const HandshakeIcon = ({ s = 18 }: { s?: number }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
+const HeartIcon = ({ filled, size = 18 }: { filled?: boolean; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+);
+
 const PRODUCT_GRID_PAGE_SIZE = 24;
 const QUICK_PREVIEW_PRODUCTS = 10;
 const CARD_IMAGE_WIDTH = 360;
@@ -1295,7 +1301,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             aria-label={favoriteIds.has(p.id) ? S('savedProduct') : S('saveProduct')}
             disabled={favBusyId === p.id}
           >
-            {favoriteIds.has(p.id) ? '♥' : '♡'}
+            <HeartIcon filled={favoriteIds.has(p.id)} />
           </button>
           <div className="ms-media-badges">
             {resolveProductImages(p).length > 1 && <span className="ms-media-badge">🖼 {resolveProductImages(p).length}</span>}
@@ -2172,7 +2178,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         }}
         money={money}
         statusLabel={statusLabel}
-        cardImageWidth={CARD_IMAGE_WIDTH}
       />
 
       <MetaShopFloatingStickers shop={shop} currentPage={tab} onNavigate={onStickerNav} />
@@ -2242,8 +2247,10 @@ const MS_CSS = `
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; flex-shrink:0; }
 .ms-account-btn { display:flex; align-items:center; gap:7px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; position:relative; }
 .ms-account-btn.on { background:color-mix(in srgb, var(--ms-primary) 12%, #fff); border-color:color-mix(in srgb, var(--ms-primary) 35%, #e5e7eb); color:var(--ms-primary); }
-.ms-fav-btn { position:absolute; top:8px; inset-inline-end:8px; z-index:3; width:34px; height:34px; border-radius:999px; border:0; background:rgba(255,255,255,.92); box-shadow:0 2px 8px rgba(0,0,0,.12); font-size:1rem; line-height:1; cursor:pointer; color:#9ca3af; }
+.ms-fav-btn { position:absolute; top:8px; inset-inline-end:8px; z-index:3; width:32px; height:32px; border-radius:50%; border:0; background:rgba(255,255,255,.88); backdrop-filter:blur(6px); box-shadow:0 1px 4px rgba(0,0,0,.1); display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; color:#d1d5db; transition:color .15s ease, transform .12s ease; }
+.ms-fav-btn:hover { transform:scale(1.06); }
 .ms-fav-btn.on { color:#ef4444; }
+.ms-fav-btn:disabled { opacity:.55; cursor:wait; }
 .ms-cart-btn.has { box-shadow:0 4px 16px color-mix(in srgb, var(--ms-primary) 45%, transparent); }
 .ms-cat-btn { display:inline-flex; align-items:center; gap:7px; background:#fff; color:var(--ms-primary); border:1.5px solid var(--ms-primary); padding:7.5px 14px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; white-space:nowrap; transition:background .15s,color .15s; }
 .ms-cat-btn:hover { background:var(--ms-primary); color:#fff; }

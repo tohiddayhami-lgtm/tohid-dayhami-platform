@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { MetaShop, MetaShopMember, MetaShopOrder, MetaShopProduct } from '../types';
 import type { MetaShopMemberSession } from '../utils/metaShopMemberSession';
-import { MetaShopProductImage } from './MetaShopProductImage';
-import { productMainImage } from '../utils/metaShopImage';
+import { metaShopProductImageUrl, productMainImage } from '../utils/metaShopImage';
 import {
   loginMetaShopMember,
   registerMetaShopMember,
@@ -17,6 +16,12 @@ import {
   writeMetaShopMemberSession,
   memberSessionToPublic,
 } from '../utils/metaShopMemberSession';
+
+const HeartIcon = ({ filled, size = 18 }: { filled?: boolean; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+);
 
 type AuthView = 'login' | 'register' | 'recover';
 type PanelTab = 'overview' | 'orders' | 'favorites' | 'profile';
@@ -34,7 +39,6 @@ interface Props {
   onOpenProduct?: (productId: string) => void;
   money: (n: number) => string;
   statusLabel: (s: MetaShopOrder['status']) => string;
-  cardImageWidth?: number;
 }
 
 const STRINGS: Record<string, Record<string, string>> = {
@@ -99,7 +103,7 @@ const errKey = (code: string): string => {
 
 export const MetaShopMemberPanel: React.FC<Props> = ({
   shop, uiLang, dir, locale, products, session, open, onClose, onSessionChange, onOpenProduct,
-  money, statusLabel, cardImageWidth = 360,
+  money, statusLabel,
 }) => {
   const t = (k: string) => STRINGS[uiLang]?.[k] || STRINGS.en[k] || k;
   const [authView, setAuthView] = useState<AuthView>('login');
@@ -386,21 +390,34 @@ export const MetaShopMemberPanel: React.FC<Props> = ({
               {!favoriteProducts.length ? (
                 <p className="msm-muted">{t('noFavorites')} {t('saveHint')}</p>
               ) : (
-                <div className="msm-fav-grid">
-                  {favoriteProducts.map(p => (
-                    <article key={p.id} className="msm-fav-card">
-                      <button type="button" className="msm-fav-img" onClick={() => onOpenProduct?.(p.id)}>
-                        <MetaShopProductImage src={productMainImage(p)} alt={p.name} width={cardImageWidth} />
-                      </button>
-                      <div className="msm-fav-body">
-                        <b>{p.name}</b>
-                        <div className="msm-fav-actions">
-                          <button type="button" onClick={() => onOpenProduct?.(p.id)}>{t('openProduct')}</button>
-                          <button type="button" className="danger" onClick={() => void handleUnfavorite(p.id)}>♥</button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                <div className="msm-fav-list">
+                  {favoriteProducts.map(p => {
+                    const thumb = metaShopProductImageUrl(productMainImage(p), 96);
+                    return (
+                      <article key={p.id} className="msm-fav-row">
+                        <button type="button" className="msm-fav-thumb" onClick={() => onOpenProduct?.(p.id)}>
+                          {thumb ? (
+                            <img src={thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span className="msm-fav-ph">{p.name.charAt(0)}</span>
+                          )}
+                        </button>
+                        <button type="button" className="msm-fav-info" onClick={() => onOpenProduct?.(p.id)}>
+                          <b>{p.name}</b>
+                          {p.sku && <span className="msm-fav-sku" dir="ltr">{p.sku}</span>}
+                        </button>
+                        <button
+                          type="button"
+                          className="msm-fav-heart on"
+                          onClick={() => void handleUnfavorite(p.id)}
+                          title={t('savedProduct')}
+                          aria-label={t('savedProduct')}
+                        >
+                          <HeartIcon filled size={20} />
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -505,14 +522,16 @@ const MSM_CSS = `
 .msm-status-cancelled { background:#fee2e2; color:#b91c1c; }
 .msm-order-meta { font-size:.82rem; color:#6b7280; margin-bottom:8px; }
 .msm-order-items { margin:0; padding-inline-start:18px; font-size:.85rem; color:#374151; }
-.msm-fav-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
-.msm-fav-card { border:1px solid #e8eaed; border-radius:14px; overflow:hidden; }
-.msm-fav-img { display:block; width:100%; aspect-ratio:1; border:0; padding:0; background:#f9fafb; cursor:pointer; }
-.msm-fav-body { padding:10px; }
-.msm-fav-body b { display:block; font-size:.82rem; margin-bottom:8px; line-height:1.35; }
-.msm-fav-actions { display:flex; gap:8px; }
-.msm-fav-actions button { flex:1; border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px; font-size:.75rem; font-weight:700; cursor:pointer; }
-.msm-fav-actions .danger { flex:0; color:#dc2626; border-color:#fecaca; }
+.msm-fav-list { display:flex; flex-direction:column; gap:8px; }
+.msm-fav-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid #e8eaed; border-radius:12px; background:#fff; }
+.msm-fav-thumb { flex-shrink:0; width:56px; height:56px; border-radius:10px; overflow:hidden; border:0; padding:0; background:#f1f5f9; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.msm-fav-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.msm-fav-ph { font-size:1.1rem; font-weight:800; color:#94a3b8; }
+.msm-fav-info { flex:1; min-width:0; border:0; background:none; text-align:start; padding:0; cursor:pointer; }
+.msm-fav-info b { display:block; font-size:.88rem; color:#111827; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.msm-fav-sku { display:block; font-size:.75rem; color:#9ca3af; margin-top:2px; }
+.msm-fav-heart { flex-shrink:0; border:0; background:none; color:#ef4444; padding:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:8px; }
+.msm-fav-heart:hover { background:#fef2f2; }
 @media (max-width:720px) {
   .msm-panel { flex-direction:column; }
   .msm-side { width:100%; border-inline-end:0; border-bottom:1px solid #e8eaed; }
