@@ -223,159 +223,299 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
   const statusCls = (s: ProposalStatus) =>
     ({ draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700', accepted: 'bg-emerald-100 text-emerald-700', declined: 'bg-red-100 text-red-600' })[s];
 
+  const PROPOSAL_DOC_CSS = `
+    @page { margin: 12mm 14mm; size: A4; }
+    * { box-sizing: border-box; }
+    .pp-root {
+      max-width: 794px; margin: 0 auto; color: #0f172a;
+      font-family: "Segoe UI", Calibri, Tahoma, Arial, sans-serif;
+      font-size: 11pt; line-height: 1.45; background: #fff;
+    }
+    .pp-logos {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px; margin-bottom: 14px; min-height: 48px;
+    }
+    .pp-logos.center { justify-content: center; }
+    .pp-logos img { object-fit: contain; max-width: 42%; }
+    .pp-title-block { text-align: center; margin: 4px 0 10px; }
+    .pp-title-block .en-title {
+      margin: 0; font-size: 15.5pt; font-weight: 800; letter-spacing: .03em;
+      text-transform: uppercase; color: #0b1f3a; line-height: 1.25;
+    }
+    .pp-title-block .rtl-title {
+      margin: 6px 0 0; font-size: 13.5pt; font-weight: 800; direction: rtl;
+      color: #0b1f3a; line-height: 1.45; font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-title-block .en-sub {
+      margin: 10px 0 0; font-size: 10pt; color: #334155; font-weight: 600;
+    }
+    .pp-title-block .rtl-sub {
+      margin: 4px 0 0; font-size: 10pt; color: #334155; direction: rtl;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-meta-bar {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
+      margin: 12px 0 4px; padding: 8px 10px; background: #0b1f3a; color: #fff;
+      font-size: 9pt; font-weight: 600; letter-spacing: .02em;
+    }
+    .pp-meta-bar span { white-space: nowrap; }
+    .pp-meta-sub {
+      text-align: center; font-size: 8.5pt; color: #64748b; margin: 6px 0 16px;
+    }
+    .pp-band {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+      background: #0b1f3a; color: #fff; margin: 18px 0 0;
+      border: 1px solid #0b1f3a;
+    }
+    .pp-band .l { padding: 8px 12px; font-size: 10pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .pp-band .r {
+      padding: 8px 12px; font-size: 10pt; font-weight: 800; direction: rtl; text-align: right;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif; border-left: 1px solid rgba(255,255,255,.2);
+    }
+    .pp-parties-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; table-layout: fixed; }
+    .pp-parties-table td {
+      width: 50%; vertical-align: top; border: 1px solid #cbd5e1; padding: 12px 14px;
+      background: #f8fafc;
+    }
+    .pp-parties-table .num {
+      font-size: 9pt; font-weight: 800; color: #0b1f3a; letter-spacing: .04em; margin-bottom: 4px;
+    }
+    .pp-parties-table .num-rtl {
+      font-size: 9pt; font-weight: 800; color: #0b1f3a; direction: rtl; margin-bottom: 6px;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-parties-table .co { font-size: 11pt; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+    .pp-parties-table .co-rtl {
+      font-size: 10.5pt; font-weight: 700; color: #1e293b; direction: rtl; margin-bottom: 8px;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-parties-table .row { font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.4; }
+    .pp-parties-table .row-rtl {
+      font-size: 9pt; color: #334155; direction: rtl; margin-top: 1px;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-section { margin: 0 0 4px; page-break-inside: avoid; }
+    .pp-body-en {
+      white-space: pre-wrap; font-size: 10pt; line-height: 1.55; color: #0f172a;
+      padding: 10px 4px 6px; text-align: justify;
+    }
+    .pp-body-rtl {
+      white-space: pre-wrap; font-size: 10pt; line-height: 1.85; color: #0f172a;
+      direction: rtl; text-align: justify; padding: 8px 10px 12px;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-top: none;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-price-table, .pp-addon-table {
+      width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 9.5pt;
+    }
+    .pp-price-table th, .pp-addon-table th {
+      background: #0b1f3a; color: #fff; font-weight: 700; font-size: 8.5pt;
+      letter-spacing: .04em; text-transform: uppercase; padding: 8px 8px; border: 1px solid #0b1f3a;
+      text-align: left;
+    }
+    .pp-price-table td, .pp-addon-table td {
+      border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; background: #fff;
+    }
+    .pp-price-table tr.sel td, .pp-addon-table tr.sel td { background: #ecfdf5; }
+    .pp-price-table .pkg-en { font-weight: 700; color: #0f172a; }
+    .pp-price-table .pkg-rtl {
+      direction: rtl; font-size: 9pt; color: #334155; margin-top: 3px;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
+    .pp-price-table .pkg-note { font-size: 8pt; color: #64748b; margin-top: 3px; font-style: italic; }
+    .pp-price-table .num, .pp-addon-table .num { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .pp-price-table .sel-col, .pp-addon-table .sel-col { text-align: center; width: 36px; font-weight: 800; color: #047857; }
+    .pp-foot {
+      margin-top: 22px; padding-top: 12px; border-top: 2px solid #0b1f3a;
+      text-align: center; font-size: 8.5pt; color: #64748b; line-height: 1.5;
+    }
+    .pp-foot .co { font-weight: 800; color: #0b1f3a; font-size: 9.5pt; margin-bottom: 4px; }
+    .pp-foot .rtl { direction: rtl; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+    @media print {
+      .pp-root { max-width: none; }
+      .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table { page-break-inside: avoid; }
+    }
+  `;
+
   const printDoc = () => {
     if (!printRef.current) return;
     const html = printRef.current.innerHTML;
-    const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1000');
+    const w = window.open('', '_blank', 'noopener,noreferrer,width=920,height=1100');
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><title>${draft?.refNo || 'Proposal'}</title>
-      <style>
-        @page { margin: 14mm; }
-        body { font-family: Inter, Tahoma, Arial, sans-serif; color: #111827; margin: 0; }
-        * { box-sizing: border-box; }
-        .pp-root { max-width: 820px; margin: 0 auto; }
-        .pp-logos { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
-        .pp-logos.center { justify-content:center; }
-        .pp-logos img { object-fit:contain; }
-        .pp-head { text-align:center; border-bottom:2px solid #0f172a; padding-bottom:14px; margin-bottom:18px; }
-        .pp-head h1 { margin:0 0 6px; font-size:18px; letter-spacing:.04em; }
-        .pp-head h2 { margin:0; font-size:15px; font-weight:700; color:#334155; direction:rtl; }
-        .pp-meta { display:flex; justify-content:space-between; gap:12px; font-size:12px; color:#475569; margin-bottom:16px; }
-        .pp-parties { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
-        .pp-party { border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#f8fafc; }
-        .pp-party b { display:block; font-size:11px; letter-spacing:.08em; color:#64748b; margin-bottom:6px; }
-        .pp-party .co { font-weight:800; font-size:13px; margin-bottom:2px; }
-        .pp-party .co-rtl { direction:rtl; font-size:12px; color:#334155; }
-        .pp-section { margin-bottom:16px; page-break-inside:avoid; }
-        .pp-section h3 { margin:0 0 4px; font-size:13px; letter-spacing:.04em; }
-        .pp-section h4 { margin:0 0 8px; font-size:12px; color:#475569; direction:rtl; font-weight:700; }
-        .pp-section .en { white-space:pre-wrap; font-size:12.5px; line-height:1.55; margin-bottom:8px; }
-        .pp-section .rtl { white-space:pre-wrap; font-size:12.5px; line-height:1.8; direction:rtl; color:#1e293b; background:#f8fafc; border-radius:8px; padding:10px; }
-        table { width:100%; border-collapse:collapse; font-size:12px; margin:8px 0 16px; }
-        th, td { border:1px solid #e2e8f0; padding:8px 10px; text-align:left; }
-        th { background:#0f172a; color:#fff; font-size:11px; letter-spacing:.04em; }
-        td.rtl { direction:rtl; text-align:right; }
-        .pp-foot { margin-top:24px; font-size:11px; color:#64748b; text-align:center; border-top:1px solid #e2e8f0; padding-top:10px; }
-      </style></head><body>${html}</body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${draft?.refNo || 'Proposal'}</title>
+      <style>${PROPOSAL_DOC_CSS} body{margin:0;background:#fff;}</style>
+      </head><body>${html}</body></html>`);
     w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 300);
+    setTimeout(() => { w.focus(); w.print(); }, 350);
   };
 
   const field = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-800/20';
   const label = 'block text-xs font-bold text-gray-500 mb-1';
 
-  // ── Preview document ──
+  const fmtDateLong = (iso: string) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { return iso; }
+  };
+
+  const partyBlock = (party: ProposalParty, index: number) => (
+    <td key={party.id}>
+      <div className="num">{index + 1}. {party.labelEn}{party.labelEn.endsWith(':') ? '' : ':'}</div>
+      {party.labelRtl && <div className="num-rtl">{index + 1}. {party.labelRtl}</div>}
+      <div className="co">{party.companyEn || '—'}</div>
+      {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
+      {party.regNo && <div className="row">Reg. No.: {party.regNo}</div>}
+      {party.regNo && <div className="row-rtl">شماره ثبت: {party.regNo}</div>}
+      {party.country && <div className="row">Country: {party.country}</div>}
+      {party.country && <div className="row-rtl">کشور: {party.country}</div>}
+      {(party.repNameEn || party.repNameRtl) && (
+        <>
+          <div className="row" style={{ marginTop: 8 }}>Contact: {party.repNameEn || '—'}</div>
+          {party.repTitleEn && <div className="row">{party.repTitleEn}</div>}
+          {party.repNameRtl && <div className="row-rtl">تماس: {party.repNameRtl}</div>}
+          {party.repTitleRtl && <div className="row-rtl">{party.repTitleRtl}</div>}
+        </>
+      )}
+      {(party.contactEmail || party.contactPhone) && (
+        <div className="row" style={{ marginTop: 6 }} dir="ltr">
+          {[party.contactEmail, party.contactPhone].filter(Boolean).join(' · ')}
+        </div>
+      )}
+    </td>
+  );
+
+  // ── Preview document (Word-like commercial proposal) ──
   const PreviewDoc = ({ p }: { p: CommercialProposal }) => {
     const h = logoH(p.contractLogoSize);
-    const logos = (
-      <div className={`pp-logos ${p.contractLogoAlign === 'center' ? 'center' : ''}`}>
-        {p.logoUrl ? <img src={p.logoUrl} alt="" style={{ height: h }} /> : <span />}
-        {p.logo2Url ? <img src={p.logo2Url} alt="" style={{ height: h }} /> : <span />}
-      </div>
-    );
+    const proposer = p.parties[0];
+    const client = p.parties[1] || p.parties[0];
     return (
       <div className="pp-root" ref={printRef}>
-        {logos}
-        <div className="pp-head">
-          <div style={{ fontSize: 11, letterSpacing: '.12em', color: '#64748b', marginBottom: 6 }}>{p.refNo}</div>
-          <h1>{p.titleEn}</h1>
-          {p.titleRtl && <h2>{p.titleRtl}</h2>}
-          {(p.subtitleEn || p.subtitleRtl) && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-              {p.subtitleEn && <div>{p.subtitleEn}</div>}
-              {p.subtitleRtl && <div style={{ direction: 'rtl' }}>{p.subtitleRtl}</div>}
-            </div>
-          )}
+        <style>{PROPOSAL_DOC_CSS}</style>
+        {(p.logoUrl || p.logo2Url) && (
+          <div className={`pp-logos ${p.contractLogoAlign === 'center' ? 'center' : ''}`}>
+            {p.logoUrl ? <img src={p.logoUrl} alt="" style={{ height: h }} /> : <span />}
+            {p.logo2Url ? <img src={p.logo2Url} alt="" style={{ height: h }} /> : <span />}
+          </div>
+        )}
+
+        <div className="pp-title-block">
+          <h1 className="en-title">{p.titleEn}</h1>
+          {p.titleRtl && <h2 className="rtl-title">{p.titleRtl}</h2>}
+          {p.subtitleEn && <div className="en-sub">{p.subtitleEn}</div>}
+          {p.subtitleRtl && <div className="rtl-sub">{p.subtitleRtl}</div>}
         </div>
-        <div className="pp-meta">
-          <div><b>Date:</b> {p.proposalDate}</div>
-          <div><b>Valid until:</b> {p.validUntil}</div>
-          <div><b>Currency:</b> {p.currency}</div>
+
+        <div className="pp-meta-bar">
+          <span>Ref. {p.refNo}</span>
+          <span>|</span>
+          <span>Date: {fmtDateLong(p.proposalDate)}</span>
+          <span>|</span>
+          <span>Currency: {p.currency}</span>
         </div>
-        <div className="pp-parties">
-          {p.parties.map(party => (
-            <div key={party.id} className="pp-party">
-              <b>{party.labelEn} / {party.labelRtl}</b>
-              <div className="co">{party.companyEn || '—'}</div>
-              {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
-              {party.regNo && <div style={{ fontSize: 11, color: '#64748b' }}>CR: {party.regNo}</div>}
-              {party.country && <div style={{ fontSize: 11 }}>{party.country}</div>}
-              {(party.repNameEn || party.repNameRtl) && (
-                <div style={{ fontSize: 11, marginTop: 6 }}>
-                  {party.repNameEn}{party.repTitleEn ? ` — ${party.repTitleEn}` : ''}
-                  {party.repNameRtl && <div style={{ direction: 'rtl' }}>{party.repNameRtl}{party.repTitleRtl ? ` — ${party.repTitleRtl}` : ''}</div>}
-                </div>
-              )}
-              {(party.contactEmail || party.contactPhone) && (
-                <div style={{ fontSize: 11, marginTop: 4, color: '#475569' }} dir="ltr">
-                  {[party.contactEmail, party.contactPhone].filter(Boolean).join(' · ')}
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="pp-meta-sub">
+          Proposal date: {p.proposalDate} &nbsp;|&nbsp; Valid until: {p.validUntil} &nbsp;|&nbsp; Ref: {p.refNo}
         </div>
+
+        <div className="pp-band">
+          <div className="l">PARTIES</div>
+          <div className="r">طرفین</div>
+        </div>
+        <table className="pp-parties-table">
+          <tbody>
+            <tr>
+              {proposer && partyBlock(proposer, 0)}
+              {client && partyBlock(client, 1)}
+            </tr>
+          </tbody>
+        </table>
+
         {p.sections.map(sec => (
           <div key={sec.id} className="pp-section">
-            <h3>{sec.sectionNum}. {sec.titleEn}</h3>
-            {sec.titleRtl && <h4>{sec.titleRtl}</h4>}
-            {sec.contentEn && <div className="en">{sec.contentEn}</div>}
-            {sec.contentRtl && <div className="rtl">{sec.contentRtl}</div>}
+            <div className="pp-band">
+              <div className="l">{sec.titleEn || sec.sectionNum}</div>
+              <div className="r">{sec.titleRtl || '—'}</div>
+            </div>
+            {sec.contentEn && <div className="pp-body-en">{sec.contentEn}</div>}
+            {sec.contentRtl && <div className="pp-body-rtl">{sec.contentRtl}</div>}
           </div>
         ))}
+
         {p.lineItems.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 13, letterSpacing: '.04em' }}>PRICING / قیمت‌گذاری</h3>
-            <table>
+          <div className="pp-section">
+            <div className="pp-band">
+              <div className="l">PRICING OPTIONS</div>
+              <div className="r">گزینه‌های قیمت‌گذاری</div>
+            </div>
+            <table className="pp-price-table">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th className="rtl">مورد</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Total</th>
+                  <th style={{ width: '46%' }}>Package / بسته</th>
+                  <th className="num">Qty</th>
+                  <th className="num">Unit ({p.currency})</th>
+                  <th className="num">Total ({p.currency})</th>
+                  <th className="sel-col">Sel.</th>
                 </tr>
               </thead>
               <tbody>
                 {p.lineItems.map(li => (
-                  <tr key={li.id} style={li.selected ? { background: '#ecfdf5' } : undefined}>
-                    <td>{li.itemEn}{li.notes ? <div style={{ fontSize: 10, color: '#64748b' }}>{li.notes}</div> : null}</td>
-                    <td className="rtl">{li.itemRtl}</td>
-                    <td dir="ltr">{li.qty}</td>
-                    <td dir="ltr">{li.unitPrice} {p.currency}</td>
-                    <td dir="ltr"><b>{li.total} {p.currency}</b></td>
+                  <tr key={li.id} className={li.selected ? 'sel' : undefined}>
+                    <td>
+                      <div className="pkg-en">{li.itemEn}</div>
+                      {li.itemRtl && <div className="pkg-rtl">{li.itemRtl}</div>}
+                      {li.notes && <div className="pkg-note">{li.notes}</div>}
+                    </td>
+                    <td className="num" dir="ltr">{li.qty}</td>
+                    <td className="num" dir="ltr">{li.unitPrice}</td>
+                    <td className="num" dir="ltr"><b>{li.total}</b></td>
+                    <td className="sel-col">{li.selected ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
+
         {p.addOns.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 13, letterSpacing: '.04em' }}>OPTIONAL ADD-ONS / افزودنی‌های اختیاری</h3>
-            <table>
+          <div className="pp-section">
+            <div className="pp-band">
+              <div className="l">OPTIONAL ADD-ONS</div>
+              <div className="r">افزودنی‌های اختیاری</div>
+            </div>
+            <table className="pp-addon-table">
               <thead>
                 <tr>
-                  <th>Add-on</th>
-                  <th className="rtl">افزودنی</th>
-                  <th>Price</th>
+                  <th>Add-On</th>
+                  <th className="num">Price ({p.currency})</th>
+                  <th className="sel-col">Sel.</th>
                 </tr>
               </thead>
               <tbody>
                 {p.addOns.map(ao => (
-                  <tr key={ao.id} style={ao.selected ? { background: '#ecfdf5' } : undefined}>
-                    <td>{ao.nameEn}{ao.descEn ? <div style={{ fontSize: 10, color: '#64748b' }}>{ao.descEn}</div> : null}</td>
-                    <td className="rtl">{ao.nameRtl}{ao.descRtl ? <div style={{ fontSize: 10, color: '#64748b' }}>{ao.descRtl}</div> : null}</td>
-                    <td dir="ltr">{ao.price} {p.currency}</td>
+                  <tr key={ao.id} className={ao.selected ? 'sel' : undefined}>
+                    <td>
+                      <div className="pkg-en">{ao.nameEn}</div>
+                      {ao.nameRtl && <div className="pkg-rtl">{ao.nameRtl}</div>}
+                      {(ao.descEn || ao.descRtl) && (
+                        <div className="pkg-note">
+                          {ao.descEn}{ao.descEn && ao.descRtl ? ' — ' : ''}{ao.descRtl}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num" dir="ltr">{ao.price}</td>
+                    <td className="sel-col">{ao.selected ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
+
         <div className="pp-foot">
-          {p.companyName || 'Commercial proposal — not a binding contract.'}
-          <div>This document is a commercial proposal and does not constitute a legal contract.</div>
-          <div style={{ direction: 'rtl' }}>این سند پیشنهاد تجاری است و قرارداد الزام‌آور محسوب نمی‌شود.</div>
+          <div className="co">{p.companyName || 'Commercial Proposal'}</div>
+          <div>This document is a commercial proposal and becomes binding only upon signature of the corresponding service agreement.</div>
+          <div className="rtl">این سند پیشنهاد تجاری است و تنها پس از امضای قرارداد خدمات متناظر الزام‌آور می‌شود.</div>
         </div>
       </div>
     );
@@ -473,8 +613,12 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
             <button type="button" onClick={printDoc} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1"><IconPrinter className="w-3.5 h-3.5" />{T ? 'چاپ / PDF' : 'Print / PDF'}</button>
           </div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 md:p-10">
-          <PreviewDoc p={draft} />
+        <div className="bg-slate-200/70 rounded-xl p-4 md:p-8 overflow-auto">
+          <div className="mx-auto bg-white shadow-xl border border-slate-300/80" style={{ maxWidth: 820 }}>
+            <div className="p-6 md:p-10">
+              <PreviewDoc p={draft} />
+            </div>
+          </div>
         </div>
       </div>
     );
