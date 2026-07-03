@@ -173,6 +173,48 @@ function applyCloneTextFixes(node: HTMLElement) {
   });
 }
 
+/** Convert <img> sources to data URLs so foreignObject rendering never fails on CORS. */
+async function inlineImages(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(imgs.map(async img => {
+    const src = img.getAttribute('src') || '';
+    if (!src || src.startsWith('data:')) return;
+    try {
+      const r = await fetch(src, { mode: 'cors' });
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result));
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      img.setAttribute('src', dataUrl);
+    } catch {
+      // Remove un-fetchable images — a missing logo is better than a failed render.
+      img.remove();
+    }
+  }));
+}
+
+/** True when the canvas is (almost) entirely white — foreignObject silently failed. */
+function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
+  const w = 60, h = 80;
+  const s = document.createElement('canvas');
+  s.width = w; s.height = h;
+  const ctx = s.getContext('2d');
+  if (!ctx) return false;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(canvas, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let nonWhite = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240) nonWhite++;
+  }
+  return nonWhite < 12;
+}
+
 async function capturePage(pageEl: HTMLElement, foreignObject: boolean): Promise<HTMLCanvasElement> {
   await (document.fonts?.ready ?? Promise.resolve());
   await new Promise(r => setTimeout(r, 80));
@@ -180,7 +222,6 @@ async function capturePage(pageEl: HTMLElement, foreignObject: boolean): Promise
   return html2canvas(pageEl, {
     scale: 2,
     useCORS: true,
-    allowTaint: true,
     backgroundColor: '#ffffff',
     logging: false,
     imageTimeout: 20000,
@@ -188,7 +229,8 @@ async function capturePage(pageEl: HTMLElement, foreignObject: boolean): Promise
     windowWidth: PROPOSAL_CAPTURE_WIDTH_PX,
     scrollX: 0,
     scrollY: 0,
-    // foreignObjectRendering keeps Arabic/Persian glyphs intact in supporting browsers
+    // foreignObjectRendering uses the browser's own text engine — the ONLY html2canvas
+    // mode that shapes Persian/Arabic ligatures correctly.
     foreignObjectRendering: foreignObject,
     onclone: (_doc, el) => applyCloneTextFixes(el as HTMLElement),
   });
@@ -260,13 +302,13 @@ export async function exportProposalPdf(element: HTMLElement, filename: string):
       pageEl.appendChild(inner);
       host.appendChild(pageEl);
 
+      await inlineImages(pageEl);
+
       let canvas: HTMLCanvasElement;
       try {
         canvas = await capturePage(pageEl, true);
-        // Fallback if foreignObject produced a blank/near-blank page
-        const probe = canvas.getContext('2d')?.getImageData(8, 8, 4, 4).data;
-        const blank = probe && probe[0] === 255 && probe[1] === 255 && probe[2] === 255 && probe[3] === 255;
-        if (blank && canvas.height > 100) {
+        // Only fall back when foreignObject truly failed (fully blank page).
+        if (isCanvasBlank(canvas)) {
           canvas = await capturePage(pageEl, false);
         }
       } catch {
