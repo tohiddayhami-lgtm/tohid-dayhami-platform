@@ -22,7 +22,7 @@ import {
   proposalClientName,
   genProposalRefNo,
 } from '../utils/proposalFormat';
-import { exportInvoicePdf } from '../utils/exportInvoicePdf';
+import { exportProposalPdf } from '../utils/exportProposalPdf';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -389,7 +389,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
     if (!printRef.current || !draft || pdfBusy) return;
     setPdfBusy(true);
     try {
-      await exportInvoicePdf(printRef.current, `proposal_${draft.refNo || 'draft'}.pdf`);
+      await exportProposalPdf(printRef.current, `proposal_${draft.refNo || 'draft'}.pdf`);
     } catch (e) {
       console.error(e);
       alert(T ? 'ساخت PDF ناموفق بود. دوباره تلاش کنید.' : 'PDF export failed. Please try again.');
