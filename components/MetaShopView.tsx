@@ -211,6 +211,10 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [discountInput, setDiscountInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
+  const [form, setForm] = useState({ customerName: '', company: '', phone: '', email: '', country: '', city: '', notes: '' });
+  const [memberSession, setMemberSession] = useState<MetaShopMemberSession | null>(() => readMetaShopMemberSession(shop.id));
+  const [memberPanelOpen, setMemberPanelOpen] = useState(false);
+  const [favBusyId, setFavBusyId] = useState<string | null>(null);
   useEffect(() => { setGalIdx(0); }, [detail]);
   useEffect(() => { setMemberSession(readMetaShopMemberSession(shop.id)); }, [shop.id]);
   useEffect(() => {
@@ -253,7 +257,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(u)) return { type: 'video', src: u };
     return { type: 'link', src: u };
   };
-  const [form, setForm] = useState({ customerName: '', company: '', phone: '', email: '', country: '', city: '', notes: '' });
   const [submitting, setSubmitting] = useState(false);
   const [tracking, setTracking] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -279,9 +282,6 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [supplierPdfUrl, setSupplierPdfUrl] = useState<string | null>(null);
   const [supplierPdfName, setSupplierPdfName] = useState('');
   const [supplierPdfUploading, setSupplierPdfUploading] = useState(false);
-  const [memberSession, setMemberSession] = useState<MetaShopMemberSession | null>(() => readMetaShopMemberSession(shop.id));
-  const [memberPanelOpen, setMemberPanelOpen] = useState(false);
-  const [favBusyId, setFavBusyId] = useState<string | null>(null);
   const supplierFileRef = useRef<HTMLInputElement>(null);
   const supplierPdfRef = useRef<HTMLInputElement>(null);
   const emptyReferForm = () => ({
