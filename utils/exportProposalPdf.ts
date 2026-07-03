@@ -1,181 +1,27 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import type { CommercialProposal } from '../types';
+import { buildProposalDocumentHtml } from './proposalDocumentHtml';
 
-/** A4 content width at 96dpi — matches on-screen proposal preview. */
-export const PROPOSAL_CAPTURE_WIDTH_PX = 794;
+/**
+ * PDF from the same HTML as Word.
+ *
+ * Persian breaks when:
+ * - html2canvas runs without foreignObjectRendering (letters disconnect)
+ * - text-align:justify is used (letter-spacing splits Arabic joins)
+ * - we fall back to canvas text mode after a bad "blank page" check
+ *
+ * So: build HTML with mode=pdf (no justify), render in iframe, capture ONLY
+ * with foreignObjectRendering:true, paginate by whole sections.
+ */
 
-/** Usable content height on A4 with margins (px at 96dpi). */
-const PAGE_CONTENT_HEIGHT_PX = 1040;
-const PAGE_MARGIN_MM = 10;
-const A4_WIDTH_MM = 210;
-const A4_HEIGHT_MM = 297;
+const PAGE_W = 794;
+const PAGE_H = 1123;
+const PAD = 28;
+const CONTENT_H = PAGE_H - PAD * 2 - 20;
 
-type Block = HTMLElement;
-
-function pageCss(sourceCss: string): string {
-  return `
-    ${sourceCss}
-    .pp-pdf-page {
-      width: ${PROPOSAL_CAPTURE_WIDTH_PX}px;
-      min-height: ${PAGE_CONTENT_HEIGHT_PX}px;
-      max-width: ${PROPOSAL_CAPTURE_WIDTH_PX}px;
-      margin: 0;
-      padding: 28px 32px 36px;
-      box-sizing: border-box;
-      background: #ffffff;
-      direction: ltr !important;
-      text-align: left !important;
-      overflow: hidden;
-      position: relative;
-    }
-    .pp-pdf-page .pp-root {
-      max-width: none !important;
-      width: 100% !important;
-      margin: 0 !important;
-    }
-    .pp-pdf-page .pp-body-en {
-      text-align: justify !important;
-      direction: ltr !important;
-      text-align-last: left;
-    }
-    .pp-pdf-page .pp-body-rtl {
-      text-align: justify !important;
-      direction: rtl !important;
-      text-align-last: right;
-    }
-  `;
-}
-
-/** Top-level blocks that must stay together on one page when possible. */
-function extractBlocks(source: HTMLElement): Block[] {
-  const root = source.cloneNode(true) as HTMLElement;
-  root.querySelectorAll('style').forEach(s => s.remove());
-
-  const blocks: Block[] = [];
-  const children = Array.from(root.children) as HTMLElement[];
-
-  // Group: logos + title + meta bars as one header block
-  const header = document.createElement('div');
-  header.className = 'pp-pdf-header-block';
-  let i = 0;
-  while (i < children.length) {
-    const el = children[i];
-    const cls = el.className || '';
-    if (
-      cls.includes('pp-logos')
-      || cls.includes('pp-title-block')
-      || cls.includes('pp-meta-bar')
-      || cls.includes('pp-meta-sub')
-    ) {
-      header.appendChild(el.cloneNode(true));
-      i++;
-      continue;
-    }
-    break;
-  }
-  if (header.childNodes.length) blocks.push(header);
-
-  // Parties: band + table together
-  while (i < children.length) {
-    const el = children[i];
-    const cls = el.className || '';
-    if (cls.includes('pp-band') && i + 1 < children.length && (children[i + 1].className || '').includes('pp-parties-table')) {
-      const wrap = document.createElement('div');
-      wrap.className = 'pp-pdf-parties-block';
-      wrap.appendChild(el.cloneNode(true));
-      wrap.appendChild(children[i + 1].cloneNode(true));
-      blocks.push(wrap);
-      i += 2;
-      continue;
-    }
-    if (cls.includes('pp-section')) {
-      blocks.push(el.cloneNode(true) as HTMLElement);
-      i++;
-      continue;
-    }
-    if (cls.includes('pp-foot')) {
-      blocks.push(el.cloneNode(true) as HTMLElement);
-      i++;
-      continue;
-    }
-    // skip unknown
-    i++;
-  }
-
-  return blocks;
-}
-
-function measureHeight(el: HTMLElement, host: HTMLElement): number {
-  const probe = el.cloneNode(true) as HTMLElement;
-  probe.style.visibility = 'hidden';
-  host.appendChild(probe);
-  const h = probe.offsetHeight;
-  probe.remove();
-  return h;
-}
-
-function packPages(blocks: Block[], host: HTMLElement): HTMLElement[][] {
-  const pages: HTMLElement[][] = [];
-  let current: HTMLElement[] = [];
-  let used = 0;
-  const pad = 64; // page padding allowance
-
-  const pushPage = () => {
-    if (current.length) pages.push(current);
-    current = [];
-    used = 0;
-  };
-
-  for (const block of blocks) {
-    const h = measureHeight(block, host);
-    const limit = PAGE_CONTENT_HEIGHT_PX - pad;
-
-    // Oversized block: put alone on its own page(s) — still one block per page start
-    if (h > limit) {
-      pushPage();
-      current.push(block);
-      pushPage();
-      continue;
-    }
-
-    if (used > 0 && used + h > limit) {
-      pushPage();
-    }
-    current.push(block);
-    used += h + 8;
-  }
-  pushPage();
-  return pages.filter(p => p.length > 0);
-}
-
-function applyCloneTextFixes(node: HTMLElement) {
-  node.style.width = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
-  node.style.background = '#ffffff';
-  node.style.direction = 'ltr';
-  node.querySelectorAll('.pp-body-en').forEach(b => {
-    const e = b as HTMLElement;
-    e.style.direction = 'ltr';
-    e.style.textAlign = 'justify';
-    e.style.unicodeBidi = 'isolate';
-  });
-  node.querySelectorAll('.pp-body-rtl').forEach(b => {
-    const e = b as HTMLElement;
-    e.style.direction = 'rtl';
-    e.style.textAlign = 'justify';
-    e.style.unicodeBidi = 'isolate';
-    e.style.fontFamily = 'Tahoma, Arial, sans-serif';
-  });
-  node.querySelectorAll('.pp-foot .rtl, .rtl-title, .rtl-sub, .co-rtl, .num-rtl, .row-rtl, .pkg-rtl, .pp-band .r, .rtl-block').forEach(b => {
-    const e = b as HTMLElement;
-    e.style.direction = 'rtl';
-    e.style.unicodeBidi = 'isolate';
-    e.style.fontFamily = 'Tahoma, Arial, sans-serif';
-  });
-}
-
-/** Convert <img> sources to data URLs so foreignObject rendering never fails on CORS. */
-async function inlineImages(root: HTMLElement): Promise<void> {
-  const imgs = Array.from(root.querySelectorAll('img'));
+async function inlineImagesInDoc(doc: Document): Promise<void> {
+  const imgs = Array.from(doc.images);
   await Promise.all(imgs.map(async img => {
     const src = img.getAttribute('src') || '';
     if (!src || src.startsWith('data:')) return;
@@ -189,153 +35,204 @@ async function inlineImages(root: HTMLElement): Promise<void> {
         fr.onerror = rej;
         fr.readAsDataURL(blob);
       });
-      img.setAttribute('src', dataUrl);
+      img.src = dataUrl;
+      await new Promise<void>(done => {
+        if (img.complete) done();
+        else { img.onload = () => done(); img.onerror = () => done(); }
+      });
     } catch {
-      // Remove un-fetchable images — a missing logo is better than a failed render.
       img.remove();
     }
   }));
 }
 
-/** True when the canvas is (almost) entirely white — foreignObject silently failed. */
-function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
-  const w = 60, h = 80;
-  const s = document.createElement('canvas');
-  s.width = w; s.height = h;
-  const ctx = s.getContext('2d');
-  if (!ctx) return false;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(canvas, 0, 0, w, h);
-  const d = ctx.getImageData(0, 0, w, h).data;
-  let nonWhite = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240) nonWhite++;
-  }
-  return nonWhite < 12;
+function loadHtmlInIframe(html: string): Promise<HTMLIFrameElement> {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    Object.assign(iframe.style, {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      width: `${PAGE_W}px`,
+      height: `${PAGE_H}px`,
+      border: '0',
+      opacity: '0.01',
+      pointerEvents: 'none',
+      zIndex: '-1',
+      transform: 'translateX(-200vw)',
+      background: '#fff',
+    });
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    if (!doc) {
+      iframe.remove();
+      reject(new Error('iframe document unavailable'));
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+    const done = () => setTimeout(() => resolve(iframe), 150);
+    if (doc.readyState === 'complete') done();
+    else iframe.onload = done;
+  });
 }
 
-async function capturePage(pageEl: HTMLElement, foreignObject: boolean): Promise<HTMLCanvasElement> {
-  await (document.fonts?.ready ?? Promise.resolve());
-  await new Promise(r => setTimeout(r, 80));
+function isNavyBand(el: HTMLElement): boolean {
+  if (el.tagName.toLowerCase() !== 'table') return false;
+  const html = el.innerHTML;
+  return html.includes('#0b1f3a') || html.includes('0b1f3a');
+}
 
-  return html2canvas(pageEl, {
+/** Group DOM nodes so a section header never separates from its body. */
+function groupUnits(body: HTMLElement): HTMLElement[][] {
+  const kids = Array.from(body.children) as HTMLElement[];
+  const units: HTMLElement[][] = [];
+  let i = 0;
+
+  // Header block: everything before first navy band
+  const header: HTMLElement[] = [];
+  while (i < kids.length && !isNavyBand(kids[i])) {
+    header.push(kids[i]);
+    i++;
+  }
+  if (header.length) units.push(header);
+
+  while (i < kids.length) {
+    const el = kids[i];
+    if (isNavyBand(el)) {
+      const unit = [el];
+      i++;
+      // paragraphs belonging to this section
+      while (i < kids.length && kids[i].tagName.toLowerCase() === 'p') {
+        unit.push(kids[i]);
+        i++;
+      }
+      // optional data table (parties / pricing / addons)
+      if (i < kids.length && kids[i].tagName.toLowerCase() === 'table' && !isNavyBand(kids[i])) {
+        unit.push(kids[i]);
+        i++;
+      }
+      units.push(unit);
+      continue;
+    }
+    // footer or stray
+    units.push([el]);
+    i++;
+  }
+  return units;
+}
+
+function packPages(units: HTMLElement[][]): HTMLElement[][] {
+  const pages: HTMLElement[][] = [];
+  let cur: HTMLElement[] = [];
+  let used = 0;
+
+  const hOf = (els: HTMLElement[]) =>
+    els.reduce((s, el) => s + el.getBoundingClientRect().height + 6, 0);
+
+  for (const unit of units) {
+    const h = hOf(unit);
+    if (cur.length && used + h > CONTENT_H) {
+      pages.push(cur);
+      cur = [];
+      used = 0;
+    }
+    cur.push(...unit);
+    used += Math.min(h, CONTENT_H);
+  }
+  if (cur.length) pages.push(cur);
+  return pages.length ? pages : [units.flat()];
+}
+
+async function capturePage(el: HTMLElement): Promise<HTMLCanvasElement> {
+  await (document.fonts?.ready ?? Promise.resolve());
+  await new Promise(r => setTimeout(r, 50));
+  return html2canvas(el, {
     scale: 2,
     useCORS: true,
     backgroundColor: '#ffffff',
     logging: false,
-    imageTimeout: 20000,
-    width: PROPOSAL_CAPTURE_WIDTH_PX,
-    windowWidth: PROPOSAL_CAPTURE_WIDTH_PX,
+    width: PAGE_W,
+    windowWidth: PAGE_W,
     scrollX: 0,
     scrollY: 0,
-    // foreignObjectRendering uses the browser's own text engine — the ONLY html2canvas
-    // mode that shapes Persian/Arabic ligatures correctly.
-    foreignObjectRendering: foreignObject,
-    onclone: (_doc, el) => applyCloneTextFixes(el as HTMLElement),
+    foreignObjectRendering: true,
+    onclone: (_d, node) => {
+      const n = node as HTMLElement;
+      n.style.width = `${PAGE_W}px`;
+      n.style.background = '#ffffff';
+      n.querySelectorAll('*').forEach(c => {
+        const e = c as HTMLElement;
+        e.style.letterSpacing = '0px';
+        e.style.wordSpacing = '0px';
+      });
+      n.querySelectorAll('[dir="rtl"], [lang="fa"]').forEach(c => {
+        const e = c as HTMLElement;
+        e.style.fontFamily = 'Tahoma, Arial, sans-serif';
+        e.style.direction = 'rtl';
+        e.style.unicodeBidi = 'embed';
+        // Never justify in PDF capture — it letter-spaces and breaks joins
+        if ((e.style.textAlign || '') === 'justify') e.style.textAlign = 'right';
+      });
+      n.querySelectorAll('[dir="ltr"]').forEach(c => {
+        const e = c as HTMLElement;
+        if ((e.style.textAlign || '') === 'justify') e.style.textAlign = 'left';
+      });
+    },
   });
 }
 
-/**
- * Export the on-screen proposal preview to a clean multi-page A4 PDF.
- * Renders each page as a full DOM page (no mid-paragraph image slicing).
- */
-export async function exportProposalPdf(element: HTMLElement, filename: string): Promise<void> {
-  const sourceCss = element.querySelector('style')?.textContent || '';
-
-  const host = document.createElement('div');
-  Object.assign(host.style, {
-    position: 'fixed',
-    left: '0',
-    top: '0',
-    width: `${PROPOSAL_CAPTURE_WIDTH_PX}px`,
-    zIndex: '-1',
-    opacity: '0.01',
-    pointerEvents: 'none',
-    overflow: 'visible',
-    background: '#ffffff',
-    transform: 'translateX(-140vw)',
-  });
-
-  const styleEl = document.createElement('style');
-  styleEl.textContent = pageCss(sourceCss);
-  host.appendChild(styleEl);
-
-  // Measure host for packing
-  const measureHost = document.createElement('div');
-  measureHost.className = 'pp-pdf-page';
-  measureHost.style.width = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
-  host.appendChild(measureHost);
-
-  document.body.appendChild(host);
+export async function exportProposalPdf(proposal: CommercialProposal, filename: string): Promise<void> {
+  const html = buildProposalDocumentHtml(proposal, 'pdf');
+  const iframe = await loadHtmlInIframe(html);
+  const doc = iframe.contentDocument!;
+  const body = doc.body;
 
   try {
-    const blocks = extractBlocks(element);
-    // Filter empty add-on sections: section with only empty addon table
-    const filtered = blocks.filter(b => {
-      if (!b.classList.contains('pp-section')) return true;
-      const addonTable = b.querySelector('.pp-addon-table');
-      if (!addonTable) return true;
-      const cells = Array.from(addonTable.querySelectorAll('tbody td.pkg-en, tbody .pkg-en'));
-      // if addon section has no real names, drop it
-      const hasContent = Array.from(addonTable.querySelectorAll('tbody tr')).some(tr => {
-        const text = (tr.textContent || '').replace(/[0\s✓OMR]/g, '');
-        return text.length > 2;
-      });
-      return hasContent || !addonTable;
-    });
+    await inlineImagesInDoc(doc);
+    await new Promise(r => setTimeout(r, 80));
 
-    const pages = packPages(filtered.length ? filtered : blocks, measureHost);
-    measureHost.remove();
+    const units = groupUnits(body);
+    const pageGroups = packPages(units);
+
+    // Snapshot clones so we don't mutate live nodes between captures
+    const pageClones = pageGroups.map(group => group.map(el => el.cloneNode(true) as HTMLElement));
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-    const contentW = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
-    const contentH = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2 - 8;
+    const marginMm = 8;
+    const pageWmm = 210;
+    const pageHmm = 297;
+    const contentWmm = pageWmm - marginMm * 2;
+    const contentHmm = pageHmm - marginMm * 2 - 8;
 
-    for (let i = 0; i < pages.length; i++) {
-      const pageEl = document.createElement('div');
-      pageEl.className = 'pp-pdf-page';
-      const inner = document.createElement('div');
-      inner.className = 'pp-root';
-      inner.setAttribute('dir', 'ltr');
-      pages[i].forEach(b => inner.appendChild(b.cloneNode(true)));
-      pageEl.appendChild(inner);
-      host.appendChild(pageEl);
+    for (let pi = 0; pi < pageClones.length; pi++) {
+      body.innerHTML = '';
+      const pageDiv = doc.createElement('div');
+      pageDiv.style.cssText = `width:${PAGE_W}px;min-height:${PAGE_H}px;padding:${PAD}px;box-sizing:border-box;background:#ffffff;`;
+      pageClones[pi].forEach(n => pageDiv.appendChild(n));
+      body.appendChild(pageDiv);
 
-      await inlineImages(pageEl);
-
-      let canvas: HTMLCanvasElement;
-      try {
-        canvas = await capturePage(pageEl, true);
-        // Only fall back when foreignObject truly failed (fully blank page).
-        if (isCanvasBlank(canvas)) {
-          canvas = await capturePage(pageEl, false);
-        }
-      } catch {
-        canvas = await capturePage(pageEl, false);
+      const canvas = await capturePage(pageDiv);
+      const img = canvas.toDataURL('image/jpeg', 0.95);
+      let w = contentWmm;
+      let h = (canvas.height * contentWmm) / canvas.width;
+      if (h > contentHmm) {
+        const s = contentHmm / h;
+        h = contentHmm;
+        w = contentWmm * s;
       }
-      pageEl.remove();
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      let imgW = contentW;
-      let imgH = (canvas.height * contentW) / canvas.width;
-      if (imgH > contentH) {
-        const s = contentH / imgH;
-        imgH = contentH;
-        imgW = contentW * s;
-      }
-
-      if (i > 0) pdf.addPage();
-      const x = PAGE_MARGIN_MM + (contentW - imgW) / 2;
-      pdf.addImage(imgData, 'JPEG', x, PAGE_MARGIN_MM, imgW, imgH);
+      if (pi > 0) pdf.addPage();
+      pdf.addImage(img, 'JPEG', marginMm + (contentWmm - w) / 2, marginMm, w, h);
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
       pdf.setTextColor(100);
-      pdf.text(`${i + 1} / ${pages.length}`, A4_WIDTH_MM / 2, A4_HEIGHT_MM - 6, { align: 'center' });
+      pdf.text(`${pi + 1} / ${pageClones.length}`, pageWmm / 2, pageHmm - 5, { align: 'center' });
     }
 
-    pdf.save(filename);
+    pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
   } finally {
-    host.remove();
+    iframe.remove();
   }
 }

@@ -400,10 +400,10 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
   `;
 
   const downloadPdf = async () => {
-    if (!printRef.current || !draft || pdfBusy) return;
+    if (!draft || pdfBusy) return;
     setPdfBusy(true);
     try {
-      await exportProposalPdf(printRef.current, `proposal_${draft.refNo || 'draft'}.pdf`);
+      await exportProposalPdf(draft, `proposal_${draft.refNo || 'draft'}.pdf`);
     } catch (e) {
       console.error(e);
       alert(T ? 'ساخت PDF ناموفق بود. دوباره تلاش کنید.' : 'PDF export failed. Please try again.');
