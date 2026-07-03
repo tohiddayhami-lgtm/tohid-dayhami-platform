@@ -22,6 +22,7 @@ import {
   proposalClientName,
   genProposalRefNo,
 } from '../utils/proposalFormat';
+import { exportInvoicePdf } from '../utils/exportInvoicePdf';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -43,6 +44,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
   const [saving, setSaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState<1 | 2 | null>(null);
   const [importErr, setImportErr] = useState('');
+  const [pdfBusy, setPdfBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const logo1Ref = useRef<HTMLInputElement>(null);
   const logo2Ref = useRef<HTMLInputElement>(null);
@@ -230,123 +232,168 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
       max-width: 794px; margin: 0 auto; color: #0f172a;
       font-family: "Segoe UI", Calibri, Tahoma, Arial, sans-serif;
       font-size: 11pt; line-height: 1.45; background: #fff;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
     }
     .pp-logos {
       display: flex; align-items: center; justify-content: space-between;
       gap: 20px; margin-bottom: 14px; min-height: 48px;
+      direction: ltr !important;
     }
     .pp-logos.center { justify-content: center; }
     .pp-logos img { object-fit: contain; max-width: 42%; }
-    .pp-title-block { text-align: center; margin: 4px 0 10px; }
+    .pp-title-block { text-align: center; margin: 4px 0 10px; direction: ltr !important; }
     .pp-title-block .en-title {
       margin: 0; font-size: 15.5pt; font-weight: 800; letter-spacing: .03em;
       text-transform: uppercase; color: #0b1f3a; line-height: 1.25;
+      direction: ltr !important; text-align: center; unicode-bidi: isolate;
     }
     .pp-title-block .rtl-title {
-      margin: 6px 0 0; font-size: 13.5pt; font-weight: 800; direction: rtl;
+      margin: 6px 0 0; font-size: 13.5pt; font-weight: 800;
+      direction: rtl !important; text-align: center; unicode-bidi: isolate;
       color: #0b1f3a; line-height: 1.45; font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-title-block .en-sub {
       margin: 10px 0 0; font-size: 10pt; color: #334155; font-weight: 600;
+      direction: ltr !important; text-align: center; unicode-bidi: isolate;
     }
     .pp-title-block .rtl-sub {
-      margin: 4px 0 0; font-size: 10pt; color: #334155; direction: rtl;
+      margin: 4px 0 0; font-size: 10pt; color: #334155;
+      direction: rtl !important; text-align: center; unicode-bidi: isolate;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-meta-bar {
       display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
       margin: 12px 0 4px; padding: 8px 10px; background: #0b1f3a; color: #fff;
       font-size: 9pt; font-weight: 600; letter-spacing: .02em;
+      direction: ltr !important; text-align: center;
     }
-    .pp-meta-bar span { white-space: nowrap; }
+    .pp-meta-bar span { white-space: nowrap; direction: ltr !important; }
     .pp-meta-sub {
       text-align: center; font-size: 8.5pt; color: #64748b; margin: 6px 0 16px;
+      direction: ltr !important;
     }
     .pp-band {
       display: grid; grid-template-columns: 1fr 1fr; gap: 0;
       background: #0b1f3a; color: #fff; margin: 18px 0 0;
-      border: 1px solid #0b1f3a;
+      border: 1px solid #0b1f3a; direction: ltr !important;
     }
-    .pp-band .l { padding: 8px 12px; font-size: 10pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .pp-band .l {
+      padding: 8px 12px; font-size: 10pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+    }
     .pp-band .r {
-      padding: 8px 12px; font-size: 10pt; font-weight: 800; direction: rtl; text-align: right;
+      padding: 8px 12px; font-size: 10pt; font-weight: 800;
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif; border-left: 1px solid rgba(255,255,255,.2);
     }
-    .pp-parties-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; table-layout: fixed; }
+    .pp-parties-table { width: 100%; border-collapse: collapse; margin: 0 0 8px; table-layout: fixed; direction: ltr !important; }
     .pp-parties-table td {
       width: 50%; vertical-align: top; border: 1px solid #cbd5e1; padding: 12px 14px;
-      background: #f8fafc;
+      background: #f8fafc; direction: ltr !important; text-align: left !important;
     }
     .pp-parties-table .num {
       font-size: 9pt; font-weight: 800; color: #0b1f3a; letter-spacing: .04em; margin-bottom: 4px;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
     }
     .pp-parties-table .num-rtl {
-      font-size: 9pt; font-weight: 800; color: #0b1f3a; direction: rtl; margin-bottom: 6px;
+      font-size: 9pt; font-weight: 800; color: #0b1f3a;
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-bottom: 6px;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
-    .pp-parties-table .co { font-size: 11pt; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+    .pp-parties-table .co {
+      font-size: 11pt; font-weight: 800; color: #0f172a; margin-bottom: 2px;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+    }
     .pp-parties-table .co-rtl {
-      font-size: 10.5pt; font-weight: 700; color: #1e293b; direction: rtl; margin-bottom: 8px;
+      font-size: 10.5pt; font-weight: 700; color: #1e293b;
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-bottom: 8px;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
-    .pp-parties-table .row { font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.4; }
+    .pp-parties-table .row {
+      font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.4;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+    }
     .pp-parties-table .row-rtl {
-      font-size: 9pt; color: #334155; direction: rtl; margin-top: 1px;
+      font-size: 9pt; color: #334155;
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-top: 1px;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
-    .pp-section { margin: 0 0 4px; page-break-inside: avoid; }
+    .pp-section { margin: 0 0 4px; page-break-inside: avoid; direction: ltr !important; }
     .pp-body-en {
       white-space: pre-wrap; font-size: 10pt; line-height: 1.55; color: #0f172a;
-      padding: 10px 4px 6px; text-align: justify;
+      padding: 10px 4px 6px;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
     }
     .pp-body-rtl {
       white-space: pre-wrap; font-size: 10pt; line-height: 1.85; color: #0f172a;
-      direction: rtl; text-align: justify; padding: 8px 10px 12px;
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
+      padding: 8px 10px 12px;
       background: #f8fafc; border: 1px solid #e2e8f0; border-top: none;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-price-table, .pp-addon-table {
       width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 9.5pt;
+      direction: ltr !important;
     }
     .pp-price-table th, .pp-addon-table th {
       background: #0b1f3a; color: #fff; font-weight: 700; font-size: 8.5pt;
       letter-spacing: .04em; text-transform: uppercase; padding: 8px 8px; border: 1px solid #0b1f3a;
-      text-align: left;
+      text-align: left !important; direction: ltr !important;
     }
     .pp-price-table td, .pp-addon-table td {
       border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; background: #fff;
+      direction: ltr !important; text-align: left !important;
     }
     .pp-price-table tr.sel td, .pp-addon-table tr.sel td { background: #ecfdf5; }
-    .pp-price-table .pkg-en { font-weight: 700; color: #0f172a; }
-    .pp-price-table .pkg-rtl {
-      direction: rtl; font-size: 9pt; color: #334155; margin-top: 3px;
+    .pp-price-table .pkg-en {
+      font-weight: 700; color: #0f172a;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+    }
+    .pp-price-table .pkg-rtl, .pp-addon-table .pkg-rtl {
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
+      font-size: 9pt; color: #334155; margin-top: 3px;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
-    .pp-price-table .pkg-note { font-size: 8pt; color: #64748b; margin-top: 3px; font-style: italic; }
-    .pp-price-table .num, .pp-addon-table .num { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .pp-price-table .sel-col, .pp-addon-table .sel-col { text-align: center; width: 36px; font-weight: 800; color: #047857; }
+    .pp-price-table .pkg-note, .pp-addon-table .pkg-note {
+      font-size: 8pt; color: #64748b; margin-top: 3px; font-style: italic;
+      direction: ltr !important; text-align: left !important;
+    }
+    .pp-price-table .num, .pp-addon-table .num {
+      text-align: center !important; white-space: nowrap; font-variant-numeric: tabular-nums;
+      direction: ltr !important;
+    }
+    .pp-price-table .sel-col, .pp-addon-table .sel-col {
+      text-align: center !important; width: 36px; font-weight: 800; color: #047857;
+      direction: ltr !important;
+    }
     .pp-foot {
       margin-top: 22px; padding-top: 12px; border-top: 2px solid #0b1f3a;
       text-align: center; font-size: 8.5pt; color: #64748b; line-height: 1.5;
+      direction: ltr !important;
     }
-    .pp-foot .co { font-weight: 800; color: #0b1f3a; font-size: 9.5pt; margin-bottom: 4px; }
-    .pp-foot .rtl { direction: rtl; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+    .pp-foot .co { font-weight: 800; color: #0b1f3a; font-size: 9.5pt; margin-bottom: 4px; direction: ltr !important; }
+    .pp-foot .en { direction: ltr !important; text-align: center; unicode-bidi: isolate; }
+    .pp-foot .rtl {
+      direction: rtl !important; text-align: center; unicode-bidi: isolate;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+    }
     @media print {
       .pp-root { max-width: none; }
       .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table { page-break-inside: avoid; }
     }
   `;
 
-  const printDoc = () => {
-    if (!printRef.current) return;
-    const html = printRef.current.innerHTML;
-    const w = window.open('', '_blank', 'noopener,noreferrer,width=920,height=1100');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${draft?.refNo || 'Proposal'}</title>
-      <style>${PROPOSAL_DOC_CSS} body{margin:0;background:#fff;}</style>
-      </head><body>${html}</body></html>`);
-    w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 350);
+  const downloadPdf = async () => {
+    if (!printRef.current || !draft || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await exportInvoicePdf(printRef.current, `proposal_${draft.refNo || 'draft'}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert(T ? 'ساخت PDF ناموفق بود. دوباره تلاش کنید.' : 'PDF export failed. Please try again.');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const field = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-800/20';
@@ -360,21 +407,21 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
   };
 
   const partyBlock = (party: ProposalParty, index: number) => (
-    <td key={party.id}>
-      <div className="num">{index + 1}. {party.labelEn}{party.labelEn.endsWith(':') ? '' : ':'}</div>
-      {party.labelRtl && <div className="num-rtl">{index + 1}. {party.labelRtl}</div>}
-      <div className="co">{party.companyEn || '—'}</div>
-      {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
-      {party.regNo && <div className="row">Reg. No.: {party.regNo}</div>}
-      {party.regNo && <div className="row-rtl">شماره ثبت: {party.regNo}</div>}
-      {party.country && <div className="row">Country: {party.country}</div>}
-      {party.country && <div className="row-rtl">کشور: {party.country}</div>}
+    <td key={party.id} dir="ltr">
+      <div className="num" dir="ltr">{index + 1}. {party.labelEn}{party.labelEn.endsWith(':') ? '' : ':'}</div>
+      {party.labelRtl && <div className="num-rtl" dir="rtl">{index + 1}. {party.labelRtl}</div>}
+      <div className="co" dir="ltr">{party.companyEn || '—'}</div>
+      {party.companyRtl && <div className="co-rtl" dir="rtl">{party.companyRtl}</div>}
+      {party.regNo && <div className="row" dir="ltr">Reg. No.: {party.regNo}</div>}
+      {party.regNo && <div className="row-rtl" dir="rtl">شماره ثبت: {party.regNo}</div>}
+      {party.country && <div className="row" dir="ltr">Country: {party.country}</div>}
+      {party.country && <div className="row-rtl" dir="rtl">کشور: {party.country}</div>}
       {(party.repNameEn || party.repNameRtl) && (
         <>
-          <div className="row" style={{ marginTop: 8 }}>Contact: {party.repNameEn || '—'}</div>
-          {party.repTitleEn && <div className="row">{party.repTitleEn}</div>}
-          {party.repNameRtl && <div className="row-rtl">تماس: {party.repNameRtl}</div>}
-          {party.repTitleRtl && <div className="row-rtl">{party.repTitleRtl}</div>}
+          <div className="row" dir="ltr" style={{ marginTop: 8 }}>Contact: {party.repNameEn || '—'}</div>
+          {party.repTitleEn && <div className="row" dir="ltr">{party.repTitleEn}</div>}
+          {party.repNameRtl && <div className="row-rtl" dir="rtl">تماس: {party.repNameRtl}</div>}
+          {party.repTitleRtl && <div className="row-rtl" dir="rtl">{party.repTitleRtl}</div>}
         </>
       )}
       {(party.contactEmail || party.contactPhone) && (
@@ -391,7 +438,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
     const proposer = p.parties[0];
     const client = p.parties[1] || p.parties[0];
     return (
-      <div className="pp-root" ref={printRef}>
+      <div className="pp-root" ref={printRef} dir="ltr" lang="en">
         <style>{PROPOSAL_DOC_CSS}</style>
         {(p.logoUrl || p.logo2Url) && (
           <div className={`pp-logos ${p.contractLogoAlign === 'center' ? 'center' : ''}`}>
@@ -401,10 +448,10 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         )}
 
         <div className="pp-title-block">
-          <h1 className="en-title">{p.titleEn}</h1>
-          {p.titleRtl && <h2 className="rtl-title">{p.titleRtl}</h2>}
-          {p.subtitleEn && <div className="en-sub">{p.subtitleEn}</div>}
-          {p.subtitleRtl && <div className="rtl-sub">{p.subtitleRtl}</div>}
+          <h1 className="en-title" dir="ltr">{p.titleEn}</h1>
+          {p.titleRtl && <h2 className="rtl-title" dir="rtl">{p.titleRtl}</h2>}
+          {p.subtitleEn && <div className="en-sub" dir="ltr">{p.subtitleEn}</div>}
+          {p.subtitleRtl && <div className="rtl-sub" dir="rtl">{p.subtitleRtl}</div>}
         </div>
 
         <div className="pp-meta-bar">
@@ -419,8 +466,8 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         </div>
 
         <div className="pp-band">
-          <div className="l">PARTIES</div>
-          <div className="r">طرفین</div>
+          <div className="l" dir="ltr">PARTIES</div>
+          <div className="r" dir="rtl">طرفین</div>
         </div>
         <table className="pp-parties-table">
           <tbody>
@@ -434,19 +481,19 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         {p.sections.map(sec => (
           <div key={sec.id} className="pp-section">
             <div className="pp-band">
-              <div className="l">{sec.titleEn || sec.sectionNum}</div>
-              <div className="r">{sec.titleRtl || '—'}</div>
+              <div className="l" dir="ltr">{sec.titleEn || sec.sectionNum}</div>
+              <div className="r" dir="rtl">{sec.titleRtl || '—'}</div>
             </div>
-            {sec.contentEn && <div className="pp-body-en">{sec.contentEn}</div>}
-            {sec.contentRtl && <div className="pp-body-rtl">{sec.contentRtl}</div>}
+            {sec.contentEn && <div className="pp-body-en" dir="ltr">{sec.contentEn}</div>}
+            {sec.contentRtl && <div className="pp-body-rtl" dir="rtl">{sec.contentRtl}</div>}
           </div>
         ))}
 
         {p.lineItems.length > 0 && (
           <div className="pp-section">
             <div className="pp-band">
-              <div className="l">PRICING OPTIONS</div>
-              <div className="r">گزینه‌های قیمت‌گذاری</div>
+              <div className="l" dir="ltr">PRICING OPTIONS</div>
+              <div className="r" dir="rtl">گزینه‌های قیمت‌گذاری</div>
             </div>
             <table className="pp-price-table">
               <thead>
@@ -462,8 +509,8 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
                 {p.lineItems.map(li => (
                   <tr key={li.id} className={li.selected ? 'sel' : undefined}>
                     <td>
-                      <div className="pkg-en">{li.itemEn}</div>
-                      {li.itemRtl && <div className="pkg-rtl">{li.itemRtl}</div>}
+                      <div className="pkg-en" dir="ltr">{li.itemEn}</div>
+                      {li.itemRtl && <div className="pkg-rtl" dir="rtl">{li.itemRtl}</div>}
                       {li.notes && <div className="pkg-note">{li.notes}</div>}
                     </td>
                     <td className="num" dir="ltr">{li.qty}</td>
@@ -480,8 +527,8 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         {p.addOns.length > 0 && (
           <div className="pp-section">
             <div className="pp-band">
-              <div className="l">OPTIONAL ADD-ONS</div>
-              <div className="r">افزودنی‌های اختیاری</div>
+              <div className="l" dir="ltr">OPTIONAL ADD-ONS</div>
+              <div className="r" dir="rtl">افزودنی‌های اختیاری</div>
             </div>
             <table className="pp-addon-table">
               <thead>
@@ -495,8 +542,8 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
                 {p.addOns.map(ao => (
                   <tr key={ao.id} className={ao.selected ? 'sel' : undefined}>
                     <td>
-                      <div className="pkg-en">{ao.nameEn}</div>
-                      {ao.nameRtl && <div className="pkg-rtl">{ao.nameRtl}</div>}
+                      <div className="pkg-en" dir="ltr">{ao.nameEn}</div>
+                      {ao.nameRtl && <div className="pkg-rtl" dir="rtl">{ao.nameRtl}</div>}
                       {(ao.descEn || ao.descRtl) && (
                         <div className="pkg-note">
                           {ao.descEn}{ao.descEn && ao.descRtl ? ' — ' : ''}{ao.descRtl}
@@ -514,8 +561,8 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
 
         <div className="pp-foot">
           <div className="co">{p.companyName || 'Commercial Proposal'}</div>
-          <div>This document is a commercial proposal and becomes binding only upon signature of the corresponding service agreement.</div>
-          <div className="rtl">این سند پیشنهاد تجاری است و تنها پس از امضای قرارداد خدمات متناظر الزام‌آور می‌شود.</div>
+          <div className="en">This document is a commercial proposal and becomes binding only upon signature of the corresponding service agreement.</div>
+          <div className="rtl" dir="rtl">این سند پیشنهاد تجاری است و تنها پس از امضای قرارداد خدمات متناظر الزام‌آور می‌شود.</div>
         </div>
       </div>
     );
@@ -610,7 +657,9 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="flex gap-2">
             {!readonly && <button type="button" onClick={() => setMode('editor')} className="text-xs px-3 py-2 rounded-lg border border-gray-200">{T ? 'ویرایش' : 'Edit'}</button>}
             <button type="button" onClick={exportCurrent} className="text-xs px-3 py-2 rounded-lg border border-gray-200">JSON</button>
-            <button type="button" onClick={printDoc} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1"><IconPrinter className="w-3.5 h-3.5" />{T ? 'چاپ / PDF' : 'Print / PDF'}</button>
+            <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50">
+              <IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}
+            </button>
           </div>
         </div>
         <div className="bg-slate-200/70 rounded-xl p-4 md:p-8 overflow-auto">
