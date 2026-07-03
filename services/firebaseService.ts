@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, LegalContract, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -1076,6 +1076,33 @@ export const deleteProposalFromCloud = async (id: string, actor?: Personnel) => 
 
 export const subscribeToProposals = (callback: (proposals: CommercialProposal[]) => void) =>
   subscribeCollection<CommercialProposal>('proposals', callback, {
+    sort: (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime(),
+    intervalMs: 45_000,
+  });
+
+// ── Legal Contracts (Invoices → Contracts tab) ──
+export const saveContractToCloud = async (contract: LegalContract, actor?: Personnel) => {
+  const payload = { ...contract, updatedAt: new Date().toISOString() };
+  await setDocCloud('contracts', contract.id, payload);
+  await logSystemAction(
+    'UPDATE',
+    'Contract',
+    `Contract ${contract.refNo} — ${contract.titleEn || contract.titleRtl}`,
+    actor?.fullName || contract.createdBy || 'System',
+    contract.id,
+    undefined,
+    undefined,
+    actor?.id,
+  );
+};
+
+export const deleteContractFromCloud = async (id: string, actor?: Personnel) => {
+  await deleteDocCloud('contracts', id);
+  await logSystemAction('DELETE', 'Contract', `Contract deleted`, actor?.fullName || 'System', id, undefined, 'contracts', actor?.id);
+};
+
+export const subscribeToContracts = (callback: (contracts: LegalContract[]) => void) =>
+  subscribeCollection<LegalContract>('contracts', callback, {
     sort: (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime(),
     intervalMs: 45_000,
   });
