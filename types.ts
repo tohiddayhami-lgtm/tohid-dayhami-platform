@@ -1720,6 +1720,85 @@ export interface InvoiceTemplate {
   };
 }
 
+/** Bilingual commercial proposal (EN + RTL) — Invoices → Proposals tab. */
+export type ProposalStatus = 'draft' | 'sent' | 'accepted' | 'declined';
+export type ProposalRtlLanguage = 'fa' | 'ar';
+export type ProposalLogoLayout = 'corners' | 'row' | 'single';
+
+export interface ProposalParty {
+  id: string;
+  labelEn: string;
+  labelRtl: string;
+  companyEn: string;
+  companyRtl: string;
+  regNo?: string;
+  country?: string;
+  repNameEn?: string;
+  repNameRtl?: string;
+  repTitleEn?: string;
+  repTitleRtl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
+export interface ProposalSection {
+  id: string;
+  sectionNum: string;
+  titleEn: string;
+  titleRtl: string;
+  contentEn: string;
+  contentRtl: string;
+}
+
+export interface ProposalLineItem {
+  id: string;
+  itemEn: string;
+  itemRtl: string;
+  qty: string;
+  unitPrice: string;
+  total: string;
+  notes?: string;
+  selected?: boolean;
+}
+
+export interface ProposalAddOn {
+  id: string;
+  nameEn: string;
+  nameRtl: string;
+  descEn?: string;
+  descRtl?: string;
+  price: string;
+  selected?: boolean;
+}
+
+export interface CommercialProposal {
+  id: string;
+  refNo: string;
+  titleEn: string;
+  titleRtl: string;
+  subtitleEn?: string;
+  subtitleRtl?: string;
+  proposalDate: string;
+  validUntil: string;
+  logoUrl?: string;
+  logo2Url?: string;
+  contractLogoLayout?: ProposalLogoLayout;
+  contractLogoAlign?: 'start' | 'center' | 'end';
+  contractLogoSize?: 'sm' | 'md' | 'lg';
+  companyName?: string;
+  parties: ProposalParty[];
+  sections: ProposalSection[];
+  lineItems: ProposalLineItem[];
+  addOns: ProposalAddOn[];
+  currency: string;
+  rtlLanguage: ProposalRtlLanguage;
+  status: ProposalStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  createdByPersonnelId?: string;
+}
+
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';
 export type AssignmentTargetType = 'role' | 'personnel';
 
