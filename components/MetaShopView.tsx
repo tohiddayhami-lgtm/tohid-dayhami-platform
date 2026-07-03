@@ -17,10 +17,15 @@ import { MetaShopMoney } from './MetaShopMoney';
 import { metaShopProductImageUrl, productMainImage, resolveProductImages } from '../utils/metaShopImage';
 import { resolveProductIncoterms, resolveProductOrigin } from '../utils/metaShopExportTerms';
 import MetaShopFloatingStickers, { type FloatingStickerNavAction } from './MetaShopFloatingStickers';
+import { MetaShopMemberPanel, toggleMemberFavorite } from './MetaShopMemberPanel';
+import { readMetaShopMemberSession } from '../utils/metaShopMemberSession';
+import type { MetaShopMemberSession } from '../utils/metaShopMemberSession';
+import { fetchMetaShopMemberById } from '../services/metaShopMemberService';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
   country?: string; city?: string; notes?: string;
+  memberId?: string;
   items: { productId: string; name: string; sku?: string; unit?: string; qty: number; unitPrice?: number; lineTotal?: number; currency?: string; optionLabel?: string }[];
   fees?: { label: string; amount: number; currency?: string; description?: string }[];
   itemsTotal?: number;
@@ -207,6 +212,27 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [appliedDiscount, setAppliedDiscount] = useState<import('../types').MetaShopDiscount | null>(null);
   const [discountErr, setDiscountErr] = useState('');
   useEffect(() => { setGalIdx(0); }, [detail]);
+  useEffect(() => { setMemberSession(readMetaShopMemberSession(shop.id)); }, [shop.id]);
+  useEffect(() => {
+    if (!memberSession) return;
+    setForm(f => ({
+      ...f,
+      customerName: memberSession.fullName || f.customerName,
+      phone: memberSession.phone || f.phone,
+    }));
+    void fetchMetaShopMemberById(memberSession.id).then(full => {
+      if (!full) return;
+      setForm(f => ({
+        ...f,
+        customerName: full.fullName || f.customerName,
+        phone: full.phone || f.phone,
+        email: full.email || f.email,
+        company: full.company || f.company,
+        country: full.country || f.country,
+        city: full.city || f.city,
+      }));
+    });
+  }, [memberSession?.id]);
   useEffect(() => {
     if (!detail) return;
     const prev = document.body.style.overflow;
@@ -253,6 +279,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const [supplierPdfUrl, setSupplierPdfUrl] = useState<string | null>(null);
   const [supplierPdfName, setSupplierPdfName] = useState('');
   const [supplierPdfUploading, setSupplierPdfUploading] = useState(false);
+  const [memberSession, setMemberSession] = useState<MetaShopMemberSession | null>(() => readMetaShopMemberSession(shop.id));
+  const [memberPanelOpen, setMemberPanelOpen] = useState(false);
+  const [favBusyId, setFavBusyId] = useState<string | null>(null);
   const supplierFileRef = useRef<HTMLInputElement>(null);
   const supplierPdfRef = useRef<HTMLInputElement>(null);
   const emptyReferForm = () => ({
@@ -342,6 +371,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       supplierCatalogPdf: 'Supply catalog (PDF)', supplierCatalogPdfHint: 'Optional — PDF up to 50 MB',
       supplierPdfTooBig: 'PDF file must be 50 MB or smaller.', supplierPdfInvalid: 'Please choose a PDF file.',
       supplierPdfRemove: 'Remove PDF',
+      myAccount: 'My account', saveProduct: 'Save', savedProduct: 'Saved',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -392,6 +422,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       supplierCatalogPdf: 'کاتالوگ تأمین (PDF)', supplierCatalogPdfHint: 'اختیاری — حداکثر ۵۰ مگابایت',
       supplierPdfTooBig: 'حجم فایل PDF باید حداکثر ۵۰ مگابایت باشد.', supplierPdfInvalid: 'لطفاً یک فایل PDF انتخاب کنید.',
       supplierPdfRemove: 'حذف PDF',
+      myAccount: 'حساب من', saveProduct: 'ذخیره', savedProduct: 'ذخیره شد',
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
@@ -1020,6 +1051,26 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     setCartOpen(true);
   };
 
+  const favoriteIds = useMemo(
+    () => new Set(memberSession?.favoriteProductIds || []),
+    [memberSession?.favoriteProductIds],
+  );
+
+  const toggleFavorite = async (e: React.MouseEvent, productId: string) => {
+    e.stopPropagation();
+    if (!memberSession) {
+      setMemberPanelOpen(true);
+      return;
+    }
+    if (favBusyId) return;
+    setFavBusyId(productId);
+    try {
+      await toggleMemberFavorite(memberSession, productId, setMemberSession);
+    } finally {
+      setFavBusyId(null);
+    }
+  };
+
   const submit = async () => {
     if (!form.customerName.trim() || !form.phone.trim()) { setError(t.incomplete); return; }
     if (cartItems.length === 0) { setError(S('cartEmptyErr')); return; }
@@ -1030,6 +1081,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         phone: form.phone.trim(), email: form.email.trim() || undefined,
         country: form.country.trim() || undefined, city: form.city.trim() || undefined,
         notes: form.notes.trim() || undefined,
+        memberId: memberSession?.id,
         items: cartItems.map(c => ({ productId: c.p.id, name: c.optionText ? `${pName(c.p)} — ${c.optionText}` : pName(c.p), sku: c.p.sku, unit: c.p.unit, qty: c.qty, unitPrice: c.hidden ? undefined : c.rate, lineTotal: c.hidden ? undefined : c.line, currency: c.cur, optionLabel: c.optionText || undefined, priceHidden: c.hidden || undefined })),
         fees: activeFees.map(f => ({
           label: L(f.label, f.labelEn),
@@ -1235,6 +1287,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
           {!re && p.group && <span className="ms-group-badge">{pGroup(p)}</span>}
           {off > 0 && <span className="ms-disc-ribbon">−{off}%</span>}
           {opts.featured && <span className="ms-feat-badge">★ {t.featured}</span>}
+          <button
+            type="button"
+            className={`ms-fav-btn ${favoriteIds.has(p.id) ? 'on' : ''}`}
+            onClick={e => void toggleFavorite(e, p.id)}
+            title={favoriteIds.has(p.id) ? S('savedProduct') : S('saveProduct')}
+            aria-label={favoriteIds.has(p.id) ? S('savedProduct') : S('saveProduct')}
+            disabled={favBusyId === p.id}
+          >
+            {favoriteIds.has(p.id) ? '♥' : '♡'}
+          </button>
           <div className="ms-media-badges">
             {resolveProductImages(p).length > 1 && <span className="ms-media-badge">🖼 {resolveProductImages(p).length}</span>}
             {p.videoUrl && <span className="ms-media-badge">▶</span>}
@@ -1311,6 +1373,16 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             <a className="ms-cat-btn" href={catalogHref} target="_blank" rel="noreferrer" title={t.downloadCatalog}>
               <PdfIcon s={16} /><span className="ms-cat-lbl">{t.catalog}</span>
             </a>
+            <button
+              type="button"
+              className={`ms-account-btn ${memberSession ? 'on' : ''}`}
+              onClick={() => setMemberPanelOpen(true)}
+              title={S('myAccount')}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span className="ms-account-lbl">{S('myAccount')}</span>
+              {memberSession && favoriteIds.size > 0 && <span className="ms-badge">{favoriteIds.size}</span>}
+            </button>
             {!isRealEstate && (
             <button type="button" className={`ms-cart-btn ${cartCount ? 'has' : ''}`} onClick={() => (setStep('cart'), setCartOpen(true))} aria-label={t.cartBtn}>
               <CartIcon s={18} /><span className="ms-cart-lbl">{t.cartBtn}</span>{cartCount > 0 && <span className="ms-badge">{cartCount}</span>}
@@ -2084,6 +2156,25 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       </>
       )}
 
+      <MetaShopMemberPanel
+        shop={shop}
+        uiLang={uiLang}
+        dir={dir}
+        locale={locale}
+        products={products}
+        session={memberSession}
+        open={memberPanelOpen}
+        onClose={() => setMemberPanelOpen(false)}
+        onSessionChange={setMemberSession}
+        onOpenProduct={id => {
+          const p = products.find(x => x.id === id);
+          if (p) { setMemberPanelOpen(false); openDetail(p); setTab('products'); }
+        }}
+        money={money}
+        statusLabel={statusLabel}
+        cardImageWidth={CARD_IMAGE_WIDTH}
+      />
+
       <MetaShopFloatingStickers shop={shop} currentPage={tab} onNavigate={onStickerNav} />
     </div>
   );
@@ -2149,6 +2240,10 @@ const MS_CSS = `
 .ms-name { font-size:15px; font-weight:800; color:var(--ms-heading,#1f2a18); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ms-code { font-size:10px; font-family:ui-monospace,monospace; font-weight:800; letter-spacing:.08em; background:var(--ms-primary); color:#fff; padding:2px 7px; border-radius:6px; flex-shrink:0; }
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; flex-shrink:0; }
+.ms-account-btn { display:flex; align-items:center; gap:7px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; position:relative; }
+.ms-account-btn.on { background:color-mix(in srgb, var(--ms-primary) 12%, #fff); border-color:color-mix(in srgb, var(--ms-primary) 35%, #e5e7eb); color:var(--ms-primary); }
+.ms-fav-btn { position:absolute; top:8px; inset-inline-end:8px; z-index:3; width:34px; height:34px; border-radius:999px; border:0; background:rgba(255,255,255,.92); box-shadow:0 2px 8px rgba(0,0,0,.12); font-size:1rem; line-height:1; cursor:pointer; color:#9ca3af; }
+.ms-fav-btn.on { color:#ef4444; }
 .ms-cart-btn.has { box-shadow:0 4px 16px color-mix(in srgb, var(--ms-primary) 45%, transparent); }
 .ms-cat-btn { display:inline-flex; align-items:center; gap:7px; background:#fff; color:var(--ms-primary); border:1.5px solid var(--ms-primary); padding:7.5px 14px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; white-space:nowrap; transition:background .15s,color .15s; }
 .ms-cat-btn:hover { background:var(--ms-primary); color:#fff; }

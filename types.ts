@@ -1494,6 +1494,29 @@ export interface MetaShopOrder {
   /** Soft-archive — hidden from default admin lists; data kept in Firestore. */
   archivedAt?: string;
   archivedBy?: string;
+  /** Logged-in shopper account for this shop (customer portal). */
+  memberId?: string;
+}
+
+/** Per-shop shopper account — distinct from CRM `Customer` and partner `CustomerAccount`. */
+export interface MetaShopMember {
+  id: string;
+  shopId: string;
+  username: string;
+  /** PBKDF2 hash (hex) — never expose in UI. */
+  passwordHash: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  country?: string;
+  city?: string;
+  favoriteProductIds?: string[];
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+  /** `${shopId}|${username}` — unique lookup key. */
+  loginKey: string;
 }
 
 /** Master-only checkpoint: up to 3 saved snapshots per MetaShop (stored in metaShopBackups). */

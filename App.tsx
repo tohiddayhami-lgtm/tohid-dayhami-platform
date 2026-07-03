@@ -1628,7 +1628,7 @@ const App: React.FC = () => {
   }, [view, expoMapSlug, metaBazaars]);
 
   // ── Meta Shop: customer places an order → save order + route to کارتابل + return tracking code ──
-  const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; discountCode?: string; discountAmount?: number; taxRate?: number; taxAmount?: number; taxInclusive?: boolean; total: number; currency: string; }): Promise<string> => {
+  const handleMetaShopOrder = async (shop: MetaShop, data: { customerName: string; company?: string; phone: string; email?: string; country?: string; city?: string; notes?: string; memberId?: string; items: MetaShopOrder['items']; fees?: { label: string; amount: number }[]; itemsTotal?: number; discountCode?: string; discountAmount?: number; taxRate?: number; taxAmount?: number; taxInclusive?: boolean; total: number; currency: string; }): Promise<string> => {
     const phoneRaw = data.phone.trim();
     const phone = normalizePhone(phoneRaw);
     // Tracking code, e.g. SHP-1234-AB7C
@@ -1661,6 +1661,7 @@ const App: React.FC = () => {
       fees: data.fees, itemsTotal: data.itemsTotal, discountCode: data.discountCode, discountAmount: data.discountAmount,
       taxRate: data.taxRate, taxAmount: data.taxAmount, taxInclusive: data.taxInclusive, total: data.total,
       currency: data.currency, status: 'new', createdAt: new Date().toISOString(), customerId,
+      memberId: data.memberId,
       customerAccountId: portalAccount?.id,
       partnerAccountName: portalAccount?.fullName,
       partnerCommissionPercent: commissionPct,
