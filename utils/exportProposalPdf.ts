@@ -4,100 +4,180 @@ import { jsPDF } from 'jspdf';
 /** A4 content width at 96dpi — matches on-screen proposal preview. */
 export const PROPOSAL_CAPTURE_WIDTH_PX = 794;
 
-const PAGE_MARGIN_MM = 12;
+/** Usable content height on A4 with margins (px at 96dpi). */
+const PAGE_CONTENT_HEIGHT_PX = 1040;
+const PAGE_MARGIN_MM = 10;
 const A4_WIDTH_MM = 210;
 const A4_HEIGHT_MM = 297;
 
-const BREAK_SELECTORS = [
-  '.pp-logos',
-  '.pp-title-block',
-  '.pp-meta-bar',
-  '.pp-meta-sub',
-  '.pp-band',
-  '.pp-parties-table',
-  '.pp-section',
-  '.pp-price-table',
-  '.pp-addon-table',
-  '.pp-foot',
-].join(', ');
+type Block = HTMLElement;
 
-function prepareClone(source: HTMLElement): HTMLElement {
-  const clone = source.cloneNode(true) as HTMLElement;
-  // Drop embedded <style> — we inject a clean stylesheet on the host.
-  clone.querySelectorAll('style').forEach(s => s.remove());
-  clone.removeAttribute('id');
-  Object.assign(clone.style, {
-    width: `${PROPOSAL_CAPTURE_WIDTH_PX}px`,
-    maxWidth: `${PROPOSAL_CAPTURE_WIDTH_PX}px`,
-    minWidth: `${PROPOSAL_CAPTURE_WIDTH_PX}px`,
-    margin: '0',
-    padding: '0',
-    boxSizing: 'border-box',
-    background: '#ffffff',
-    direction: 'ltr',
-    textAlign: 'left',
-    position: 'relative',
-    overflow: 'visible',
-  });
-  return clone;
-}
-
-function relativeY(el: HTMLElement, root: HTMLElement): { top: number; bottom: number } {
-  const er = el.getBoundingClientRect();
-  const rr = root.getBoundingClientRect();
-  const top = er.top - rr.top + root.scrollTop;
-  return { top, bottom: top + er.height };
-}
-
-/** DOM Y offsets (px) where a page break is safe — after complete blocks. */
-function collectBreakYs(root: HTMLElement): number[] {
-  const points = new Set<number>([0]);
-
-  // Only break *after* complete blocks so headers are not left alone at page bottom.
-  root.querySelectorAll(`${BREAK_SELECTORS}, .pp-body-en, .pp-body-rtl`).forEach(node => {
-    const { bottom } = relativeY(node as HTMLElement, root);
-    if (bottom > 1) points.add(Math.round(bottom));
-  });
-
-  const height = Math.max(root.scrollHeight, root.offsetHeight, 1);
-  points.add(Math.round(height));
-  return [...points].sort((a, b) => a - b);
-}
-
-/**
- * Build page ranges [startY, endY) in DOM pixels, preferring breaks between blocks
- * so text is not cut mid-line.
- */
-function buildPageRanges(breakYs: number[], pageHeightDomPx: number): Array<{ start: number; end: number }> {
-  const total = breakYs[breakYs.length - 1] || 0;
-  if (total <= pageHeightDomPx) return [{ start: 0, end: total }];
-
-  const ranges: Array<{ start: number; end: number }> = [];
-  let start = 0;
-
-  while (start < total - 1) {
-    const limit = start + pageHeightDomPx;
-    // Largest break point that still fits on this page (and advances).
-    let end = start;
-    for (const y of breakYs) {
-      if (y <= start + 2) continue;
-      if (y <= limit) end = y;
-      else break;
+function pageCss(sourceCss: string): string {
+  return `
+    ${sourceCss}
+    .pp-pdf-page {
+      width: ${PROPOSAL_CAPTURE_WIDTH_PX}px;
+      min-height: ${PAGE_CONTENT_HEIGHT_PX}px;
+      max-width: ${PROPOSAL_CAPTURE_WIDTH_PX}px;
+      margin: 0;
+      padding: 28px 32px 36px;
+      box-sizing: border-box;
+      background: #ffffff;
+      direction: ltr !important;
+      text-align: left !important;
+      overflow: hidden;
+      position: relative;
     }
-    // Fallback: hard cut if a single block is taller than a page.
-    if (end <= start) end = Math.min(total, limit);
-    ranges.push({ start, end });
-    start = end;
-  }
-  return ranges;
+    .pp-pdf-page .pp-root {
+      max-width: none !important;
+      width: 100% !important;
+      margin: 0 !important;
+    }
+    .pp-pdf-page .pp-body-en {
+      text-align: justify !important;
+      direction: ltr !important;
+      text-align-last: left;
+    }
+    .pp-pdf-page .pp-body-rtl {
+      text-align: justify !important;
+      direction: rtl !important;
+      text-align-last: right;
+    }
+  `;
 }
 
-async function captureElement(el: HTMLElement): Promise<HTMLCanvasElement> {
-  // Wait for fonts/images/layout.
-  await (document.fonts?.ready ?? Promise.resolve());
-  await new Promise(r => setTimeout(r, 200));
+/** Top-level blocks that must stay together on one page when possible. */
+function extractBlocks(source: HTMLElement): Block[] {
+  const root = source.cloneNode(true) as HTMLElement;
+  root.querySelectorAll('style').forEach(s => s.remove());
 
-  return html2canvas(el, {
+  const blocks: Block[] = [];
+  const children = Array.from(root.children) as HTMLElement[];
+
+  // Group: logos + title + meta bars as one header block
+  const header = document.createElement('div');
+  header.className = 'pp-pdf-header-block';
+  let i = 0;
+  while (i < children.length) {
+    const el = children[i];
+    const cls = el.className || '';
+    if (
+      cls.includes('pp-logos')
+      || cls.includes('pp-title-block')
+      || cls.includes('pp-meta-bar')
+      || cls.includes('pp-meta-sub')
+    ) {
+      header.appendChild(el.cloneNode(true));
+      i++;
+      continue;
+    }
+    break;
+  }
+  if (header.childNodes.length) blocks.push(header);
+
+  // Parties: band + table together
+  while (i < children.length) {
+    const el = children[i];
+    const cls = el.className || '';
+    if (cls.includes('pp-band') && i + 1 < children.length && (children[i + 1].className || '').includes('pp-parties-table')) {
+      const wrap = document.createElement('div');
+      wrap.className = 'pp-pdf-parties-block';
+      wrap.appendChild(el.cloneNode(true));
+      wrap.appendChild(children[i + 1].cloneNode(true));
+      blocks.push(wrap);
+      i += 2;
+      continue;
+    }
+    if (cls.includes('pp-section')) {
+      blocks.push(el.cloneNode(true) as HTMLElement);
+      i++;
+      continue;
+    }
+    if (cls.includes('pp-foot')) {
+      blocks.push(el.cloneNode(true) as HTMLElement);
+      i++;
+      continue;
+    }
+    // skip unknown
+    i++;
+  }
+
+  return blocks;
+}
+
+function measureHeight(el: HTMLElement, host: HTMLElement): number {
+  const probe = el.cloneNode(true) as HTMLElement;
+  probe.style.visibility = 'hidden';
+  host.appendChild(probe);
+  const h = probe.offsetHeight;
+  probe.remove();
+  return h;
+}
+
+function packPages(blocks: Block[], host: HTMLElement): HTMLElement[][] {
+  const pages: HTMLElement[][] = [];
+  let current: HTMLElement[] = [];
+  let used = 0;
+  const pad = 64; // page padding allowance
+
+  const pushPage = () => {
+    if (current.length) pages.push(current);
+    current = [];
+    used = 0;
+  };
+
+  for (const block of blocks) {
+    const h = measureHeight(block, host);
+    const limit = PAGE_CONTENT_HEIGHT_PX - pad;
+
+    // Oversized block: put alone on its own page(s) — still one block per page start
+    if (h > limit) {
+      pushPage();
+      current.push(block);
+      pushPage();
+      continue;
+    }
+
+    if (used > 0 && used + h > limit) {
+      pushPage();
+    }
+    current.push(block);
+    used += h + 8;
+  }
+  pushPage();
+  return pages.filter(p => p.length > 0);
+}
+
+function applyCloneTextFixes(node: HTMLElement) {
+  node.style.width = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
+  node.style.background = '#ffffff';
+  node.style.direction = 'ltr';
+  node.querySelectorAll('.pp-body-en').forEach(b => {
+    const e = b as HTMLElement;
+    e.style.direction = 'ltr';
+    e.style.textAlign = 'justify';
+    e.style.unicodeBidi = 'isolate';
+  });
+  node.querySelectorAll('.pp-body-rtl').forEach(b => {
+    const e = b as HTMLElement;
+    e.style.direction = 'rtl';
+    e.style.textAlign = 'justify';
+    e.style.unicodeBidi = 'isolate';
+    e.style.fontFamily = 'Tahoma, Arial, sans-serif';
+  });
+  node.querySelectorAll('.pp-foot .rtl, .rtl-title, .rtl-sub, .co-rtl, .num-rtl, .row-rtl, .pkg-rtl, .pp-band .r, .rtl-block').forEach(b => {
+    const e = b as HTMLElement;
+    e.style.direction = 'rtl';
+    e.style.unicodeBidi = 'isolate';
+    e.style.fontFamily = 'Tahoma, Arial, sans-serif';
+  });
+}
+
+async function capturePage(pageEl: HTMLElement, foreignObject: boolean): Promise<HTMLCanvasElement> {
+  await (document.fonts?.ready ?? Promise.resolve());
+  await new Promise(r => setTimeout(r, 80));
+
+  return html2canvas(pageEl, {
     scale: 2,
     useCORS: true,
     allowTaint: true,
@@ -108,74 +188,20 @@ async function captureElement(el: HTMLElement): Promise<HTMLCanvasElement> {
     windowWidth: PROPOSAL_CAPTURE_WIDTH_PX,
     scrollX: 0,
     scrollY: 0,
-    onclone: (_doc, cloneEl) => {
-      const clone = cloneEl as HTMLElement;
-      clone.style.width = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
-      clone.style.maxWidth = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
-      clone.style.margin = '0';
-      clone.style.overflow = 'visible';
-      clone.style.direction = 'ltr';
-      clone.style.textAlign = 'left';
-      let node: HTMLElement | null = clone.parentElement;
-      while (node) {
-        node.style.overflow = 'visible';
-        node.style.direction = 'ltr';
-        node = node.parentElement;
-      }
-    },
+    // foreignObjectRendering keeps Arabic/Persian glyphs intact in supporting browsers
+    foreignObjectRendering: foreignObject,
+    onclone: (_doc, el) => applyCloneTextFixes(el as HTMLElement),
   });
 }
 
-function addCanvasSlice(
-  pdf: jsPDF,
-  canvas: HTMLCanvasElement,
-  srcY: number,
-  srcH: number,
-  isFirst: boolean,
-  pageLabel: string,
-) {
-  const contentWidth = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
-  const contentHeight = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2 - 6; // room for page number
-
-  const slice = document.createElement('canvas');
-  slice.width = canvas.width;
-  slice.height = Math.max(1, Math.round(srcH));
-  const ctx = slice.getContext('2d');
-  if (!ctx) return;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, slice.width, slice.height);
-  ctx.drawImage(
-    canvas,
-    0, Math.round(srcY), canvas.width, Math.round(srcH),
-    0, 0, slice.width, slice.height,
-  );
-
-  const imgData = slice.toDataURL('image/jpeg', 0.95);
-  let imgH = (slice.height * contentWidth) / slice.width;
-  let imgW = contentWidth;
-  if (imgH > contentHeight) {
-    const s = contentHeight / imgH;
-    imgH = contentHeight;
-    imgW = contentWidth * s;
-  }
-
-  if (!isFirst) pdf.addPage();
-  const x = PAGE_MARGIN_MM + (contentWidth - imgW) / 2;
-  pdf.addImage(imgData, 'JPEG', x, PAGE_MARGIN_MM, imgW, imgH);
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
-  pdf.setTextColor(100);
-  pdf.text(pageLabel, A4_WIDTH_MM / 2, A4_HEIGHT_MM - 6, { align: 'center' });
-}
-
 /**
- * Export the on-screen proposal preview DOM to a multi-page A4 PDF.
- * Pages break between sections/blocks (not through the middle of a line).
+ * Export the on-screen proposal preview to a clean multi-page A4 PDF.
+ * Renders each page as a full DOM page (no mid-paragraph image slicing).
  */
 export async function exportProposalPdf(element: HTMLElement, filename: string): Promise<void> {
+  const sourceCss = element.querySelector('style')?.textContent || '';
+
   const host = document.createElement('div');
-  host.className = 'proposal-pdf-capture-host';
   Object.assign(host.style, {
     position: 'fixed',
     left: '0',
@@ -186,43 +212,85 @@ export async function exportProposalPdf(element: HTMLElement, filename: string):
     pointerEvents: 'none',
     overflow: 'visible',
     background: '#ffffff',
-    transform: 'translateX(-120vw)',
+    transform: 'translateX(-140vw)',
   });
 
-  // Re-inject proposal CSS so the clone matches the live preview exactly.
-  const liveStyle = element.querySelector('style')?.textContent || '';
   const styleEl = document.createElement('style');
-  styleEl.textContent = liveStyle || '';
-
-  const captureRoot = prepareClone(element);
+  styleEl.textContent = pageCss(sourceCss);
   host.appendChild(styleEl);
-  host.appendChild(captureRoot);
+
+  // Measure host for packing
+  const measureHost = document.createElement('div');
+  measureHost.className = 'pp-pdf-page';
+  measureHost.style.width = `${PROPOSAL_CAPTURE_WIDTH_PX}px`;
+  host.appendChild(measureHost);
+
+  document.body.appendChild(host);
 
   try {
-    document.body.appendChild(host);
+    const blocks = extractBlocks(element);
+    // Filter empty add-on sections: section with only empty addon table
+    const filtered = blocks.filter(b => {
+      if (!b.classList.contains('pp-section')) return true;
+      const addonTable = b.querySelector('.pp-addon-table');
+      if (!addonTable) return true;
+      const cells = Array.from(addonTable.querySelectorAll('tbody td.pkg-en, tbody .pkg-en'));
+      // if addon section has no real names, drop it
+      const hasContent = Array.from(addonTable.querySelectorAll('tbody tr')).some(tr => {
+        const text = (tr.textContent || '').replace(/[0\s✓OMR]/g, '');
+        return text.length > 2;
+      });
+      return hasContent || !addonTable;
+    });
 
-    // Force layout at fixed width.
-    void captureRoot.offsetHeight;
-
-    const contentWidthMm = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
-    const contentHeightMm = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2 - 6;
-    // DOM px that fit on one A4 page at capture width.
-    const pageHeightDomPx = (contentHeightMm / contentWidthMm) * PROPOSAL_CAPTURE_WIDTH_PX;
-
-    const breakYs = collectBreakYs(captureRoot);
-    const ranges = buildPageRanges(breakYs, pageHeightDomPx);
-
-    const canvas = await captureElement(captureRoot);
-    const scaleY = canvas.height / Math.max(1, captureRoot.scrollHeight);
+    const pages = packPages(filtered.length ? filtered : blocks, measureHost);
+    measureHost.remove();
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
-    const totalPages = ranges.length;
+    const contentW = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
+    const contentH = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2 - 8;
 
-    ranges.forEach((range, i) => {
-      const srcY = range.start * scaleY;
-      const srcH = Math.max(1, (range.end - range.start) * scaleY);
-      addCanvasSlice(pdf, canvas, srcY, srcH, i === 0, `${i + 1} / ${totalPages}`);
-    });
+    for (let i = 0; i < pages.length; i++) {
+      const pageEl = document.createElement('div');
+      pageEl.className = 'pp-pdf-page';
+      const inner = document.createElement('div');
+      inner.className = 'pp-root';
+      inner.setAttribute('dir', 'ltr');
+      pages[i].forEach(b => inner.appendChild(b.cloneNode(true)));
+      pageEl.appendChild(inner);
+      host.appendChild(pageEl);
+
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await capturePage(pageEl, true);
+        // Fallback if foreignObject produced a blank/near-blank page
+        const probe = canvas.getContext('2d')?.getImageData(8, 8, 4, 4).data;
+        const blank = probe && probe[0] === 255 && probe[1] === 255 && probe[2] === 255 && probe[3] === 255;
+        if (blank && canvas.height > 100) {
+          canvas = await capturePage(pageEl, false);
+        }
+      } catch {
+        canvas = await capturePage(pageEl, false);
+      }
+      pageEl.remove();
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      let imgW = contentW;
+      let imgH = (canvas.height * contentW) / canvas.width;
+      if (imgH > contentH) {
+        const s = contentH / imgH;
+        imgH = contentH;
+        imgW = contentW * s;
+      }
+
+      if (i > 0) pdf.addPage();
+      const x = PAGE_MARGIN_MM + (contentW - imgW) / 2;
+      pdf.addImage(imgData, 'JPEG', x, PAGE_MARGIN_MM, imgW, imgH);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(100);
+      pdf.text(`${i + 1} / ${pages.length}`, A4_WIDTH_MM / 2, A4_HEIGHT_MM - 6, { align: 'center' });
+    }
 
     pdf.save(filename);
   } finally {

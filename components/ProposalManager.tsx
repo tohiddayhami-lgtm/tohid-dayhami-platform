@@ -291,31 +291,39 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
       width: 50%; vertical-align: top; border: 1px solid #cbd5e1; padding: 12px 14px;
       background: #f8fafc; direction: ltr !important; text-align: left !important;
     }
+    .pp-parties-table .en-block {
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate; margin-bottom: 10px;
+    }
+    .pp-parties-table .rtl-block {
+      direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+      border-top: 1px solid #e2e8f0; padding-top: 8px;
+    }
     .pp-parties-table .num {
       font-size: 9pt; font-weight: 800; color: #0b1f3a; letter-spacing: .04em; margin-bottom: 4px;
-      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+      direction: ltr !important; text-align: left !important;
     }
     .pp-parties-table .num-rtl {
-      font-size: 9pt; font-weight: 800; color: #0b1f3a;
-      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-bottom: 6px;
+      font-size: 9pt; font-weight: 800; color: #0b1f3a; margin-bottom: 4px;
+      direction: rtl !important; text-align: right !important;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-parties-table .co {
       font-size: 11pt; font-weight: 800; color: #0f172a; margin-bottom: 2px;
-      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+      direction: ltr !important; text-align: left !important;
     }
     .pp-parties-table .co-rtl {
-      font-size: 10.5pt; font-weight: 700; color: #1e293b;
-      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-bottom: 8px;
+      font-size: 10.5pt; font-weight: 700; color: #1e293b; margin-bottom: 6px;
+      direction: rtl !important; text-align: right !important;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-parties-table .row {
-      font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.4;
-      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+      font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.45;
+      direction: ltr !important; text-align: left !important;
     }
     .pp-parties-table .row-rtl {
-      font-size: 9pt; color: #334155;
-      direction: rtl !important; text-align: right !important; unicode-bidi: isolate; margin-top: 1px;
+      font-size: 9pt; color: #334155; margin-top: 2px; line-height: 1.55;
+      direction: rtl !important; text-align: right !important;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-section { margin: 0 0 4px; page-break-inside: avoid; direction: ltr !important; }
@@ -347,18 +355,19 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
       direction: ltr !important; text-align: left !important;
     }
     .pp-price-table tr.sel td, .pp-addon-table tr.sel td { background: #ecfdf5; }
-    .pp-price-table .pkg-en {
-      font-weight: 700; color: #0f172a;
+    .pp-price-table .pkg-en, .pp-addon-table .pkg-en {
+      font-weight: 700; color: #0f172a; display: block;
       direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
     }
     .pp-price-table .pkg-rtl, .pp-addon-table .pkg-rtl {
+      display: block; margin-top: 4px;
       direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
-      font-size: 9pt; color: #334155; margin-top: 3px;
+      font-size: 9pt; color: #334155; font-weight: 600;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
     .pp-price-table .pkg-note, .pp-addon-table .pkg-note {
-      font-size: 8pt; color: #64748b; margin-top: 3px; font-style: italic;
-      direction: ltr !important; text-align: left !important;
+      display: block; font-size: 8pt; color: #64748b; margin-top: 4px; font-style: italic;
+      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
     }
     .pp-price-table .num, .pp-addon-table .num {
       text-align: center !important; white-space: nowrap; font-variant-numeric: tabular-nums;
@@ -374,10 +383,14 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
       direction: ltr !important;
     }
     .pp-foot .co { font-weight: 800; color: #0b1f3a; font-size: 9.5pt; margin-bottom: 4px; direction: ltr !important; }
-    .pp-foot .en { direction: ltr !important; text-align: center; unicode-bidi: isolate; }
+    .pp-foot .en {
+      direction: ltr !important; text-align: center; unicode-bidi: isolate;
+      display: block; margin-bottom: 4px;
+    }
     .pp-foot .rtl {
       direction: rtl !important; text-align: center; unicode-bidi: isolate;
-      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+      font-family: Tahoma, Arial, sans-serif;
+      display: block; line-height: 1.7;
     }
     @media print {
       .pp-root { max-width: none; }
@@ -410,25 +423,27 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
 
   const partyBlock = (party: ProposalParty, index: number) => (
     <td key={party.id} dir="ltr">
-      <div className="num" dir="ltr">{index + 1}. {party.labelEn}{party.labelEn.endsWith(':') ? '' : ':'}</div>
-      {party.labelRtl && <div className="num-rtl" dir="rtl">{index + 1}. {party.labelRtl}</div>}
-      <div className="co" dir="ltr">{party.companyEn || '—'}</div>
-      {party.companyRtl && <div className="co-rtl" dir="rtl">{party.companyRtl}</div>}
-      {party.regNo && <div className="row" dir="ltr">Reg. No.: {party.regNo}</div>}
-      {party.regNo && <div className="row-rtl" dir="rtl">شماره ثبت: {party.regNo}</div>}
-      {party.country && <div className="row" dir="ltr">Country: {party.country}</div>}
-      {party.country && <div className="row-rtl" dir="rtl">کشور: {party.country}</div>}
-      {(party.repNameEn || party.repNameRtl) && (
-        <>
-          <div className="row" dir="ltr" style={{ marginTop: 8 }}>Contact: {party.repNameEn || '—'}</div>
-          {party.repTitleEn && <div className="row" dir="ltr">{party.repTitleEn}</div>}
-          {party.repNameRtl && <div className="row-rtl" dir="rtl">تماس: {party.repNameRtl}</div>}
-          {party.repTitleRtl && <div className="row-rtl" dir="rtl">{party.repTitleRtl}</div>}
-        </>
-      )}
-      {(party.contactEmail || party.contactPhone) && (
-        <div className="row" style={{ marginTop: 6 }} dir="ltr">
-          {[party.contactEmail, party.contactPhone].filter(Boolean).join(' · ')}
+      <div className="en-block" dir="ltr">
+        <div className="num">{index + 1}. {party.labelEn}{party.labelEn.endsWith(':') ? '' : ':'}</div>
+        <div className="co">{party.companyEn || '—'}</div>
+        {party.regNo && <div className="row">Reg. No.: {party.regNo}</div>}
+        {party.country && <div className="row">Country: {party.country}</div>}
+        {party.repNameEn && <div className="row" style={{ marginTop: 6 }}>Contact: {party.repNameEn}</div>}
+        {party.repTitleEn && <div className="row">{party.repTitleEn}</div>}
+        {(party.contactEmail || party.contactPhone) && (
+          <div className="row" style={{ marginTop: 4 }} dir="ltr">
+            {[party.contactEmail, party.contactPhone].filter(Boolean).join(' · ')}
+          </div>
+        )}
+      </div>
+      {(party.labelRtl || party.companyRtl || party.repNameRtl) && (
+        <div className="rtl-block" dir="rtl">
+          {party.labelRtl && <div className="num-rtl">{index + 1}. {party.labelRtl}</div>}
+          {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
+          {party.regNo && <div className="row-rtl">شماره ثبت: {party.regNo}</div>}
+          {party.country && <div className="row-rtl">کشور: {party.country}</div>}
+          {party.repNameRtl && <div className="row-rtl" style={{ marginTop: 6 }}>تماس: {party.repNameRtl}</div>}
+          {party.repTitleRtl && <div className="row-rtl">{party.repTitleRtl}</div>}
         </div>
       )}
     </td>
@@ -526,7 +541,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
           </div>
         )}
 
-        {p.addOns.length > 0 && (
+        {p.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim()) && (
           <div className="pp-section">
             <div className="pp-band">
               <div className="l" dir="ltr">OPTIONAL ADD-ONS</div>
@@ -541,7 +556,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
                 </tr>
               </thead>
               <tbody>
-                {p.addOns.map(ao => (
+                {p.addOns.filter(ao => (ao.nameEn || ao.nameRtl || '').trim()).map(ao => (
                   <tr key={ao.id} className={ao.selected ? 'sel' : undefined}>
                     <td>
                       <div className="pkg-en" dir="ltr">{ao.nameEn}</div>
