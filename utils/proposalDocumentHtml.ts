@@ -1,17 +1,20 @@
 import type { CommercialProposal, ProposalParty } from '../types';
 
 /**
- * Shared bilingual proposal HTML for Word (.doc) and print/PDF.
- * Rules:
- * - Never nest double-quotes inside style="..."
- * - EN: dir=ltr, left/justify, Calibri
- * - FA/AR: dir=rtl, right/justify, Tahoma
- * - Tables only (Word-safe)
+ * Shared bilingual proposal HTML for Word (.doc) and PDF.
+ *
+ * Word justify rules (why it looked awful before):
+ * - One giant <p> with <br/> makes Word stretch every line including the last.
+ * - Bullet/list lines must NEVER be justified.
+ * - Only multi-line prose paragraphs get justify; short lines stay start-aligned.
+ * - Never nest " inside style="...".
  */
 
 const NAVY = '#0b1f3a';
-const EN_FONT = "Calibri, Arial, sans-serif";
-const RTL_FONT = "Tahoma, Arial, sans-serif";
+const EN_FONT = 'Calibri, Arial, sans-serif';
+const RTL_FONT = 'Tahoma, Arial, sans-serif';
+
+export type ProposalDocMode = 'word' | 'pdf';
 
 const esc = (s: string) =>
   (s || '')
@@ -20,7 +23,73 @@ const esc = (s: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-const nl2br = (s: string) => esc(s).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>');
+const LIST_RE = /^(?:[•▪◦●・]|[-–—*]|\d{1,3}[.)]|[۰-۹]{1,3}[.)])\s+/;
+
+const isListLine = (line: string) => LIST_RE.test(line.trim());
+
+/** Split on blank lines into blocks; keep single newlines inside a block as soft breaks. */
+function splitBlocks(text: string): string[] {
+  return (text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split(/\n{2,}/)
+    .map(b => b.trim())
+    .filter(Boolean);
+}
+
+function renderBody(text: string, rtl: boolean, mode: ProposalDocMode): string {
+  const blocks = splitBlocks(text);
+  if (!blocks.length) return '';
+
+  const font = rtl ? RTL_FONT : EN_FONT;
+  const dir = rtl ? 'rtl' : 'ltr';
+  const lang = rtl ? ' lang="fa"' : '';
+  const startAlign = rtl ? 'right' : 'left';
+  // PDF capture must not justify (letter-spacing breaks Arabic joins in html2canvas).
+  const allowJustify = mode === 'word';
+
+  const parts = blocks.map(block => {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) return '';
+
+    const listCount = lines.filter(isListLine).length;
+    const treatAsList = listCount > 0 && listCount >= Math.ceil(lines.length * 0.5);
+
+    if (treatAsList) {
+      return lines.map(line => {
+        const t = esc(line);
+        // Hanging indent for bullets — Word-friendly, never justified.
+        if (rtl) {
+          return `<p dir="rtl"${lang} style="margin:0 0 4pt 0;font-family:${font};font-size:10pt;line-height:1.75;color:#0f172a;text-align:right;margin-right:12pt;text-indent:-12pt;">${t}</p>`;
+        }
+        return `<p dir="ltr" style="margin:0 0 4pt 0;font-family:${font};font-size:10pt;line-height:1.5;color:#0f172a;text-align:left;margin-left:12pt;text-indent:-12pt;">${t}</p>`;
+      }).join('');
+    }
+
+    // Prose: join soft line-breaks with space (real paragraph).
+    const prose = esc(lines.join(' '));
+    const longEnough = prose.length >= 90;
+    const align = allowJustify && longEnough ? 'justify' : startAlign;
+    // text-justify:inter-word + no last-line stretch (Word honors text-align-last poorly,
+    // but separate paragraphs fix the "last line stretched" look).
+    const justifyExtra = align === 'justify'
+      ? 'text-justify:inter-word;'
+      : '';
+
+    if (rtl) {
+      return `<p dir="rtl"${lang} style="margin:0 0 8pt 0;font-family:${font};font-size:10pt;line-height:1.85;color:#0f172a;text-align:${align};${justifyExtra}">${prose}</p>`;
+    }
+    return `<p dir="ltr" style="margin:0 0 8pt 0;font-family:${font};font-size:10pt;line-height:1.55;color:#0f172a;text-align:${align};${justifyExtra}">${prose}</p>`;
+  });
+
+  const inner = parts.join('');
+  if (rtl) {
+    return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:100%;margin:0 0 10pt 0;">
+      <tr><td dir="rtl" style="background:#f8fafc;border:1pt solid #e2e8f0;padding:8pt 10pt;">${inner}</td></tr>
+    </table>`;
+  }
+  return `<div style="margin:8pt 0 4pt 0;">${inner}</div>`;
+}
 
 const band = (en: string, rtl: string) => `
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:12pt;width:100%;">
@@ -56,14 +125,7 @@ const partyCell = (party: ProposalParty, index: number) => {
 </td>`;
 };
 
-export type ProposalDocMode = 'word' | 'pdf';
-
-/** Build full HTML document. `mode=pdf` avoids justify (breaks Arabic in canvas). */
 export function buildProposalDocumentHtml(p: CommercialProposal, mode: ProposalDocMode = 'word'): string {
-  // Word supports justify with real text. PDF/html2canvas justify letter-spaces Arabic and disconnects glyphs.
-  const enAlign = mode === 'word' ? 'justify' : 'left';
-  const rtlAlign = mode === 'word' ? 'justify' : 'right';
-
   const logoRow = (p.logoUrl || p.logo2Url)
     ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-bottom:10pt;width:100%;">
         <tr>
@@ -75,8 +137,8 @@ export function buildProposalDocumentHtml(p: CommercialProposal, mode: ProposalD
 
   const sections = p.sections.map(sec => `
     ${band(sec.titleEn || sec.sectionNum, sec.titleRtl || '')}
-    ${sec.contentEn ? `<p dir="ltr" style="margin:8pt 0 6pt 0;font-family:${EN_FONT};font-size:10pt;line-height:1.55;text-align:${enAlign};color:#0f172a;">${nl2br(sec.contentEn)}</p>` : ''}
-    ${sec.contentRtl ? `<p dir="rtl" lang="fa" style="margin:0 0 10pt 0;font-family:${RTL_FONT};font-size:10pt;line-height:1.9;text-align:${rtlAlign};color:#0f172a;background:#f8fafc;border:1pt solid #e2e8f0;padding:8pt 10pt;">${nl2br(sec.contentRtl)}</p>` : ''}
+    ${sec.contentEn ? renderBody(sec.contentEn, false, mode) : ''}
+    ${sec.contentRtl ? renderBody(sec.contentRtl, true, mode) : ''}
   `).join('');
 
   const priceRows = p.lineItems.map(li => `
@@ -159,15 +221,9 @@ export function buildProposalDocumentHtml(p: CommercialProposal, mode: ProposalD
 <![endif]-->
 <style>
   @page { size: A4; margin: 1.8cm 1.6cm; }
-  body {
-    margin: 0;
-    padding: 0;
-    color: #0f172a;
-    font-family: ${EN_FONT};
-    font-size: 10pt;
-  }
-  p { margin: 0; }
-  table { border-collapse: collapse; }
+  body { margin:0; padding:0; color:#0f172a; font-family:${EN_FONT}; font-size:10pt; }
+  p { margin:0; }
+  table { border-collapse:collapse; }
 </style>
 </head>
 <body>
