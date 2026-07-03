@@ -14,7 +14,7 @@ import { db, sanitizeData } from './firebaseService';
 const COL = 'metaShopMembers';
 const ORDERS_COL = 'metaShopOrders';
 
-type ProxyOpts = { doc?: string; whereField?: string; whereEq?: string; all?: boolean };
+type ProxyOpts = { doc?: string; whereField?: string; whereEq?: string; all?: boolean; orderField?: string; dir?: 'asc' | 'desc' };
 
 const PROXY_LS_KEY = '_iran_proxy_v2';
 
@@ -47,6 +47,10 @@ async function proxyGet<T>(col: string, opts: ProxyOpts = {}): Promise<T> {
     p.set('whereField', opts.whereField);
     p.set('whereEq', opts.whereEq);
     if (opts.all) p.set('all', '1');
+  }
+  if (opts.orderField) {
+    p.set('orderField', opts.orderField);
+    if (opts.dir) p.set('dir', opts.dir);
   }
   const r = await fetch(`/api/fb?${p}`);
   if (!r.ok) throw new Error(`Proxy ${r.status}`);
@@ -94,6 +98,65 @@ export async function findMetaShopMemberByLoginKey(loginKey: string): Promise<Me
   } catch {
     return null;
   }
+}
+
+export async function fetchMetaShopMembersByShop(shopId: string): Promise<MetaShopMember[]> {
+  try {
+    let rows: MetaShopMember[] = [];
+    if (await isProxy()) {
+      const all = await proxyGet<MetaShopMember[]>(COL, { whereField: 'shopId', whereEq: shopId, all: true });
+      rows = Array.isArray(all) ? all : [];
+    } else {
+      const q = query(collection(db, COL), where('shopId', '==', shopId));
+      const snap = await getDocs(q);
+      rows = snap.docs.map(d => d.data() as MetaShopMember);
+    }
+    return rows.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  } catch {
+    return [];
+  }
+}
+
+/** Admin — all members (for per-shop counts on manager list). */
+export async function fetchAllMetaShopMembers(): Promise<MetaShopMember[]> {
+  try {
+    if (await isProxy()) {
+      const rows = await proxyGet<MetaShopMember[]>(COL, { orderField: 'createdAt', dir: 'desc' });
+      return Array.isArray(rows) ? rows : [];
+    }
+    const snap = await getDocs(collection(db, COL));
+    return snap.docs
+      .map(d => d.data() as MetaShopMember)
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  } catch {
+    return [];
+  }
+}
+
+export async function updateMetaShopMemberAdmin(
+  member: MetaShopMember,
+  updates: Partial<Pick<MetaShopMember, 'isVip' | 'vipDiscountPercent' | 'vipNote' | 'isActive'>>,
+): Promise<MetaShopMember> {
+  const next: MetaShopMember = {
+    ...member,
+    ...updates,
+    vipDiscountPercent: updates.vipDiscountPercent != null && updates.vipDiscountPercent > 0
+      ? Math.min(100, updates.vipDiscountPercent)
+      : (updates.vipDiscountPercent === 0 ? undefined : member.vipDiscountPercent),
+    vipNote: updates.vipNote?.trim() || member.vipNote,
+  };
+  if (updates.isVip === false) {
+    next.vipDiscountPercent = undefined;
+  }
+  await writeMember(next);
+  return next;
+}
+
+export function summarizeMetaShopMembers(members: MetaShopMember[]) {
+  const total = members.length;
+  const vip = members.filter(m => m.isVip).length;
+  const active = members.filter(m => m.isActive !== false).length;
+  return { total, vip, active };
 }
 
 export async function findMetaShopMembersByPhone(shopId: string, phone: string): Promise<MetaShopMember[]> {

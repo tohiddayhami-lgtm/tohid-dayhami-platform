@@ -1439,6 +1439,8 @@ export interface MetaShop {
   supplierCollaborationEnabled?: boolean;
   /** Up to 3 floating PNG promo stickers on the public storefront. */
   floatingStickers?: MetaShopFloatingSticker[];
+  /** Default VIP discount % for members marked VIP (overridable per member). */
+  vipDefaultDiscountPercent?: number;
   /** Link-share / Open Graph (WhatsApp, Telegram, …) — overrides defaults when set. */
   seoTitle?: string;
   seoDescription?: string;
@@ -1496,6 +1498,9 @@ export interface MetaShopOrder {
   archivedBy?: string;
   /** Logged-in shopper account for this shop (customer portal). */
   memberId?: string;
+  /** Auto VIP discount applied at checkout. */
+  memberVipDiscountPercent?: number;
+  memberVipDiscountAmount?: number;
 }
 
 /** Per-shop shopper account — distinct from CRM `Customer` and partner `CustomerAccount`. */
@@ -1513,6 +1518,11 @@ export interface MetaShopMember {
   city?: string;
   favoriteProductIds?: string[];
   isActive: boolean;
+  /** VIP member — automatic checkout discount. */
+  isVip?: boolean;
+  /** Per-member VIP % (falls back to shop `vipDefaultDiscountPercent`). */
+  vipDiscountPercent?: number;
+  vipNote?: string;
   createdAt: string;
   lastLoginAt?: string;
   /** `${shopId}|${username}` — unique lookup key. */

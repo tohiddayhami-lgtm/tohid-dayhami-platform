@@ -21,6 +21,8 @@ import { MetaShopMemberPanel, toggleMemberFavorite } from './MetaShopMemberPanel
 import { readMetaShopMemberSession } from '../utils/metaShopMemberSession';
 import type { MetaShopMemberSession } from '../utils/metaShopMemberSession';
 import { fetchMetaShopMemberById } from '../services/metaShopMemberService';
+import { resolveMemberVipDiscountPercent, computeVipDiscountAmount } from '../utils/metaShopMemberVip';
+import { memberSessionToPublic, writeMetaShopMemberSession } from '../utils/metaShopMemberSession';
 
 interface OrderData {
   customerName: string; company?: string; phone: string; email?: string;
@@ -31,6 +33,8 @@ interface OrderData {
   itemsTotal?: number;
   discountCode?: string;
   discountAmount?: number;
+  memberVipDiscountPercent?: number;
+  memberVipDiscountAmount?: number;
   taxRate?: number;
   taxAmount?: number;
   taxInclusive?: boolean;
@@ -232,6 +236,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     }));
     void fetchMetaShopMemberById(memberSession.id).then(full => {
       if (!full) return;
+      const pub = memberSessionToPublic(full);
+      setMemberSession(pub);
+      writeMetaShopMemberSession(full);
       setForm(f => ({
         ...f,
         customerName: full.fullName || f.customerName,
@@ -378,6 +385,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       supplierPdfTooBig: 'PDF file must be 50 MB or smaller.', supplierPdfInvalid: 'Please choose a PDF file.',
       supplierPdfRemove: 'Remove PDF',
       myAccount: 'My account', saveProduct: 'Save', savedProduct: 'Saved',
+      vipDiscount: 'VIP discount', vipMember: 'VIP member',
     },
     fa: {
       cartBtn: 'ثبت سفارش', addProduct: 'افزودن به سبد', addService: 'افزودن به درخواست', added: 'افزوده شد ✓', all: 'همه',
@@ -429,6 +437,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
       supplierPdfTooBig: 'حجم فایل PDF باید حداکثر ۵۰ مگابایت باشد.', supplierPdfInvalid: 'لطفاً یک فایل PDF انتخاب کنید.',
       supplierPdfRemove: 'حذف PDF',
       myAccount: 'حساب من', saveProduct: 'ذخیره', savedProduct: 'ذخیره شد',
+      vipDiscount: 'تخفیف VIP', vipMember: 'عضو VIP',
     },
     ar: {
       cartBtn: 'تأكيد الطلب', addProduct: 'أضف إلى السلة', addService: 'أضف إلى الطلب', added: 'تمت الإضافة ✓', all: 'الكل',
@@ -855,11 +864,17 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     return Math.round(raw * 100) / 100;
   };
   const discountAmount = computeDiscount(appliedDiscount);
+  const memberVipPercent = useMemo(
+    () => resolveMemberVipDiscountPercent(shop, memberSession),
+    [shop, memberSession?.isVip, memberSession?.vipDiscountPercent, shop.vipDefaultDiscountPercent],
+  );
+  const vipDiscountAmount = computeVipDiscountAmount(grandTotal, memberVipPercent);
+  const totalDiscountAmount = Math.min(grandTotal, discountAmount + vipDiscountAmount);
   // ── Tax (inclusive or exclusive, optional on invoice) ──
   const taxRate = metaShopTaxRateConfigured(shop);
   const taxInclusive = !!shop.taxInclusive;
   const taxActive = metaShopTaxActive(shop);
-  const taxBase = Math.max(0, grandTotal - discountAmount) + feesTotal;
+  const taxBase = Math.max(0, grandTotal - totalDiscountAmount) + feesTotal;
   const { taxAmount, finalTotal } = computeMetaShopTax(taxBase, shop, taxActive);
 
   const applyDiscount = () => {
@@ -1097,7 +1112,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
         })),
         itemsTotal: grandTotal,
         discountCode: appliedDiscount ? appliedDiscount.code : undefined,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        discountAmount: totalDiscountAmount > 0 ? totalDiscountAmount : undefined,
+        memberVipDiscountPercent: vipDiscountAmount > 0 ? memberVipPercent : undefined,
+        memberVipDiscountAmount: vipDiscountAmount > 0 ? vipDiscountAmount : undefined,
         taxRate: taxActive && taxRate > 0 ? taxRate : undefined,
         taxAmount: taxActive && taxAmount > 0 ? Math.round(taxAmount * 100) / 100 : undefined,
         taxInclusive: taxActive && taxRate > 0 ? taxInclusive : undefined,
@@ -1381,12 +1398,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
             </a>
             <button
               type="button"
-              className={`ms-account-btn ${memberSession ? 'on' : ''}`}
+              className={`ms-account-btn ${memberSession ? 'on' : ''} ${memberSession?.isVip ? 'vip' : ''}`}
               onClick={() => setMemberPanelOpen(true)}
               title={S('myAccount')}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span className="ms-account-lbl">{S('myAccount')}</span>
+              <span className="ms-account-lbl">{memberSession?.isVip ? `★ ${S('vipMember')}` : S('myAccount')}</span>
               {memberSession && favoriteIds.size > 0 && <span className="ms-badge">{favoriteIds.size}</span>}
             </button>
             {!isRealEstate && (
@@ -2106,7 +2123,12 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
                     )}
                   </>
                 ) : null}
-                {!multiCur && discountAmount > 0 && <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount?.code})</span><span>− {money(discountAmount, displayCur)}</span></div>}
+                {!multiCur && appliedDiscount && discountAmount > 0 && (
+                  <div className="ms-inv-discount"><span>{t.discountLine} ({appliedDiscount.code})</span><span>− {money(discountAmount, displayCur)}</span></div>
+                )}
+                {!multiCur && vipDiscountAmount > 0 && (
+                  <div className="ms-inv-discount ms-inv-vip"><span>{S('vipDiscount')} ({memberVipPercent}%)</span><span>− {money(vipDiscountAmount, displayCur)}</span></div>
+                )}
                 {!multiCur && taxActive && (
                   <div className="ms-inv-tax">
                     <span>{(L(shop.taxLabel, shop.taxLabelEn) || (taxInclusive ? t.taxIncl : t.taxExcl))} ({taxRate}%{taxInclusive ? ` · ${t.taxIncl}` : ''})</span>
@@ -2247,6 +2269,8 @@ const MS_CSS = `
 .ms-cart-btn { display:flex; align-items:center; gap:8px; background:var(--ms-primary); color:#fff; border:none; padding:9px 18px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.15); white-space:nowrap; flex-shrink:0; }
 .ms-account-btn { display:flex; align-items:center; gap:7px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; flex-shrink:0; position:relative; }
 .ms-account-btn.on { background:color-mix(in srgb, var(--ms-primary) 12%, #fff); border-color:color-mix(in srgb, var(--ms-primary) 35%, #e5e7eb); color:var(--ms-primary); }
+.ms-account-btn.vip { background:#fffbeb; border-color:#fcd34d; color:#b45309; }
+.ms-inv-vip { color:#b45309; }
 .ms-fav-btn { position:absolute; top:8px; inset-inline-end:8px; z-index:3; width:32px; height:32px; border-radius:50%; border:0; background:rgba(255,255,255,.88); backdrop-filter:blur(6px); box-shadow:0 1px 4px rgba(0,0,0,.1); display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; color:#d1d5db; transition:color .15s ease, transform .12s ease; }
 .ms-fav-btn:hover { transform:scale(1.06); }
 .ms-fav-btn.on { color:#ef4444; }

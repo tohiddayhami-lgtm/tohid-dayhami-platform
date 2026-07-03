@@ -339,9 +339,9 @@ export const MetaShopMemberPanel: React.FC<Props> = ({
       <div className="msm-panel">
         <aside className="msm-side">
           <div className="msm-user-card">
-            <div className="msm-avatar">{session.fullName.charAt(0).toUpperCase()}</div>
+            <div className={`msm-avatar ${session.isVip ? 'vip' : ''}`}>{session.fullName.charAt(0).toUpperCase()}</div>
             <div>
-              <b>{session.fullName}</b>
+              <b>{session.fullName}{session.isVip && <span className="msm-vip-tag"> ★ VIP</span>}</b>
               <span dir="ltr">@{session.username}</span>
             </div>
           </div>
@@ -498,6 +498,8 @@ const MSM_CSS = `
 .msm-side { width:240px; background:#f8fafc; border-inline-end:1px solid #e8eaed; padding:18px 14px; display:flex; flex-direction:column; gap:14px; }
 .msm-user-card { display:flex; gap:12px; align-items:center; }
 .msm-avatar { width:44px; height:44px; border-radius:14px; background:var(--ms-primary,#2563eb); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; flex-shrink:0; }
+.msm-avatar.vip { background:linear-gradient(135deg,#f59e0b,#ef4444); }
+.msm-vip-tag { color:#d97706; font-size:.78rem; font-weight:800; }
 .msm-user-card b { display:block; font-size:.95rem; color:#111827; }
 .msm-user-card span { font-size:.78rem; color:#6b7280; }
 .msm-nav { display:flex; flex-direction:column; gap:6px; flex:1; }

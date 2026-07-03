@@ -27,7 +27,8 @@ import { MetaShopOrdersHub } from './MetaShopOrdersHub';
 import { clearMetaShopManagerNav, loadMetaShopManagerNav, saveMetaShopManagerNav } from '../utils/metaShopPanelSession';
 import { MetaShopBulkPriceMarkupPanel, MetaShopProductMarkupFields, MetaShopProductPromoLabelField } from './MetaShopPriceMarkupEditor';
 import { MetaShopBulkExportTermsPanel, MetaShopProductExportFields } from './MetaShopExportTermsEditor';
-import { MetaShopPriceHistoryPanel } from './MetaShopPriceHistoryPanel';
+import { MetaShopMembersManager } from './MetaShopMembersManager';
+import { fetchAllMetaShopMembers } from '../services/metaShopMemberService';
 import {
   appendPriceHistory,
   appendPriceHistoryMany,
@@ -201,7 +202,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const savedNav = loadMetaShopManagerNav();
   const [section, setSection] = useState<'shops' | 'bazaars' | 'expos' | 'uploads' | 'currency-rates'>('shops');
   const [shopFilter, setShopFilter] = useState<'all' | MetaShopType>('all');
-  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords'>(() => {
+  const [mode, setMode] = useState<'list' | 'editor' | 'orders' | 'all-orders' | 'referrals' | 'supplier-collab' | 'analytics' | 'keywords' | 'members'>(() => {
     if (savedNav?.mode === 'orders' || savedNav?.mode === 'all-orders') return savedNav.mode;
     return 'list';
   });
@@ -219,6 +220,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [analyticsEvents, setAnalyticsEvents] = useState<MetaShopEvent[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [membersShopId, setMembersShopId] = useState<string | null>(null);
+  const [memberStatsByShop, setMemberStatsByShop] = useState<Record<string, { total: number; vip: number }>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [embedShop, setEmbedShop] = useState<MetaShop | null>(null); // Google Site / iframe embed export modal
   const [embedHeight, setEmbedHeight] = useState(1200);
@@ -290,10 +293,28 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     return () => { cancelled = true; };
   }, [metaShops, section, mode]);
 
+  useEffect(() => {
+    if (section !== 'shops' || mode !== 'list') return;
+    let cancelled = false;
+    (async () => {
+      const all = await fetchAllMetaShopMembers();
+      if (cancelled) return;
+      const map: Record<string, { total: number; vip: number }> = {};
+      for (const m of all) {
+        if (!map[m.shopId]) map[m.shopId] = { total: 0, vip: 0 };
+        map[m.shopId].total++;
+        if (m.isVip) map[m.shopId].vip++;
+      }
+      setMemberStatsByShop(map);
+    })();
+    return () => { cancelled = true; };
+  }, [section, mode, metaShops.length]);
+
   const backToList = () => {
     clearMetaShopManagerNav();
     setMode('list');
     setOrdersShopId(null);
+    setMembersShopId(null);
   };
 
   const startKeywordsBulk = () => {
@@ -348,6 +369,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     edit: T ? 'ویرایش' : 'Edit', del: T ? 'حذف' : 'Delete', open: T ? 'باز کردن' : 'Open', copy: T ? 'کپی لینک' : 'Copy link', copied: T ? 'کپی شد ✓' : 'Copied ✓',
     orders: T ? 'سفارش‌ها' : 'Orders', active: T ? 'فعال' : 'Active', inactive: T ? 'غیرفعال' : 'Inactive',
     analytics: T ? 'گزارش بازدید' : 'Visit report',
+    members: T ? 'کاربران' : 'Customers',
     anTitle: T ? 'گزارش بازدید' : 'Visit report',
     anLoading: T ? 'در حال بارگذاری گزارش…' : 'Loading report…',
     anEmpty: T ? 'هنوز بازدیدی ثبت نشده است. به‌محض بازدید مشتری‌ها از لینک فروشگاه، آمار اینجا نمایش داده می‌شود.' : 'No visits recorded yet. Once customers open the shop link, stats will appear here.',
@@ -1382,6 +1404,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
               const pendingRefs = refs.filter(r => r.status === 'pending').length;
               const collabs = supplierCollabsByShop[s.id] || [];
               const pendingCollabs = collabs.filter(r => r.status === 'pending').length;
+              const memberStats = memberStatsByShop[s.id];
               const probeState = productProbe[s.id];
               const productsBroken = probeState === 'missing';
               const productsChecking = probeState === 'pending' && (s.productCount ?? 0) > 0;
@@ -1396,7 +1419,12 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                       <h4 className="font-bold text-gray-800 text-sm truncate flex items-center gap-1.5">{s.name}<span className="text-[10px] font-mono font-bold bg-gray-900 text-white px-1.5 py-0.5 rounded" dir="ltr">{shopCodeOf(s)}</span></h4>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{shopTypeBadge(s.type)}</span>
                     </div>
-                    <div className="text-[11px] text-gray-400">{(s.productCount ?? (s.products || []).length)} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}</div>
+                    <div className="text-[11px] text-gray-400">
+                      {(s.productCount ?? (s.products || []).length)} {T ? 'مورد' : 'items'} · {orders.length} {t.orders}
+                      {memberStats != null && (
+                        <> · <span className="text-indigo-600">{memberStats.total} {t.members}</span>{memberStats.vip > 0 && <span className="text-amber-600"> · ★{memberStats.vip} VIP</span>}</>
+                      )}
+                    </div>
                     {productsChecking && (
                       <p className="text-[11px] text-gray-400">{T ? 'در حال بررسی محصولات…' : 'Checking products…'}</p>
                     )}
@@ -1424,6 +1452,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
                         <button onClick={() => { setSupplierCollabShopId(s.id); setMode('supplier-collab'); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-700 hover:bg-violet-50">{t.supplierCollab}{pendingCollabs > 0 && <span className="ml-1 bg-violet-600 text-white rounded-full px-1.5 text-[10px]">{pendingCollabs}</span>}</button>
                       )}
                       <button onClick={() => openAnalytics(s)} title={t.analytics} className="text-xs px-2.5 py-1.5 rounded-lg border border-sky-200 text-sky-600 hover:bg-sky-50 flex items-center gap-1">📊 {t.analytics}</button>
+                      <button onClick={() => { setMembersShopId(s.id); setMode('members'); }} title={t.members} className="text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex items-center gap-1"><IconUsers className="w-3.5 h-3.5" />{t.members}{memberStats && memberStats.total > 0 && <span className="bg-indigo-600 text-white rounded-full px-1.5 text-[10px]">{memberStats.total}</span>}</button>
                       <button onClick={() => downloadShopJson(s)} title={t.downloadJson} className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
                       {!readonly && productsBroken && (
                         <button
@@ -1778,6 +1807,28 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           </div>
         )}
       </div>
+    );
+  }
+
+  // ════════════ SHOP CUSTOMERS (members + VIP) ════════════
+  if (mode === 'members') {
+    const shop = metaShops.find(s => s.id === membersShopId);
+    if (!shop) {
+      return (
+        <div className="space-y-4">
+          <button type="button" onClick={backToList} className="text-sm text-gray-500 hover:text-gray-800">← {t.back}</button>
+          <p className="text-sm text-gray-400">{T ? 'فروشگاه یافت نشد.' : 'Shop not found.'}</p>
+        </div>
+      );
+    }
+    return (
+      <MetaShopMembersManager
+        shop={shop}
+        lang={lang}
+        readonly={readonly}
+        onBack={backToList}
+        onSaveShop={async updated => { await onSaveMetaShop(updated); }}
+      />
     );
   }
 

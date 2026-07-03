@@ -10,12 +10,14 @@ type SessionEnvelope = {
   fullName: string;
   phone: string;
   favoriteProductIds: string[];
+  isVip?: boolean;
+  vipDiscountPercent?: number;
   ts: number;
 };
 
 export type MetaShopMemberSession = Pick<
   MetaShopMember,
-  'id' | 'shopId' | 'username' | 'fullName' | 'phone' | 'favoriteProductIds'
+  'id' | 'shopId' | 'username' | 'fullName' | 'phone' | 'favoriteProductIds' | 'isVip' | 'vipDiscountPercent'
 >;
 
 function key(shopId: string) {
@@ -35,6 +37,8 @@ export function readMetaShopMemberSession(shopId: string): MetaShopMemberSession
       fullName: env.fullName,
       phone: env.phone,
       favoriteProductIds: env.favoriteProductIds || [],
+      isVip: !!env.isVip,
+      vipDiscountPercent: env.vipDiscountPercent,
     };
   } catch {
     return null;
@@ -49,6 +53,8 @@ export function writeMetaShopMemberSession(member: MetaShopMember) {
     fullName: member.fullName,
     phone: member.phone,
     favoriteProductIds: member.favoriteProductIds || [],
+    isVip: !!member.isVip,
+    vipDiscountPercent: member.vipDiscountPercent,
     ts: Date.now(),
   };
   try {
@@ -70,5 +76,7 @@ export function memberSessionToPublic(member: MetaShopMember): MetaShopMemberSes
     fullName: member.fullName,
     phone: member.phone,
     favoriteProductIds: member.favoriteProductIds || [],
+    isVip: !!member.isVip,
+    vipDiscountPercent: member.vipDiscountPercent,
   };
 }
