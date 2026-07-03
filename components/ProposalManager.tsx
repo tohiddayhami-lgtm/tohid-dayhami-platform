@@ -320,14 +320,16 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
     }
     .pp-section { margin: 0 0 4px; page-break-inside: avoid; direction: ltr !important; }
     .pp-body-en {
-      white-space: pre-wrap; font-size: 10pt; line-height: 1.55; color: #0f172a;
-      padding: 10px 4px 6px;
-      direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
+      white-space: pre-wrap; font-size: 10pt; line-height: 1.65; color: #0f172a;
+      padding: 10px 6px 8px;
+      direction: ltr !important; text-align: justify !important; text-justify: inter-word;
+      unicode-bidi: isolate; hyphens: auto;
     }
     .pp-body-rtl {
-      white-space: pre-wrap; font-size: 10pt; line-height: 1.85; color: #0f172a;
-      direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
-      padding: 8px 10px 12px;
+      white-space: pre-wrap; font-size: 10pt; line-height: 1.9; color: #0f172a;
+      direction: rtl !important; text-align: justify !important; text-justify: inter-word;
+      unicode-bidi: isolate;
+      padding: 10px 12px 12px;
       background: #f8fafc; border: 1px solid #e2e8f0; border-top: none;
       font-family: Tahoma, "Segoe UI", Arial, sans-serif;
     }
