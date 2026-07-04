@@ -9,6 +9,7 @@ import { FeaturedBusinesses } from './components/FeaturedBusinesses';
 import { NewsPage } from './components/NewsPage';
 import { ExportShopPage } from './components/ExportShopPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
+import { PublicFormView } from './components/PublicFormView';
 import { ConsultationTrackingView } from './components/ConsultationTrackingView';
 import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, CustomForm, TeamBrainstormPost, ConsultantCategory } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase, IconTrolley } from './components/Icons';
