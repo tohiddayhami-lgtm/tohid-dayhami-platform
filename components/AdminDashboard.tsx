@@ -1955,6 +1955,7 @@ export const AdminDashboard: React.FC<Props> = ({
                  <CartableSheetImporter
                    personnel={personnel}
                    services={services}
+                   tickets={tickets}
                    config={config}
                    currentUser={currentUser}
                    lang={lang}

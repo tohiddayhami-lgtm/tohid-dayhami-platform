@@ -9,6 +9,7 @@ import {
   SHEET_COLUMN_FIELDS,
   SheetColumnField,
   SheetImportOptions,
+  SkippedSheetRow,
   autoDetectColumnMap,
   buildTicketsFromSheet,
   columnMapFromSource,
@@ -20,6 +21,7 @@ import {
 interface Props {
   personnel: Personnel[];
   services: ServiceOption[];
+  tickets: Ticket[];
   config: AppConfig;
   currentUser: Personnel;
   lang: Language;
@@ -30,7 +32,7 @@ interface Props {
 type ImportMode = 'individual' | 'aggregated';
 
 export const CartableSheetImporter: React.FC<Props> = ({
-  personnel, services, config, currentUser, lang, onCreateTickets, onUpdateConfig,
+  personnel, services, tickets, config, currentUser, lang, onCreateTickets, onUpdateConfig,
 }) => {
   const T = lang === 'fa';
   const fileRef = useRef<HTMLInputElement>(null);
@@ -54,6 +56,7 @@ export const CartableSheetImporter: React.FC<Props> = ({
   const [saveSourceName, setSaveSourceName] = useState('');
   const [showSaveSource, setShowSaveSource] = useState(false);
   const [previewTickets, setPreviewTickets] = useState<Ticket[]>([]);
+  const [skippedDuplicates, setSkippedDuplicates] = useState<SkippedSheetRow[]>([]);
   const [step, setStep] = useState<'load' | 'map' | 'preview'>('load');
 
   const sources = config.cartableSheetSources || [];
@@ -98,6 +101,10 @@ export const CartableSheetImporter: React.FC<Props> = ({
     aggTitlePh: T ? 'مثال: لیست مشتریان جدید' : 'e.g. New customer list',
     columnMap: T ? 'نگاشت ستون‌ها' : 'Column mapping',
     preview: T ? 'پیش‌نمایش و ثبت' : 'Preview & submit',
+    dupSkipped: T ? 'ردیف تکراری (همان شماره + همان متن) — ثبت نشد' : 'Duplicate row (same phone + text) — skipped',
+    dupInCartable: T ? 'قبلاً در کارتابل' : 'Already in cartable',
+    dupInFile: T ? 'تکرار در همین فایل' : 'Repeat in this file',
+    allDuplicates: T ? 'همه ردیف‌ها تکراری بودند — مورد جدیدی برای ثبت نیست.' : 'All rows are duplicates — nothing new to register.',
     back: T ? 'بازگشت' : 'Back',
     submit: T ? 'ثبت در کارتابل' : 'Register in cartable',
     submitting: T ? 'در حال ثبت...' : 'Submitting...',
@@ -124,6 +131,7 @@ export const CartableSheetImporter: React.FC<Props> = ({
     setRows([]);
     setColumnMap({});
     setPreviewTickets([]);
+    setSkippedDuplicates([]);
     setStep('load');
     setError('');
     setSuccessMsg('');
@@ -240,8 +248,15 @@ export const CartableSheetImporter: React.FC<Props> = ({
       priority,
       aggregatedTitle: aggregatedTitle.trim() || undefined,
     };
-    const tickets = buildTicketsFromSheet({ headers, rows }, opts, personnelNames);
-    setPreviewTickets(tickets);
+    const result = buildTicketsFromSheet({ headers, rows }, opts, personnelNames, tickets);
+    if (!result.tickets.length) {
+      setSkippedDuplicates(result.skippedDuplicates);
+      setError(txt.allDuplicates);
+      setPreviewTickets([]);
+      return;
+    }
+    setPreviewTickets(result.tickets);
+    setSkippedDuplicates(result.skippedDuplicates);
     setStep('preview');
   };
 
@@ -252,7 +267,10 @@ export const CartableSheetImporter: React.FC<Props> = ({
     try {
       await onCreateTickets(previewTickets);
       const codes = previewTickets.map(t => t.id).join(', ');
-      setSuccessMsg(`${T ? 'ثبت شد' : 'Registered'}: ${codes}`);
+      const dupNote = skippedDuplicates.length
+        ? (T ? ` — ${skippedDuplicates.length} تکراری نادیده گرفته شد` : ` — ${skippedDuplicates.length} duplicates skipped`)
+        : '';
+      setSuccessMsg(`${T ? 'ثبت شد' : 'Registered'}: ${codes}${dupNote}`);
       resetData();
       setSheetUrl('');
       setSourceName('');
@@ -463,9 +481,26 @@ export const CartableSheetImporter: React.FC<Props> = ({
               <>
                 <p className="text-sm font-semibold text-gray-800">
                   {mode === 'individual'
-                    ? (T ? `${previewTickets.length} درخواست تکی ثبت می‌شود` : `${previewTickets.length} individual requests`)
-                    : (T ? '۱ درخواست تجمیعی ثبت می‌شود' : '1 aggregated request')}
+                    ? (T ? `${previewTickets.length} درخواست جدید ثبت می‌شود` : `${previewTickets.length} new requests`)
+                    : (T ? '۱ درخواست تجمیعی جدید ثبت می‌شود' : '1 new aggregated request')}
                 </p>
+                {skippedDuplicates.length > 0 && (
+                  <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                    <p className="font-semibold">{skippedDuplicates.length} {txt.dupSkipped}</p>
+                    <ul className="max-h-24 overflow-y-auto space-y-0.5">
+                      {skippedDuplicates.slice(0, 12).map((s, i) => (
+                        <li key={i} className="text-amber-700">
+                          {T ? 'ردیف' : 'Row'} {s.row}: {s.customerName}
+                          {s.phone && s.phone !== '-' ? ` (${s.phone})` : ''}
+                          <span className="text-amber-500"> — {s.reason === 'existing' ? txt.dupInCartable : txt.dupInFile}</span>
+                        </li>
+                      ))}
+                      {skippedDuplicates.length > 12 && (
+                        <li className="text-amber-500">+{skippedDuplicates.length - 12} …</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {previewTickets.map(t => {
                     const assignee = personnel.find(p => p.id === t.assignedTo);

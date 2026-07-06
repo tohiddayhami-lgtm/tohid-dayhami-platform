@@ -78,6 +78,52 @@ const normalizePhone = (v: string) => {
   return digits.length >= 6 ? v.trim() : '';
 };
 
+/** Normalize phone to digits only (for duplicate comparison). */
+export function normalizePhoneDigits(phone: string): string {
+  return (phone || '').replace(/\D/g, '');
+}
+
+/** Normalize request text for duplicate comparison. */
+export function normalizeRequestText(text: string): string {
+  return (text || '')
+    .replace(/\u200c/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Duplicate key: same phone + same request text.
+ * Requires at least 6 phone digits and non-empty description.
+ */
+export function buildSheetDuplicateKey(phone: string, description: string): string | null {
+  const phoneKey = normalizePhoneDigits(phone);
+  const descKey = normalizeRequestText(description);
+  if (phoneKey.length < 6 || !descKey) return null;
+  return `${phoneKey}::${descKey}`;
+}
+
+export function buildDuplicateKeySetFromTickets(tickets: Ticket[]): Set<string> {
+  const keys = new Set<string>();
+  for (const t of tickets) {
+    const key = buildSheetDuplicateKey(t.phoneNumber || '', t.description || '');
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
+export interface SkippedSheetRow {
+  row: number;
+  customerName: string;
+  phone: string;
+  reason: 'existing' | 'batch';
+}
+
+export interface SheetImportBuildResult {
+  tickets: Ticket[];
+  skippedDuplicates: SkippedSheetRow[];
+}
+
 /** RFC-style CSV parser (handles quoted fields with commas). */
 export function parseCsvText(text: string): ParsedSheet {
   const rows: string[][] = [];
@@ -200,6 +246,16 @@ function buildRowDescription(row: string[], headers: string[], columnMap: Record
   return parts.join('\n');
 }
 
+function resolveRowDescription(
+  row: string[],
+  headers: string[],
+  columnMap: Record<string, SheetColumnField>,
+): string {
+  return getFieldValue(row, headers, columnMap, 'description')
+    || buildRowDescription(row, headers, columnMap)
+    || '—';
+}
+
 function buildTicketBase(
   opts: SheetImportOptions,
   assigneeId: string | undefined,
@@ -251,30 +307,71 @@ export function buildTicketsFromSheet(
   parsed: ParsedSheet,
   opts: SheetImportOptions,
   personnelNames: Record<string, string>,
-): Ticket[] {
+  existingTickets: Ticket[] = [],
+): SheetImportBuildResult {
   const { headers, rows } = parsed;
-  if (!headers.length || !rows.length) return [];
+  if (!headers.length || !rows.length) return { tickets: [], skippedDuplicates: [] };
 
   const tickets: Ticket[] = [];
+  const skippedDuplicates: SkippedSheetRow[] = [];
+  const existingKeys = buildDuplicateKeySetFromTickets(existingTickets);
+  const batchKeys = new Set<string>();
+
+  const registerSkip = (
+    rowIndex: number,
+    customerName: string,
+    phone: string,
+    description: string,
+  ): boolean => {
+    const key = buildSheetDuplicateKey(phone, description);
+    if (!key) return false;
+    if (existingKeys.has(key)) {
+      skippedDuplicates.push({ row: rowIndex + 2, customerName, phone, reason: 'existing' });
+      return true;
+    }
+    if (batchKeys.has(key)) {
+      skippedDuplicates.push({ row: rowIndex + 2, customerName, phone, reason: 'batch' });
+      return true;
+    }
+    batchKeys.add(key);
+    existingKeys.add(key);
+    return false;
+  };
 
   if (opts.mode === 'aggregated') {
+    const nonDupRows: { row: string[]; idx: number }[] = [];
+    rows.forEach((row, idx) => {
+      const name = getFieldValue(row, headers, opts.columnMap, 'customerName') || `ردیف ${idx + 1}`;
+      const phoneRaw = getFieldValue(row, headers, opts.columnMap, 'phoneNumber');
+      const desc = resolveRowDescription(row, headers, opts.columnMap);
+      if (!registerSkip(idx, name, phoneRaw, desc)) {
+        nonDupRows.push({ row, idx });
+      }
+    });
+
+    if (nonDupRows.length === 0) {
+      return { tickets: [], skippedDuplicates };
+    }
+
     const assigneeId = pickRandom(opts.assigneeIds);
     const assigneeName = assigneeId ? (personnelNames[assigneeId] || 'کارشناس') : '—';
     const base = buildTicketBase(opts, assigneeId, assigneeName);
 
-    const lines = rows.map((row, idx) => {
+    const lines = nonDupRows.map(({ row, idx }) => {
       const name = getFieldValue(row, headers, opts.columnMap, 'customerName') || `ردیف ${idx + 1}`;
       const phone = getFieldValue(row, headers, opts.columnMap, 'phoneNumber');
       const detail = buildRowDescription(row, headers, opts.columnMap);
       return `▸ ${name}${phone ? ` (${phone})` : ''}\n${detail}`;
     });
 
-    const firstRow = rows[0];
+    const firstRow = nonDupRows[0].row;
     const title = opts.aggregatedTitle?.trim()
       || getFieldValue(firstRow, headers, opts.columnMap, 'customerName')
       || opts.sourceName;
 
     const aggPhone = normalizePhone(getFieldValue(firstRow, headers, opts.columnMap, 'phoneNumber'));
+    const aggDesc = truncate(`درخواست تجمیعی از «${opts.sourceName}» — ${nonDupRows.length} مورد:\n\n${lines.join('\n\n')}`);
+
     tickets.push({
       ...(base as Ticket),
       customerName: truncate(title),
@@ -283,23 +380,28 @@ export function buildTicketsFromSheet(
       phoneNumber: aggPhone || '-',
       whatsappNumber: aggPhone || '-',
       businessType: getFieldValue(firstRow, headers, opts.columnMap, 'businessType') || undefined,
-      description: truncate(`درخواست تجمیعی از «${opts.sourceName}» — ${rows.length} مورد:\n\n${lines.join('\n\n')}`),
+      description: aggDesc,
       customData: {
         ...base.customData,
         importMode: 'aggregated',
-        rowCount: String(rows.length),
+        rowCount: String(nonDupRows.length),
+        skippedDuplicates: skippedDuplicates.length ? String(skippedDuplicates.length) : undefined,
       },
     });
-    return tickets;
+    return { tickets, skippedDuplicates };
   }
 
   rows.forEach((row, idx) => {
-    const assigneeId = pickRandom(opts.assigneeIds);
-    const assigneeName = assigneeId ? (personnelNames[assigneeId] || 'کارشناس') : '—';
-    const base = buildTicketBase(opts, assigneeId, assigneeName, idx);
     const customerName = getFieldValue(row, headers, opts.columnMap, 'customerName') || `${opts.sourceName} — ردیف ${idx + 1}`;
     const phoneRaw = getFieldValue(row, headers, opts.columnMap, 'phoneNumber');
     const phone = normalizePhone(phoneRaw) || '-';
+    const description = resolveRowDescription(row, headers, opts.columnMap);
+
+    if (registerSkip(idx, customerName, phoneRaw || phone, description)) return;
+
+    const assigneeId = pickRandom(opts.assigneeIds);
+    const assigneeName = assigneeId ? (personnelNames[assigneeId] || 'کارشناس') : '—';
+    const base = buildTicketBase(opts, assigneeId, assigneeName, idx);
 
     tickets.push({
       ...(base as Ticket),
@@ -309,7 +411,7 @@ export function buildTicketsFromSheet(
       phoneNumber: phone,
       whatsappNumber: phone,
       businessType: getFieldValue(row, headers, opts.columnMap, 'businessType') || undefined,
-      description: truncate(getFieldValue(row, headers, opts.columnMap, 'description') || buildRowDescription(row, headers, opts.columnMap) || '—'),
+      description: truncate(description),
       customData: {
         ...base.customData,
         importMode: 'individual',
@@ -318,7 +420,7 @@ export function buildTicketsFromSheet(
     });
   });
 
-  return tickets;
+  return { tickets, skippedDuplicates };
 }
 
 export function sheetSourceToColumnMap(source: CartableSheetSource): Record<string, string> | undefined {
