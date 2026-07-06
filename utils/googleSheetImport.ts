@@ -13,7 +13,7 @@ export const SHEET_COLUMN_FIELDS: { key: SheetColumnField; fa: string; en: strin
   { key: 'skip', fa: '— نادیده —', en: '— Skip —' },
   { key: 'customerName', fa: 'نام / متقاضی', en: 'Name / applicant' },
   { key: 'phoneNumber', fa: 'شماره تماس', en: 'Phone' },
-  { key: 'companyName', fa: 'شرکت', en: 'Company' },
+  { key: 'companyName', fa: 'شرکت / برند', en: 'Company / brand' },
   { key: 'location', fa: 'موقعیت / شهر', en: 'Location' },
   { key: 'businessType', fa: 'نوع کسب‌وکار', en: 'Business type' },
   { key: 'description', fa: 'توضیحات', en: 'Description' },
@@ -22,10 +22,10 @@ export const SHEET_COLUMN_FIELDS: { key: SheetColumnField; fa: string; en: strin
 const HEADER_HINTS: Record<Exclude<SheetColumnField, 'skip'>, RegExp[]> = {
   customerName: [/نام/, /name/i, /متقاضی/, /customer/i, /مشتری/],
   phoneNumber: [/phone/i, /mobile/i, /tel/i, /شماره/, /موبایل/, /تماس/, /واتس/, /whatsapp/i],
-  companyName: [/company/i, /شرکت/, /سازمان/, /organization/i, /firm/i],
+  companyName: [/company/i, /شرکت/, /سازمان/, /organization/i, /firm/i, /برند/, /brand/i],
   location: [/location/i, /city/i, /شهر/, /کشور/, /country/i, /آدرس/, /address/i, /موقعیت/],
   businessType: [/business/i, /نوع/, /صنعت/, /industry/i, /حوزه/],
-  description: [/desc/i, /توضیح/, /note/i, /یادداشت/, /comment/i, /جزئیات/, /detail/i, /موضوع/, /subject/i],
+  description: [/desc/i, /توضیح/, /note/i, /یادداشت/, /comment/i, /جزئیات/, /detail/i, /موضوع/, /subject/i, /درخواست/, /request/i, /متن/, /message/i],
 };
 
 export interface ParsedSheet {
@@ -198,7 +198,7 @@ export function autoDetectColumnMap(headers: string[]): Record<string, SheetColu
     }
     if (best !== 'skip') used.add(best);
     else {
-      // Unmapped columns become part of description when building tickets
+      // Label for UI — all non-skipped columns land in the full description
       best = 'description';
     }
     map[h] = best;
@@ -235,12 +235,18 @@ function getFieldValue(row: string[], headers: string[], columnMap: Record<strin
   return '';
 }
 
-function buildRowDescription(row: string[], headers: string[], columnMap: Record<string, SheetColumnField>): string {
+/** All non-empty sheet columns (except skipped) → multiline description for the ticket. */
+function buildFullRowDescription(
+  row: string[],
+  headers: string[],
+  columnMap: Record<string, SheetColumnField>,
+): string {
   const parts: string[] = [];
   for (let i = 0; i < headers.length; i++) {
-    const h = headers[i];
+    const h = (headers[i] || '').trim();
+    if (!h || columnMap[h] === 'skip') continue;
     const v = (row[i] || '').trim();
-    if (!v || columnMap[h] === 'skip') continue;
+    if (!v) continue;
     parts.push(`${h}: ${v}`);
   }
   return parts.join('\n');
@@ -251,9 +257,8 @@ function resolveRowDescription(
   headers: string[],
   columnMap: Record<string, SheetColumnField>,
 ): string {
-  return getFieldValue(row, headers, columnMap, 'description')
-    || buildRowDescription(row, headers, columnMap)
-    || '—';
+  const full = buildFullRowDescription(row, headers, columnMap);
+  return full || '—';
 }
 
 function buildTicketBase(
@@ -360,7 +365,7 @@ export function buildTicketsFromSheet(
     const lines = nonDupRows.map(({ row, idx }) => {
       const name = getFieldValue(row, headers, opts.columnMap, 'customerName') || `ردیف ${idx + 1}`;
       const phone = getFieldValue(row, headers, opts.columnMap, 'phoneNumber');
-      const detail = buildRowDescription(row, headers, opts.columnMap);
+      const detail = buildFullRowDescription(row, headers, opts.columnMap);
       return `▸ ${name}${phone ? ` (${phone})` : ''}\n${detail}`;
     });
 
