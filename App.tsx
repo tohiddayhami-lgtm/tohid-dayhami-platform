@@ -1018,11 +1018,18 @@ const App: React.FC = () => {
     .toLowerCase();
 
   const calculateAssignee = useCallback((serviceIdOrTitle: string): string | undefined => {
+    if (!serviceIdOrTitle) return undefined;
     const config = appConfig.assignmentConfig;
     if (!config || config.mode === 'manual') return undefined;
 
     const findServiceId = () => {
-      const serviceObj = services.find(s => s.id === serviceIdOrTitle || s.title === serviceIdOrTitle || s.titleEn === serviceIdOrTitle || s.title.includes(serviceIdOrTitle));
+      const serviceObj = services.find(s =>
+        s.id === serviceIdOrTitle
+        || s.title === serviceIdOrTitle
+        || s.titleEn === serviceIdOrTitle
+        || (s.title?.includes(serviceIdOrTitle) ?? false)
+        || (s.titleEn?.includes(serviceIdOrTitle) ?? false)
+      );
       return serviceObj?.id || serviceIdOrTitle;
     };
 
@@ -1035,7 +1042,12 @@ const App: React.FC = () => {
     if (!config.serviceRoleMap) return undefined;
     let targetRole = config.serviceRoleMap[serviceIdOrTitle]?.trim();
     if (!targetRole) {
-      const serviceObj = services.find(s => s.title === serviceIdOrTitle || s.titleEn === serviceIdOrTitle || s.title.includes(serviceIdOrTitle));
+      const serviceObj = services.find(s =>
+        s.title === serviceIdOrTitle
+        || s.titleEn === serviceIdOrTitle
+        || (s.title?.includes(serviceIdOrTitle) ?? false)
+        || (s.titleEn?.includes(serviceIdOrTitle) ?? false)
+      );
       if (serviceObj) targetRole = config.serviceRoleMap[serviceObj.id]?.trim();
     }
     if (!targetRole) return undefined;
@@ -1080,7 +1092,13 @@ const App: React.FC = () => {
   // Per-service / per-sub-service routing configured in the Services & Tariffs section.
   // Sub-service routing takes priority over the service-level routing.
   const resolveServiceRouting = useCallback((ticket: Ticket): string | undefined => {
-    const service = services.find(s => s.id === ticket.serviceId || s.title === ticket.serviceId || s.titleEn === ticket.serviceId || s.title.includes(ticket.serviceId));
+    const service = services.find(s =>
+      s.id === ticket.serviceId
+      || s.title === ticket.serviceId
+      || s.titleEn === ticket.serviceId
+      || (ticket.serviceId && (s.title?.includes(ticket.serviceId) ?? false))
+      || (ticket.serviceId && (s.titleEn?.includes(ticket.serviceId) ?? false))
+    );
     if (!service) return undefined;
     for (const subId of (ticket.selectedSubServices || [])) {
       const sub = service.subServices?.find(ss => ss.id === subId);
