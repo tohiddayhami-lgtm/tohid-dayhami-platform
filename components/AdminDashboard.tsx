@@ -29,6 +29,7 @@ import { NotificationCenter } from './NotificationCenter';
 import { CustomerAccountManager } from './CustomerAccountManager';
 import { ProcessManager } from './ProcessManager';
 import { CustomerBank } from './CustomerBank';
+import { CartableSheetImporter } from './CartableSheetImporter';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -48,7 +49,7 @@ interface Props {
   news?: NewsArticle[];
   analyticsEvents?: AnalyticsEvent[];
   config: AppConfig;
-  onCreateTicket: (ticket: Ticket) => Promise<void>;
+  onCreateTicket: (ticket: Ticket | Ticket[]) => Promise<void>;
   onUpdateTicket: (ticketId: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility?: 'public' | 'internal', files?: AttachedFile[]) => void;
   onDeleteTicket: (ticketId: string) => Promise<void>;
   onUpdateServices: (services: ServiceOption[]) => void;
@@ -1951,6 +1952,15 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
 
+                 <CartableSheetImporter
+                   personnel={personnel}
+                   services={services}
+                   config={config}
+                   currentUser={currentUser}
+                   lang={lang}
+                   onCreateTickets={onCreateTicket}
+                   onUpdateConfig={onUpdateConfig}
+                 />
 
                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                      <div className="bg-white p-4 rounded-xl border border-gray-100"><div className="text-gray-400 text-xs mb-1">{t.myTasks}</div><div className="text-2xl font-bold text-gray-900">{myTasksCount}</div></div>

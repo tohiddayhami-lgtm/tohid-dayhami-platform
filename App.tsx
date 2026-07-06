@@ -2557,7 +2557,7 @@ const App: React.FC = () => {
                     news={news}
                     analyticsEvents={analyticsEvents}
                     config={appConfig}
-                    onCreateTicket={async (t) => handleNewTicket(t)}
+                    onCreateTicket={handleNewTicket}
                     onUpdateTicket={handleUpdateTicket}
                     onDeleteTicket={handleDeleteTicket}
                     onUpdateServices={handleUpdateServices}

@@ -1989,6 +1989,20 @@ export interface AppConfig {
   consultationPublicNoticeFa?: string;
   consultationPublicNoticeEn?: string;
   labels?: TicketLabel[];
+  /** Saved Google Sheet databases for cartable import. */
+  cartableSheetSources?: CartableSheetSource[];
+}
+
+/** A registered Google Sheet used as a data source for cartable imports. */
+export interface CartableSheetSource {
+  id: string;
+  name: string;
+  sheetUrl: string;
+  serviceId?: string;
+  /** Maps ticket field keys → sheet column header names. */
+  columnMap?: Record<string, string>;
+  defaultAssigneeIds?: string[];
+  createdAt: string;
 }
 
 export interface AnalyticsEvent {
