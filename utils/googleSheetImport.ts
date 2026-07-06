@@ -261,6 +261,11 @@ function resolveRowDescription(
   return full || '—';
 }
 
+const pruneCustomData = (data: Record<string, string | undefined>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(data).filter((entry): entry is [string, string] => entry[1] != null && entry[1] !== ''),
+  );
+
 function buildTicketBase(
   opts: SheetImportOptions,
   assigneeId: string | undefined,
@@ -300,11 +305,11 @@ function buildTicketBase(
     files: [],
     selectedSubServices: [],
     discountApplied: false,
-    customData: {
+    customData: pruneCustomData({
       importSource: opts.sheetUrl ? 'google_sheet' : 'csv',
       sheetName: opts.sourceName,
       ...(opts.sheetUrl ? { sheetUrl: opts.sheetUrl } : {}),
-    },
+    }),
   };
 }
 
@@ -386,12 +391,12 @@ export function buildTicketsFromSheet(
       whatsappNumber: aggPhone || '-',
       businessType: getFieldValue(firstRow, headers, opts.columnMap, 'businessType') || undefined,
       description: aggDesc,
-      customData: {
+      customData: pruneCustomData({
         ...base.customData,
         importMode: 'aggregated',
         rowCount: String(nonDupRows.length),
-        skippedDuplicates: skippedDuplicates.length ? String(skippedDuplicates.length) : undefined,
-      },
+        ...(skippedDuplicates.length ? { skippedDuplicates: String(skippedDuplicates.length) } : {}),
+      }),
     });
     return { tickets, skippedDuplicates };
   }
@@ -417,11 +422,11 @@ export function buildTicketsFromSheet(
       whatsappNumber: phone,
       businessType: getFieldValue(row, headers, opts.columnMap, 'businessType') || undefined,
       description: truncate(description),
-      customData: {
+      customData: pruneCustomData({
         ...base.customData,
         importMode: 'individual',
         sheetRow: String(idx + 2),
-      },
+      }),
     });
   });
 

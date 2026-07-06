@@ -50,7 +50,7 @@ import { BazaarPassageLoader } from './components/BazaarPassageLoader';
 import { ConsultationBookingLoader } from './components/ConsultationBookingLoader';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ShopShutterLoader } from './components/ShopShutterLoader';
-import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE } from './services/notificationService';
+import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog, DEFAULT_MEETING_REMINDER_TEMPLATE, DEFAULT_DAILY_SUMMARY_TEMPLATE, DEFAULT_TICKET_TEMPLATE } from './services/notificationService';
 import { customerCanAccessShop, mergeCustomerShopEdits } from './utils/customerMetaShopAccess';
 import { calcCommission, findPortalAccountForShop } from './utils/metaShopCommission';
 import { shopNeedsProductHydration } from './utils/metaShopChunks';
@@ -1009,7 +1009,7 @@ const App: React.FC = () => {
     return () => { if (dailySummaryTimerRef.current) clearTimeout(dailySummaryTimerRef.current); };
   }, [meetings, appConfig.notificationConfig, personnel]);
 
-  const normalizeRoleName = (role?: string) => (role || '')
+  const normalizeRoleName = (role?: unknown) => String(role ?? '')
     .trim()
     .replace(/ي/g, 'ی')
     .replace(/ك/g, 'ک')
@@ -1017,19 +1017,30 @@ const App: React.FC = () => {
     .replace(/\s+/g, '')
     .toLowerCase();
 
+  const safeStrIncludes = (haystack: unknown, needle: unknown): boolean => {
+    if (haystack == null || needle == null) return false;
+    return String(haystack).includes(String(needle));
+  };
+
+  const serviceMatchesRef = (s: ServiceOption, idOrTitle: string) =>
+    s.id === idOrTitle
+    || s.title === idOrTitle
+    || s.titleEn === idOrTitle
+    || safeStrIncludes(s.title, idOrTitle)
+    || safeStrIncludes(s.titleEn, idOrTitle);
+
+  const mapRole = (map: Record<string, string> | undefined, key: string) => {
+    const v = map?.[key];
+    return typeof v === 'string' ? v.trim() : '';
+  };
+
   const calculateAssignee = useCallback((serviceIdOrTitle: string): string | undefined => {
     if (!serviceIdOrTitle) return undefined;
     const config = appConfig.assignmentConfig;
     if (!config || config.mode === 'manual') return undefined;
 
     const findServiceId = () => {
-      const serviceObj = services.find(s =>
-        s.id === serviceIdOrTitle
-        || s.title === serviceIdOrTitle
-        || s.titleEn === serviceIdOrTitle
-        || (s.title?.includes(serviceIdOrTitle) ?? false)
-        || (s.titleEn?.includes(serviceIdOrTitle) ?? false)
-      );
+      const serviceObj = services.find(s => serviceMatchesRef(s, serviceIdOrTitle));
       return serviceObj?.id || serviceIdOrTitle;
     };
 
@@ -1040,15 +1051,10 @@ const App: React.FC = () => {
     }
 
     if (!config.serviceRoleMap) return undefined;
-    let targetRole = config.serviceRoleMap[serviceIdOrTitle]?.trim();
+    let targetRole = mapRole(config.serviceRoleMap, serviceIdOrTitle);
     if (!targetRole) {
-      const serviceObj = services.find(s =>
-        s.title === serviceIdOrTitle
-        || s.titleEn === serviceIdOrTitle
-        || (s.title?.includes(serviceIdOrTitle) ?? false)
-        || (s.titleEn?.includes(serviceIdOrTitle) ?? false)
-      );
-      if (serviceObj) targetRole = config.serviceRoleMap[serviceObj.id]?.trim();
+      const serviceObj = services.find(s => serviceMatchesRef(s, serviceIdOrTitle));
+      if (serviceObj) targetRole = mapRole(config.serviceRoleMap, serviceObj.id);
     }
     if (!targetRole) return undefined;
     const normalizedTargetRole = normalizeRoleName(targetRole);
@@ -1076,7 +1082,7 @@ const App: React.FC = () => {
       const dept = (appConfig.departments || []).find(d => d.id === routeDepartmentId);
       if (!dept) return [];
       const positions = dept.positions || [];
-      return personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => positions.includes(r)));
+      return personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r && positions.includes(r)));
     }
     return [];
   }, [personnel, appConfig.departments]);
@@ -1093,11 +1099,8 @@ const App: React.FC = () => {
   // Sub-service routing takes priority over the service-level routing.
   const resolveServiceRouting = useCallback((ticket: Ticket): string | undefined => {
     const service = services.find(s =>
-      s.id === ticket.serviceId
-      || s.title === ticket.serviceId
-      || s.titleEn === ticket.serviceId
-      || (ticket.serviceId && (s.title?.includes(ticket.serviceId) ?? false))
-      || (ticket.serviceId && (s.titleEn?.includes(ticket.serviceId) ?? false))
+      serviceMatchesRef(s, ticket.serviceId || '')
+      || (ticket.serviceId && s.id === ticket.serviceId)
     );
     if (!service) return undefined;
     for (const subId of (ticket.selectedSubServices || [])) {
@@ -1118,7 +1121,13 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const isAuthorized = currentUser.username === 'master' || currentUser.roles.includes('مدیر');
     if (!isAuthorized) return;
-    const unassigned = tickets.filter(t => !t.assignedTo && t.status !== TicketStatus.CANCELLED && t.status !== TicketStatus.COMPLETED);
+    const unassigned = tickets.filter(t =>
+      !t.assignedTo
+      && t.status !== TicketStatus.CANCELLED
+      && t.status !== TicketStatus.COMPLETED
+      && t.customData?.importSource !== 'google_sheet'
+      && t.customData?.importSource !== 'csv'
+    );
     if (unassigned.length === 0) return;
     const autoMode = !!appConfig.assignmentConfig && appConfig.assignmentConfig.mode !== 'manual';
     // Custom-form tickets (incl. those filled via the connected Google Form) are written
@@ -1140,7 +1149,7 @@ const App: React.FC = () => {
       if (directId) return directId;
       if (roleStr) {
         const normalizedRole = roleStr.trim().toLowerCase();
-        const eligible = personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r.trim().toLowerCase() === normalizedRole));
+        const eligible = personnel.filter(p => (p.status || 'active') === 'active' && (p.roles || []).some(r => r && typeof r === 'string' && r.trim().toLowerCase() === normalizedRole));
         if (eligible.length === 1) return eligible[0].id;
         if (eligible.length > 1) {
           const workload = eligible.map(p => ({ id: p.id, count: tickets.filter(t => t.assignedTo === p.id && t.status !== TicketStatus.COMPLETED && t.status !== TicketStatus.CANCELLED).length }));
@@ -1170,7 +1179,7 @@ const App: React.FC = () => {
             const ageMs = new Date().getTime() - new Date(ticket.createdAt).getTime();
             const isRecent = isFinite(ageMs) && ageMs >= 0 && ageMs < 30 * 60 * 1000;
             if (isRecent && nc?.enabled && nc.onNewTicket) {
-              const msg = renderTemplate(nc.ticketTemplate, {
+              const msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
                 recipientName: assignee.fullName,
                 ticketId: ticket.id,
                 customerName: ticket.customerName || '',
@@ -1205,7 +1214,7 @@ const App: React.FC = () => {
       !!phones[id] && (!isCallMeBot || !!apiKeys[id]);
 
     const active = (p: Personnel) => (p.status || 'active') === 'active';
-    const isManager = (p: Personnel) => (p.roles || []).some(r => r.includes('مدیر'));
+    const isManager = (p: Personnel) => (p.roles || []).some(r => typeof r === 'string' && r.includes('مدیر'));
 
     // 1. Master account with notification set up
     const masterWithNotif = personnel.find(p => p.username === 'master' && active(p) && notifReady(p.id));
@@ -1223,83 +1232,56 @@ const App: React.FC = () => {
     return personnel.find(p => active(p) && isManager(p))?.id;
   };
 
-  const saveNewTicketToSystem = async (ticket: Ticket) => {
-    // Guarantee a case code — if the caller didn't supply one, generate it now
+  const isSheetImportTicket = (t: Ticket) =>
+    t.customData?.importSource === 'google_sheet' || t.customData?.importSource === 'csv';
+
+  const notifyNewTicketAssignee = async (ticket: Ticket, assignedTo: string) => {
+    const nc = appConfig.notificationConfig;
+    if (!nc?.enabled || !nc.onNewTicket) return;
+    try {
+      const assignee = personnel.find(p => p.id === assignedTo);
+      if (!assignee) return;
+      const msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
+        recipientName: assignee.fullName || '',
+        ticketId: ticket.id || '',
+        customerName: ticket.customerName || '',
+        formTitle: ticket.customData?.formTitle || ticket.serviceId || '',
+        senderName: 'سیستم',
+        status: ticket.status || '',
+      });
+      const phone = nc.personnelPhones?.[assignedTo];
+      if (phone) {
+        const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assignedTo]);
+        await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee.fullName, phone, msg, result, ticket.id));
+      }
+      await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assignedTo, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
+    } catch (notifyErr) {
+      console.warn('Ticket notification skipped', notifyErr);
+    }
+  };
+
+  /** Sheet/CSV imports: skip service-role routing (avoids fragile auto-assign on incomplete service records). */
+  const saveSheetImportTicket = async (ticket: Ticket) => {
     if (!ticket.id) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      const suffix = (ticket.customData?.formId || ticket.serviceId || 'TKT').slice(0, 3).toUpperCase();
-      (ticket as any).id = `FRM-${rand}-${suffix}`;
+      (ticket as Ticket).id = `SHR-${Date.now()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
     }
-
-    let assignedTo = ticket.assignedTo;
-    let assignmentNote: TimelineEntry | null = null;
-
-    if (!assignedTo) {
-      // 1. For custom-form tickets: check if the form itself has an assignee config
-      if (ticket.serviceId?.startsWith('form:') && ticket.customData?.formId) {
-        // assignee info was already embedded in ticket.customData by PublicFormView
-        const directId = ticket.customData.__assigneePersonnelId;
-        const roleStr  = ticket.customData.__assigneeRole;
-        if (directId) {
-          // Direct person assignment
-          assignedTo = directId;
-        } else if (roleStr) {
-          // Role-based → load-balance among eligible staff
-          const normalizedRole = roleStr.trim().toLowerCase();
-          const eligible = personnel.filter(p =>
-            (p.status || 'active') === 'active' &&
-            (p.roles || []).some(r => r.trim().toLowerCase() === normalizedRole)
-          );
-          if (eligible.length === 1) {
-            assignedTo = eligible[0].id;
-          } else if (eligible.length > 1) {
-            // Pick person with fewest active tickets
-            const workload = eligible.map(p => ({
-              id: p.id,
-              count: tickets.filter(t =>
-                t.assignedTo === p.id &&
-                t.status !== TicketStatus.COMPLETED &&
-                t.status !== TicketStatus.CANCELLED
-              ).length,
-            }));
-            workload.sort((a, b) => a.count - b.count);
-            assignedTo = workload[0].id;
-          }
-        }
-      }
-
-      // 2. System assignment config
-      if (!assignedTo) {
-        const autoId = calculateAssignee(ticket.serviceId);
-        if (autoId) assignedTo = autoId;
-      }
-
-      // 3. CEO/master fallback — nobody left unassigned
-      if (!assignedTo) {
-        assignedTo = getCeoFallbackId();
-      }
-
-      if (assignedTo) {
-        const assigneeName = personnel.find(p => p.id === assignedTo)?.fullName || 'مدیریت';
-        const wasCeoFallback = !ticket.customData?.__assigneePersonnelId && !ticket.customData?.__assigneeRole && !calculateAssignee(ticket.serviceId);
-        const note = wasCeoFallback
-          ? `فرم بدون تنظیم ارجاع ثبت شد — پرونده به‌صورت خودکار به ${assigneeName} ارجاع داده شد. ${assigneeName} می‌تواند پرونده را به کارشناس مربوطه ارجاع دهد.`
-          : `پرونده به ${assigneeName} ارجاع داده شد.`;
-        assignmentNote = { type: 'assignment', title: 'ارجاع خودکار', description: note, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
-      }
+    const assignedTo = ticket.assignedTo || getCeoFallbackId();
+    const timeline: TimelineEntry[] = [...(ticket.timeline || [])];
+    if (!ticket.assignedTo && assignedTo) {
+      const assigneeName = personnel.find(p => p.id === assignedTo)?.fullName || 'مدیریت';
+      timeline.push({
+        type: 'assignment',
+        title: 'ارجاع خودکار',
+        description: `پرونده به ${assigneeName} ارجاع داده شد.`,
+        actorName: 'سیستم',
+        timestamp: new Date().toISOString(),
+        visibility: 'internal',
+      });
     }
-
-    const initialTimeline: TimelineEntry[] = [
-      { type: 'creation', title: 'ثبت درخواست', description: 'درخواست در سامانه ثبت شد', timestamp: new Date().toISOString(), actorName: 'سیستم', visibility: 'public' },
-      ...(ticket.timeline || []),
-    ];
-    if (assignmentNote) initialTimeline.push(assignmentNote);
 
     let newCustomer: Customer | undefined;
-    // Recognize the customer by mobile number (normalized) — same phone = same customer, even with a different name
     const ticketPhoneNorm = (ticket.phoneNumber || '').replace(/\D/g, '');
     const existingCustomer = customers.find(c => (c.phoneNumber || '').replace(/\D/g, '') === ticketPhoneNorm && ticketPhoneNorm !== '');
-    const isSheetImport = ticket.customData?.importSource === 'google_sheet' || ticket.customData?.importSource === 'csv';
     const phoneDigits = ticketPhoneNorm.length;
     const shouldLinkCustomer = phoneDigits >= 6;
 
@@ -1316,7 +1298,130 @@ const App: React.FC = () => {
           totalTickets: (existingCustomer.totalTickets || 0) + 1,
           source: importLabel || existingCustomer.source || 'Web Form',
         };
-      } else if (!isSheetImport || phoneDigits >= 6) {
+      } else {
+        const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const phoneSuffix = ticketPhoneNorm.slice(-4) || '0000';
+        const importLabel = ticket.customData?.sheetName ? `Sheet: ${ticket.customData.sheetName}` : undefined;
+        newCustomer = {
+          id: `C-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          fullName: ticket.customerName,
+          companyName: ticket.companyName,
+          location: ticket.location || '-',
+          phoneNumber: ticket.phoneNumber,
+          whatsappNumber: ticket.whatsappNumber || ticket.phoneNumber,
+          businessType: ticket.businessType,
+          firstContact: new Date().toISOString(),
+          totalTickets: 1,
+          source: importLabel || 'Sheet Import',
+          loyaltyCode: `VIP-${phoneSuffix}-${randomStr}`,
+        };
+      }
+    }
+
+    await saveTicketToCloud({ ...ticket, assignedTo, timeline });
+    if (newCustomer) await saveCustomerToCloud(newCustomer);
+    if (assignedTo) await notifyNewTicketAssignee(ticket, assignedTo);
+  };
+
+  const saveNewTicketToSystem = async (ticket: Ticket) => {
+    if (isSheetImportTicket(ticket)) {
+      await saveSheetImportTicket(ticket);
+      return;
+    }
+
+    // Guarantee a case code — if the caller didn't supply one, generate it now
+    if (!ticket.id) {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      const suffix = (ticket.customData?.formId || ticket.serviceId || 'TKT').slice(0, 3).toUpperCase();
+      (ticket as any).id = `FRM-${rand}-${suffix}`;
+    }
+
+    let assignedTo = ticket.assignedTo;
+    let assignmentNote: TimelineEntry | null = null;
+
+    try {
+      if (!assignedTo) {
+        if (ticket.serviceId?.startsWith('form:') && ticket.customData?.formId) {
+          // assignee info was already embedded in ticket.customData by PublicFormView
+          const directId = ticket.customData.__assigneePersonnelId;
+          const roleStr  = ticket.customData.__assigneeRole;
+          if (directId) {
+            assignedTo = directId;
+          } else if (typeof roleStr === 'string' && roleStr.trim()) {
+            const normalizedRole = roleStr.trim().toLowerCase();
+            const eligible = personnel.filter(p =>
+              (p.status || 'active') === 'active' &&
+              (p.roles || []).some(r => typeof r === 'string' && r.trim().toLowerCase() === normalizedRole)
+            );
+            if (eligible.length === 1) {
+              assignedTo = eligible[0].id;
+            } else if (eligible.length > 1) {
+              const workload = eligible.map(p => ({
+                id: p.id,
+                count: tickets.filter(t =>
+                  t.assignedTo === p.id &&
+                  t.status !== TicketStatus.COMPLETED &&
+                  t.status !== TicketStatus.CANCELLED
+                ).length,
+              }));
+              workload.sort((a, b) => a.count - b.count);
+              assignedTo = workload[0].id;
+            }
+          }
+        }
+
+        if (!assignedTo) {
+          const autoId = calculateAssignee(ticket.serviceId || '');
+          if (autoId) assignedTo = autoId;
+        }
+
+        if (!assignedTo) {
+          assignedTo = getCeoFallbackId();
+        }
+
+        if (assignedTo) {
+          const assigneeName = personnel.find(p => p.id === assignedTo)?.fullName || 'مدیریت';
+          const wasCeoFallback = !ticket.customData?.__assigneePersonnelId
+            && !ticket.customData?.__assigneeRole
+            && !calculateAssignee(ticket.serviceId || '');
+          const note = wasCeoFallback
+            ? `فرم بدون تنظیم ارجاع ثبت شد — پرونده به‌صورت خودکار به ${assigneeName} ارجاع داده شد. ${assigneeName} می‌تواند پرونده را به کارشناس مربوطه ارجاع دهد.`
+            : `پرونده به ${assigneeName} ارجاع داده شد.`;
+          assignmentNote = { type: 'assignment', title: 'ارجاع خودکار', description: note, actorName: 'سیستم', timestamp: new Date().toISOString(), visibility: 'internal' };
+        }
+      }
+    } catch (assignErr) {
+      console.error('Ticket assignment failed, using fallback', assignErr);
+      if (!assignedTo) assignedTo = getCeoFallbackId();
+    }
+
+    const initialTimeline: TimelineEntry[] = [
+      { type: 'creation', title: 'ثبت درخواست', description: 'درخواست در سامانه ثبت شد', timestamp: new Date().toISOString(), actorName: 'سیستم', visibility: 'public' },
+      ...(ticket.timeline || []),
+    ];
+    if (assignmentNote) initialTimeline.push(assignmentNote);
+
+    let newCustomer: Customer | undefined;
+    // Recognize the customer by mobile number (normalized) — same phone = same customer, even with a different name
+    const ticketPhoneNorm = (ticket.phoneNumber || '').replace(/\D/g, '');
+    const existingCustomer = customers.find(c => (c.phoneNumber || '').replace(/\D/g, '') === ticketPhoneNorm && ticketPhoneNorm !== '');
+    const phoneDigits = ticketPhoneNorm.length;
+    const shouldLinkCustomer = phoneDigits >= 6;
+
+    if (shouldLinkCustomer) {
+      if (existingCustomer) {
+        const importLabel = ticket.customData?.sheetName ? `Sheet: ${ticket.customData.sheetName}` : undefined;
+        newCustomer = {
+          ...existingCustomer,
+          fullName: ticket.customerName,
+          companyName: ticket.companyName || existingCustomer.companyName,
+          location: ticket.location || existingCustomer.location,
+          whatsappNumber: ticket.whatsappNumber || existingCustomer.whatsappNumber,
+          businessType: ticket.businessType || existingCustomer.businessType,
+          totalTickets: (existingCustomer.totalTickets || 0) + 1,
+          source: importLabel || existingCustomer.source || 'Web Form',
+        };
+      } else {
         const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
         const phoneSuffix = (ticket.phoneNumber || '').replace(/\D/g, '').slice(-4) || '0000';
         const importLabel = ticket.customData?.sheetName ? `Sheet: ${ticket.customData.sheetName}` : undefined;
@@ -1337,29 +1442,7 @@ const App: React.FC = () => {
     }
     await saveTicketToCloud({ ...ticket, assignedTo, timeline: initialTimeline });
     if (newCustomer) await saveCustomerToCloud(newCustomer);
-
-    // WhatsApp notification to assignee
-    const nc = appConfig.notificationConfig;
-    if (nc?.enabled && nc.onNewTicket && assignedTo) {
-      const assignee = personnel.find(p => p.id === assignedTo);
-      if (assignee) {
-        const msg = renderTemplate(nc.ticketTemplate, {
-          recipientName: assignee.fullName,
-          ticketId: ticket.id,
-          customerName: ticket.customerName,
-          formTitle: ticket.customData?.formTitle || ticket.serviceId,
-          senderName: 'سیستم',
-          status: ticket.status,
-        });
-        const phone = nc.personnelPhones[assignedTo];
-        if (phone) {
-          const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys[assignedTo]);
-          await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee.fullName, phone, msg, result, ticket.id));
-        }
-        // Master copy — sent even if the assignee has NO phone configured.
-        await sendMasterCopy({ config: nc, personnel, message: msg, originalRecipientId: assignedTo, originalRecipientName: assignee.fullName, logType: 'new_ticket', ticketId: ticket.id, saveLog: saveNotificationLog });
-      }
-    }
+    if (assignedTo) await notifyNewTicketAssignee(ticket, assignedTo);
   };
 
   const handleNewTicket = async (ticketOrTickets: Ticket | Ticket[]) => {

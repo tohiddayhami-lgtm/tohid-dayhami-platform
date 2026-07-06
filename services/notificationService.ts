@@ -26,11 +26,13 @@ export const DEFAULT_DAILY_SUMMARY_TEMPLATE =
   'سلام {recipientName} 👋\n📋 جلسات شما برای فردا ({tomorrowDate}):\n\n{meetingsList}\n\nموفق باشید! 🌟';
 
 // Fill template variables: {recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle}
-export const renderTemplate = (template: string, vars: Record<string, string>): string =>
-  Object.entries(vars).reduce(
+export const renderTemplate = (template: string, vars: Record<string, string>): string => {
+  const base = template || '';
+  return Object.entries(vars).reduce(
     (t, [k, v]) => t.replace(new RegExp(`\\{${k}\\}`, 'g'), v || ''),
-    template,
+    base,
   );
+};
 
 // Normalize to international format (handles Iranian numbers starting with 09/989/+98)
 const normalizePhone = (phone: string): string => {
@@ -48,7 +50,7 @@ export const sendWhatsAppNotification = async (
   config: NotificationConfig,
   callMeBotApiKey?: string,
 ): Promise<{ success: boolean; error?: string }> => {
-  if (!config.enabled || !phone.trim() || !message.trim()) {
+  if (!config.enabled || !phone?.trim() || !message?.trim()) {
     return { success: false, error: 'disabled or missing data' };
   }
 
