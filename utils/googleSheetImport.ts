@@ -71,6 +71,13 @@ export async function fetchGoogleSheetCsv(sheetUrl: string): Promise<string> {
   return res.text();
 }
 
+const cleanCell = (v: string) => v.replace(/\0/g, '').trim();
+const truncate = (v: string, max = 48000) => (v.length > max ? `${v.slice(0, max)}…` : v);
+const normalizePhone = (v: string) => {
+  const digits = v.replace(/\D/g, '');
+  return digits.length >= 6 ? v.trim() : '';
+};
+
 /** RFC-style CSV parser (handles quoted fields with commas). */
 export function parseCsvText(text: string): ParsedSheet {
   const rows: string[][] = [];
@@ -108,8 +115,26 @@ export function parseCsvText(text: string): ParsedSheet {
   }
 
   if (rows.length < 1) return { headers: [], rows: [] };
-  const headers = rows[0].map(h => h.replace(/^\uFEFF/, '').trim());
-  const dataRows = rows.slice(1).filter(r => r.some(c => c.trim().length > 0));
+
+  // Persian Excel often exports semicolon-separated CSV
+  const firstLine = rows[0].join(',');
+  if (rows[0].length === 1 && firstLine.includes(';')) {
+    const semiRows: string[][] = [];
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      semiRows.push(line.split(';').map(c => cleanCell(c.replace(/^"|"$/g, ''))));
+    }
+    if (semiRows.length > 0) {
+      const headers = semiRows[0].map(h => h.replace(/^\uFEFF/, ''));
+      const dataRows = semiRows.slice(1).filter(r => r.some(c => c.length > 0));
+      return { headers, rows: dataRows };
+    }
+  }
+
+  const headers = rows[0].map(h => cleanCell(h.replace(/^\uFEFF/, '')));
+  const dataRows = rows.slice(1)
+    .filter(r => r.some(c => cleanCell(c).length > 0))
+    .map(r => r.map(cleanCell));
   return { headers, rows: dataRows };
 }
 
@@ -153,9 +178,8 @@ function pickRandom<T>(items: T[]): T | undefined {
 }
 
 export function generateSheetTicketId(seq?: number): string {
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  const suffix = seq != null ? String(seq + 1).padStart(3, '0') : String(Math.floor(Math.random() * 999)).padStart(3, '0');
-  return `SHR-${rand}-${suffix}`;
+  const suffix = seq != null ? String(seq + 1).padStart(4, '0') : String(Math.floor(Math.random() * 9999)).padStart(4, '0');
+  return `SHR-${Date.now()}-${suffix}`;
 }
 
 function getFieldValue(row: string[], headers: string[], columnMap: Record<string, SheetColumnField>, field: SheetColumnField): string {
@@ -212,8 +236,11 @@ function buildTicketBase(
     priority: opts.priority || 'Medium',
     assignedTo: assigneeId,
     timeline,
+    files: [],
+    selectedSubServices: [],
+    discountApplied: false,
     customData: {
-      importSource: 'google_sheet',
+      importSource: opts.sheetUrl ? 'google_sheet' : 'csv',
       sheetName: opts.sourceName,
       ...(opts.sheetUrl ? { sheetUrl: opts.sheetUrl } : {}),
     },
@@ -247,15 +274,16 @@ export function buildTicketsFromSheet(
       || getFieldValue(firstRow, headers, opts.columnMap, 'customerName')
       || opts.sourceName;
 
+    const aggPhone = normalizePhone(getFieldValue(firstRow, headers, opts.columnMap, 'phoneNumber'));
     tickets.push({
       ...(base as Ticket),
-      customerName: title,
+      customerName: truncate(title),
       companyName: getFieldValue(firstRow, headers, opts.columnMap, 'companyName') || undefined,
       location: getFieldValue(firstRow, headers, opts.columnMap, 'location') || '-',
-      phoneNumber: getFieldValue(firstRow, headers, opts.columnMap, 'phoneNumber') || '-',
-      whatsappNumber: getFieldValue(firstRow, headers, opts.columnMap, 'phoneNumber') || '-',
+      phoneNumber: aggPhone || '-',
+      whatsappNumber: aggPhone || '-',
       businessType: getFieldValue(firstRow, headers, opts.columnMap, 'businessType') || undefined,
-      description: `درخواست تجمیعی از گوگل‌شیت «${opts.sourceName}» — ${rows.length} مورد:\n\n${lines.join('\n\n')}`,
+      description: truncate(`درخواست تجمیعی از «${opts.sourceName}» — ${rows.length} مورد:\n\n${lines.join('\n\n')}`),
       customData: {
         ...base.customData,
         importMode: 'aggregated',
@@ -270,17 +298,18 @@ export function buildTicketsFromSheet(
     const assigneeName = assigneeId ? (personnelNames[assigneeId] || 'کارشناس') : '—';
     const base = buildTicketBase(opts, assigneeId, assigneeName, idx);
     const customerName = getFieldValue(row, headers, opts.columnMap, 'customerName') || `${opts.sourceName} — ردیف ${idx + 1}`;
-    const phone = getFieldValue(row, headers, opts.columnMap, 'phoneNumber') || '-';
+    const phoneRaw = getFieldValue(row, headers, opts.columnMap, 'phoneNumber');
+    const phone = normalizePhone(phoneRaw) || '-';
 
     tickets.push({
       ...(base as Ticket),
-      customerName,
+      customerName: truncate(customerName),
       companyName: getFieldValue(row, headers, opts.columnMap, 'companyName') || undefined,
       location: getFieldValue(row, headers, opts.columnMap, 'location') || '-',
       phoneNumber: phone,
       whatsappNumber: phone,
       businessType: getFieldValue(row, headers, opts.columnMap, 'businessType') || undefined,
-      description: getFieldValue(row, headers, opts.columnMap, 'description') || buildRowDescription(row, headers, opts.columnMap) || '—',
+      description: truncate(getFieldValue(row, headers, opts.columnMap, 'description') || buildRowDescription(row, headers, opts.columnMap) || '—'),
       customData: {
         ...base.customData,
         importMode: 'individual',

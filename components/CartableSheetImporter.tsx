@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppConfig, CartableSheetSource, Personnel, ServiceOption, Ticket,
 } from '../types';
@@ -57,6 +57,13 @@ export const CartableSheetImporter: React.FC<Props> = ({
   const [step, setStep] = useState<'load' | 'map' | 'preview'>('load');
 
   const sources = config.cartableSheetSources || [];
+
+  useEffect(() => {
+    if (!serviceId && services.length > 0) {
+      setServiceId(services[0].id);
+    }
+  }, [services, serviceId]);
+
   const activePersonnel = useMemo(
     () => personnel.filter(p => (p.status || 'active') === 'active'),
     [personnel],
@@ -218,12 +225,13 @@ export const CartableSheetImporter: React.FC<Props> = ({
   };
 
   const buildPreview = () => {
-    if (!serviceId) { setError(txt.errors.no_service); return; }
+    const sid = serviceId || services[0]?.id || '';
+    if (!sid) { setError(txt.errors.no_service); return; }
     if (!rows.length) { setError(txt.errors.no_rows); return; }
     setError('');
     const opts: SheetImportOptions = {
       mode,
-      serviceId,
+      serviceId: sid,
       assigneeIds,
       sourceName: sourceName.trim() || (T ? 'گوگل‌شیت' : 'Google Sheet'),
       sheetUrl: sheetUrl.trim() || undefined,
@@ -250,8 +258,11 @@ export const CartableSheetImporter: React.FC<Props> = ({
       setSourceName('');
       setAggregatedTitle('');
       setStep('load');
-    } catch {
-      setError(T ? 'خطا در ثبت درخواست‌ها.' : 'Failed to register requests.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg.includes('Proxy write') || msg.includes('sanitize_failed')
+        ? (T ? 'خطا در ارتباط با دیتابیس — اتصال اینترنت را بررسی کنید.' : 'Database connection error.')
+        : (T ? `خطا در ثبت: ${msg}` : `Submit failed: ${msg}`));
     } finally {
       setSubmitting(false);
     }

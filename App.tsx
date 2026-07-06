@@ -1281,12 +1281,41 @@ const App: React.FC = () => {
     // Recognize the customer by mobile number (normalized) — same phone = same customer, even with a different name
     const ticketPhoneNorm = (ticket.phoneNumber || '').replace(/\D/g, '');
     const existingCustomer = customers.find(c => (c.phoneNumber || '').replace(/\D/g, '') === ticketPhoneNorm && ticketPhoneNorm !== '');
-    if (existingCustomer) {
-      newCustomer = { ...existingCustomer, fullName: ticket.customerName, companyName: ticket.companyName || existingCustomer.companyName, location: ticket.location || existingCustomer.location, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType || existingCustomer.businessType, totalTickets: existingCustomer.totalTickets + 1, source: existingCustomer.source || 'Web Form' };
-    } else {
-      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const phoneSuffix = (ticket.phoneNumber || '').slice(-4);
-      newCustomer = { id: `C-${Date.now()}`, fullName: ticket.customerName, companyName: ticket.companyName, location: ticket.location, phoneNumber: ticket.phoneNumber, whatsappNumber: ticket.whatsappNumber, businessType: ticket.businessType, firstContact: new Date().toISOString(), totalTickets: 1, source: ticket.customData?.formTitle ? `Form: ${ticket.customData.formTitle}` : 'Web Form', loyaltyCode: `VIP-${phoneSuffix}-${randomStr}` };
+    const isSheetImport = ticket.customData?.importSource === 'google_sheet' || ticket.customData?.importSource === 'csv';
+    const phoneDigits = ticketPhoneNorm.length;
+    const shouldLinkCustomer = phoneDigits >= 6;
+
+    if (shouldLinkCustomer) {
+      if (existingCustomer) {
+        const importLabel = ticket.customData?.sheetName ? `Sheet: ${ticket.customData.sheetName}` : undefined;
+        newCustomer = {
+          ...existingCustomer,
+          fullName: ticket.customerName,
+          companyName: ticket.companyName || existingCustomer.companyName,
+          location: ticket.location || existingCustomer.location,
+          whatsappNumber: ticket.whatsappNumber || existingCustomer.whatsappNumber,
+          businessType: ticket.businessType || existingCustomer.businessType,
+          totalTickets: (existingCustomer.totalTickets || 0) + 1,
+          source: importLabel || existingCustomer.source || 'Web Form',
+        };
+      } else if (!isSheetImport || phoneDigits >= 6) {
+        const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const phoneSuffix = (ticket.phoneNumber || '').replace(/\D/g, '').slice(-4) || '0000';
+        const importLabel = ticket.customData?.sheetName ? `Sheet: ${ticket.customData.sheetName}` : undefined;
+        newCustomer = {
+          id: `C-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          fullName: ticket.customerName,
+          companyName: ticket.companyName,
+          location: ticket.location || '-',
+          phoneNumber: ticket.phoneNumber,
+          whatsappNumber: ticket.whatsappNumber || ticket.phoneNumber,
+          businessType: ticket.businessType,
+          firstContact: new Date().toISOString(),
+          totalTickets: 1,
+          source: importLabel || (ticket.customData?.formTitle ? `Form: ${ticket.customData.formTitle}` : 'Web Form'),
+          loyaltyCode: `VIP-${phoneSuffix}-${randomStr}`,
+        };
+      }
     }
     await saveTicketToCloud({ ...ticket, assignedTo, timeline: initialTimeline });
     if (newCustomer) await saveCustomerToCloud(newCustomer);
@@ -1319,7 +1348,12 @@ const App: React.FC = () => {
     try {
       if (Array.isArray(ticketOrTickets)) { for (const t of ticketOrTickets) await saveNewTicketToSystem(t); }
       else await saveNewTicketToSystem(ticketOrTickets);
-    } catch (e: any) { console.error("Database Save Error", e); alert("خطا در ذخیره سازی در دیتابیس."); throw e; }
+    } catch (e: any) {
+      console.error("Database Save Error", e);
+      const detail = e?.message || String(e);
+      alert(`خطا در ذخیره سازی در دیتابیس.\n${detail}`);
+      throw e;
+    }
   };
 
   const handleUpdateTicket = async (id: string, updates: Partial<Ticket>, actorName: string, actionNote?: string, visibility: 'public' | 'internal' = 'public', files?: AttachedFile[]) => {

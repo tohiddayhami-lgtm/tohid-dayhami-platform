@@ -251,6 +251,9 @@ function subscribeCollection<T>(
 async function setDocCloud(col: string, id: string, data: unknown) {
   const proxy = await checkProxyMode();
   const payload = sanitizeData(data);
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(`sanitize_failed:${col}/${id}`);
+  }
   if (proxy) await proxyWrite(col, id, payload);
   else await setDoc(doc(db, col, id), payload);
 }
