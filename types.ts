@@ -1869,6 +1869,7 @@ export interface LegalContract {
   clauses: ContractClause[];
   scheduleRows: ContractScheduleRow[];
   addOns: ContractAddOn[];
+  currency: string;
   rtlLanguage: ContractRtlLanguage;
   status: ContractStatus;
   createdAt: string;

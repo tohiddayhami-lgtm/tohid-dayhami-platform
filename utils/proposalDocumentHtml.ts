@@ -16,7 +16,7 @@ const RTL_FONT = 'Tahoma, Arial, sans-serif';
 
 export type ProposalDocMode = 'word' | 'pdf';
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
   (s || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -37,7 +37,7 @@ function splitBlocks(text: string): string[] {
     .filter(Boolean);
 }
 
-function renderBody(text: string, rtl: boolean, mode: ProposalDocMode): string {
+export function renderBody(text: string, rtl: boolean, mode: ProposalDocMode): string {
   const blocks = splitBlocks(text);
   if (!blocks.length) return '';
 
@@ -91,7 +91,7 @@ function renderBody(text: string, rtl: boolean, mode: ProposalDocMode): string {
   return `<div style="margin:8pt 0 4pt 0;">${inner}</div>`;
 }
 
-const band = (en: string, rtl: string) => `
+export const band = (en: string, rtl: string) => `
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:12pt;width:100%;">
   <tr>
     <td width="50%" dir="ltr" align="left" style="width:50%;background:${NAVY};color:#ffffff;font-family:${EN_FONT};font-size:10pt;font-weight:bold;padding:6pt 9pt;text-transform:uppercase;">${esc(en)}</td>

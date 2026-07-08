@@ -16,7 +16,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function genContractRefNo(): string {
   const y = new Date().getFullYear();
   const n = String(Math.floor(1000 + Math.random() * 9000));
-  return `OM-${y}-${n}`;
+  return `CTR-${y}-${n}`;
 }
 
 export function emptyContract(actor?: { fullName?: string; id?: string }): LegalContract {
@@ -79,6 +79,7 @@ export function emptyContract(actor?: { fullName?: string; id?: string }): Legal
     ],
     scheduleRows: [],
     addOns: [],
+    currency: 'OMR',
     rtlLanguage: 'fa',
     status: 'draft',
     createdAt: now,
@@ -111,7 +112,7 @@ function mapParty(raw: Record<string, unknown>, i: number): ContractParty {
 function mapClause(raw: Record<string, unknown>): ContractClause {
   return {
     id: str(raw.id, uid('cl')),
-    articleNum: str(raw.articleNum, '1'),
+    articleNum: str(raw.articleNum ?? raw.sectionNum, '1'),
     titleEn: str(raw.titleEn),
     titleRtl: str(raw.titleRtl),
     contentEn: str(raw.contentEn),
@@ -122,9 +123,9 @@ function mapClause(raw: Record<string, unknown>): ContractClause {
 function mapSchedule(raw: Record<string, unknown>): ContractScheduleRow {
   return {
     id: str(raw.id, uid('sr')),
-    tierEn: str(raw.tierEn),
-    tierRtl: str(raw.tierRtl),
-    buildFee: str(raw.buildFee, '0'),
+    tierEn: str(raw.tierEn ?? raw.itemEn),
+    tierRtl: str(raw.tierRtl ?? raw.itemRtl),
+    buildFee: str(raw.buildFee ?? raw.unitPrice ?? raw.total, '0'),
     annualFee: str(raw.annualFee, '0'),
     interpretation: str(raw.interpretation, '0'),
     selected: !!raw.selected,
@@ -143,15 +144,36 @@ function mapAddOn(raw: Record<string, unknown>): ContractAddOn {
   };
 }
 
+/** Normalize AI/proposal-style aliases into contract fields. */
+function normalizeContractRaw(input: Record<string, unknown>): Record<string, unknown> {
+  let raw: Record<string, unknown>;
+  if (input.contract && typeof input.contract === 'object') {
+    raw = { ...(input.contract as Record<string, unknown>) };
+  } else if (input.proposal && typeof input.proposal === 'object') {
+    raw = { ...(input.proposal as Record<string, unknown>) };
+  } else {
+    raw = { ...input };
+  }
+
+  if (!Array.isArray(raw.clauses) && Array.isArray(raw.sections)) {
+    raw.clauses = (raw.sections as Record<string, unknown>[]).map(mapClause);
+  }
+  if (!Array.isArray(raw.scheduleRows) && Array.isArray(raw.lineItems)) {
+    raw.scheduleRows = (raw.lineItems as Record<string, unknown>[]).map(mapSchedule);
+  }
+  if (!str(raw.effectiveDate) && str(raw.proposalDate)) {
+    raw.effectiveDate = raw.proposalDate;
+  }
+
+  return raw;
+}
+
 const STATUS: ContractStatus[] = ['draft', 'final', 'signed'];
 const LAYOUTS: ContractLogoLayout[] = ['title-left', 'title-right', 'banner-top', 'corners'];
 
 export function parseContractJson(input: unknown, actor?: { fullName?: string; id?: string }): LegalContract {
   if (!input || typeof input !== 'object') throw new Error('invalid_json');
-  const root = input as Record<string, unknown>;
-  const raw = (root.contract && typeof root.contract === 'object'
-    ? root.contract
-    : root) as Record<string, unknown>;
+  const raw = normalizeContractRaw(input as Record<string, unknown>);
 
   if (!str(raw.titleEn) && !str(raw.titleRtl) && !str(raw.refNo)) {
     throw new Error('missing_fields');
@@ -197,6 +219,7 @@ export function parseContractJson(input: unknown, actor?: { fullName?: string; i
     clauses: clauses.length ? clauses : base.clauses,
     scheduleRows,
     addOns,
+    currency: str(raw.currency, 'OMR'),
     rtlLanguage,
     status,
     createdAt: typeof raw.createdAt === 'string'
@@ -208,15 +231,21 @@ export function parseContractJson(input: unknown, actor?: { fullName?: string; i
   };
 }
 
+const AI_MODELS_HINT =
+  'Return ONLY valid JSON. Use envelope with top-level "contract", OR a flat root with the same keys. '
+  + 'Mirror the commercial proposal layout: bilingual title/subtitle, parties[], clauses[] (like sections[]), '
+  + 'scheduleRows[] (like lineItems[]), addOns[], currency, rtlLanguage, status. '
+  + 'Each clause: id, articleNum (use "RECITALS" for recitals, then "1","2",…), titleEn, titleRtl, contentEn, contentRtl. '
+  + 'Write full professional legal paragraphs in BOTH languages (not placeholders). Use \\n for lists. '
+  + 'scheduleRows[]: tierEn, tierRtl, buildFee, annualFee, interpretation, selected. '
+  + 'effectiveDate = YYYY-MM-DD (not proposalDate). Aliases accepted on import: sections→clauses, lineItems→scheduleRows, proposalDate→effectiveDate. '
+  + 'Omit id/createdAt/updatedAt on import — app assigns them.';
+
 export function exportContractEnvelope(c: LegalContract): Record<string, unknown> {
   return {
     _schema_version: '1.0',
-    _about: 'Bilingual legal contract JSON (English + RTL). Used by Invoices → Contracts. NOT a commercial proposal.',
-    _for_ai_models:
-      'Return ONLY valid JSON. Use envelope with top-level "contract", OR a flat root with the same keys. '
-      + 'Preserve clauses[] order. Each clause needs articleNum, titleEn, titleRtl, contentEn, contentRtl. '
-      + 'scheduleRows[] = Schedule A fee tiers; addOns[] = optional extras. Each array item needs string id. '
-      + 'Omit id/createdAt/updatedAt on import — app assigns them.',
+    _about: 'Bilingual legal contract JSON (English + RTL). Used by Invoices → Contracts. Same layout as commercial proposal JSON but with contract fields.',
+    _for_ai_models: AI_MODELS_HINT,
     contract: {
       refNo: c.refNo,
       titleEn: c.titleEn,
@@ -232,6 +261,7 @@ export function exportContractEnvelope(c: LegalContract): Record<string, unknown
       clauses: c.clauses,
       scheduleRows: c.scheduleRows,
       addOns: c.addOns,
+      currency: c.currency,
       rtlLanguage: c.rtlLanguage,
       status: c.status,
     },
@@ -242,40 +272,138 @@ export function exportContractEnvelope(c: LegalContract): Record<string, unknown
 export function buildContractSampleEnvelope(actor?: { fullName?: string; id?: string }): Record<string, unknown> {
   const sample = exportContractEnvelope(emptyContract(actor));
   const contract = sample.contract as LegalContract;
+  contract.refNo = 'CTR-2026-PKG-020';
   contract.titleEn = 'METAVERSE EXPORT PAVILION — SERVICES AGREEMENT';
   contract.titleRtl = 'قرارداد خدمات غرفه صادراتی متاورسی';
-  contract.subtitleEn = '';
-  contract.subtitleRtl = '';
+  contract.subtitleEn = 'Export Pavilion Build, MetaShop Setup & Market Entry Support';
+  contract.subtitleRtl = 'راه‌اندازی غرفه صادراتی، متا‌شاپ و پشتیبانی ورود به بازار';
+  contract.effectiveDate = today();
+  contract.currency = 'OMR';
+  contract.parties = [
+    {
+      id: 'sp1',
+      labelEn: 'SERVICE PROVIDER',
+      labelRtl: 'ارائه‌دهنده‌ی خدمات',
+      companyEn: 'Tohid Dayhami Business Solutions Center SPC',
+      companyRtl: 'مرکز راهکارهای کسب‌وکار توحید دیهمی',
+      regNo: '',
+      country: 'Sultanate of Oman',
+      repNameEn: '',
+      repNameRtl: '',
+      repTitleEn: '',
+      repTitleRtl: '',
+      aliasEn: 'the Service Provider',
+      aliasRtl: 'ارائه‌دهنده‌ی خدمات',
+      contactEmail: '',
+      contactPhone: '',
+    },
+    {
+      id: 'cl1',
+      labelEn: 'CLIENT',
+      labelRtl: 'مشتری',
+      companyEn: '',
+      companyRtl: '',
+      regNo: '',
+      country: '',
+      repNameEn: '',
+      repNameRtl: '',
+      repTitleEn: '',
+      repTitleRtl: '',
+      aliasEn: 'the Client',
+      aliasRtl: 'مشتری',
+      contactEmail: '',
+      contactPhone: '',
+    },
+  ];
   contract.clauses = [
     {
       id: 'rec',
       articleNum: 'RECITALS',
       titleEn: 'RECITALS',
       titleRtl: 'مقدمه',
-      contentEn: 'Describe the background in English…',
-      contentRtl: 'توضیح مقدمه به فارسی…',
+      contentEn:
+        'WHEREAS the Service Provider specialises in export consultancy, digital trade infrastructure, and Metaverse Export Pavilion solutions;\n'
+        + 'AND WHEREAS the Client wishes to engage the Service Provider to design, build, and operate a bilingual export pavilion with integrated MetaShop catalog and market-entry support;\n'
+        + 'NOW, THEREFORE, the parties agree to enter into this Services Agreement on the terms set out below.',
+      contentRtl:
+        'با عنایت به تخصص ارائه‌دهنده‌ی خدمات در مشاوره صادرات، زیرساخت تجارت دیجیتال و راهکارهای غرفه صادراتی متاورسی؛\n'
+        + 'و با عنایت به تمایل مشتری برای بهره‌گیری از طراحی، راه‌اندازی و بهره‌برداری از غرفه صادراتی دوزبانه همراه با کاتالوگ متا‌شاپ و پشتیبانی ورود به بازار؛\n'
+        + 'اکنون طرفین توافق می‌نمایند این قرارداد خدمات را با شرایط زیر منعقد کنند.',
     },
     {
       id: 'a1',
       articleNum: '1',
-      titleEn: 'SCOPE OF SERVICES',
-      titleRtl: 'دامنه خدمات',
-      contentEn: 'List services and obligations…',
-      contentRtl: 'فهرست خدمات و تعهدات…',
+      titleEn: 'SCOPE & DELIVERABLES',
+      titleRtl: 'دامنه و تحویل‌دادنی‌ها',
+      contentEn:
+        'The Service Provider shall deliver the following, as further detailed in Schedule A:\n'
+        + '• Metaverse Export Pavilion environment (branded booth, product zones, visitor flow)\n'
+        + '• MetaShop bilingual product catalog (SKU upload, pricing, media assets)\n'
+        + '• Export documentation starter pack and compliance checklist\n'
+        + '• Market-entry briefing and handover session',
+      contentRtl:
+        'ارائه‌دهنده‌ی خدمات موارد زیر را طبق جزئیات پیوست الف تحویل می‌دهد:\n'
+        + '• محیط غرفه صادراتی متاورسی (غرفه برندشده، زون محصول، مسیر بازدیدکننده)\n'
+        + '• کاتالوگ دوزبانه متا‌شاپ (بارگذاری SKU، قیمت‌گذاری، رسانه)\n'
+        + '• بسته آغازین مستندات صادرات و چک‌لیست انطباق\n'
+        + '• جلسه توجیهی ورود به بازار و تحویل نهایی',
+    },
+    {
+      id: 'a2',
+      articleNum: '2',
+      titleEn: 'FEES & PAYMENT',
+      titleRtl: 'حق‌الزحمه و پرداخت',
+      contentEn:
+        'Fees are set out in Schedule A (OMR). Unless otherwise agreed in writing, fifty percent (50%) is payable upon execution of this Agreement and fifty percent (50%) upon completion of deliverables.\n'
+        + 'All amounts are exclusive of applicable taxes. Late payments may accrue interest at 1% per month.',
+      contentRtl:
+        'حق‌الزحمه در پیوست الف (ریال عمان) تعیین شده است. مگر خلاف آن کتباً توافق شود، پنجاه درصد (۵۰٪) هنگام امضا و پنجاه درصد (۵۰٪) پس از تکمیل تحویل‌دادنی‌ها قابل پرداخت است.\n'
+        + 'کلیه مبالغ بدون مالیات‌های قابل اجرا است. تأخیر در پرداخت می‌تواند مشمول جریمه ۱٪ ماهانه شود.',
+    },
+    {
+      id: 'a3',
+      articleNum: '3',
+      titleEn: 'TERM & GOVERNING LAW',
+      titleRtl: 'مدت و قانون حاکم',
+      contentEn:
+        'This Agreement commences on the Effective Date and continues for twelve (12) months unless terminated earlier in accordance with its terms.\n'
+        + 'This Agreement is governed by the laws of the Sultanate of Oman. Disputes shall be resolved amicably, failing which the courts of Muscat shall have exclusive jurisdiction.',
+      contentRtl:
+        'این قرارداد از تاریخ اجرا آغاز و به مدت دوازده (۱۲) ماه ادامه می‌یابد مگر زودتر طبق شرایط فسخ شود.\n'
+        + 'این قرارداد تابع قوانین سلطنت عمان است. اختلافات ابتدا دوستانه حل می‌شود و در غیر این صورت دادگاه‌های مسقط صلاحیت انحصاری دارند.',
     },
   ];
   contract.scheduleRows = [
     {
       id: 'sr1',
-      tierEn: 'Standard Package',
-      tierRtl: 'بسته استاندارد',
+      tierEn: 'Package A — Pavilion Standard',
+      tierRtl: 'بسته الف — غرفه استاندارد',
       buildFee: '1,500',
       annualFee: '350',
       interpretation: '10',
       selected: true,
     },
+    {
+      id: 'sr2',
+      tierEn: 'Package B — Pavilion Premium',
+      tierRtl: 'بسته ب — غرفه ویژه',
+      buildFee: '2,800',
+      annualFee: '600',
+      interpretation: '20',
+      selected: false,
+    },
   ];
-  contract.addOns = [];
+  contract.addOns = [
+    {
+      id: 'ao1',
+      nameEn: 'Rush delivery (7 business days)',
+      nameRtl: 'تحویل فوری (۷ روز کاری)',
+      descEn: 'Expedited pavilion build and catalog upload',
+      descRtl: 'راه‌اندازی تسریع‌شده غرفه و بارگذاری کاتالوگ',
+      price: '250',
+      selected: false,
+    },
+  ];
   return sample;
 }
 

@@ -25,6 +25,7 @@ import {
   downloadContractJson,
 } from '../utils/contractFormat';
 import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
+import { exportContractPdf } from '../utils/exportContractPdf';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -44,6 +45,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState<1 | 2 | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [importErr, setImportErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const logo1Ref = useRef<HTMLInputElement>(null);
@@ -75,6 +77,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
     try {
       const payload: LegalContract = {
         ...draft,
+        currency: draft.currency || 'OMR',
         updatedAt: new Date().toISOString(),
         createdBy: draft.createdBy || currentUser.fullName,
         createdByPersonnelId: draft.createdByPersonnelId || currentUser.id,
@@ -182,15 +185,16 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
   const statusCls = (s: ContractStatus) =>
     ({ draft: 'bg-gray-100 text-gray-600', final: 'bg-blue-100 text-blue-700', signed: 'bg-emerald-100 text-emerald-700' })[s];
 
-  const printDoc = () => {
-    if (!printRef.current) return;
-    const html = printRef.current.innerHTML;
-    const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1000');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><title>${draft?.refNo || 'Contract'}</title>
-      <style>${BILINGUAL_DOC_CSS}</style></head><body>${html}</body></html>`);
-    w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 300);
+  const downloadPdf = async () => {
+    if (!draft || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await exportContractPdf({ ...draft, currency: draft.currency || 'OMR' }, `contract_${draft.refNo || 'draft'}.pdf`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'PDF export failed');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const field = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-800/20';
@@ -235,6 +239,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
 
   const PreviewDoc = ({ c }: { c: LegalContract }) => {
     const h = logoH(c.contractLogoSize);
+    const currency = c.currency || 'OMR';
     const provider = c.parties[0];
     const client = c.parties[1] || c.parties[0];
     return (
@@ -259,7 +264,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <span>|</span>
           <span>Effective: {fmtDateLong(c.effectiveDate)}</span>
           <span>|</span>
-          <span>Status: {statusLabel(c.status)}</span>
+          <span>Currency: {currency}</span>
         </div>
         <div className="pp-meta-sub">
           Effective date: {c.effectiveDate} &nbsp;|&nbsp; Ref: {c.refNo} &nbsp;|&nbsp; Status: {c.status}
@@ -299,8 +304,8 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
               <thead>
                 <tr>
                   <th style={{ width: '40%' }}>Tier / سطح</th>
-                  <th className="num">Build (OMR)</th>
-                  <th className="num">Annual (OMR)</th>
+                  <th className="num">Build ({currency})</th>
+                  <th className="num">Annual ({currency})</th>
                   <th className="num">Interp. hrs</th>
                   <th className="sel-col">Sel.</th>
                 </tr>
@@ -333,7 +338,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
               <thead>
                 <tr>
                   <th>Add-On</th>
-                  <th className="num">Price (OMR)</th>
+                  <th className="num">Price ({currency})</th>
                   <th className="sel-col">Sel.</th>
                 </tr>
               </thead>
@@ -474,7 +479,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="flex gap-2">
             {!readonly && <button type="button" onClick={() => setMode('editor')} className="text-xs px-3 py-2 rounded-lg border border-gray-200">{T ? 'ویرایش' : 'Edit'}</button>}
             <button type="button" onClick={exportCurrent} className="text-xs px-3 py-2 rounded-lg border border-gray-200">JSON</button>
-            <button type="button" onClick={printDoc} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1"><IconPrinter className="w-3.5 h-3.5" />{T ? 'چاپ / PDF' : 'Print / PDF'}</button>
+            <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50"><IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? '…' : (T ? 'دانلود PDF' : 'Download PDF')}</button>
           </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 md:p-10">
@@ -519,6 +524,10 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
             <select className={field} value={draft.status} onChange={e => upd({ status: e.target.value as ContractStatus })}>
               {(['draft', 'final', 'signed'] as ContractStatus[]).map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
+          </div>
+          <div>
+            <label className={label}>{T ? 'ارز' : 'Currency'}</label>
+            <input className={field} dir="ltr" value={draft.currency || 'OMR'} onChange={e => upd({ currency: e.target.value })} />
           </div>
           <div>
             <label className={label}>{T ? 'زبان RTL' : 'RTL language'}</label>
