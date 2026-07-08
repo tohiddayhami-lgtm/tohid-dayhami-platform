@@ -24,6 +24,7 @@ import {
   buildContractSampleEnvelope,
   downloadContractJson,
 } from '../utils/contractFormat';
+import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -187,39 +188,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
     const w = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1000');
     if (!w) return;
     w.document.write(`<!DOCTYPE html><html><head><title>${draft?.refNo || 'Contract'}</title>
-      <style>
-        @page { margin: 14mm; }
-        body { font-family: Inter, Tahoma, Arial, sans-serif; color: #111827; margin: 0; }
-        * { box-sizing: border-box; }
-        .ct-root { max-width: 820px; margin: 0 auto; }
-        .ct-logos { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
-        .ct-logos.center { justify-content:center; }
-        .ct-logos.banner { justify-content:center; margin-bottom:10px; }
-        .ct-logos img { object-fit:contain; }
-        .ct-head { text-align:center; border-bottom:2px solid #0f172a; padding-bottom:14px; margin-bottom:18px; }
-        .ct-head.left { text-align:left; display:flex; align-items:center; gap:16px; }
-        .ct-head.right { text-align:right; display:flex; flex-direction:row-reverse; align-items:center; gap:16px; }
-        .ct-head h1 { margin:0 0 6px; font-size:17px; letter-spacing:.04em; }
-        .ct-head h2 { margin:0; font-size:14px; font-weight:700; color:#334155; direction:rtl; }
-        .ct-meta { display:flex; justify-content:space-between; gap:12px; font-size:12px; color:#475569; margin-bottom:16px; }
-        .ct-parties { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
-        .ct-party { border:1px solid #e2e8f0; border-radius:10px; padding:12px; background:#f8fafc; }
-        .ct-party b { display:block; font-size:11px; letter-spacing:.08em; color:#64748b; margin-bottom:6px; }
-        .ct-party .co { font-weight:800; font-size:13px; }
-        .ct-party .co-rtl { direction:rtl; font-size:12px; color:#334155; }
-        .ct-clause { margin-bottom:16px; page-break-inside:avoid; }
-        .ct-clause h3 { margin:0 0 4px; font-size:12.5px; letter-spacing:.03em; }
-        .ct-clause h4 { margin:0 0 8px; font-size:12px; color:#475569; direction:rtl; font-weight:700; }
-        .ct-clause .en { white-space:pre-wrap; font-size:12px; line-height:1.55; margin-bottom:8px; }
-        .ct-clause .rtl { white-space:pre-wrap; font-size:12px; line-height:1.85; direction:rtl; color:#1e293b; background:#f8fafc; border-radius:8px; padding:10px; }
-        table { width:100%; border-collapse:collapse; font-size:11.5px; margin:8px 0 16px; }
-        th, td { border:1px solid #e2e8f0; padding:7px 9px; text-align:left; }
-        th { background:#0f172a; color:#fff; font-size:10.5px; letter-spacing:.04em; }
-        td.rtl { direction:rtl; text-align:right; }
-        .ct-sign { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:32px; page-break-inside:avoid; }
-        .ct-sign .box { border-top:1px solid #94a3b8; padding-top:10px; font-size:11px; color:#475569; min-height:70px; }
-        .ct-foot { margin-top:20px; font-size:10.5px; color:#64748b; text-align:center; border-top:1px solid #e2e8f0; padding-top:10px; }
-      </style></head><body>${html}</body></html>`);
+      <style>${BILINGUAL_DOC_CSS}</style></head><body>${html}</body></html>`);
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); }, 300);
   };
@@ -227,138 +196,191 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
   const field = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-800/20';
   const label = 'block text-xs font-bold text-gray-500 mb-1';
 
-  const PreviewDoc = ({ c }: { c: LegalContract }) => {
-    const h = logoH(c.contractLogoSize);
-    const layout = c.contractLogoLayout || 'corners';
-    const logos = (c.logoUrl || c.logo2Url) ? (
-      <div className={`ct-logos ${c.contractLogoAlign === 'center' || layout === 'banner-top' ? 'center' : ''} ${layout === 'banner-top' ? 'banner' : ''}`}>
-        {c.logoUrl ? <img src={c.logoUrl} alt="" style={{ height: h }} /> : <span />}
-        {c.logo2Url ? <img src={c.logo2Url} alt="" style={{ height: h }} /> : <span />}
-      </div>
-    ) : null;
+  const fmtDateLong = (iso: string) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { return iso; }
+  };
 
-    const headClass = layout === 'title-left' ? 'left' : layout === 'title-right' ? 'right' : '';
-    const titleBlock = (
-      <div>
-        <div style={{ fontSize: 11, letterSpacing: '.12em', color: '#64748b', marginBottom: 6 }}>{c.refNo}</div>
-        <h1>{c.titleEn}</h1>
-        {c.titleRtl && <h2>{c.titleRtl}</h2>}
-        {(c.subtitleEn || c.subtitleRtl) && (
-          <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-            {c.subtitleEn && <div>{c.subtitleEn}</div>}
-            {c.subtitleRtl && <div style={{ direction: 'rtl' }}>{c.subtitleRtl}</div>}
+  const partyBlock = (party: ContractParty, index: number) => (
+    <td key={party.id}>
+      <div className="en-block" dir="ltr">
+        <div className="num">{index + 1}. {party.labelEn}</div>
+        {party.companyEn && <div className="co">{party.companyEn}</div>}
+        {party.aliasEn && <div className="row" style={{ fontStyle: 'italic' }}>({party.aliasEn})</div>}
+        {party.regNo && <div className="row">Reg. No.: {party.regNo}</div>}
+        {party.country && <div className="row">Country: {party.country}</div>}
+        {party.repNameEn && <div className="row" style={{ marginTop: 6 }}>Contact: {party.repNameEn}</div>}
+        {party.repTitleEn && <div className="row">{party.repTitleEn}</div>}
+        {(party.contactEmail || party.contactPhone) && (
+          <div className="row" style={{ marginTop: 4 }} dir="ltr">
+            {[party.contactEmail, party.contactPhone].filter(Boolean).join(' · ')}
           </div>
         )}
       </div>
-    );
+      {(party.labelRtl || party.companyRtl || party.repNameRtl) && (
+        <div className="rtl-block" dir="rtl">
+          {party.labelRtl && <div className="num-rtl">{index + 1}. {party.labelRtl}</div>}
+          {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
+          {party.aliasRtl && <div className="row-rtl" style={{ fontStyle: 'italic' }}>({party.aliasRtl})</div>}
+          {party.regNo && <div className="row-rtl">شماره ثبت: {party.regNo}</div>}
+          {party.country && <div className="row-rtl">کشور: {party.country}</div>}
+          {party.repNameRtl && <div className="row-rtl" style={{ marginTop: 6 }}>تماس: {party.repNameRtl}</div>}
+          {party.repTitleRtl && <div className="row-rtl">{party.repTitleRtl}</div>}
+        </div>
+      )}
+    </td>
+  );
 
+  const PreviewDoc = ({ c }: { c: LegalContract }) => {
+    const h = logoH(c.contractLogoSize);
+    const provider = c.parties[0];
+    const client = c.parties[1] || c.parties[0];
     return (
-      <div className="ct-root" ref={printRef}>
-        {layout === 'banner-top' && logos}
-        {layout === 'corners' && logos}
-        <div className={`ct-head ${headClass}`}>
-          {layout === 'title-left' && c.logoUrl && <img src={c.logoUrl} alt="" style={{ height: h }} />}
-          {titleBlock}
-          {layout === 'title-right' && c.logoUrl && <img src={c.logoUrl} alt="" style={{ height: h }} />}
-          {layout === 'title-left' && c.logo2Url && <img src={c.logo2Url} alt="" style={{ height: h }} />}
-          {layout === 'title-right' && c.logo2Url && <img src={c.logo2Url} alt="" style={{ height: h }} />}
+      <div className="pp-root" ref={printRef} dir="ltr" lang="en">
+        <style>{BILINGUAL_DOC_CSS}</style>
+        {(c.logoUrl || c.logo2Url) && (
+          <div className={`pp-logos ${c.contractLogoAlign === 'center' ? 'center' : ''}`}>
+            {c.logoUrl ? <img src={c.logoUrl} alt="" style={{ height: h }} /> : <span />}
+            {c.logo2Url ? <img src={c.logo2Url} alt="" style={{ height: h }} /> : <span />}
+          </div>
+        )}
+
+        <div className="pp-title-block">
+          <h1 className="en-title" dir="ltr">{c.titleEn}</h1>
+          {c.titleRtl && <h2 className="rtl-title" dir="rtl">{c.titleRtl}</h2>}
+          {c.subtitleEn && <div className="en-sub" dir="ltr">{c.subtitleEn}</div>}
+          {c.subtitleRtl && <div className="rtl-sub" dir="rtl">{c.subtitleRtl}</div>}
         </div>
-        <div className="ct-meta">
-          <div><b>Effective Date:</b> {c.effectiveDate}</div>
-          <div><b>Status:</b> {statusLabel(c.status)}</div>
-          <div><b>Ref:</b> {c.refNo}</div>
+
+        <div className="pp-meta-bar">
+          <span>Ref. {c.refNo}</span>
+          <span>|</span>
+          <span>Effective: {fmtDateLong(c.effectiveDate)}</span>
+          <span>|</span>
+          <span>Status: {statusLabel(c.status)}</span>
         </div>
-        <div className="ct-parties">
-          {c.parties.map(party => (
-            <div key={party.id} className="ct-party">
-              <b>{party.labelEn} / {party.labelRtl}</b>
-              <div className="co">{party.companyEn || '—'}</div>
-              {party.companyRtl && <div className="co-rtl">{party.companyRtl}</div>}
-              {party.aliasEn && <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>({party.aliasEn})</div>}
-              {party.regNo && <div style={{ fontSize: 11, color: '#64748b' }}>CR: {party.regNo}</div>}
-              {party.country && <div style={{ fontSize: 11 }}>{party.country}</div>}
-              {(party.repNameEn || party.repNameRtl) && (
-                <div style={{ fontSize: 11, marginTop: 6 }}>
-                  {party.repNameEn}{party.repTitleEn ? ` — ${party.repTitleEn}` : ''}
-                  {party.repNameRtl && <div style={{ direction: 'rtl' }}>{party.repNameRtl}{party.repTitleRtl ? ` — ${party.repTitleRtl}` : ''}</div>}
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="pp-meta-sub">
+          Effective date: {c.effectiveDate} &nbsp;|&nbsp; Ref: {c.refNo} &nbsp;|&nbsp; Status: {c.status}
         </div>
+
+        <div className="pp-band">
+          <div className="l" dir="ltr">PARTIES</div>
+          <div className="r" dir="rtl">طرفین</div>
+        </div>
+        <table className="pp-parties-table">
+          <tbody>
+            <tr>
+              {provider && partyBlock(provider, 0)}
+              {client && partyBlock(client, 1)}
+            </tr>
+          </tbody>
+        </table>
+
         {c.clauses.map(cl => (
-          <div key={cl.id} className="ct-clause">
-            <h3>{cl.articleNum === 'RECITALS' ? '' : `ARTICLE ${cl.articleNum} — `}{cl.titleEn}</h3>
-            {cl.titleRtl && <h4>{cl.titleRtl}</h4>}
-            {cl.contentEn && <div className="en">{cl.contentEn}</div>}
-            {cl.contentRtl && <div className="rtl">{cl.contentRtl}</div>}
+          <div key={cl.id} className="pp-section">
+            <div className="pp-band">
+              <div className="l" dir="ltr">{cl.titleEn || cl.articleNum}</div>
+              <div className="r" dir="rtl">{cl.titleRtl || '—'}</div>
+            </div>
+            {cl.contentEn && <div className="pp-body-en" dir="ltr">{cl.contentEn}</div>}
+            {cl.contentRtl && <div className="pp-body-rtl" dir="rtl">{cl.contentRtl}</div>}
           </div>
         ))}
+
         {c.scheduleRows.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 13, letterSpacing: '.04em' }}>SCHEDULE A — FEES / پیوست الف — حق‌الزحمه</h3>
-            <table>
+          <div className="pp-section">
+            <div className="pp-band">
+              <div className="l" dir="ltr">SCHEDULE A — FEES</div>
+              <div className="r" dir="rtl">پیوست الف — حق‌الزحمه</div>
+            </div>
+            <table className="pp-price-table">
               <thead>
                 <tr>
-                  <th>Tier</th>
-                  <th className="rtl">سطح</th>
-                  <th>Build Fee</th>
-                  <th>Annual Fee</th>
-                  <th>Interp. hrs</th>
+                  <th style={{ width: '40%' }}>Tier / سطح</th>
+                  <th className="num">Build (OMR)</th>
+                  <th className="num">Annual (OMR)</th>
+                  <th className="num">Interp. hrs</th>
+                  <th className="sel-col">Sel.</th>
                 </tr>
               </thead>
               <tbody>
                 {c.scheduleRows.map(sr => (
-                  <tr key={sr.id} style={sr.selected ? { background: '#ecfdf5' } : undefined}>
-                    <td>{sr.tierEn}</td>
-                    <td className="rtl">{sr.tierRtl}</td>
-                    <td dir="ltr">{sr.buildFee} OMR</td>
-                    <td dir="ltr">{sr.annualFee} OMR</td>
-                    <td dir="ltr">{sr.interpretation}</td>
+                  <tr key={sr.id} className={sr.selected ? 'sel' : undefined}>
+                    <td>
+                      <div className="pkg-en" dir="ltr">{sr.tierEn}</div>
+                      {sr.tierRtl && <div className="pkg-rtl" dir="rtl">{sr.tierRtl}</div>}
+                    </td>
+                    <td className="num" dir="ltr">{sr.buildFee}</td>
+                    <td className="num" dir="ltr">{sr.annualFee}</td>
+                    <td className="num" dir="ltr">{sr.interpretation}</td>
+                    <td className="sel-col">{sr.selected ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
-        {c.addOns.length > 0 && (
-          <>
-            <h3 style={{ fontSize: 13, letterSpacing: '.04em' }}>OPTIONAL ADD-ONS / افزودنی‌های اختیاری</h3>
-            <table>
+
+        {c.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim()) && (
+          <div className="pp-section">
+            <div className="pp-band">
+              <div className="l" dir="ltr">OPTIONAL ADD-ONS</div>
+              <div className="r" dir="rtl">افزودنی‌های اختیاری</div>
+            </div>
+            <table className="pp-addon-table">
               <thead>
                 <tr>
-                  <th>Add-on</th>
-                  <th className="rtl">افزودنی</th>
-                  <th>Price</th>
+                  <th>Add-On</th>
+                  <th className="num">Price (OMR)</th>
+                  <th className="sel-col">Sel.</th>
                 </tr>
               </thead>
               <tbody>
-                {c.addOns.map(ao => (
-                  <tr key={ao.id} style={ao.selected ? { background: '#ecfdf5' } : undefined}>
-                    <td>{ao.nameEn}{ao.descEn ? <div style={{ fontSize: 10, color: '#64748b' }}>{ao.descEn}</div> : null}</td>
-                    <td className="rtl">{ao.nameRtl}{ao.descRtl ? <div style={{ fontSize: 10, color: '#64748b' }}>{ao.descRtl}</div> : null}</td>
-                    <td dir="ltr">{ao.price} OMR</td>
+                {c.addOns.filter(ao => (ao.nameEn || ao.nameRtl || '').trim()).map(ao => (
+                  <tr key={ao.id} className={ao.selected ? 'sel' : undefined}>
+                    <td>
+                      <div className="pkg-en" dir="ltr">{ao.nameEn}</div>
+                      {ao.nameRtl && <div className="pkg-rtl" dir="rtl">{ao.nameRtl}</div>}
+                      {(ao.descEn || ao.descRtl) && (
+                        <div className="pkg-note">
+                          {ao.descEn}{ao.descEn && ao.descRtl ? ' — ' : ''}{ao.descRtl}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num" dir="ltr">{ao.price}</td>
+                    <td className="sel-col">{ao.selected ? '✓' : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
-        <div className="ct-sign">
-          {c.parties.map(party => (
-            <div key={party.id} className="box">
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>{party.labelEn}</div>
-              <div style={{ direction: 'rtl', fontSize: 11 }}>{party.labelRtl}</div>
-              <div style={{ marginTop: 28 }}>________________________</div>
-              <div style={{ marginTop: 4 }}>{party.repNameEn || party.companyEn}</div>
-              <div style={{ direction: 'rtl' }}>{party.repNameRtl || party.companyRtl}</div>
-            </div>
-          ))}
+
+        <div className="pp-section">
+          <div className="pp-band">
+            <div className="l" dir="ltr">SIGNATURES</div>
+            <div className="r" dir="rtl">امضاها</div>
+          </div>
+          <div className="pp-signatures">
+            {c.parties.map(party => (
+              <div key={party.id} className="box">
+                <div className="lbl">{party.labelEn}</div>
+                <div className="lbl-rtl" dir="rtl">{party.labelRtl}</div>
+                <div className="line">{party.repNameEn || party.companyEn || '—'}</div>
+                {(party.repNameRtl || party.companyRtl) && (
+                  <div className="line-rtl" dir="rtl">{party.repNameRtl || party.companyRtl}</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="ct-foot">
-          {c.companyName}
-          <div>Executed in English and Persian. In case of discrepancy, the English version prevails.</div>
-          <div style={{ direction: 'rtl' }}>این قرارداد به دو زبان انگلیسی و فارسی تنظیم شده است. در صورت تعارض، نسخه‌ی انگلیسی مالک است.</div>
+
+        <div className="pp-foot">
+          <div className="co">{c.companyName || 'Services Agreement'}</div>
+          <div className="en">Executed in English and Persian. In case of discrepancy, the English version prevails.</div>
+          <div className="rtl" dir="rtl">این قرارداد به دو زبان انگلیسی و فارسی تنظیم شده است. در صورت تعارض، نسخه‌ی انگلیسی مالک است.</div>
         </div>
       </div>
     );
