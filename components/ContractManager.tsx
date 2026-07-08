@@ -25,7 +25,7 @@ import {
   downloadContractJson,
 } from '../utils/contractFormat';
 import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
-import { exportContractPdf } from '../utils/exportContractPdf';
+import { exportPdfFromPreviewElement } from '../utils/exportPreviewPdf';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -187,11 +187,16 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
 
   const downloadPdf = async () => {
     if (!draft || pdfBusy) return;
+    if (!printRef.current) {
+      alert(T ? 'ابتدا پیش‌نمایش را باز کنید.' : 'Open preview first.');
+      return;
+    }
     setPdfBusy(true);
     try {
-      await exportContractPdf({ ...draft, currency: draft.currency || 'OMR' }, `contract_${draft.refNo || 'draft'}.pdf`);
+      await exportPdfFromPreviewElement(printRef.current, `contract_${draft.refNo || 'draft'}.pdf`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'PDF export failed');
+      console.error(e);
+      alert(T ? 'ساخت PDF ناموفق بود. دوباره تلاش کنید.' : 'PDF export failed. Please try again.');
     } finally {
       setPdfBusy(false);
     }
@@ -479,7 +484,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="flex gap-2">
             {!readonly && <button type="button" onClick={() => setMode('editor')} className="text-xs px-3 py-2 rounded-lg border border-gray-200">{T ? 'ویرایش' : 'Edit'}</button>}
             <button type="button" onClick={exportCurrent} className="text-xs px-3 py-2 rounded-lg border border-gray-200">JSON</button>
-            <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50"><IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? '…' : (T ? 'دانلود PDF' : 'Download PDF')}</button>
+            <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50"><IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}</button>
           </div>
         </div>
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 md:p-10">
