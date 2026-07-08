@@ -21,6 +21,8 @@ import {
   parseContractJson,
   contractClientName,
   genContractRefNo,
+  buildContractSampleEnvelope,
+  downloadContractJson,
 } from '../utils/contractFormat';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
@@ -112,23 +114,12 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
   };
 
   const downloadSample = () => {
-    const sample = exportContractEnvelope(emptyContract(currentUser));
-    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'contract_sample.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadContractJson(buildContractSampleEnvelope(currentUser), 'contract_sample.json');
   };
 
   const exportCurrent = () => {
     if (!draft) return;
-    const blob = new Blob([JSON.stringify(exportContractEnvelope(draft), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `contract_${draft.refNo}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadContractJson(exportContractEnvelope(draft), `contract_${draft.refNo}.json`);
   };
 
   const uploadLogo = (slot: 1 | 2, file: File) => {
@@ -381,7 +372,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div>
             <h3 className="text-lg font-bold text-gray-900">{T ? 'قراردادها' : 'Contracts'}</h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              {T ? 'دوزبانه حقوقی — مواد، پیوست الف، لوگو، ایمپورت JSON' : 'Bilingual legal — clauses, Schedule A, logos, AI JSON import'}
+              {T ? 'دوزبانه حقوقی (EN + فارسی/عربی) — مواد قرارداد، پیوست الف، لوگو، ایمپورت JSON از هوش مصنوعی' : 'Bilingual legal (EN + FA/AR) — clauses, Schedule A, logos, AI JSON import'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
