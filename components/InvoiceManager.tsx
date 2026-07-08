@@ -32,6 +32,12 @@ import {
   isInvoiceMasterOrAdmin,
 } from '../utils/invoiceAccess';
 import { computeInvoiceTotals, invoiceLineTotal, invoiceNetExclVat } from '../utils/invoiceTotals';
+import {
+  buildInvoiceSampleEnvelope,
+  downloadInvoiceJson,
+  exportInvoiceEnvelope,
+  parseInvoiceJson,
+} from '../utils/invoiceFormat';
 import { ProposalManager } from './ProposalManager';
 import { ContractManager } from './ContractManager';
 
@@ -144,7 +150,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [paymentModalInv, setPaymentModalInv] = useState<Invoice | null>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: 0, date: new Date().toISOString().split('T')[0], method: '', reference: '', note: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [importErr, setImportErr] = useState('');
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const jsonFileRef = useRef<HTMLInputElement>(null);
   const invoiceSheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -172,6 +180,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       amountDecimals: 'تعداد اعشار مبالغ', amountDecimalsHint: 'پیش‌فرض فاکتورهای جدید',
       invAmountDecimals: 'اعشار مبالغ',
       type: 'نوع', terms: 'شرایط و قوانین',
+      jsonHint: 'صدور سریع با JSON — دانلود سمپل برای هوش مصنوعی، آپلود و ویرایش',
+      downloadJsonSample: 'دانلود سمپل JSON',
+      uploadJson: 'آپلود JSON',
+      exportJson: 'خروجی JSON',
+      jsonImportErr: 'فایل JSON نامعتبر است. فرمت سمپل فاکتور را رعایت کنید.',
     },
     en: {
       title: 'Invoices', archive: 'Invoice Archive', newInvoice: 'New Invoice', companyInfo: 'Company Info',
@@ -191,6 +204,11 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       amountDecimals: 'Amount decimal places', amountDecimalsHint: 'Default for new invoices',
       invAmountDecimals: 'Decimals',
       type: 'Type', terms: 'Terms',
+      jsonHint: 'Fast invoicing via JSON — download sample for AI, upload and edit',
+      downloadJsonSample: 'Download sample JSON',
+      uploadJson: 'Upload JSON',
+      exportJson: 'Export JSON',
+      jsonImportErr: 'Invalid JSON file. Use the invoice sample format.',
     },
   }[lang];
 
@@ -238,12 +256,14 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
 
   const startNew = () => {
     if (!canCreate) return;
+    setImportErr('');
     setDraft(recompute(emptyDraft(config, currentUser, visibleInvoices.length)));
     setMode('editor');
   };
   const startEdit = (inv: Invoice) => {
     if (!visibleInvoices.some(i => i.id === inv.id)) { denyAccess(); return; }
     if (!readonly && !canEditInvoice(currentUser, inv)) { denyAccess(); return; }
+    setImportErr('');
     setDraft(recompute({
       ...inv,
       items: inv.items.map(it => ({ ...it, total: invoiceLineTotal(it) })),
@@ -252,6 +272,46 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       receipts: inv.receipts || [],
     }));
     setMode('editor');
+  };
+
+  const invoiceImportCtx = () => ({
+    actor: currentUser,
+    config,
+    existingCount: visibleInvoices.length,
+  });
+
+  const downloadSampleJson = () => {
+    downloadInvoiceJson(buildInvoiceSampleEnvelope(invoiceImportCtx()), 'invoice_sample.json');
+  };
+
+  const importJsonFile = (file: File) => {
+    if (!canCreate) return;
+    setImportErr('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || ''));
+        const invoice = parseInvoiceJson(parsed, invoiceImportCtx());
+        invoice.id = `inv-${Date.now()}`;
+        invoice.createdAt = new Date().toISOString();
+        invoice.issuedBy = currentUser.fullName;
+        invoice.issuedByPersonnelId = currentUser.id;
+        setDraft(recompute({
+          ...invoice,
+          paymentDetails: normalizePaymentDetails(invoice.paymentDetails),
+          receipts: [],
+        }));
+        setMode('editor');
+      } catch {
+        setImportErr(t.jsonImportErr);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const exportCurrentJson = () => {
+    if (!draft) return;
+    downloadInvoiceJson(exportInvoiceEnvelope(draft), `invoice_${draft.number || 'draft'}.json`);
   };
 
   const setItem = (idx: number, field: keyof InvoiceItem, value: any) => setDraft(d => {
@@ -654,17 +714,44 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       {mainTab === 'invoices' && (<>
       {/* Header / tabs */}
       <div className="flex items-center justify-between gap-3 flex-wrap print:hidden">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconInvoice className="w-5 h-5" /></div>
-          <h3 className="text-lg font-bold text-gray-800">{t.title}</h3>
-          <span className="text-xs text-gray-400">({visibleInvoices.length}{showAllInvoices && invoices.length !== visibleInvoices.length ? ` / ${invoices.length}` : ''})</span>
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><IconInvoice className="w-5 h-5" /></div>
+            <h3 className="text-lg font-bold text-gray-800">{t.title}</h3>
+            <span className="text-xs text-gray-400">({visibleInvoices.length}{showAllInvoices && invoices.length !== visibleInvoices.length ? ` / ${invoices.length}` : ''})</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 ms-11">{t.jsonHint}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { setMode('archive'); setDraft(null); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'archive' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.archive}</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" onClick={downloadSampleJson} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+            {t.downloadJsonSample}
+          </button>
+          {canCreate && (
+            <>
+              <button type="button" onClick={() => jsonFileRef.current?.click()} className="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex items-center gap-1">
+                <IconUpload className="w-3.5 h-3.5" />{t.uploadJson}
+              </button>
+              <input
+                ref={jsonFileRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) importJsonFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </>
+          )}
+          <button onClick={() => { setMode('archive'); setDraft(null); setImportErr(''); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === 'archive' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{t.archive}</button>
           {canManageCompany && <button onClick={() => { setCompanyForm(template); setMode('company'); }} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${mode === 'company' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><IconSettings className="w-3.5 h-3.5" />{t.companyInfo}</button>}
           {canCreate && <button onClick={startNew} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5"><IconPlus className="w-4 h-4" />{t.newInvoice}</button>}
         </div>
       </div>
+      {importErr && mode === 'archive' && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 print:hidden">{importErr}</p>
+      )}
 
       {/* ───────── ARCHIVE ───────── */}
       {mode === 'archive' && (
@@ -861,10 +948,14 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                 </select>
               </div>
               <select value={draft.status || 'draft'} onChange={e => setField('status', e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none"><option value="draft">{t.draft}</option><option value="issued">{t.issued}</option><option value="paid">{t.paid}</option></select>
+              <button type="button" onClick={exportCurrentJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.exportJson}</button>
               <button onClick={handleExportPdf} disabled={pdfGenerating} className="flex items-center gap-1.5 bg-gray-700 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-gray-800 disabled:opacity-50"><IconPrinter className="w-4 h-4" />{pdfGenerating ? 'PDF…' : 'PDF'}</button>
               {!readonly && <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50"><IconCheck className="w-4 h-4" />{t.save}</button>}
             </div>
           </div>
+          {importErr && mode === 'editor' && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4 print:hidden">{importErr}</p>
+          )}
 
           {/* A4 sheet */}
           <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '26px 34px', boxSizing: 'border-box' }} dir="ltr">
