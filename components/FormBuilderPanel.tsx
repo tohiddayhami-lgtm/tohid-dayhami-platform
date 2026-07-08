@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption } from '../types';
+import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption, TicketStatus } from '../types';
 import { Language } from '../App';
-import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud } from '../services/firebaseService';
+import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud } from '../services/firebaseService';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 
@@ -272,6 +272,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [archiveFormId, setArchiveFormId] = useState<string>('');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [expandedSubmissionId, setExpandedSubmissionId] = useState<string | null>(null);
+  const [submissionAssigneeDraft, setSubmissionAssigneeDraft] = useState<Record<string, string>>({});
+  const [submissionBusyId, setSubmissionBusyId] = useState<string | null>(null);
   const [googleFormFor, setGoogleFormFor] = useState<CustomForm | null>(null);
   const [serviceReqGoogleOpen, setServiceReqGoogleOpen] = useState(false);
   const [serviceReqMulti, setServiceReqMulti] = useState(false);
@@ -463,6 +465,16 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     !searchQ || f.title.includes(searchQ) || (f.titleEn || '').toLowerCase().includes(searchQ.toLowerCase()) || f.category.includes(searchQ)
   );
 
+  const formSubmissionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tickets.forEach(t => {
+      const formId = t.customData?.formId || ((t.serviceId || '').startsWith('form:') ? (t.serviceId || '').slice('form:'.length) : '');
+      if (!formId) return;
+      counts[formId] = (counts[formId] || 0) + 1;
+    });
+    return counts;
+  }, [tickets]);
+
   // ── Archive helpers ──
   const formSubmissions = useMemo(() => {
     if (!archiveFormId) {
@@ -522,6 +534,39 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     a.download = `form_submissions_${archiveFormId || 'all'}_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const goToFormArchive = (formId: string) => {
+    setArchiveFormId(formId);
+    setArchiveSearch('');
+    setExpandedSubmissionId(null);
+    setView('archive');
+  };
+
+  const setSubmissionStatus = async (ticketId: string, status: Ticket['status']) => {
+    if (!ticketId || !status) return;
+    setSubmissionBusyId(ticketId);
+    try {
+      await updateTicketInCloud(ticketId, { status });
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ثبت اقدام' : 'Failed to update status');
+    } finally {
+      setSubmissionBusyId(null);
+    }
+  };
+
+  const assignSubmission = async (ticketId: string) => {
+    const assigneeId = submissionAssigneeDraft[ticketId];
+    if (!ticketId || !assigneeId) return;
+    setSubmissionBusyId(ticketId);
+    try {
+      await updateTicketInCloud(ticketId, { assignedTo: assigneeId });
+      setSubmissionAssigneeDraft(prev => ({ ...prev, [ticketId]: '' }));
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ارجاع پرونده' : 'Failed to assign submission');
+    } finally {
+      setSubmissionBusyId(null);
+    }
   };
 
   // ────────────────────────── RENDER ──────────────────────────
@@ -589,6 +634,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               const isExpanded = expandedSubmissionId === sub.id;
               const formTitle = sub.customData?.formTitle || sub.serviceId?.replace('form:', '') || '—';
               const fileCount = (sub.files || []).length;
+                  const selectedAssignee = submissionAssigneeDraft[sub.id] || '';
+                  const assignedName = activePersonnel.find(p => p.id === sub.assignedTo)?.fullName;
 
               return (
                 <div key={sub.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -623,6 +670,66 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                   {/* Expanded details */}
                   {isExpanded && (
                     <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4 animate-fade-in">
+                      {isEditor && (
+                        <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <p className="text-[11px] font-bold text-indigo-700">
+                              {lang === 'fa' ? 'اقدام روی این درخواست' : 'Actions on this submission'}
+                            </p>
+                            <span className="text-[11px] text-indigo-600">
+                              {lang === 'fa'
+                                ? `مسئول فعلی: ${assignedName || 'تعیین نشده'}`
+                                : `Current assignee: ${assignedName || 'Unassigned'}`}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={submissionBusyId === sub.id}
+                              onClick={() => setSubmissionStatus(sub.id, TicketStatus.PROCESSING)}
+                              className="px-2.5 py-1.5 text-[11px] font-semibold rounded border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                            >
+                              {lang === 'fa' ? 'در حال بررسی' : 'Processing'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submissionBusyId === sub.id}
+                              onClick={() => setSubmissionStatus(sub.id, TicketStatus.IN_PROGRESS)}
+                              className="px-2.5 py-1.5 text-[11px] font-semibold rounded border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                            >
+                              {lang === 'fa' ? 'در دست اقدام' : 'In progress'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submissionBusyId === sub.id}
+                              onClick={() => setSubmissionStatus(sub.id, TicketStatus.COMPLETED)}
+                              className="px-2.5 py-1.5 text-[11px] font-semibold rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                            >
+                              {lang === 'fa' ? 'تکمیل شد' : 'Completed'}
+                            </button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <select
+                              value={selectedAssignee}
+                              onChange={e => setSubmissionAssigneeDraft(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                              className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white min-w-[220px]"
+                            >
+                              <option value="">{lang === 'fa' ? '— انتخاب پرسنل برای ارجاع —' : '— Select assignee —'}</option>
+                              {activePersonnel.map(p => (
+                                <option key={p.id} value={p.id}>{p.fullName}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={!selectedAssignee || submissionBusyId === sub.id}
+                              onClick={() => assignSubmission(sub.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                              {lang === 'fa' ? 'ارجاع پرونده' : 'Assign'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {/* Field values */}
                       {formFields.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1633,6 +1740,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 {form.description && <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{form.description}</p>}
                 <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                   <span>{form.fields.length} {lang === 'fa' ? 'فیلد' : 'fields'}</span>
+                  <button
+                    type="button"
+                    onClick={() => goToFormArchive(form.id)}
+                    className="text-indigo-600 hover:text-indigo-700 hover:underline"
+                  >
+                    {formSubmissionCounts[form.id] || 0} {lang === 'fa' ? 'پاسخ' : 'responses'}
+                  </button>
                   {form.allowAttachments && (
                     <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
                       📎 {lang === 'fa' ? 'ضمیمه فعال' : 'Attachments ON'}
