@@ -26,6 +26,7 @@ import {
 } from '../utils/contractFormat';
 import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
 import { exportPdfFromPreviewElement } from '../utils/exportPreviewPdf';
+import { exportContractWord } from '../utils/exportContractWord';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -484,6 +485,14 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="flex gap-2">
             {!readonly && <button type="button" onClick={() => setMode('editor')} className="text-xs px-3 py-2 rounded-lg border border-gray-200">{T ? 'ویرایش' : 'Edit'}</button>}
             <button type="button" onClick={exportCurrent} className="text-xs px-3 py-2 rounded-lg border border-gray-200">JSON</button>
+            <button
+              type="button"
+              onClick={() => exportContractWord(draft, `contract_${draft.refNo || 'draft'}.doc`)}
+              className="text-xs px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-bold"
+              title={T ? 'دانلود فایل Word قابل ویرایش' : 'Download editable Word file'}
+            >
+              Word
+            </button>
             <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50"><IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}</button>
           </div>
         </div>
