@@ -1,16 +1,21 @@
 import type { Personnel } from '../types';
 import type { GlobalSupplier, SupplierEvaluationCriteria, SupplierPermissions } from '../types/supplier';
 
+export function isSupplierMaster(user: Personnel): boolean {
+  return user.username === 'master';
+}
+
 export function isSupplierAdmin(user: Personnel): boolean {
   const roles = user.roles || [];
-  return roles.includes('مدیر') || user.username === 'master';
+  return roles.includes('مدیر') || isSupplierMaster(user);
 }
 
 export function getSupplierPermissions(user: Personnel): SupplierPermissions {
-  const admin = isSupplierAdmin(user);
   const p = user.permissions;
+  const master = isSupplierMaster(user);
+  const admin = isSupplierAdmin(user);
 
-  if (admin) {
+  if (master) {
     return {
       canView: true,
       canEdit: true,
@@ -22,26 +27,34 @@ export function getSupplierPermissions(user: Personnel): SupplierPermissions {
     };
   }
 
-  const canView = user.status !== 'inactive' || !!p?.canViewSuppliers;
+  if (admin) {
+    return {
+      canView: true,
+      canEdit: true,
+      canDelete: false,
+      canEvaluate: true,
+      canManageDocuments: true,
+      canViewFinancials: true,
+      role: 'manager',
+    };
+  }
+
+  const canView = !!(p?.canViewSuppliers || p?.canManageSuppliers);
   const canManage = !!p?.canManageSuppliers;
 
   return {
     canView,
     canEdit: canManage,
-    canDelete: canManage && !!p?.canDeleteSuppliers,
+    canDelete: false,
     canEvaluate: canManage || !!p?.canEvaluateSuppliers,
     canManageDocuments: canManage || !!p?.canManageSupplierDocuments,
     canViewFinancials: canManage && !!p?.canViewSupplierFinancials,
-    role: canManage ? 'manager' : canView ? 'sales' : 'viewer',
+    role: canManage ? 'manager' : canView ? 'viewer' : 'viewer',
   };
 }
 
 export function canAccessSuppliers(user: Personnel): boolean {
-  if (isSupplierAdmin(user)) return true;
-  const p = user.permissions;
-  if (p?.canViewSuppliers || p?.canManageSuppliers) return true;
-  // Default view for active internal staff on the admin dashboard
-  return user.status !== 'inactive';
+  return getSupplierPermissions(user).canView;
 }
 
 export function calcEvaluationScore(c: SupplierEvaluationCriteria): number {

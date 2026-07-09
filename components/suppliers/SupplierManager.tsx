@@ -95,6 +95,7 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
   }, [currentUser, suppliers]);
 
   const handleToggleFlag = async (s: GlobalSupplier, key: keyof GlobalSupplier['flags']) => {
+    if (!permissions.canEdit) return;
     const flags = { ...s.flags, [key]: !s.flags[key] };
     await updateSupplierInCloud(s.id, { flags }, currentUser);
   };

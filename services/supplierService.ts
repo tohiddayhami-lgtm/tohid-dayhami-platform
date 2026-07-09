@@ -3,6 +3,7 @@ import type { Personnel } from '../types';
 import type { GlobalSupplier } from '../types/supplier';
 import { db, logSystemAction, sanitizeData } from './firebaseService';
 import { syncSupplierTopFields } from '../utils/supplierUtils';
+import { isSupplierMaster } from '../utils/supplierAccess';
 
 const COL = 'suppliers';
 
@@ -45,6 +46,9 @@ export const updateSupplierInCloud = async (
 };
 
 export const softDeleteSupplierFromCloud = async (id: string, actor: Personnel) => {
+  if (!isSupplierMaster(actor)) {
+    throw new Error('Only master can delete suppliers');
+  }
   let backup: unknown = null;
   const snap = await getDoc(doc(db, COL, id));
   if (snap.exists()) backup = snap.data();

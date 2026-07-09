@@ -149,7 +149,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const canEditInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices;
   const canAssign = isAdmin || isMaster || currentUser?.permissions?.canAssign;
   const hasCustomerAccess = isAdmin || isMaster || currentUser?.permissions?.canViewCustomers;
-  const hasSupplierAccess = isAdmin || isMaster || canAccessSuppliers(currentUser) || !!currentUser?.permissions?.canManageSuppliers;
+  const hasSupplierAccess = canAccessSuppliers(currentUser);
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
   const hasMetaShopAccess = canAccessMetaShop(currentUser);
@@ -1919,7 +1919,7 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="w-full space-y-1">
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'overview' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconActivity className="w-4 h-4 shrink-0" /><span>{t.overview}</span></button>
                 {hasCustomerAccess && <button onClick={() => setActiveTab('customer_bank')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_bank' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'بانک مشتریان' : 'Customer Bank'}</span></button>}
-                <button onClick={() => setActiveTab('suppliers')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'suppliers' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTrolley className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'تأمین‌کنندگان' : 'Suppliers'}</span></button>
+                {hasSupplierAccess && <button onClick={() => setActiveTab('suppliers')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'suppliers' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTrolley className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'تأمین‌کنندگان' : 'Suppliers'}</span></button>}
                 {canManageInvoices && <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'invoices' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconInvoice className="w-4 h-4 shrink-0" /><span>Invoices</span></button>}
                 {hasMetaShopAccess && <button onClick={() => setActiveTab('metashop')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'metashop' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTag className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'متاشاپ' : 'Meta Shop'}</span></button>}
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'tasks' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconList className="w-4 h-4 shrink-0" /><span>{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
@@ -1944,7 +1944,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
         {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
-        {activeTab === 'suppliers' && <SupplierManager currentUser={currentUser} personnel={personnel} lang={lang} />}
+        {activeTab === 'suppliers' && hasSupplierAccess && <SupplierManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'invoices' && canManageInvoices && onSaveInvoice && onDeleteInvoice && (
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
@@ -1975,6 +1975,7 @@ export const AdminDashboard: React.FC<Props> = ({
                      <div className="bg-white p-4 rounded-xl border border-gray-100"><div className="text-gray-400 text-xs mb-1">{t.newMessages}</div><div className="text-2xl font-bold text-gray-900">{unreadMessagesCount}</div></div>
                  </div>
 
+                 {hasSupplierAccess && (
                  <button
                    type="button"
                    onClick={() => setActiveTab('suppliers')}
@@ -1989,6 +1990,7 @@ export const AdminDashboard: React.FC<Props> = ({
                    </div>
                    <span className="text-xs font-bold text-teal-700 shrink-0">{lang === 'fa' ? 'ورود ←' : 'Open →'}</span>
                  </button>
+                 )}
 
                  <div className="bg-white p-5 rounded-xl border border-gray-100 animate-fade-in">
                      <div className="flex items-center gap-3 mb-4">
@@ -2341,7 +2343,7 @@ export const AdminDashboard: React.FC<Props> = ({
           />
         )}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} config={config} />}
-        {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} metaShops={metaShops} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
+        {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} metaShops={metaShops} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} currentUser={currentUser} />}
         {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} metaBazaars={metaBazaars} onUpdate={onUpdateConfig} isMaster={isMaster} />}
         {activeTab === 'notifications' && isMaster && <NotificationCenter config={config} personnel={personnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}

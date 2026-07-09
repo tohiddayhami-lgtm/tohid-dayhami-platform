@@ -130,9 +130,11 @@ interface Props {
   onUpdate: (list: Personnel[]) => void;
   onUpdateConfig: (config: AppConfig) => void;
   lang: Language;
+  currentUser?: Personnel;
 }
 
-export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], config, onUpdate, onUpdateConfig, lang }) => {
+export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], config, onUpdate, onUpdateConfig, lang, currentUser }) => {
+  const isMaster = currentUser?.username === 'master';
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDept, setNewRoleDept] = useState(''); // department id for the position being added
@@ -149,7 +151,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
     fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
     canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[],
-    canViewSuppliers: false, canManageSuppliers: false, canDeleteSuppliers: false,
+    canViewSuppliers: false, canManageSuppliers: false,
     canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false,
   });
 
@@ -263,8 +265,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           permMetaShopShopsHint: 'خالی = همه فروشگاه‌ها. برای محدود کردن، فروشگاه‌های دلخواه را انتخاب کنید.',
           permMetaShopShopsAll: 'همه فروشگاه‌ها',
           permSuppliers: 'مشاهده تأمین‌کنندگان',
-          permManageSuppliers: 'مدیریت تأمین‌کنندگان',
-          permDeleteSuppliers: 'حذف تأمین‌کنندگان',
+          permManageSuppliers: 'ویرایش تأمین‌کنندگان',
+          permSuppliersHint: 'فقط master می‌تواند دسترسی تأمین‌کنندگان را برای پرسنل تعریف کند. حذف تأمین‌کننده فقط برای master است.',
           permEvaluateSuppliers: 'ارزیابی تأمین‌کنندگان',
           permSupplierDocs: 'مدیریت اسناد تأمین‌کننده',
           permSupplierFinancials: 'داده‌های مالی تأمین‌کننده',
@@ -333,8 +335,8 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           permMetaShopShopsHint: 'Empty = all shops. Select specific shops to limit access.',
           permMetaShopShopsAll: 'All shops',
           permSuppliers: 'View suppliers',
-          permManageSuppliers: 'Manage suppliers',
-          permDeleteSuppliers: 'Delete suppliers',
+          permManageSuppliers: 'Edit suppliers',
+          permSuppliersHint: 'Only master can assign supplier access. Supplier delete is master-only.',
           permEvaluateSuppliers: 'Evaluate suppliers',
           permSupplierDocs: 'Supplier documents',
           permSupplierFinancials: 'Supplier financial data',
@@ -372,7 +374,6 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
         allowedMetaShopIds: person.permissions?.allowedMetaShopIds || [],
         canViewSuppliers: person.permissions?.canViewSuppliers || false,
         canManageSuppliers: person.permissions?.canManageSuppliers || false,
-        canDeleteSuppliers: person.permissions?.canDeleteSuppliers || false,
         canEvaluateSuppliers: person.permissions?.canEvaluateSuppliers || false,
         canManageSupplierDocuments: person.permissions?.canManageSupplierDocuments || false,
         canViewSupplierFinancials: person.permissions?.canViewSupplierFinancials || false,
@@ -382,7 +383,7 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [], canViewSuppliers: false, canManageSuppliers: false, canDeleteSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [], canViewSuppliers: false, canManageSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -420,18 +421,29 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.roles.length === 0 || formData.documents.some(d => d.file.status === 'uploading') || isProcessingImage) return;
+    const existingPerms = editingId ? personnel.find(p => p.id === editingId)?.permissions : undefined;
+    const supplierPerms = isMaster
+      ? {
+          canViewSuppliers: formData.canViewSuppliers,
+          canManageSuppliers: formData.canManageSuppliers,
+          canEvaluateSuppliers: formData.canEvaluateSuppliers,
+          canManageSupplierDocuments: formData.canManageSupplierDocuments,
+          canViewSupplierFinancials: formData.canViewSupplierFinancials && formData.canManageSuppliers,
+        }
+      : {
+          canViewSuppliers: existingPerms?.canViewSuppliers,
+          canManageSuppliers: existingPerms?.canManageSuppliers,
+          canEvaluateSuppliers: existingPerms?.canEvaluateSuppliers,
+          canManageSupplierDocuments: existingPerms?.canManageSupplierDocuments,
+          canViewSupplierFinancials: existingPerms?.canViewSupplierFinancials,
+        };
     const permissions = {
       canAssign: formData.canAssign, canViewCustomers: formData.canViewCustomers, canViewTariffs: formData.canViewTariffs,
       canViewAllTickets: formData.canViewAllTickets, canIssueInvoices: formData.canIssueInvoices, canViewAllInvoices: formData.canViewAllInvoices,
       canManageMetaShop: formData.canManageMetaShop,
       canDeleteMetaShop: formData.canDeleteMetaShop && formData.canManageMetaShop,
       allowedMetaShopIds: formData.canManageMetaShop && formData.allowedMetaShopIds.length ? formData.allowedMetaShopIds : undefined,
-      canViewSuppliers: formData.canViewSuppliers,
-      canManageSuppliers: formData.canManageSuppliers,
-      canDeleteSuppliers: formData.canDeleteSuppliers && formData.canManageSuppliers,
-      canEvaluateSuppliers: formData.canEvaluateSuppliers,
-      canManageSupplierDocuments: formData.canManageSupplierDocuments,
-      canViewSupplierFinancials: formData.canViewSupplierFinancials && formData.canManageSuppliers,
+      ...supplierPerms,
     };
     if (editingId) {
         onUpdate(personnel.map(p => p.id === editingId ? { ...p, ...formData, permissions } : p));
@@ -726,18 +738,18 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
               </div>
             </div>
           )}
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {isMaster && (
+          <div className="mt-4 p-4 rounded-xl border border-teal-100 bg-teal-50/40">
+            <div className="text-sm font-bold text-teal-900 mb-1">{lang === 'fa' ? 'دسترسی تأمین‌کنندگان' : 'Supplier access'}</div>
+            <p className="text-xs text-teal-800/80 mb-3">{t.permSuppliersHint}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <label className="flex items-center gap-2 cursor-pointer bg-teal-50 px-3 py-3 rounded-lg border border-teal-100">
-              <input type="checkbox" className="w-4 h-4" checked={formData.canViewSuppliers} onChange={e => setFormData({...formData, canViewSuppliers: e.target.checked, ...(e.target.checked ? {} : { canManageSuppliers: false, canDeleteSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false })})}/>
+              <input type="checkbox" className="w-4 h-4" checked={formData.canViewSuppliers} onChange={e => setFormData({...formData, canViewSuppliers: e.target.checked, ...(e.target.checked ? {} : { canManageSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false })})}/>
               <span className="text-xs font-bold text-teal-800">{t.permSuppliers}</span>
             </label>
             <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canViewSuppliers ? 'cursor-pointer bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
-              <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canManageSuppliers} onChange={e => setFormData({...formData, canManageSuppliers: e.target.checked, ...(e.target.checked ? {} : { canDeleteSuppliers: false, canViewSupplierFinancials: false })})}/>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canManageSuppliers} onChange={e => setFormData({...formData, canManageSuppliers: e.target.checked, ...(e.target.checked ? {} : { canViewSupplierFinancials: false })})}/>
               <span className="text-xs font-bold text-emerald-800">{t.permManageSuppliers}</span>
-            </label>
-            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canManageSuppliers ? 'cursor-pointer bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
-              <input type="checkbox" className="w-4 h-4" disabled={!formData.canManageSuppliers} checked={formData.canDeleteSuppliers} onChange={e => setFormData({...formData, canDeleteSuppliers: e.target.checked})}/>
-              <span className="text-xs font-bold text-red-800">{t.permDeleteSuppliers}</span>
             </label>
             <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canViewSuppliers ? 'cursor-pointer bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
               <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canEvaluateSuppliers} onChange={e => setFormData({...formData, canEvaluateSuppliers: e.target.checked})}/>
@@ -751,7 +763,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
               <input type="checkbox" className="w-4 h-4" disabled={!formData.canManageSuppliers} checked={formData.canViewSupplierFinancials} onChange={e => setFormData({...formData, canViewSupplierFinancials: e.target.checked})}/>
               <span className="text-xs font-bold text-violet-800">{t.permSupplierFinancials}</span>
             </label>
+            </div>
           </div>
+          )}
           </div>
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
             <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
