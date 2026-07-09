@@ -1,0 +1,162 @@
+{
+  "_schema_version": "1.0",
+  "_about": "Global supplier CRM record for Dashboard → Suppliers module. Import one supplier via top-level \"supplier\", or multiple via \"suppliers\" array.",
+  "_for_ai_models": "Return ONLY valid JSON. Use envelope { \"supplier\": { ... } } OR flat root with same keys. For bulk: { \"suppliers\": [ {...}, {...} ] }. Required: companyName. Use status: active|inactive|prospect|negotiating|approved|rejected|blocked. productCategory from: Agriculture, Food, Packaging, Printing, Plastic, Polymer, Chemical, Logistics, Shipping, Customs, Machinery, Construction, Electronics, Medical, Textile, Furniture, Mining, Consulting, Marketing, IT, Finance, Others. general.country = country name or ISO code (CN, IR, OM). tags[]: { label, color } — omit id. Nested arrays: products, supplierServices, proposals, evaluations, internalNotes, communications, reminders, documents. Proposal status: new|under_review|negotiating|accepted|rejected|expired|archived. Evaluation criteria 1–5: quality, price, communication, deliverySpeed, packaging, reliability, responseTime, flexibility, documentation, professionalism. Omit id/createdAt/updatedAt on import — app assigns new ids.",
+  "supplier": {
+    "companyName": "Guangzhou Apex Packaging Co., Ltd.",
+    "contactPerson": "Ms. Linda Chen",
+    "productCategory": "Packaging",
+    "serviceTypes": ["Manufacturer", "OEM", "Export"],
+    "email": "linda.chen@apexpack.cn",
+    "phone": "+86 20 8888 1234",
+    "whatsapp": "+86 138 0013 8000",
+    "website": "https://www.apexpack.cn",
+    "status": "negotiating",
+    "rating": 4,
+    "tags": [
+      { "label": "Manufacturer", "color": "#3b82f6" },
+      { "label": "Verified", "color": "#10b981" },
+      { "label": "Fast Response", "color": "#22c55e" }
+    ],
+    "flags": {
+      "favorite": true,
+      "topSupplier": false,
+      "needsAttention": true
+    },
+    "lastContact": "2026-07-01",
+    "general": {
+      "logoUrl": "",
+      "country": "China",
+      "countryCode": "CN",
+      "city": "Guangzhou",
+      "address": "No. 88 Industrial Park Road, Baiyun District, Guangzhou, Guangdong 510440",
+      "website": "https://www.apexpack.cn",
+      "establishedYear": "2008",
+      "companySize": "150–300 employees",
+      "description": "OEM/ODM manufacturer of export-grade food packaging, stand-up pouches, corrugated cartons, and custom printed labels for GCC and European markets. ISO 22000 and BRC certified.",
+      "businessLicenseNumber": "91440101MA5XXXXXX",
+      "exportMarkets": ["GCC", "EU", "Southeast Asia", "Iran"],
+      "manufacturingCapacity": "50M units/month — flexible MOQ from 5,000 pcs",
+      "certificates": ["ISO 22000", "BRC", "FSC", "Halal packaging line"]
+    },
+    "contact": {
+      "mainContactName": "Ms. Linda Chen",
+      "position": "Export Sales Manager",
+      "email": "linda.chen@apexpack.cn",
+      "phone": "+86 20 8888 1234",
+      "mobile": "+86 138 0013 8000",
+      "whatsapp": "+86 138 0013 8000",
+      "wechat": "apexpack_linda",
+      "telegram": "",
+      "linkedin": "https://linkedin.com/in/linda-chen-packaging",
+      "preferredCommunication": "WhatsApp / WeChat"
+    },
+    "products": [
+      {
+        "name": "Stand-Up Pouch (food grade)",
+        "description": "Laminated stand-up pouch with zipper, tear notch, and custom gravure printing. Suitable for nuts, spices, coffee, and dry food.",
+        "category": "Packaging",
+        "moq": "10,000 pcs",
+        "leadTime": "18–25 days after artwork approval",
+        "priceList": "USD 0.08–0.22 / pc (depends on size & layers)",
+        "currency": "USD",
+        "incoterms": "FOB Guangzhou / CIF Sohar",
+        "paymentTerms": "30% deposit, 70% before shipment",
+        "packagingOptions": "Carton export packing, palletized",
+        "productionCapacity": "2M pcs/month on this line"
+      },
+      {
+        "name": "Corrugated Export Carton",
+        "description": "5-ply export cartons with flexo or offset print. Custom die-cut for FMCG and industrial goods.",
+        "category": "Packaging",
+        "moq": "5,000 pcs",
+        "leadTime": "12–18 days",
+        "priceList": "USD 0.45–1.20 / pc",
+        "currency": "USD",
+        "incoterms": "FOB / EXW",
+        "paymentTerms": "T/T 30/70"
+      }
+    ],
+    "supplierServices": [
+      {
+        "name": "OEM / Private Label",
+        "description": "Full OEM from artwork to production for GCC retail brands.",
+        "category": "Manufacturing"
+      },
+      {
+        "name": "Sample Development",
+        "description": "Pre-production samples in 5–7 working days.",
+        "category": "Support"
+      }
+    ],
+    "proposals": [
+      {
+        "title": "Q3 2026 — Spice pouch quotation for Oman distributor",
+        "proposalDate": "2026-06-15",
+        "products": "Stand-up pouch 200g, 3-layer PET/AL/PE, matte finish",
+        "prices": "USD 0.14/pc @ 50,000 MOQ; USD 0.12/pc @ 100,000",
+        "currency": "USD",
+        "moq": "50,000 pcs",
+        "deliveryTime": "22 days",
+        "validity": "2026-08-15",
+        "notes": "Includes one free die & plate. Re-print fee USD 180 if design changes.",
+        "status": "under_review"
+      }
+    ],
+    "evaluations": [
+      {
+        "criteria": {
+          "quality": 4,
+          "price": 4,
+          "communication": 5,
+          "deliverySpeed": 3,
+          "packaging": 4,
+          "reliability": 4,
+          "responseTime": 5,
+          "flexibility": 4,
+          "documentation": 4,
+          "professionalism": 4
+        },
+        "notes": "Strong communication and competitive pricing. Requested faster sample turnaround for next order.",
+        "evaluatedAt": "2026-06-20"
+      }
+    ],
+    "internalNotes": [
+      {
+        "content": "Introduced via Canton Fair 2026. Good fit for Omani spice exporters needing halal-compliant pouches.",
+        "createdBy": "Import sample"
+      }
+    ],
+    "communications": [
+      {
+        "type": "whatsapp",
+        "subject": "Initial intro & catalog request",
+        "notes": "Sent company profile PDF. Linda replied within 2 hours with product catalog.",
+        "date": "2026-06-10",
+        "followUpDate": "2026-07-15"
+      },
+      {
+        "type": "meeting",
+        "subject": "Video call — pouch specs review",
+        "notes": "Reviewed 200g pouch dimensions and barrier requirements for GCC humidity.",
+        "date": "2026-07-01"
+      }
+    ],
+    "reminders": [
+      {
+        "type": "follow_up",
+        "title": "Follow up on revised quotation",
+        "dueDate": "2026-07-15",
+        "completed": false,
+        "notes": "Ask for CIF Sohar price and halal certificate copy"
+      }
+    ],
+    "documents": [
+      {
+        "name": "Apex-Packaging-Catalog-2026.pdf",
+        "docType": "pdf",
+        "url": "https://example.com/docs/apex-catalog.pdf"
+      }
+    ]
+  }
+}

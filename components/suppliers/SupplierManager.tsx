@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import type { Personnel } from '../../types';
 import type { GlobalSupplier, SupplierListFilters, SupplierListSettings, SupplierMergedLists } from '../../types/supplier';
 import { Language } from '../../App';
@@ -7,12 +7,17 @@ import { getSupplierPermissions } from '../../utils/supplierAccess';
 import { filterSuppliers, paginate, DEFAULT_COLUMNS, SupplierColumnKey } from '../../utils/supplierFilters';
 import { emptySupplier, syncSupplierTopFields } from '../../utils/supplierUtils';
 import { buildSupplierLists, emptySupplierListSettings } from '../../utils/supplierLists';
+import {
+  buildSupplierSampleEnvelope,
+  downloadSupplierJson,
+  parseSuppliersJson,
+} from '../../utils/supplierFormat';
 import { SupplierWidgets } from './SupplierWidgets';
 import { SupplierFilterBar } from './SupplierFilterBar';
 import { SupplierTable } from './SupplierTable';
 import { SupplierProfilePanel } from './SupplierProfilePanel';
 import { SupplierListSettingsPanel } from './SupplierListSettingsPanel';
-import { IconPlus, IconTrash, IconBriefcase, IconList, IconRefreshCw, IconSettings } from '../Icons';
+import { IconPlus, IconTrash, IconBriefcase, IconList, IconRefreshCw, IconSettings, IconUpload } from '../Icons';
 
 interface Props {
   currentUser: Personnel;
@@ -43,6 +48,9 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [showListSettings, setShowListSettings] = useState(false);
   const [listSettings, setListSettings] = useState<SupplierListSettings>(emptySupplierListSettings());
+  const [importErr, setImportErr] = useState('');
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const permissions = getSupplierPermissions(currentUser);
   const isFa = lang === 'fa';
@@ -124,6 +132,37 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
     setColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
   };
 
+  const downloadSample = () => downloadSupplierJson(buildSupplierSampleEnvelope(), 'supplier_sample.json');
+
+  const importJson = (file: File) => {
+    setImportErr('');
+    const reader = new FileReader();
+    reader.onload = () => {
+      void (async () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ''));
+          const items = parseSuppliersJson(parsed, { fullName: currentUser.fullName, id: currentUser.id });
+          if (items.length === 1) {
+            setProfile(items[0]);
+          } else {
+            setImporting(true);
+            for (const s of items) {
+              await saveSupplierToCloud(s, currentUser);
+            }
+            alert(isFa ? `${items.length} تأمین‌کننده با موفقیت وارد شد.` : `${items.length} suppliers imported successfully.`);
+          }
+        } catch {
+          setImportErr(isFa
+            ? 'فایل JSON نامعتبر است. از فرمت سمپل تأمین‌کنندگان استفاده کنید.'
+            : 'Invalid JSON. Use the supplier sample format.');
+        } finally {
+          setImporting(false);
+        }
+      })();
+    };
+    reader.readAsText(file);
+  };
+
   if (!permissions.canView) {
     return (
       <div className="p-8 text-center text-gray-400">
@@ -145,6 +184,21 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={downloadSample}
+            className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50">
+            {isFa ? 'دانلود سمپل JSON' : 'Download sample JSON'}
+          </button>
+          {permissions.canEdit && (
+            <>
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={importing}
+                className="px-3 py-2 rounded-xl border border-indigo-200 text-indigo-700 text-xs font-bold hover:bg-indigo-50 flex items-center gap-1 disabled:opacity-50">
+                <IconUpload className="w-4 h-4" />
+                {importing ? (isFa ? 'در حال ورود…' : 'Importing…') : (isFa ? 'آپلود JSON' : 'Upload JSON')}
+              </button>
+              <input ref={fileRef} type="file" accept="application/json,.json" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) importJson(f); e.target.value = ''; }} />
+            </>
+          )}
           <button type="button" onClick={() => setShowWidgets(v => !v)}
             className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50">
             {showWidgets ? (isFa ? 'پنهان کردن داشبورد' : 'Hide widgets') : (isFa ? 'نمایش داشبورد' : 'Show widgets')}
@@ -175,6 +229,10 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
           )}
         </div>
       </div>
+
+      {importErr && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{importErr}</p>
+      )}
 
       {showWidgets && <SupplierWidgets suppliers={suppliers} lang={lang} />}
 

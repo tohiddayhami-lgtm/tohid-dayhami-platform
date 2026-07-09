@@ -11,6 +11,7 @@ import {
   STATUS_LABELS, PROPOSAL_STATUS_LABELS, SUPPLIER_PROPOSAL_STATUSES,
 } from '../../utils/supplierConstants';
 import { addActivity, addEvaluation } from '../../utils/supplierUtils';
+import { exportSupplierEnvelope, downloadSupplierJson } from '../../utils/supplierFormat';
 import { supplierDisplayScore } from '../../utils/supplierAccess';
 import { uploadFileWithProgress } from '../../services/firebaseService';
 import {
@@ -154,6 +155,11 @@ export const SupplierProfilePanel: React.FC<Props> = ({
     }, () => {}, 'documents');
   };
 
+  const handleExportJson = () => {
+    const safe = (draft.companyName || 'supplier').replace(/[^\w\-]+/g, '_').slice(0, 40);
+    downloadSupplierJson(exportSupplierEnvelope(draft), `supplier_${safe}.json`);
+  };
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'general', label: lang === 'fa' ? 'عمومی' : 'General' },
     { id: 'contact', label: lang === 'fa' ? 'تماس' : 'Contact' },
@@ -190,6 +196,10 @@ export const SupplierProfilePanel: React.FC<Props> = ({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button type="button" onClick={handleExportJson}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100">
+              JSON
+            </button>
             {canEdit && (
               <button type="button" onClick={handleSave} disabled={saving}
                 className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold flex items-center gap-1 disabled:opacity-50">
