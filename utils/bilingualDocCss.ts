@@ -192,8 +192,30 @@ export const BILINGUAL_DOC_CSS = `
     direction: rtl !important; text-align: right !important;
     font-family: Tahoma, "Segoe UI", Arial, sans-serif;
   }
+  .pp-company-block {
+    border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px 14px; margin: 0 0 14px;
+    direction: ltr !important;
+  }
+  .pp-company-block .co { font-size: 11pt; font-weight: 800; color: #0f172a; margin-bottom: 4px; direction: ltr !important; }
+  .pp-company-block .co-rtl { font-size: 10.5pt; font-weight: 700; color: #1e293b; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+  .pp-company-block .row { font-size: 9pt; color: #334155; margin-top: 2px; direction: ltr !important; }
+  .pp-company-block .row-rtl { font-size: 9pt; color: #334155; margin-top: 2px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+  .pp-area-intro-en { font-size: 9.5pt; color: #334155; font-style: italic; padding: 6px 6px 10px; direction: ltr !important; }
+  .pp-area-intro-rtl { font-size: 9.5pt; color: #334155; font-style: italic; padding: 0 12px 10px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+  .pp-service-card {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; background: #fff;
+    page-break-inside: avoid; direction: ltr !important;
+  }
+  .pp-service-card .svc-num { font-size: 8.5pt; font-weight: 800; color: #0b1f3a; letter-spacing: .04em; margin-bottom: 2px; direction: ltr !important; }
+  .pp-service-card .svc-title-en { font-size: 10.5pt; font-weight: 700; color: #0f172a; margin-bottom: 4px; direction: ltr !important; }
+  .pp-service-card .svc-title-rtl { font-size: 10pt; font-weight: 700; color: #0f172a; margin-bottom: 6px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+  .pp-service-card .for-en { font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 6px; direction: ltr !important; }
+  .pp-service-card .for-rtl { font-size: 8.5pt; color: #64748b; font-style: italic; margin-top: 2px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
+  .pp-bullet-en { font-size: 10pt; line-height: 1.6; color: #0f172a; padding: 4px 6px 4px 18px; text-indent: -12px; direction: ltr !important; }
+  .pp-bullet-rtl { font-size: 10pt; line-height: 1.8; color: #0f172a; padding: 4px 18px 4px 6px; text-indent: -12px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 6px; }
+  .pp-contact-line { text-align: center; font-size: 9.5pt; font-weight: 700; color: #0b1f3a; margin-top: 10px; direction: ltr !important; }
   @media print {
     .pp-root { max-width: none; }
-    .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table, .pp-signatures { page-break-inside: avoid; }
+    .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table, .pp-signatures, .pp-service-card { page-break-inside: avoid; }
   }
 `;

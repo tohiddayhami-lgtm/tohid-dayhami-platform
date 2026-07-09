@@ -1,0 +1,254 @@
+{
+  "_schema_version": "1.0",
+  "_about": "Bilingual company services catalog (English + RTL/Persian). Marketing/reference document — NOT a priced proposal or contract.",
+  "catalog": {
+    "refNo": "CATALOG-2026-01",
+    "titleEn": "SERVICES CATALOG — TOHID DAYHAMI BUSINESS SOLUTIONS CENTER",
+    "titleRtl": "کاتالوگ خدمات — مرکز راهکارهای کسب‌وکار توحید دیهمی",
+    "subtitleEn": "From an Idea to a Brand on the Shelf — Export, Branding, Metaverse & Investment Solutions, Muscat–GCC–Iran",
+    "subtitleRtl": "از یک ایده تا یک برند روی قفسه — راهکارهای صادرات، برندسازی، متاورس و سرمایه‌گذاری، مسقط–خلیج–ایران",
+    "catalogDate": "2026-07-04",
+    "logoUrl": "",
+    "logo2Url": "",
+    "companyName": "Tohid Dayhami Business Solutions Center SPC",
+    "languages": ["fa", "ar", "en"],
+    "rtlLanguage": "fa",
+    "company": {
+      "labelEn": "THE COMPANY",
+      "labelRtl": "درباره شرکت",
+      "companyEn": "Tohid Dayhami Business Solutions Center SPC",
+      "companyRtl": "مرکز راهکارهای کسب‌وکار توحید دیهمی",
+      "regNo": "CR No. 1617064",
+      "country": "Sultanate of Oman — Avenues Mall, Muscat",
+      "repNameEn": "Tohid Dayhami",
+      "repNameRtl": "توحید دیهمی",
+      "repTitleEn": "Founder & CEO",
+      "repTitleRtl": "مؤسس و مدیرعامل",
+      "contactEmail": "info@tohiddayhami.com",
+      "contactPhone": "+968 98 1030 64",
+      "website": "www.tohiddayhami.com"
+    },
+    "intro": {
+      "sectionNum": "ABOUT US",
+      "titleEn": "WHO WE ARE",
+      "titleRtl": "ما که هستیم",
+      "contentEn": "Tohid Dayhami Business Solutions Center SPC is an Omani-registered company (CR No. 1617064), based at Avenues Mall in Muscat, operating trilingually in Persian, Arabic, and English. We help producers, exporters, entrepreneurs, and brand owners cross the distance between a good product and a profitable presence in the Gulf and global markets.\n\nOur difference is that we cover the ENTIRE journey under one roof: strategy, market entry, company registration, brand identity, export-grade packaging, production management, a metaverse exhibition platform, training, and investment structuring. A client who enters through one service is supported through the next — from an idea, to a registered company, to a designed brand, to a shipment leaving Sohar Port.\n\nWe work with a simple philosophy: transparent scope, honest deliverables, and real presence on the ground in Oman — not a remote agency, but a partner who walks your file into the offices, sits at the table with the buyers, and stays after the sale. This catalog presents our full range of services, organized into four solution areas.",
+      "contentRtl": "مرکز راهکارهای کسب‌وکار توحید دیهمی، شرکتی ثبت‌شده در عمان (CR شماره 1617064) و مستقر در Avenues Mall مسقط است که به سه زبان فارسی، عربی و انگلیسی فعالیت می‌کند. ما به تولیدکنندگان، صادرکنندگان، کارآفرینان و صاحبان برند کمک می‌کنیم فاصله میان «یک محصول خوب» و «یک حضور سودآور» در بازارهای خلیج و جهان را طی کنند.\n\nتفاوت ما این است که کل مسیر را زیر یک سقف پوشش می‌دهیم: استراتژی، ورود به بازار، ثبت شرکت، هویت برند، بسته‌بندی در سطح صادرات، مدیریت تولید، پلتفرم نمایشگاه متاورسی، آموزش و ساختاردهی سرمایه‌گذاری. مشتری که از یک خدمت وارد می‌شود، در خدمت بعدی هم همراهی می‌شود — از یک ایده، تا یک شرکت ثبت‌شده، تا یک برند طراحی‌شده، تا محموله‌ای که از بندر صحار خارج می‌شود.\n\nفلسفه ما ساده است: دامنه شفاف، تحویل صادقانه، و حضور واقعی روی زمین در عمان — نه یک آژانس از راه دور، بلکه شریکی که پرونده شما را با پای خود وارد ادارات می‌کند، سر میز با خریداران می‌نشیند و پس از فروش هم می‌ماند. این کاتالوگ کل دامنه خدمات ما را در چهار حوزه راهکار معرفی می‌کند."
+    },
+    "areas": [
+      {
+        "areaNum": "1",
+        "areaTitleEn": "EXPORT & MARKET ENTRY",
+        "areaTitleRtl": "صادرات و ورود به بازار",
+        "areaIntroEn": "Everything needed to take a product into the Gulf and global markets — strategy, the legal entity to trade from, and the hands-on management of real export operations.",
+        "areaIntroRtl": "هر آنچه برای بردن یک محصول به بازارهای خلیج و جهان لازم است — استراتژی، شخصیت حقوقی برای تجارت، و مدیریت عملی عملیات واقعی صادرات.",
+        "services": [
+          {
+            "serviceNum": "1.1",
+            "titleEn": "GCC Export & Market-Entry Consulting",
+            "titleRtl": "مشاوره صادرات و ورود به بازار خلیج",
+            "descEn": "Strategic guidance for entering the GCC and the wider Arab markets: which country to enter first, export-readiness assessment, distributor selection and margin structures, retail-channel strategy, landed-cost and pricing logic, competitor analysis, and a step-by-step go-to-market roadmap tailored to your product.",
+            "descRtl": "راهنمایی استراتژیک برای ورود به بازار خلیج و کشورهای عربی: ورود اول به کدام کشور، ارزیابی آمادگی صادرات، انتخاب توزیع‌کننده و ساختار حاشیه سود، استراتژی کانال خرده‌فروشی، منطق قیمت تمام‌شده و قیمت‌گذاری، تحلیل رقبا، و نقشه راه گام‌به‌گام ورود به بازار متناسب با محصول شما.",
+            "forEn": "Producers and exporters targeting Oman, Saudi Arabia, the UAE, Qatar, Kuwait, and Bahrain.",
+            "forRtl": "تولیدکنندگان و صادرکنندگانی که عمان، عربستان، امارات، قطر، کویت و بحرین را هدف گرفته‌اند."
+          },
+          {
+            "serviceNum": "1.2",
+            "titleEn": "Export Management (Done-For-You)",
+            "titleRtl": "مدیریت صادرات (کلیدتحویل)",
+            "descEn": "We act as your export department: export-readiness audit, buyer sourcing in the GCC, quotation and negotiation support, export documentation and compliance, logistics coordination through Sohar Port, and end-to-end management of shipments — so you can produce while we sell and ship.",
+            "descRtl": "ما به‌عنوان واحد صادرات شما عمل می‌کنیم: ممیزی آمادگی صادرات، خریداریابی در خلیج، پشتیبانی استعلام و مذاکره، اسناد و انطباق صادراتی، هماهنگی لجستیک از بندر صحار، و مدیریت سرتاسری محموله‌ها — تا شما تولید کنید و ما بفروشیم و ارسال کنیم.",
+            "forEn": "Manufacturers who have a product but lack an export team or GCC buyer network.",
+            "forRtl": "تولیدکنندگانی که محصول دارند اما تیم صادرات یا شبکه خریدار خلیجی ندارند."
+          },
+          {
+            "serviceNum": "1.3",
+            "titleEn": "Company Registration in Oman (Turn-Key)",
+            "titleRtl": "ثبت شرکت در عمان (کلیدتحویل)",
+            "descEn": "Complete establishment of an import/export company in Oman: legal structure and activity selection, Commercial Registration, Chamber of Commerce, municipality and licensing, investor visa and residency, medical and Resident ID follow-up, and corporate bank account opening assistance — delivered as a ready-to-trade business, not just a certificate.",
+            "descRtl": "تأسیس کامل شرکت واردات/صادرات در عمان: ساختار حقوقی و انتخاب فعالیت، ثبت تجاری (CR)، اتاق بازرگانی، شهرداری و مجوزها، ویزای سرمایه‌گذار و اقامت، پیگیری معاینه پزشکی و کارت اقامت، و کمک به افتتاح حساب بانکی شرکتی — تحویل به‌صورت یک کسب‌وکار آماده تجارت، نه فقط یک گواهی.",
+            "forEn": "Iranian and international businesses seeking a legal base for GCC trade.",
+            "forRtl": "کسب‌وکارهای ایرانی و بین‌المللی در جست‌وجوی پایگاه حقوقی برای تجارت خلیج."
+          },
+          {
+            "serviceNum": "1.4",
+            "titleEn": "Advisory & Consulting Sessions",
+            "titleRtl": "جلسات مشاوره و راهبری",
+            "descEn": "Focused consulting packages for specific decisions: diagnosis of a business problem, a 90-day action plan, pricing and packaging of a service, or an executive second opinion on a strategic choice — structured sessions with written summaries after each.",
+            "descRtl": "بسته‌های مشاوره متمرکز برای تصمیم‌های مشخص: عارضه‌یابی یک مسئله کسب‌وکار، برنامه اقدام ۹۰ روزه، قیمت‌گذاری و پکیج‌بندی یک خدمت، یا نظر دوم اجرایی روی یک انتخاب استراتژیک — جلسات ساختاریافته با خلاصه مکتوب پس از هر جلسه.",
+            "forEn": "Owners and managers facing a specific decision or a growth bottleneck.",
+            "forRtl": "صاحبان و مدیرانی که با یک تصمیم مشخص یا گلوگاه رشد روبه‌رو هستند."
+          }
+        ]
+      },
+      {
+        "areaNum": "2",
+        "areaTitleEn": "BRAND & PACKAGING",
+        "areaTitleRtl": "برند و بسته‌بندی",
+        "areaIntroEn": "The visual and physical presence that decides whether a product is picked up on the shelf — identity, packaging design, luxury cases, and the management of their production.",
+        "areaIntroRtl": "حضور بصری و فیزیکی که تعیین می‌کند یک محصول از قفسه برداشته می‌شود یا نه — هویت، طراحی بسته‌بندی، کیس‌های لوکس، و مدیریت تولید آن‌ها.",
+        "services": [
+          {
+            "serviceNum": "2.1",
+            "titleEn": "Brand Identity & Logo Design",
+            "titleRtl": "هویت برند و طراحی لوگو",
+            "descEn": "Strategy-first brand creation: positioning, naming direction, logo system, color palette, typography, and brand guidelines — built to look premium and international, and engineered for real retail and export shelves. From a single logo to a complete, launch-ready identity system.",
+            "descRtl": "خلق برند با اولویت استراتژی: جایگاه‌یابی، جهت‌دهی نام، سیستم لوگو، پالت رنگ، تایپوگرافی و راهنمای برند — ساخته‌شده برای دیده‌شدن پرمیوم و بین‌المللی، و مهندسی‌شده برای قفسه‌های واقعی خرده‌فروشی و صادرات. از یک لوگوی تنها تا یک سیستم هویت کامل و آماده لانچ.",
+            "forEn": "New brands, rebrands, and manufacturers launching their own premium line.",
+            "forRtl": "برندهای جدید، بازطراحی برند، و تولیدکنندگانی که خط پرمیوم خودشان را لانچ می‌کنند."
+          },
+          {
+            "serviceNum": "2.2",
+            "titleEn": "Packaging Design (Retail & Export)",
+            "titleRtl": "طراحی بسته‌بندی (خرده‌فروشی و صادرات)",
+            "descEn": "Export-grade packaging design for food and consumer products: front-of-pack shelf impact, back-of-pack layout engineered for target-market labeling (nutrition, ingredients, allergens, origin, barcode), GSO/international compliance logic, premium material and finish specification, print-ready artwork with dielines, and photorealistic 3D mockups for e-commerce and buyer presentations.",
+            "descRtl": "طراحی بسته‌بندی در سطح صادرات برای محصولات غذایی و مصرفی: تأثیر قفسه‌ای روی بسته، چیدمان پشت بسته مهندسی‌شده برای برچسب‌گذاری بازار هدف (ارزش غذایی، ترکیبات، آلرژن، مبدأ، بارکد)، منطق انطباق GSO/بین‌المللی، مشخصات متریال و پرداخت پرمیوم، آرت‌ورک آماده چاپ با دای‌لاین، و موکاپ سه‌بعدی فتورئال برای فروش آنلاین و ارائه به خریدار.",
+            "forEn": "Food producers and consumer brands preparing for premium retail or export.",
+            "forRtl": "تولیدکنندگان غذایی و برندهای مصرفی که برای خرده‌فروشی پرمیوم یا صادرات آماده می‌شوند."
+          },
+          {
+            "serviceNum": "2.3",
+            "titleEn": "Luxury & Bespoke Packaging Design",
+            "titleRtl": "طراحی بسته‌بندی لوکس و سفارشی",
+            "descEn": "Collector-grade, handmade presentation packaging for exclusive products: exotic materials (leather, carved wood, engraved or CNC metal), fitted inserts, limited-edition detailing (serial plates, certificates of authenticity), delivered as an artisan-ready technical package — photorealistic renders, construction drawings, and engraving/CNC files any master maker can build from.",
+            "descRtl": "بسته‌بندی نمایش دست‌ساز و کلکسیونی برای محصولات اختصاصی: متریال خاص (چرم، چوب منبت، فلز حکاکی یا CNC)، اینسرت اندازه‌شده، جزئیات نسخه محدود (پلاک سریال، گواهی اصالت)، تحویل به‌صورت پکیج فنی آماده استادکار — رندر فتورئال، نقشه ساخت، و فایل حکاکی/CNC که هر استادکاری از رویش می‌سازد.",
+            "forEn": "Premium and limited-edition products: spirits, collectibles, luxury food, gifts.",
+            "forRtl": "محصولات پرمیوم و نسخه محدود: نوشیدنی، کلکسیونی، غذای لوکس، هدایا."
+          },
+          {
+            "serviceNum": "2.4",
+            "titleEn": "Packaging Production Management",
+            "titleRtl": "مدیریت تولید بسته‌بندی",
+            "descEn": "From approved design to physical packaging in hand: sourcing and comparing vetted printers/manufacturers, real quotations, golden-sample approval, production QC, and delivery coordination — on a transparent broker model where you always see the maker's real price and there are no hidden supplier commissions.",
+            "descRtl": "از طراحی تأییدشده تا بسته‌بندی فیزیکی در دست: تأمین و مقایسه چاپخانه/تولیدکننده ارزیابی‌شده، استعلام واقعی، تأیید نمونه طلایی، کنترل کیفیت تولید، و هماهنگی تحویل — با مدل کارگزاری شفاف که همیشه قیمت واقعی سازنده را می‌بینید و هیچ کمیسیون پنهان تأمین‌کننده‌ای وجود ندارد.",
+            "forEn": "Brands wanting design and production handled by one accountable partner.",
+            "forRtl": "برندهایی که می‌خواهند طراحی و تولید را یک شریک پاسخگو انجام دهد."
+          }
+        ]
+      },
+      {
+        "areaNum": "3",
+        "areaTitleEn": "METAVERSE & DIGITAL",
+        "areaTitleRtl": "متاورس و دیجیتال",
+        "areaIntroEn": "A new dimension of trade: virtual storefronts and metaverse exhibition platforms that let a product be seen, booked, and sold across borders — 24/7, in three languages.",
+        "areaIntroRtl": "بُعد تازه‌ای از تجارت: ویترین‌های مجازی و پلتفرم‌های نمایشگاه متاورسی که به یک محصول اجازه می‌دهند فرامرزی دیده، رزرو و فروخته شود — ۲۴ ساعته، به سه زبان.",
+        "services": [
+          {
+            "serviceNum": "3.1",
+            "titleEn": "MetaShop — Virtual Storefronts & Booths",
+            "titleRtl": "متاشاپ — ویترین و غرفه مجازی",
+            "descEn": "Your own trilingual (FA/AR/EN) virtual storefront inside our metaverse marketplace: product pages with photos, specifications and price lists, downloadable catalogs and certificates, direct WhatsApp/e-mail inquiry buttons, and visibility alongside an established exporter network — an always-open shelf reachable from anywhere in the world.",
+            "descRtl": "ویترین مجازی سه‌زبانه (فارسی/عربی/انگلیسی) شما داخل بازارچه متاورسی ما: صفحات محصول با عکس، مشخصات و لیست قیمت، کاتالوگ و گواهی قابل دانلود، دکمه استعلام مستقیم واتس‌اپ/ایمیل، و دیده‌شدن در کنار شبکه صادرکنندگان جاافتاده — قفسه‌ای همیشه‌باز، قابل دسترس از هر جای دنیا.",
+            "forEn": "Exporters, brands, and SMEs wanting an online export presence without a website build.",
+            "forRtl": "صادرکنندگان، برندها و کسب‌وکارهایی که حضور صادراتی آنلاین می‌خواهند بدون ساخت وب‌سایت."
+          },
+          {
+            "serviceNum": "3.2",
+            "titleEn": "Tohid Meta Port — Metaverse Exhibition Platform",
+            "titleRtl": "توحید متاپورت — پلتفرم نمایشگاه متاورسی",
+            "descEn": "A digital-twin exhibition platform for organizers and brands: mirrored floor maps of real exhibition halls, online booth booking and payment, virtual environmental advertising (entrance arches, hall billboards, sponsor zones), organizer dashboards, VR (WebXR / Meta Quest) support, and white-label deployment — letting an exhibition live all year and reach every buyer who could not attend in person.",
+            "descRtl": "پلتفرم نمایشگاه دوقلوی دیجیتال برای برگزارکنندگان و برندها: آینه‌سازی نقشه سالن‌های نمایشگاه واقعی، رزرو و پرداخت آنلاین غرفه، تبلیغات محیطی مجازی (طاق ورودی، بیلبورد سالن، زون اسپانسر)، داشبورد برگزارکننده، پشتیبانی VR (WebXR / Meta Quest)، و استقرار وایت‌لیبل — تا یک نمایشگاه تمام‌سال زنده بماند و به هر خریداری که نتوانست حضوری بیاید برسد.",
+            "forEn": "Exhibition organizers, trade bodies, and multi-brand pavilions.",
+            "forRtl": "برگزارکنندگان نمایشگاه، نهادهای تجاری، و پاویون‌های چندبرندی."
+          },
+          {
+            "serviceNum": "3.3",
+            "titleEn": "Digital Presence & Social Design",
+            "titleRtl": "حضور دیجیتال و طراحی شبکه اجتماعی",
+            "descEn": "Premium multilingual social content and marketing creative: Instagram stories and posts, ad creatives, product launch campaigns, and e-commerce visuals — with proper Persian/Arabic/English typography and a consistent brand voice across every channel.",
+            "descRtl": "محتوای اجتماعی چندزبانه پرمیوم و کریتیو بازاریابی: استوری و پست اینستاگرام، کریتیو تبلیغات، کمپین لانچ محصول، و تصاویر فروش آنلاین — با تایپوگرافی درست فارسی/عربی/انگلیسی و لحن برند یکدست در هر کانال.",
+            "forEn": "Brands and exporters building an audience and selling online.",
+            "forRtl": "برندها و صادرکنندگانی که مخاطب می‌سازند و آنلاین می‌فروشند."
+          }
+        ]
+      },
+      {
+        "areaNum": "4",
+        "areaTitleEn": "INVESTMENT, PRODUCTION & GROWTH",
+        "areaTitleRtl": "سرمایه‌گذاری، تولید و رشد",
+        "areaIntroEn": "For those building something bigger: structuring investment partnerships, establishing factories and micro-factories, and the training that turns capability into a running business.",
+        "areaIntroRtl": "برای کسانی که چیز بزرگ‌تری می‌سازند: ساختاردهی مشارکت‌های سرمایه‌گذاری، احداث کارخانه و میکروکارخانه، و آموزشی که توانایی را به یک کسب‌وکار فعال تبدیل می‌کند.",
+        "services": [
+          {
+            "serviceNum": "4.1",
+            "titleEn": "Investment Structuring & Partnerships",
+            "titleRtl": "ساختاردهی سرمایه‌گذاری و مشارکت",
+            "descEn": "Designing clear, Sharia-compatible investment structures for ventures and company growth: profit-sharing (Mudarabah) unit models, investor tiers and returns, use-of-funds plans, distribution calendars, reporting and governance, exit and buy-back terms, and honest risk disclosure — investor-ready documents that protect both sides.",
+            "descRtl": "طراحی ساختارهای سرمایه‌گذاری شفاف و منطبق با شریعت برای کسب‌وکارها و رشد شرکت: مدل واحد تقسیم سود (مضاربه)، سطوح و بازده سرمایه‌گذار، برنامه مصارف وجوه، تقویم توزیع، گزارش‌دهی و حاکمیت، شرایط خروج و بازخرید، و افشای صادقانه ریسک — اسناد آماده سرمایه‌گذار که از هر دو طرف محافظت می‌کند.",
+            "forEn": "Founders raising capital and investors seeking structured, transparent ventures.",
+            "forRtl": "بنیان‌گذارانی که جذب سرمایه می‌کنند و سرمایه‌گذارانی که کسب‌وکار ساختاریافته و شفاف می‌خواهند."
+          },
+          {
+            "serviceNum": "4.2",
+            "titleEn": "Turn-Key Business Launch (You Own, We Build)",
+            "titleRtl": "راه‌اندازی کسب‌وکار کلیدتحویل (شما مالک، ما سازنده)",
+            "descEn": "We build a complete, ready-to-operate business that the investor fully owns: company, brand, packaging, supply, location, staff, and market channels — from zero to opening, with milestone-based funding, a capped budget, and our continued oversight so the business actually runs, not just exists.",
+            "descRtl": "ما یک کسب‌وکار کامل و آماده بهره‌برداری می‌سازیم که سرمایه‌گذار صددرصد مالک آن است: شرکت، برند، بسته‌بندی، تأمین، محل، پرسنل و کانال‌های بازار — از صفر تا افتتاح، با تأمین مالی مایلستونی، بودجه سقف‌دار، و راهبری مستمر ما تا کسب‌وکار واقعاً کار کند، نه فقط وجود داشته باشد.",
+            "forEn": "Investors who want to own a business without building it from scratch themselves.",
+            "forRtl": "سرمایه‌گذارانی که می‌خواهند مالک یک کسب‌وکار باشند بدون اینکه خودشان از صفر بسازند."
+          },
+          {
+            "serviceNum": "4.3",
+            "titleEn": "Factory & Production Line Development",
+            "titleRtl": "توسعه کارخانه و خط تولید",
+            "descEn": "End-to-end factory establishment: feasibility, process and layout design, machinery specification and sourcing (with real supplier tiers), utilities and staffing, quality and certification path (HACCP/ISO/GSO), CAPEX/OPEX and financial modelling, and a launch roadmap — for food processing, packaging, and consumer-goods plants at any scale.",
+            "descRtl": "احداث کارخانه سرتاسری: امکان‌سنجی، طراحی فرایند و چیدمان، مشخصات و تأمین ماشین‌آلات (با سطوح واقعی تأمین‌کننده)، یوتیلیتی و پرسنل، مسیر کیفیت و گواهی (HACCP/ISO/GSO)، مدل‌سازی CAPEX/OPEX و مالی، و نقشه راه راه‌اندازی — برای واحدهای فرآوری غذا، بسته‌بندی و کالای مصرفی در هر مقیاس.",
+            "forEn": "Entrepreneurs and investors establishing manufacturing in Oman or the region.",
+            "forRtl": "کارآفرینان و سرمایه‌گذارانی که در عمان یا منطقه واحد تولیدی می‌سازند."
+          },
+          {
+            "serviceNum": "4.4",
+            "titleEn": "Micro-Factory Programs (Every Home a Factory)",
+            "titleRtl": "برنامه‌های میکروکارخانه (هر خانه، یک کارخانه)",
+            "descEn": "A guided path for small and home-scale producers: matching budget, space, and skills to a realistic micro-factory, a personal masterplan (machine list, layout, unit economics, launch roadmap), brand and packaging direction, an online storefront, and an aggregation-export route that consolidates small producers' output into real GCC orders.",
+            "descRtl": "مسیری هدایت‌شده برای تولیدکنندگان کوچک و خانگی: تطبیق بودجه، فضا و مهارت با یک میکروکارخانه واقع‌بینانه، مسترپلن شخصی (فهرست ماشین‌آلات، چیدمان، اقتصاد واحد، نقشه راه راه‌اندازی)، جهت‌دهی برند و بسته‌بندی، ویترین آنلاین، و مسیر صادرات تجمیعی که تولید تولیدکنندگان کوچک را در سفارش‌های واقعی خلیج تجمیع می‌کند.",
+            "forEn": "Families and individuals starting production from home or a small workshop.",
+            "forRtl": "خانواده‌ها و افرادی که تولید را از خانه یا کارگاه کوچک شروع می‌کنند."
+          },
+          {
+            "serviceNum": "4.5",
+            "titleEn": "Training & Business Tours (Tohid Academy)",
+            "titleRtl": "آموزش و تورهای تجاری (آکادمی توحید)",
+            "descEn": "Practical training and guided business tours: trading and export fundamentals, pricing and costing, selling from home and online, plus curated scientific/business tours to regional exhibitions with market briefings, guided attendance, and pre-arranged B2B meetings — turning knowledge and contacts into real deals.",
+            "descRtl": "آموزش کاربردی و تورهای تجاری هدایت‌شده: مبانی تجارت و صادرات، قیمت‌گذاری و بهای تمام‌شده، فروش از خانه و آنلاین، به‌علاوه تورهای علمی/تجاری منتخب به نمایشگاه‌های منطقه با توجیه بازار، حضور هدایت‌شده و جلسات B2B از پیش هماهنگ‌شده — تبدیل دانش و ارتباط به معاملات واقعی.",
+            "forEn": "Entrepreneurs, students, and businesses entering the export and Gulf markets.",
+            "forRtl": "کارآفرینان، دانشجویان و کسب‌وکارهایی که وارد بازار صادرات و خلیج می‌شوند."
+          }
+        ]
+      }
+    ],
+    "howWeWork": {
+      "sectionNum": "HOW WE WORK",
+      "titleEn": "HOW WE WORK",
+      "titleRtl": "چگونه کار می‌کنیم",
+      "pointsEn": [
+        "One accountable partner across the whole journey — strategy, registration, brand, packaging, production, and market.",
+        "Transparent scope and honest deliverables: what is included is written down, and any out-of-scope cost is agreed before it is spent.",
+        "Real presence in Muscat and trilingual operation (Persian, Arabic, English) — no translator between you and your most important decisions.",
+        "Golden-sample discipline and quality control on every physical deliverable.",
+        "Dual banking corridors (Bank Muscat in OMR, Bank Pasargad in IRR) for convenient settlement.",
+        "We start where you are: an idea, a product, a brand, or a factory — and take it to the next step."
+      ],
+      "pointsRtl": [
+        "یک شریک پاسخگو در کل مسیر — استراتژی، ثبت، برند، بسته‌بندی، تولید و بازار.",
+        "دامنه شفاف و تحویل صادقانه: آنچه شامل است نوشته می‌شود، و هر هزینه خارج از دامنه پیش از خرج توافق می‌شود.",
+        "حضور واقعی در مسقط و عملیات سه‌زبانه (فارسی، عربی، انگلیسی) — بدون مترجم میان شما و مهم‌ترین تصمیم‌هایتان.",
+        "انضباط نمونه طلایی و کنترل کیفیت روی هر تحویل‌دادنی فیزیکی.",
+        "دو کریدور بانکی (بانک مسقط به ریال عمان، بانک پاسارگاد به ریال ایران) برای تسویه راحت.",
+        "از همان‌جا که هستید شروع می‌کنیم: یک ایده، یک محصول، یک برند یا یک کارخانه — و آن را به گام بعد می‌بریم."
+      ]
+    },
+    "contact": {
+      "sectionNum": "CONTACT",
+      "titleEn": "START A CONVERSATION",
+      "titleRtl": "شروع یک گفت‌وگو",
+      "contentEn": "Whichever service fits your need, the first step is a conversation. Tell us what you have and where you want it to go, and we will map the path — from where you are today to a brand, a shipment, or a business that runs.",
+      "contentRtl": "هر خدمتی که با نیاز شما بخواند، اولین قدم یک گفت‌وگوست. بگویید چه دارید و کجا می‌خواهید برسد، و ما مسیر را ترسیم می‌کنیم — از جایی که امروز هستید تا یک برند، یک محموله، یا کسب‌وکاری که کار می‌کند.",
+      "email": "info@tohiddayhami.com",
+      "phone": "+968 98 1030 64",
+      "website": "www.tohiddayhami.com",
+      "location": "Unit A09, Avenues Mall, Muscat, Sultanate of Oman"
+    },
+    "status": "draft"
+  }
+}

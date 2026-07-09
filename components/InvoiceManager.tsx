@@ -40,6 +40,7 @@ import {
 } from '../utils/invoiceFormat';
 import { ProposalManager } from './ProposalManager';
 import { ContractManager } from './ContractManager';
+import { CatalogManager } from './CatalogManager';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
@@ -127,7 +128,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const visibleInvoices = useMemo(() => filterInvoicesForUser(invoices, currentUser), [invoices, currentUser]);
   const canManageCompany = isInvoiceMasterOrAdmin(currentUser);
   const canCreate = canIssueInvoices(currentUser) && !readonly;
-  const [mainTab, setMainTab] = useState<'invoices' | 'proposals' | 'contracts'>('invoices');
+  const [mainTab, setMainTab] = useState<'invoices' | 'proposals' | 'contracts' | 'catalog'>('invoices');
   const [mode, setMode] = useState<'archive' | 'editor' | 'company'>('archive');
   const [draft, setDraft] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
@@ -701,7 +702,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
         >
           Contracts
         </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('catalog')}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${mainTab === 'catalog' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+        >
+          {lang === 'fa' ? 'کاتالوگ شرکت' : 'Company Catalog'}
+        </button>
       </div>
+
+      {mainTab === 'catalog' && (
+        <CatalogManager currentUser={currentUser} lang={lang} readonly={readonly} />
+      )}
 
       {mainTab === 'proposals' && (
         <ProposalManager currentUser={currentUser} lang={lang} readonly={readonly} />

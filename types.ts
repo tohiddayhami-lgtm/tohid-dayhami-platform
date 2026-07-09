@@ -1878,6 +1878,103 @@ export interface LegalContract {
   createdByPersonnelId?: string;
 }
 
+/** Bilingual company services catalog — Invoices → Company Catalog tab. */
+export type CatalogStatus = 'draft' | 'published';
+export type CatalogRtlLanguage = 'fa' | 'ar';
+
+export interface CatalogCompany {
+  labelEn: string;
+  labelRtl: string;
+  companyEn: string;
+  companyRtl: string;
+  regNo?: string;
+  country?: string;
+  repNameEn?: string;
+  repNameRtl?: string;
+  repTitleEn?: string;
+  repTitleRtl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  website?: string;
+}
+
+export interface CatalogIntro {
+  sectionNum: string;
+  titleEn: string;
+  titleRtl: string;
+  contentEn: string;
+  contentRtl: string;
+}
+
+export interface CatalogService {
+  id: string;
+  serviceNum: string;
+  titleEn: string;
+  titleRtl: string;
+  descEn: string;
+  descRtl: string;
+  forEn?: string;
+  forRtl?: string;
+}
+
+export interface CatalogArea {
+  id: string;
+  areaNum: string;
+  areaTitleEn: string;
+  areaTitleRtl: string;
+  areaIntroEn?: string;
+  areaIntroRtl?: string;
+  services: CatalogService[];
+}
+
+export interface CatalogHowWeWork {
+  sectionNum: string;
+  titleEn: string;
+  titleRtl: string;
+  pointsEn: string[];
+  pointsRtl: string[];
+}
+
+export interface CatalogContact {
+  sectionNum: string;
+  titleEn: string;
+  titleRtl: string;
+  contentEn?: string;
+  contentRtl?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  location?: string;
+}
+
+export interface CompanyCatalog {
+  id: string;
+  refNo: string;
+  titleEn: string;
+  titleRtl: string;
+  subtitleEn?: string;
+  subtitleRtl?: string;
+  catalogDate: string;
+  logoUrl?: string;
+  logo2Url?: string;
+  contractLogoLayout?: ContractLogoLayout;
+  contractLogoAlign?: 'start' | 'center' | 'end';
+  contractLogoSize?: 'sm' | 'md' | 'lg';
+  companyName?: string;
+  languages: string[];
+  rtlLanguage: CatalogRtlLanguage;
+  company: CatalogCompany;
+  intro: CatalogIntro;
+  areas: CatalogArea[];
+  howWeWork: CatalogHowWeWork;
+  contact: CatalogContact;
+  status: CatalogStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  createdByPersonnelId?: string;
+}
+
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';
 export type AssignmentTargetType = 'role' | 'personnel';
 

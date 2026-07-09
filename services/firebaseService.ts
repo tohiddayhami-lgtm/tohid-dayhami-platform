@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, LegalContract, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, LegalContract, CompanyCatalog, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -1106,6 +1106,33 @@ export const deleteContractFromCloud = async (id: string, actor?: Personnel) => 
 
 export const subscribeToContracts = (callback: (contracts: LegalContract[]) => void) =>
   subscribeCollection<LegalContract>('contracts', callback, {
+    sort: (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime(),
+    intervalMs: 45_000,
+  });
+
+// ── Company Catalogs (Invoices → Company Catalog tab) ──
+export const saveCatalogToCloud = async (catalog: CompanyCatalog, actor?: Personnel) => {
+  const payload = { ...catalog, updatedAt: new Date().toISOString() };
+  await setDocCloud('catalogs', catalog.id, payload);
+  await logSystemAction(
+    'UPDATE',
+    'Catalog',
+    `Catalog ${catalog.refNo} — ${catalog.titleEn || catalog.titleRtl}`,
+    actor?.fullName || catalog.createdBy || 'System',
+    catalog.id,
+    undefined,
+    undefined,
+    actor?.id,
+  );
+};
+
+export const deleteCatalogFromCloud = async (id: string, actor?: Personnel) => {
+  await deleteDocCloud('catalogs', id);
+  await logSystemAction('DELETE', 'Catalog', 'Catalog deleted', actor?.fullName || 'System', id, undefined, 'catalogs', actor?.id);
+};
+
+export const subscribeToCatalogs = (callback: (catalogs: CompanyCatalog[]) => void) =>
+  subscribeCollection<CompanyCatalog>('catalogs', callback, {
     sort: (a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime(),
     intervalMs: 45_000,
   });
