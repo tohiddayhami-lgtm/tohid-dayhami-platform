@@ -148,7 +148,9 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
   const [formData, setFormData] = useState({
     fullName: '', roles: [] as string[], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [] as PersonnelDocument[],
     canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false,
-    canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[]
+    canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] as string[],
+    canViewSuppliers: false, canManageSuppliers: false, canDeleteSuppliers: false,
+    canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false,
   });
 
   const [newDocTitle, setNewDocTitle] = useState('');
@@ -260,6 +262,12 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           permMetaShopShops: 'فروشگاه‌های قابل دسترسی',
           permMetaShopShopsHint: 'خالی = همه فروشگاه‌ها. برای محدود کردن، فروشگاه‌های دلخواه را انتخاب کنید.',
           permMetaShopShopsAll: 'همه فروشگاه‌ها',
+          permSuppliers: 'مشاهده تأمین‌کنندگان',
+          permManageSuppliers: 'مدیریت تأمین‌کنندگان',
+          permDeleteSuppliers: 'حذف تأمین‌کنندگان',
+          permEvaluateSuppliers: 'ارزیابی تأمین‌کنندگان',
+          permSupplierDocs: 'مدیریت اسناد تأمین‌کننده',
+          permSupplierFinancials: 'داده‌های مالی تأمین‌کننده',
           docs: 'پرونده پرسنلی و مدارک',
           docTitle: 'عنوان مدرک',
           docFile: 'فایل',
@@ -324,6 +332,12 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
           permMetaShopShops: 'Accessible shops',
           permMetaShopShopsHint: 'Empty = all shops. Select specific shops to limit access.',
           permMetaShopShopsAll: 'All shops',
+          permSuppliers: 'View suppliers',
+          permManageSuppliers: 'Manage suppliers',
+          permDeleteSuppliers: 'Delete suppliers',
+          permEvaluateSuppliers: 'Evaluate suppliers',
+          permSupplierDocs: 'Supplier documents',
+          permSupplierFinancials: 'Supplier financial data',
           docs: 'Personnel Documents',
           docTitle: 'Document Title',
           docFile: 'File',
@@ -355,14 +369,20 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
         canViewAllInvoices: person.permissions?.canViewAllInvoices || false,
         canManageMetaShop: person.permissions?.canManageMetaShop || false,
         canDeleteMetaShop: person.permissions?.canDeleteMetaShop || false,
-        allowedMetaShopIds: person.permissions?.allowedMetaShopIds || []
+        allowedMetaShopIds: person.permissions?.allowedMetaShopIds || [],
+        canViewSuppliers: person.permissions?.canViewSuppliers || false,
+        canManageSuppliers: person.permissions?.canManageSuppliers || false,
+        canDeleteSuppliers: person.permissions?.canDeleteSuppliers || false,
+        canEvaluateSuppliers: person.permissions?.canEvaluateSuppliers || false,
+        canManageSupplierDocuments: person.permissions?.canManageSupplierDocuments || false,
+        canViewSupplierFinancials: person.permissions?.canViewSupplierFinancials || false,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCancelEdit = () => {
       setEditingId(null);
-      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [] });
+      setFormData({ fullName: '', roles: [], jobDescription: '', staffNote: '', consultantBio: '', reportsTo: '', email: '', username: '', password: '', avatar: '', documents: [], canAssign: false, canViewCustomers: false, canViewTariffs: false, canViewAllTickets: false, canIssueInvoices: false, canViewAllInvoices: false, canManageMetaShop: false, canDeleteMetaShop: false, allowedMetaShopIds: [], canViewSuppliers: false, canManageSuppliers: false, canDeleteSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false });
       setNewDocTitle(''); setNewDocFile(null);
   };
 
@@ -406,6 +426,12 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
       canManageMetaShop: formData.canManageMetaShop,
       canDeleteMetaShop: formData.canDeleteMetaShop && formData.canManageMetaShop,
       allowedMetaShopIds: formData.canManageMetaShop && formData.allowedMetaShopIds.length ? formData.allowedMetaShopIds : undefined,
+      canViewSuppliers: formData.canViewSuppliers,
+      canManageSuppliers: formData.canManageSuppliers,
+      canDeleteSuppliers: formData.canDeleteSuppliers && formData.canManageSuppliers,
+      canEvaluateSuppliers: formData.canEvaluateSuppliers,
+      canManageSupplierDocuments: formData.canManageSupplierDocuments,
+      canViewSupplierFinancials: formData.canViewSupplierFinancials && formData.canManageSuppliers,
     };
     if (editingId) {
         onUpdate(personnel.map(p => p.id === editingId ? { ...p, ...formData, permissions } : p));
@@ -700,6 +726,32 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
               </div>
             </div>
           )}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <label className="flex items-center gap-2 cursor-pointer bg-teal-50 px-3 py-3 rounded-lg border border-teal-100">
+              <input type="checkbox" className="w-4 h-4" checked={formData.canViewSuppliers} onChange={e => setFormData({...formData, canViewSuppliers: e.target.checked, ...(e.target.checked ? {} : { canManageSuppliers: false, canDeleteSuppliers: false, canEvaluateSuppliers: false, canManageSupplierDocuments: false, canViewSupplierFinancials: false })})}/>
+              <span className="text-xs font-bold text-teal-800">{t.permSuppliers}</span>
+            </label>
+            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canViewSuppliers ? 'cursor-pointer bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canManageSuppliers} onChange={e => setFormData({...formData, canManageSuppliers: e.target.checked, ...(e.target.checked ? {} : { canDeleteSuppliers: false, canViewSupplierFinancials: false })})}/>
+              <span className="text-xs font-bold text-emerald-800">{t.permManageSuppliers}</span>
+            </label>
+            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canManageSuppliers ? 'cursor-pointer bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canManageSuppliers} checked={formData.canDeleteSuppliers} onChange={e => setFormData({...formData, canDeleteSuppliers: e.target.checked})}/>
+              <span className="text-xs font-bold text-red-800">{t.permDeleteSuppliers}</span>
+            </label>
+            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canViewSuppliers ? 'cursor-pointer bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canEvaluateSuppliers} onChange={e => setFormData({...formData, canEvaluateSuppliers: e.target.checked})}/>
+              <span className="text-xs font-bold text-amber-800">{t.permEvaluateSuppliers}</span>
+            </label>
+            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canViewSuppliers ? 'cursor-pointer bg-indigo-50 border-indigo-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canViewSuppliers} checked={formData.canManageSupplierDocuments} onChange={e => setFormData({...formData, canManageSupplierDocuments: e.target.checked})}/>
+              <span className="text-xs font-bold text-indigo-800">{t.permSupplierDocs}</span>
+            </label>
+            <label className={`flex items-center gap-2 px-3 py-3 rounded-lg border ${formData.canManageSuppliers ? 'cursor-pointer bg-violet-50 border-violet-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <input type="checkbox" className="w-4 h-4" disabled={!formData.canManageSuppliers} checked={formData.canViewSupplierFinancials} onChange={e => setFormData({...formData, canViewSupplierFinancials: e.target.checked})}/>
+              <span className="text-xs font-bold text-violet-800">{t.permSupplierFinancials}</span>
+            </label>
+          </div>
           </div>
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
             <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">

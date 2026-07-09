@@ -63,6 +63,12 @@ export interface PersonnelPermissions {
   canManageMetaShop?: boolean;    // access Meta Shop panel; edit shops, bazaars, expos, booth layout
   canDeleteMetaShop?: boolean;    // delete whole shops/bazaars (booth delete stays admin-only)
   allowedMetaShopIds?: string[];  // if set, staff only sees/edits these shop ids in the panel
+  canViewSuppliers?: boolean;
+  canManageSuppliers?: boolean;
+  canDeleteSuppliers?: boolean;
+  canEvaluateSuppliers?: boolean;
+  canManageSupplierDocuments?: boolean;
+  canViewSupplierFinancials?: boolean;
 }
 
 export interface PersonnelDocument {
@@ -651,7 +657,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'InvoicePreset' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'InvoicePreset' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar' | 'Supplier';
   entityId?: string;
   details: string;
   actorName: string;

@@ -28,6 +28,8 @@ import { FormBuilderPanel } from './FormBuilderPanel';
 import { NotificationCenter } from './NotificationCenter';
 import { CustomerAccountManager } from './CustomerAccountManager';
 import { ProcessManager } from './ProcessManager';
+import { SupplierManager } from './suppliers/SupplierManager';
+import { canAccessSuppliers } from '../utils/supplierAccess';
 import { CustomerBank } from './CustomerBank';
 import { CartableSheetImporter } from './CartableSheetImporter';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
@@ -147,6 +149,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const canEditInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices;
   const canAssign = isAdmin || isMaster || currentUser?.permissions?.canAssign;
   const hasCustomerAccess = isAdmin || isMaster || currentUser?.permissions?.canViewCustomers;
+  const hasSupplierAccess = isAdmin || isMaster || canAccessSuppliers(currentUser);
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
   const hasMetaShopAccess = canAccessMetaShop(currentUser);
@@ -168,7 +171,7 @@ export const AdminDashboard: React.FC<Props> = ({
     return metaShopSupplierCollaborations.filter(r => ids.has(r.shopId));
   }, [visibleMetaShops, metaShopSupplierCollaborations]);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'invoices' | 'metashop'>(() => (
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'services' | 'personnel' | 'settings' | 'messages' | 'team_brainstorm' | 'tasks' | 'meetings' | 'logs' | 'reports' | 'kpi' | 'forms' | 'sales' | 'staff_reports' | 'expenses' | 'news_mgmt' | 'seo' | 'analytics' | 'notifications' | 'customer_accounts' | 'processes' | 'customer_bank' | 'suppliers' | 'invoices' | 'metashop'>(() => (
     shouldRestoreAdminMetaShopTab() ? 'metashop' : 'overview'
   ));
   const [meetingSubTab, setMeetingSubTab] = useState<'staff' | 'public'>('staff');
@@ -1916,6 +1919,7 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="w-full space-y-1">
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'overview' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconActivity className="w-4 h-4 shrink-0" /><span>{t.overview}</span></button>
                 {hasCustomerAccess && <button onClick={() => setActiveTab('customer_bank')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_bank' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'بانک مشتریان' : 'Customer Bank'}</span></button>}
+                {hasSupplierAccess && <button onClick={() => setActiveTab('suppliers')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'suppliers' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBriefcase className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'تأمین‌کنندگان' : 'Suppliers'}</span></button>}
                 {canManageInvoices && <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'invoices' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconInvoice className="w-4 h-4 shrink-0" /><span>Invoices</span></button>}
                 {hasMetaShopAccess && <button onClick={() => setActiveTab('metashop')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'metashop' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTag className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'متاشاپ' : 'Meta Shop'}</span></button>}
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'tasks' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconList className="w-4 h-4 shrink-0" /><span>{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
@@ -1940,6 +1944,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
         {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
+        {activeTab === 'suppliers' && hasSupplierAccess && <SupplierManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'invoices' && canManageInvoices && onSaveInvoice && onDeleteInvoice && (
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
