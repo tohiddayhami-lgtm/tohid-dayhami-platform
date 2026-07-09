@@ -1,16 +1,15 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import {
+  PAGE_W, PAGE_H, PAD, CONTENT_H,
+  groupPreviewUnits, measureUnitHeight, packPageGroups,
+} from './printPreviewPagination';
 
 /**
  * PDF export from the live preview element (.pp-root).
  * Pages always render at full A4 content width. Tall sections are split across
  * pages — never scaled down (which made some pages look smaller).
  */
-
-const PAGE_W = 794;
-const PAGE_H = 1123;
-const PAD = 28;
-const CONTENT_H = PAGE_H - PAD * 2 - 20;
 
 async function inlineImagesInDoc(doc: Document): Promise<void> {
   const imgs = Array.from(doc.images);
@@ -57,103 +56,6 @@ function loadHtmlInIframe(html: string): Promise<HTMLIFrameElement> {
     if (doc.readyState === 'complete') done();
     else iframe.onload = done;
   });
-}
-
-function splitSection(section: HTMLElement): HTMLElement[] {
-  const units: HTMLElement[] = [];
-  const children = Array.from(section.children) as HTMLElement[];
-  let i = 0;
-  while (i < children.length) {
-    const el = children[i];
-    if (el.classList.contains('pp-band') || el.classList.contains('pp-service-card')) {
-      units.push(el);
-      i++;
-      continue;
-    }
-    const group: HTMLElement[] = [el];
-    i++;
-    while (
-      i < children.length
-      && !children[i].classList.contains('pp-band')
-      && !children[i].classList.contains('pp-service-card')
-    ) {
-      group.push(children[i]);
-      i++;
-    }
-    if (group.length === 1) {
-      units.push(group[0]);
-    } else {
-      const wrap = document.createElement('div');
-      wrap.className = 'pp-section-part';
-      group.forEach(n => wrap.appendChild(n.cloneNode(true)));
-      units.push(wrap);
-    }
-  }
-  return units;
-}
-
-function groupPreviewUnits(root: HTMLElement): HTMLElement[] {
-  const kids = Array.from(root.children).filter(el => el.tagName !== 'STYLE') as HTMLElement[];
-  const units: HTMLElement[] = [];
-  let i = 0;
-
-  while (i < kids.length && !kids[i].classList.contains('pp-band') && !kids[i].classList.contains('pp-section')) {
-    units.push(kids[i]);
-    i++;
-  }
-
-  while (i < kids.length) {
-    const el = kids[i];
-    if (el.classList.contains('pp-band')) {
-      const bandUnit: HTMLElement[] = [el];
-      i++;
-      if (i < kids.length && kids[i].tagName === 'TABLE') {
-        bandUnit.push(kids[i]);
-        i++;
-      }
-      const wrap = document.createElement('div');
-      wrap.className = 'pp-unit-wrap';
-      bandUnit.forEach(n => wrap.appendChild(n.cloneNode(true)));
-      units.push(wrap);
-      continue;
-    }
-    if (el.classList.contains('pp-section')) {
-      units.push(...splitSection(el));
-      i++;
-      continue;
-    }
-    units.push(el);
-    i++;
-  }
-  return units;
-}
-
-function measureHeight(el: HTMLElement): number {
-  return el.getBoundingClientRect().height + 6;
-}
-
-function packPageGroups(units: HTMLElement[], heights: number[]): HTMLElement[][] {
-  const pages: HTMLElement[][] = [];
-  let cur: HTMLElement[] = [];
-  let used = 0;
-
-  units.forEach((unit, idx) => {
-    const h = heights[idx] || 0;
-    if (h > CONTENT_H) {
-      if (cur.length) { pages.push(cur); cur = []; used = 0; }
-      pages.push([unit]);
-      return;
-    }
-    if (cur.length && used + h > CONTENT_H) {
-      pages.push(cur);
-      cur = [];
-      used = 0;
-    }
-    cur.push(unit);
-    used += h;
-  });
-  if (cur.length) pages.push(cur);
-  return pages.length ? pages : [units];
 }
 
 async function captureEl(el: HTMLElement): Promise<HTMLCanvasElement> {
@@ -256,7 +158,7 @@ export async function exportPdfFromPreviewElement(rootEl: HTMLElement, filename:
     const styleOffset = styleTemplate ? 1 : 0;
     const unitHeights = flatUnits.map((_, idx) => {
       const child = measureMount.children[idx + styleOffset] as HTMLElement;
-      return child ? measureHeight(child) : 0;
+      return child ? measureUnitHeight(child) : 0;
     });
     body.removeChild(measureMount);
 
@@ -298,3 +200,5 @@ export async function exportPdfFromPreviewElement(rootEl: HTMLElement, filename:
     iframe.remove();
   }
 }
+
+export { PAGE_W, PAGE_H, PAD, CONTENT_H };

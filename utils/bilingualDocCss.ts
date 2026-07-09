@@ -17,7 +17,7 @@ export const BILINGUAL_DOC_CSS = `
   .pp-logos img { object-fit: contain; max-width: 42%; }
   .pp-title-block { text-align: center; margin: 4px 0 10px; direction: ltr !important; }
   .pp-title-block .en-title {
-    margin: 0; font-size: 15.5pt; font-weight: 800; letter-spacing: .03em;
+    margin: 0; font-size: var(--pp-title-fs, 15.5pt); font-weight: 800; letter-spacing: .03em;
     text-transform: uppercase; color: #0b1f3a; line-height: 1.25;
     direction: ltr !important; text-align: center; unicode-bidi: isolate;
   }
@@ -48,15 +48,15 @@ export const BILINGUAL_DOC_CSS = `
   }
   .pp-band {
     display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-    background: #0b1f3a; color: #fff; margin: 18px 0 0;
+    background: #0b1f3a; color: #fff; margin: var(--pp-band-mt, 18px) 0 0;
     border: 1px solid #0b1f3a; direction: ltr !important;
   }
   .pp-band .l {
-    padding: 8px 12px; font-size: 10pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    padding: var(--pp-band-pad, 8px) 12px; font-size: 10pt; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
     direction: ltr !important; text-align: left !important; unicode-bidi: isolate;
   }
   .pp-band .r {
-    padding: 8px 12px; font-size: 10pt; font-weight: 800;
+    padding: var(--pp-band-pad, 8px) 12px; font-size: 10pt; font-weight: 800;
     direction: rtl !important; text-align: right !important; unicode-bidi: isolate;
     font-family: Tahoma, "Segoe UI", Arial, sans-serif; border-left: 1px solid rgba(255,255,255,.2);
   }
@@ -100,23 +100,23 @@ export const BILINGUAL_DOC_CSS = `
     direction: rtl !important; text-align: right !important;
     font-family: Tahoma, "Segoe UI", Arial, sans-serif;
   }
-  .pp-section { margin: 0 0 4px; page-break-inside: avoid; direction: ltr !important; }
+  .pp-section { margin: 0 0 var(--pp-section-gap, 4px); page-break-inside: avoid; direction: ltr !important; }
   .pp-body-en {
-    white-space: pre-wrap; font-size: 10pt; line-height: 1.65; color: #0f172a;
-    padding: 10px 6px 8px;
+    white-space: pre-wrap; font-size: var(--pp-body-fs, 10pt); line-height: var(--pp-body-lh-en, 1.65); color: #0f172a;
+    padding: var(--pp-body-pad, 10px) 6px 8px;
     direction: ltr !important; text-align: justify !important; text-justify: inter-word;
     unicode-bidi: isolate; hyphens: auto;
   }
   .pp-body-rtl {
-    white-space: pre-wrap; font-size: 10pt; line-height: 1.9; color: #0f172a;
+    white-space: pre-wrap; font-size: var(--pp-body-fs, 10pt); line-height: var(--pp-body-lh-rtl, 1.9); color: #0f172a;
     direction: rtl !important; text-align: justify !important; text-justify: inter-word;
     unicode-bidi: isolate;
-    padding: 10px 12px 12px;
+    padding: var(--pp-body-pad, 10px) 12px 12px;
     background: #f8fafc; border: 1px solid #e2e8f0; border-top: none;
     font-family: Tahoma, "Segoe UI", Arial, sans-serif;
   }
   .pp-price-table, .pp-addon-table {
-    width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 9.5pt;
+    width: 100%; border-collapse: collapse; margin: 0 0 var(--pp-table-mb, 14px); font-size: 9.5pt;
     direction: ltr !important;
   }
   .pp-price-table th, .pp-addon-table th {
@@ -152,7 +152,7 @@ export const BILINGUAL_DOC_CSS = `
     direction: ltr !important;
   }
   .pp-foot {
-    margin-top: 22px; padding-top: 12px; border-top: 2px solid #0b1f3a;
+    margin-top: var(--pp-foot-mt, 22px); padding-top: 12px; border-top: 2px solid #0b1f3a;
     text-align: center; font-size: 8.5pt; color: #64748b; line-height: 1.5;
     direction: ltr !important;
   }
@@ -203,7 +203,7 @@ export const BILINGUAL_DOC_CSS = `
   .pp-area-intro-en { font-size: 9.5pt; color: #334155; font-style: italic; padding: 6px 6px 10px; direction: ltr !important; }
   .pp-area-intro-rtl { font-size: 9.5pt; color: #334155; font-style: italic; padding: 0 12px 10px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; }
   .pp-service-card {
-    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; background: #fff;
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin: 0 0 var(--pp-svc-gap, 10px); background: #fff;
     page-break-inside: avoid; direction: ltr !important;
   }
   .pp-service-card .svc-num { font-size: 8.5pt; font-weight: 800; color: #0b1f3a; letter-spacing: .04em; margin-bottom: 2px; direction: ltr !important; }

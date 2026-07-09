@@ -24,9 +24,10 @@ import {
   buildContractSampleEnvelope,
   downloadContractJson,
 } from '../utils/contractFormat';
-import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
 import { exportPdfFromPreviewElement } from '../utils/exportPreviewPdf';
 import { exportContractWord } from '../utils/exportContractWord';
+import { BilingualPrintPreview } from './BilingualPrintPreview';
+import type { PrintSectionRef } from './BilingualPrintPreview';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -243,14 +244,14 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
     </td>
   );
 
-  const PreviewDoc = ({ c }: { c: LegalContract }) => {
+  const PreviewDoc = ({ c, pageBreakBefore }: { c: LegalContract; pageBreakBefore?: string[] }) => {
     const h = logoH(c.contractLogoSize);
     const currency = c.currency || 'OMR';
     const provider = c.parties[0];
     const client = c.parties[1] || c.parties[0];
+    const brk = (id: string) => (pageBreakBefore?.includes(id) ? ' pp-force-page-break' : '');
     return (
-      <div className="pp-root" ref={printRef} dir="ltr" lang="en">
-        <style>{BILINGUAL_DOC_CSS}</style>
+      <>
         {(c.logoUrl || c.logo2Url) && (
           <div className={`pp-logos ${c.contractLogoAlign === 'center' ? 'center' : ''}`}>
             {c.logoUrl ? <img src={c.logoUrl} alt="" style={{ height: h }} /> : <span />}
@@ -290,7 +291,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
         </table>
 
         {c.clauses.map(cl => (
-          <div key={cl.id} className="pp-section">
+          <div key={cl.id} data-section-id={cl.id} className={`pp-section${brk(cl.id)}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">{cl.titleEn || cl.articleNum}</div>
               <div className="r" dir="rtl">{cl.titleRtl || '—'}</div>
@@ -301,7 +302,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
         ))}
 
         {c.scheduleRows.length > 0 && (
-          <div className="pp-section">
+          <div data-section-id="__schedule__" className={`pp-section${brk('__schedule__')}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">SCHEDULE A — FEES</div>
               <div className="r" dir="rtl">پیوست الف — حق‌الزحمه</div>
@@ -335,7 +336,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
         )}
 
         {c.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim()) && (
-          <div className="pp-section">
+          <div data-section-id="__addons__" className={`pp-section${brk('__addons__')}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">OPTIONAL ADD-ONS</div>
               <div className="r" dir="rtl">افزودنی‌های اختیاری</div>
@@ -369,7 +370,7 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           </div>
         )}
 
-        <div className="pp-section">
+        <div data-section-id="__signatures__" className={`pp-section${brk('__signatures__')}`}>
           <div className="pp-band">
             <div className="l" dir="ltr">SIGNATURES</div>
             <div className="r" dir="rtl">امضاها</div>
@@ -393,8 +394,21 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="en">Executed in English and Persian. In case of discrepancy, the English version prevails.</div>
           <div className="rtl" dir="rtl">این قرارداد به دو زبان انگلیسی و فارسی تنظیم شده است. در صورت تعارض، نسخه‌ی انگلیسی مالک است.</div>
         </div>
-      </div>
+      </>
     );
+  };
+
+  const contractPrintSections = (c: LegalContract): PrintSectionRef[] => {
+    const secs: PrintSectionRef[] = c.clauses.map(cl => ({
+      id: cl.id,
+      label: cl.titleEn || cl.articleNum,
+    }));
+    if (c.scheduleRows.length) secs.push({ id: '__schedule__', label: T ? 'پیوست الف' : 'Schedule A' });
+    if (c.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim())) {
+      secs.push({ id: '__addons__', label: T ? 'افزودنی‌ها' : 'Add-Ons' });
+    }
+    secs.push({ id: '__signatures__', label: T ? 'امضاها' : 'Signatures' });
+    return secs;
   };
 
   // ── LIST ──
@@ -493,11 +507,25 @@ export const ContractManager: React.FC<Props> = ({ currentUser, lang, readonly }
             >
               Word
             </button>
+            {!readonly && (
+              <button type="button" onClick={() => void save()} disabled={saving} className="text-xs px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 font-bold disabled:opacity-50">
+                {saving ? '…' : (T ? 'ذخیره چیدمان' : 'Save layout')}
+              </button>
+            )}
             <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50"><IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}</button>
           </div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 md:p-10">
-          <PreviewDoc c={draft} />
+        <div className="bg-slate-200/70 rounded-xl p-4 md:p-6 overflow-auto">
+          <BilingualPrintPreview
+            layout={draft.printLayout}
+            onLayoutChange={layout => setDraft(d => d ? { ...d, printLayout: layout } : d)}
+            printRef={printRef}
+            sections={contractPrintSections(draft)}
+            lang={T ? 'fa' : 'en'}
+            readonly={readonly}
+          >
+            <PreviewDoc c={draft} pageBreakBefore={draft.printLayout?.pageBreakBefore} />
+          </BilingualPrintPreview>
         </div>
       </div>
     );

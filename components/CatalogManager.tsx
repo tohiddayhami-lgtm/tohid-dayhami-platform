@@ -22,9 +22,10 @@ import {
   buildCatalogSampleEnvelope,
   downloadCatalogJson,
 } from '../utils/catalogFormat';
-import { exportPdfFromPreviewElement } from '../utils/exportCatalogPdf';
+import { exportPdfFromPreviewElement } from '../utils/exportPreviewPdf';
 import { exportCatalogWord } from '../utils/exportCatalogWord';
-import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
+import { BilingualPrintPreview } from './BilingualPrintPreview';
+import type { PrintSectionRef } from './BilingualPrintPreview';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -185,14 +186,14 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
     } catch { return iso; }
   };
 
-  const PreviewDoc = ({ c }: { c: CompanyCatalog }) => {
+  const PreviewDoc = ({ c, pageBreakBefore }: { c: CompanyCatalog; pageBreakBefore?: string[] }) => {
     const h = logoH(c.contractLogoSize);
     const langLabel = c.languages.join(' / ').toUpperCase();
     const contactLine = [c.contact.email, c.contact.phone, c.contact.website, c.contact.location].filter(Boolean).join(' · ');
+    const brk = (id: string) => (pageBreakBefore?.includes(id) ? ' pp-force-page-break' : '');
 
     return (
-      <div className="pp-root" ref={printRef} dir="ltr" lang="en">
-        <style>{BILINGUAL_DOC_CSS}</style>
+      <>
         {(c.logoUrl || c.logo2Url) && (
           <div className={`pp-logos ${c.contractLogoAlign === 'center' ? 'center' : ''}`}>
             {c.logoUrl ? <img src={c.logoUrl} alt="" style={{ height: h }} /> : <span />}
@@ -227,14 +228,14 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
           {c.company.repNameRtl && <div className="row-rtl" dir="rtl">{c.company.repNameRtl}{c.company.repTitleRtl ? ` — ${c.company.repTitleRtl}` : ''}</div>}
         </div>
 
-        <div className="pp-section">
+        <div data-section-id="__intro__" className={`pp-section${brk('__intro__')}`}>
           <div className="pp-band"><div className="l" dir="ltr">{c.intro.titleEn || c.intro.sectionNum}</div><div className="r" dir="rtl">{c.intro.titleRtl}</div></div>
           {c.intro.contentEn && <div className="pp-body-en" dir="ltr">{c.intro.contentEn}</div>}
           {c.intro.contentRtl && <div className="pp-body-rtl" dir="rtl">{c.intro.contentRtl}</div>}
         </div>
 
         {c.areas.map(area => (
-          <div key={area.id} className="pp-section">
+          <div key={area.id} data-section-id={area.id} className={`pp-section${brk(area.id)}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">{area.areaNum}. {area.areaTitleEn}</div>
               <div className="r" dir="rtl">{area.areaTitleRtl}</div>
@@ -255,7 +256,7 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
           </div>
         ))}
 
-        <div className="pp-section">
+        <div data-section-id="__howwework__" className={`pp-section${brk('__howwework__')}`}>
           <div className="pp-band"><div className="l" dir="ltr">{c.howWeWork.titleEn}</div><div className="r" dir="rtl">{c.howWeWork.titleRtl}</div></div>
           {c.howWeWork.pointsEn.map((p, i) => <div key={`en-${i}`} className="pp-bullet-en" dir="ltr">• {p}</div>)}
           {c.howWeWork.pointsRtl.length > 0 && (
@@ -265,7 +266,7 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
           )}
         </div>
 
-        <div className="pp-section">
+        <div data-section-id="__contact__" className={`pp-section${brk('__contact__')}`}>
           <div className="pp-band"><div className="l" dir="ltr">{c.contact.titleEn}</div><div className="r" dir="rtl">{c.contact.titleRtl}</div></div>
           {c.contact.contentEn && <div className="pp-body-en" dir="ltr">{c.contact.contentEn}</div>}
           {c.contact.contentRtl && <div className="pp-body-rtl" dir="rtl">{c.contact.contentRtl}</div>}
@@ -277,8 +278,18 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
           <div className="en">This document is a services catalog for reference. Pricing and scope are confirmed in proposals and contracts.</div>
           <div className="rtl" dir="rtl">این سند کاتالوگ خدمات برای مرجع است. قیمت و دامنه در پروپوزال و قرارداد تأیید می‌شود.</div>
         </div>
-      </div>
+      </>
     );
+  };
+
+  const catalogPrintSections = (c: CompanyCatalog): PrintSectionRef[] => {
+    const secs: PrintSectionRef[] = [
+      { id: '__intro__', label: c.intro.titleEn || c.intro.sectionNum || (T ? 'مقدمه' : 'Intro') },
+      ...c.areas.map(a => ({ id: a.id, label: `${a.areaNum}. ${a.areaTitleEn}` })),
+      { id: '__howwework__', label: c.howWeWork.titleEn || (T ? 'نحوه کار' : 'How we work') },
+      { id: '__contact__', label: c.contact.titleEn || (T ? 'تماس' : 'Contact') },
+    ];
+    return secs;
   };
 
   if (mode === 'list') {
@@ -374,13 +385,27 @@ export const CatalogManager: React.FC<Props> = ({ currentUser, lang, readonly })
             >
               Word
             </button>
+            {!readonly && (
+              <button type="button" onClick={() => void save()} disabled={saving} className="text-xs px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 font-bold disabled:opacity-50">
+                {saving ? '…' : (T ? 'ذخیره چیدمان' : 'Save layout')}
+              </button>
+            )}
             <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50">
               <IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}
             </button>
           </div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 md:p-10">
-          <PreviewDoc c={draft} />
+        <div className="bg-slate-200/70 rounded-xl p-4 md:p-6 overflow-auto">
+          <BilingualPrintPreview
+            layout={draft.printLayout}
+            onLayoutChange={layout => setDraft(d => d ? { ...d, printLayout: layout } : d)}
+            printRef={printRef}
+            sections={catalogPrintSections(draft)}
+            lang={T ? 'fa' : 'en'}
+            readonly={readonly}
+          >
+            <PreviewDoc c={draft} pageBreakBefore={draft.printLayout?.pageBreakBefore} />
+          </BilingualPrintPreview>
         </div>
       </div>
     );

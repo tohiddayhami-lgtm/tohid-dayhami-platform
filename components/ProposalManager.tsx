@@ -22,9 +22,10 @@ import {
   proposalClientName,
   genProposalRefNo,
 } from '../utils/proposalFormat';
-import { exportProposalPdf } from '../utils/exportProposalPdf';
+import { exportPdfFromPreviewElement } from '../utils/exportPreviewPdf';
 import { exportProposalWord } from '../utils/exportProposalWord';
-import { BILINGUAL_DOC_CSS } from '../utils/bilingualDocCss';
+import { BilingualPrintPreview } from './BilingualPrintPreview';
+import type { PrintSectionRef } from './BilingualPrintPreview';
 import { IconPlus, IconTrash, IconEdit, IconPrinter, IconUpload, IconSearch, IconCheck } from './Icons';
 
 interface Props {
@@ -229,9 +230,13 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
 
   const downloadPdf = async () => {
     if (!draft || pdfBusy) return;
+    if (!printRef.current) {
+      alert(T ? 'پیش‌نمایش آماده نیست.' : 'Preview not ready.');
+      return;
+    }
     setPdfBusy(true);
     try {
-      await exportProposalPdf(draft, `proposal_${draft.refNo || 'draft'}.pdf`);
+      await exportPdfFromPreviewElement(printRef.current, `proposal_${draft.refNo || 'draft'}.pdf`);
     } catch (e) {
       console.error(e);
       alert(T ? 'ساخت PDF ناموفق بود. دوباره تلاش کنید.' : 'PDF export failed. Please try again.');
@@ -279,13 +284,13 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
   );
 
   // ── Preview document (Word-like commercial proposal) ──
-  const PreviewDoc = ({ p }: { p: CommercialProposal }) => {
+  const PreviewDoc = ({ p, pageBreakBefore }: { p: CommercialProposal; pageBreakBefore?: string[] }) => {
     const h = logoH(p.contractLogoSize);
     const proposer = p.parties[0];
     const client = p.parties[1] || p.parties[0];
+    const brk = (id: string) => (pageBreakBefore?.includes(id) ? ' pp-force-page-break' : '');
     return (
-      <div className="pp-root" ref={printRef} dir="ltr" lang="en">
-        <style>{BILINGUAL_DOC_CSS}</style>
+      <>
         {(p.logoUrl || p.logo2Url) && (
           <div className={`pp-logos ${p.contractLogoAlign === 'center' ? 'center' : ''}`}>
             {p.logoUrl ? <img src={p.logoUrl} alt="" style={{ height: h }} /> : <span />}
@@ -325,7 +330,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         </table>
 
         {p.sections.map(sec => (
-          <div key={sec.id} className="pp-section">
+          <div key={sec.id} data-section-id={sec.id} className={`pp-section${brk(sec.id)}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">{sec.titleEn || sec.sectionNum}</div>
               <div className="r" dir="rtl">{sec.titleRtl || '—'}</div>
@@ -336,7 +341,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         ))}
 
         {p.lineItems.length > 0 && (
-          <div className="pp-section">
+          <div data-section-id="__pricing__" className={`pp-section${brk('__pricing__')}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">PRICING OPTIONS</div>
               <div className="r" dir="rtl">گزینه‌های قیمت‌گذاری</div>
@@ -371,7 +376,7 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
         )}
 
         {p.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim()) && (
-          <div className="pp-section">
+          <div data-section-id="__addons__" className={`pp-section${brk('__addons__')}`}>
             <div className="pp-band">
               <div className="l" dir="ltr">OPTIONAL ADD-ONS</div>
               <div className="r" dir="rtl">افزودنی‌های اختیاری</div>
@@ -410,8 +415,20 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
           <div className="en">This document is a commercial proposal and becomes binding only upon signature of the corresponding service agreement.</div>
           <div className="rtl" dir="rtl">این سند پیشنهاد تجاری است و تنها پس از امضای قرارداد خدمات متناظر الزام‌آور می‌شود.</div>
         </div>
-      </div>
+      </>
     );
+  };
+
+  const proposalPrintSections = (p: CommercialProposal): PrintSectionRef[] => {
+    const secs: PrintSectionRef[] = p.sections.map(s => ({
+      id: s.id,
+      label: s.titleEn || s.sectionNum,
+    }));
+    if (p.lineItems.length) secs.push({ id: '__pricing__', label: T ? 'قیمت‌گذاری' : 'Pricing' });
+    if (p.addOns.some(ao => (ao.nameEn || ao.nameRtl || '').trim())) {
+      secs.push({ id: '__addons__', label: T ? 'افزودنی‌ها' : 'Add-Ons' });
+    }
+    return secs;
   };
 
   // ── LIST ──
@@ -511,17 +528,27 @@ export const ProposalManager: React.FC<Props> = ({ currentUser, lang, readonly }
             >
               Word
             </button>
+            {!readonly && (
+              <button type="button" onClick={() => void save()} disabled={saving} className="text-xs px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 font-bold disabled:opacity-50">
+                {saving ? '…' : (T ? 'ذخیره چیدمان' : 'Save layout')}
+              </button>
+            )}
             <button type="button" onClick={() => void downloadPdf()} disabled={pdfBusy} className="text-xs px-3 py-2 rounded-lg bg-slate-900 text-white flex items-center gap-1 disabled:opacity-50">
               <IconPrinter className="w-3.5 h-3.5" />{pdfBusy ? (T ? 'در حال ساخت PDF…' : 'Building PDF…') : (T ? 'دانلود PDF' : 'Download PDF')}
             </button>
           </div>
         </div>
-        <div className="bg-slate-200/70 rounded-xl p-4 md:p-8 overflow-auto">
-          <div className="mx-auto bg-white shadow-xl border border-slate-300/80" style={{ maxWidth: 820 }}>
-            <div className="p-6 md:p-10">
-              <PreviewDoc p={draft} />
-            </div>
-          </div>
+        <div className="bg-slate-200/70 rounded-xl p-4 md:p-6 overflow-auto">
+          <BilingualPrintPreview
+            layout={draft.printLayout}
+            onLayoutChange={layout => setDraft(d => d ? { ...d, printLayout: layout } : d)}
+            printRef={printRef}
+            sections={proposalPrintSections(draft)}
+            lang={T ? 'fa' : 'en'}
+            readonly={readonly}
+          >
+            <PreviewDoc p={draft} pageBreakBefore={draft.printLayout?.pageBreakBefore} />
+          </BilingualPrintPreview>
         </div>
       </div>
     );

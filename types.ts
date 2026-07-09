@@ -1777,6 +1777,23 @@ export interface ProposalAddOn {
   selected?: boolean;
 }
 
+/** Print layout tuning for bilingual document preview / PDF export. */
+export interface PrintLayoutSettings {
+  bandMarginTop?: number;
+  sectionGap?: number;
+  bodyLineHeightEn?: number;
+  bodyLineHeightRtl?: number;
+  bodyFontSize?: number;
+  titleFontSize?: number;
+  bandPadding?: number;
+  bodyPadding?: number;
+  tableMarginBottom?: number;
+  footMarginTop?: number;
+  serviceCardGap?: number;
+  compactLevel?: number;
+  pageBreakBefore?: string[];
+}
+
 export interface CommercialProposal {
   id: string;
   refNo: string;
@@ -1803,6 +1820,7 @@ export interface CommercialProposal {
   updatedAt: string;
   createdBy?: string;
   createdByPersonnelId?: string;
+  printLayout?: PrintLayoutSettings;
 }
 
 /** Bilingual legal contract (EN + RTL) — Invoices → Contracts tab. */
@@ -1882,6 +1900,7 @@ export interface LegalContract {
   updatedAt: string;
   createdBy?: string;
   createdByPersonnelId?: string;
+  printLayout?: PrintLayoutSettings;
 }
 
 /** Bilingual company services catalog — Invoices → Company Catalog tab. */
@@ -1979,6 +1998,7 @@ export interface CompanyCatalog {
   updatedAt: string;
   createdBy?: string;
   createdByPersonnelId?: string;
+  printLayout?: PrintLayoutSettings;
 }
 
 export type AssignmentMode = 'manual' | 'auto_load_balance' | 'random';
