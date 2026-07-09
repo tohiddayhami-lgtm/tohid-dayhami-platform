@@ -38,6 +38,7 @@ import {
 } from '../utils/metaShopPriceHistory';
 import { MetaShopProductPriceTiersEditor } from './MetaShopProductPriceTiersEditor';
 import { MetaShopBackupPanel } from './MetaShopBackupPanel';
+import { MetaShopPriceHistoryPanel } from './MetaShopPriceHistoryPanel';
 import { Language } from '../App';
 import { normalizeImageUrl, metaShopProductImageUrl } from '../utils/metaShopImage';
 
