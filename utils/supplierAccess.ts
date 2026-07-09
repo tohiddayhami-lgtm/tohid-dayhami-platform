@@ -22,7 +22,7 @@ export function getSupplierPermissions(user: Personnel): SupplierPermissions {
     };
   }
 
-  const canView = !!p?.canViewSuppliers;
+  const canView = user.status !== 'inactive' || !!p?.canViewSuppliers;
   const canManage = !!p?.canManageSuppliers;
 
   return {
@@ -37,7 +37,11 @@ export function getSupplierPermissions(user: Personnel): SupplierPermissions {
 }
 
 export function canAccessSuppliers(user: Personnel): boolean {
-  return getSupplierPermissions(user).canView;
+  if (isSupplierAdmin(user)) return true;
+  const p = user.permissions;
+  if (p?.canViewSuppliers || p?.canManageSuppliers) return true;
+  // Default view for active internal staff on the admin dashboard
+  return user.status !== 'inactive';
 }
 
 export function calcEvaluationScore(c: SupplierEvaluationCriteria): number {

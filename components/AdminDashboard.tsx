@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, TeamBrainstormPost, ConsultantCategory } from '../types';
-import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag } from './Icons';
+import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag, IconTrolley } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
 import { CustomerManager } from './CustomerManager';
@@ -149,7 +149,7 @@ export const AdminDashboard: React.FC<Props> = ({
   const canEditInvoices = isAdmin || isMaster || currentUser?.permissions?.canIssueInvoices;
   const canAssign = isAdmin || isMaster || currentUser?.permissions?.canAssign;
   const hasCustomerAccess = isAdmin || isMaster || currentUser?.permissions?.canViewCustomers;
-  const hasSupplierAccess = isAdmin || isMaster || canAccessSuppliers(currentUser);
+  const hasSupplierAccess = isAdmin || isMaster || canAccessSuppliers(currentUser) || !!currentUser?.permissions?.canManageSuppliers;
   const hasTariffAccess = isAdmin || isMaster || currentUser?.permissions?.canViewTariffs;
   const canViewAllTickets = isAdmin || isMaster || currentUser?.permissions?.canViewAllTickets;
   const hasMetaShopAccess = canAccessMetaShop(currentUser);
@@ -1919,7 +1919,7 @@ export const AdminDashboard: React.FC<Props> = ({
             <div className="w-full space-y-1">
                 <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'overview' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconActivity className="w-4 h-4 shrink-0" /><span>{t.overview}</span></button>
                 {hasCustomerAccess && <button onClick={() => setActiveTab('customer_bank')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'customer_bank' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconUsers className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'بانک مشتریان' : 'Customer Bank'}</span></button>}
-                {hasSupplierAccess && <button onClick={() => setActiveTab('suppliers')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'suppliers' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconBriefcase className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'تأمین‌کنندگان' : 'Suppliers'}</span></button>}
+                <button onClick={() => setActiveTab('suppliers')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'suppliers' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTrolley className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'تأمین‌کنندگان' : 'Suppliers'}</span></button>
                 {canManageInvoices && <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'invoices' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconInvoice className="w-4 h-4 shrink-0" /><span>Invoices</span></button>}
                 {hasMetaShopAccess && <button onClick={() => setActiveTab('metashop')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${activeTab === 'metashop' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconTag className="w-4 h-4 shrink-0" /><span>{lang === 'fa' ? 'متاشاپ' : 'Meta Shop'}</span></button>}
                 <button onClick={() => setActiveTab('tasks')} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all relative ${activeTab === 'tasks' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'}`}><IconList className="w-4 h-4 shrink-0" /><span>{t.tasks}</span>{pendingTasksCount > 0 && <span className="absolute rtl:left-2 ltr:right-2 bg-gray-900 text-white text-[9px] px-1 py-0.5 rounded-full">{pendingTasksCount}</span>}</button>
@@ -1944,7 +1944,7 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'expenses' && (isAdmin || isMaster) && <ExpenseManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'staff_reports' && <ReportManager currentUser={currentUser} personnel={personnel} lang={lang} config={config} />}
         {activeTab === 'customer_bank' && hasCustomerAccess && <CustomerBank customers={customers} tickets={tickets} services={services} currentUser={currentUser} onUpdate={onUpdateCustomers} onEdit={onEditCustomer} onDelete={onDeleteCustomer} lang={lang} />}
-        {activeTab === 'suppliers' && hasSupplierAccess && <SupplierManager currentUser={currentUser} personnel={personnel} lang={lang} />}
+        {activeTab === 'suppliers' && <SupplierManager currentUser={currentUser} personnel={personnel} lang={lang} />}
         {activeTab === 'invoices' && canManageInvoices && onSaveInvoice && onDeleteInvoice && (
           <InvoiceManager invoices={invoices} customers={customers} config={config} currentUser={currentUser} lang={lang} onSaveInvoice={onSaveInvoice} onDeleteInvoice={onDeleteInvoice} onUpdateConfig={onUpdateConfig} readonly={!canEditInvoices} />
         )}
@@ -1974,6 +1974,21 @@ export const AdminDashboard: React.FC<Props> = ({
                      <div className="bg-white p-4 rounded-xl border border-gray-100"><div className="text-gray-400 text-xs mb-1">{t.activeProjects}</div><div className="text-2xl font-bold text-gray-900">{activeProjectsList.length}</div></div>
                      <div className="bg-white p-4 rounded-xl border border-gray-100"><div className="text-gray-400 text-xs mb-1">{t.newMessages}</div><div className="text-2xl font-bold text-gray-900">{unreadMessagesCount}</div></div>
                  </div>
+
+                 <button
+                   type="button"
+                   onClick={() => setActiveTab('suppliers')}
+                   className="w-full bg-white p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all flex items-center gap-3 text-right"
+                 >
+                   <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                     <IconTrolley className="w-5 h-5" />
+                   </div>
+                   <div className="flex-1 min-w-0">
+                     <div className="font-bold text-gray-900 text-sm">{lang === 'fa' ? 'مدیریت تأمین‌کنندگان' : 'Supplier Management'}</div>
+                     <div className="text-xs text-gray-400">{lang === 'fa' ? 'لیست، پروفایل، پیشنهادها و ارزیابی تأمین‌کنندگان جهانی' : 'Global supplier CRM — list, profiles, proposals & evaluations'}</div>
+                   </div>
+                   <span className="text-xs font-bold text-teal-700 shrink-0">{lang === 'fa' ? 'ورود ←' : 'Open →'}</span>
+                 </button>
 
                  <div className="bg-white p-5 rounded-xl border border-gray-100 animate-fade-in">
                      <div className="flex items-center gap-3 mb-4">
