@@ -81,6 +81,45 @@ export const restoreSupplierFromCloud = async (id: string, actor: Personnel) => 
   );
 };
 
+const SETTINGS_DOC = 'supplier_lists';
+
+export const subscribeToSupplierListSettings = (callback: (s: import('../types/supplier').SupplierListSettings) => void) => {
+  return onSnapshot(doc(db, 'app_settings', SETTINGS_DOC), snap => {
+    if (snap.exists()) {
+      callback(snap.data() as import('../types/supplier').SupplierListSettings);
+    } else {
+      callback({
+        extraCategories: [],
+        removedCategories: [],
+        extraCountries: [],
+        removedCountryCodes: [],
+        extraServiceTypes: [],
+        removedServiceTypes: [],
+        extraTags: [],
+        removedTagLabels: [],
+      });
+    }
+  });
+};
+
+export const saveSupplierListSettings = async (
+  settings: import('../types/supplier').SupplierListSettings,
+  actor: Personnel,
+) => {
+  const payload = sanitizeData({ ...settings, updatedAt: new Date().toISOString() });
+  await setDoc(doc(db, 'app_settings', SETTINGS_DOC), payload);
+  await logSystemAction(
+    'UPDATE',
+    'Supplier',
+    'بروزرسانی لیست‌های تأمین‌کننده (دسته، کشور، خدمت، برچسب)',
+    actor.fullName || actor.username,
+    SETTINGS_DOC,
+    undefined,
+    'app_settings',
+    actor.id,
+  );
+};
+
 export const subscribeToSuppliers = (callback: (list: GlobalSupplier[]) => void) => {
   const q = query(collection(db, COL), orderBy('updatedAt', 'desc'));
   return onSnapshot(q, snapshot => {

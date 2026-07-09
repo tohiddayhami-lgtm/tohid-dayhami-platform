@@ -1,15 +1,15 @@
 import React from 'react';
-import type { GlobalSupplier } from '../../types/supplier';
-import type { SupplierColumnKey } from '../../utils/supplierFilters';
+import type { GlobalSupplier, SupplierColumnKey, SupplierCountryOption } from '../../types/supplier';
 import { COLUMN_LABELS } from '../../utils/supplierFilters';
 import { STATUS_LABELS } from '../../utils/supplierConstants';
-import { resolveCountry } from '../../utils/supplierConstants';
+import { resolveCountryFromList } from '../../utils/supplierLists';
 import { supplierDisplayScore, supplierHasNotes } from '../../utils/supplierAccess';
 import { IconStar, IconFlag, IconNote, IconAlertTriangle } from '../Icons';
 
 interface Props {
   rows: GlobalSupplier[];
   columns: SupplierColumnKey[];
+  countries: SupplierCountryOption[];
   selected: Set<string>;
   onSelect: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
@@ -37,13 +37,13 @@ const Stars: React.FC<{ value: number }> = ({ value }) => (
 );
 
 export const SupplierTable: React.FC<Props> = ({
-  rows, columns, selected, onSelect, onSelectAll, onOpen, onToggleFlag, lang,
+  rows, columns, countries, selected, onSelect, onSelectAll, onOpen, onToggleFlag, lang,
 }) => {
   const allIds = rows.map(r => r.id);
   const allSelected = rows.length > 0 && rows.every(r => selected.has(r.id));
 
   const renderCell = (s: GlobalSupplier, col: SupplierColumnKey) => {
-    const country = resolveCountry(s.general.countryCode || s.general.country);
+    const country = resolveCountryFromList(countries, s.general.countryCode || s.general.country);
     switch (col) {
       case 'companyName':
         return (

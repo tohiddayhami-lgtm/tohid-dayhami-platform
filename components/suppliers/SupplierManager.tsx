@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import type { Personnel } from '../../types';
-import type { GlobalSupplier, SupplierListFilters } from '../../types/supplier';
+import type { GlobalSupplier, SupplierListFilters, SupplierListSettings, SupplierMergedLists } from '../../types/supplier';
 import { Language } from '../../App';
-import { subscribeToSuppliers, saveSupplierToCloud, updateSupplierInCloud, softDeleteSupplierFromCloud } from '../../services/supplierService';
+import { subscribeToSuppliers, saveSupplierToCloud, updateSupplierInCloud, softDeleteSupplierFromCloud, subscribeToSupplierListSettings } from '../../services/supplierService';
 import { getSupplierPermissions } from '../../utils/supplierAccess';
 import { filterSuppliers, paginate, DEFAULT_COLUMNS, SupplierColumnKey } from '../../utils/supplierFilters';
 import { emptySupplier, syncSupplierTopFields } from '../../utils/supplierUtils';
+import { buildSupplierLists, emptySupplierListSettings } from '../../utils/supplierLists';
 import { SupplierWidgets } from './SupplierWidgets';
 import { SupplierFilterBar } from './SupplierFilterBar';
 import { SupplierTable } from './SupplierTable';
 import { SupplierProfilePanel } from './SupplierProfilePanel';
-import { IconPlus, IconTrash, IconBriefcase, IconList, IconRefreshCw } from '../Icons';
+import { SupplierListSettingsPanel } from './SupplierListSettingsPanel';
+import { IconPlus, IconTrash, IconBriefcase, IconList, IconRefreshCw, IconSettings } from '../Icons';
 
 interface Props {
   currentUser: Personnel;
@@ -39,15 +41,24 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
   const [profile, setProfile] = useState<GlobalSupplier | null>(null);
   const [showWidgets, setShowWidgets] = useState(true);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [showListSettings, setShowListSettings] = useState(false);
+  const [listSettings, setListSettings] = useState<SupplierListSettings>(emptySupplierListSettings());
 
   const permissions = getSupplierPermissions(currentUser);
   const isFa = lang === 'fa';
+
+  const lists = useMemo(() => buildSupplierLists(listSettings, suppliers), [listSettings, suppliers]);
 
   useEffect(() => {
     const unsub = subscribeToSuppliers(list => {
       setSuppliers(list);
       setLoading(false);
     });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeToSupplierListSettings(setListSettings);
     return () => unsub();
   }, []);
 
@@ -63,14 +74,7 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const serviceOptions = useMemo(() => {
-    const set = new Set<string>();
-    suppliers.forEach(s => {
-      s.supplierServices?.forEach(sv => sv.name && set.add(sv.name));
-      s.serviceTypes?.forEach(st => st && set.add(st));
-    });
-    return Array.from(set).sort();
-  }, [suppliers]);
+  const serviceOptions = lists.serviceTypes;
 
   const filtered = useMemo(() => filterSuppliers(suppliers, filters), [suppliers, filters]);
   const { items: pageItems, total, pages } = useMemo(() => paginate(filtered, page, PAGE_SIZE), [filtered, page]);
@@ -145,6 +149,11 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
             className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50">
             {showWidgets ? (isFa ? 'پنهان کردن داشبورد' : 'Hide widgets') : (isFa ? 'نمایش داشبورد' : 'Show widgets')}
           </button>
+          <button type="button" onClick={() => setShowListSettings(true)}
+            className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+            <IconSettings className="w-4 h-4" />
+            {isFa ? 'لیست‌ها' : 'Lists'}
+          </button>
           <button type="button" onClick={() => setShowColumnPicker(v => !v)}
             className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-1">
             <IconList className="w-4 h-4" />
@@ -180,7 +189,7 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
         </div>
       )}
 
-      <SupplierFilterBar filters={filters} onChange={setFilters} lang={lang} serviceOptions={serviceOptions} />
+      <SupplierFilterBar filters={filters} onChange={setFilters} lang={lang} serviceOptions={serviceOptions} categories={lists.categories} countries={lists.countries} tags={lists.tags} />
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-400 gap-2">
@@ -192,6 +201,7 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
           <SupplierTable
             rows={pageItems}
             columns={columns}
+            countries={lists.countries}
             selected={selected}
             onSelect={toggleSelect}
             onSelectAll={ids => setSelected(new Set(ids))}
@@ -226,6 +236,18 @@ export const SupplierManager: React.FC<Props> = ({ currentUser, personnel, lang 
           currentUser={currentUser}
           personnel={personnel}
           lang={lang}
+          lists={lists}
+        />
+      )}
+
+      {showListSettings && (
+        <SupplierListSettingsPanel
+          settings={listSettings}
+          currentUser={currentUser}
+          canEdit={permissions.canEdit}
+          lang={lang}
+          onSaved={setListSettings}
+          onClose={() => setShowListSettings(false)}
         />
       )}
     </div>

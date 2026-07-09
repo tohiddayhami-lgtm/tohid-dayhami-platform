@@ -1,6 +1,6 @@
 import React from 'react';
-import type { SupplierListFilters } from '../../types/supplier';
-import { SUPPLIER_CATEGORIES, SUPPLIER_STATUSES, COUNTRIES, DEFAULT_SUPPLIER_TAGS } from '../../utils/supplierConstants';
+import type { SupplierListFilters, SupplierCountryOption, SupplierTag } from '../../types/supplier';
+import { SUPPLIER_STATUSES } from '../../utils/supplierConstants';
 import { IconSearch, IconStar, IconAward } from '../Icons';
 
 interface Props {
@@ -8,6 +8,9 @@ interface Props {
   onChange: (f: SupplierListFilters) => void;
   lang: 'fa' | 'en';
   serviceOptions: string[];
+  categories: string[];
+  countries: SupplierCountryOption[];
+  tags: SupplierTag[];
 }
 
 const emptyFilters = (): SupplierListFilters => ({
@@ -19,7 +22,7 @@ const emptyFilters = (): SupplierListFilters => ({
   tags: [],
 });
 
-export const SupplierFilterBar: React.FC<Props> = ({ filters, onChange, lang, serviceOptions }) => {
+export const SupplierFilterBar: React.FC<Props> = ({ filters, onChange, lang, serviceOptions, categories, countries, tags }) => {
   const toggleArr = <T extends string>(key: keyof SupplierListFilters, val: T) => {
     const cur = (filters[key] as T[]) || [];
     const next = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val];
@@ -75,8 +78,8 @@ export const SupplierFilterBar: React.FC<Props> = ({ filters, onChange, lang, se
             value={filters.countries}
             onChange={e => onChange({ ...filters, countries: Array.from(e.target.selectedOptions, o => o.value) })}
           >
-            {COUNTRIES.map(c => (
-              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+            {countries.map(c => (
+              <option key={c.code} value={c.code}>{c.flag || '🌍'} {c.name}</option>
             ))}
           </select>
         </div>
@@ -88,7 +91,7 @@ export const SupplierFilterBar: React.FC<Props> = ({ filters, onChange, lang, se
             value={filters.categories}
             onChange={e => onChange({ ...filters, categories: Array.from(e.target.selectedOptions, o => o.value) })}
           >
-            {SUPPLIER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
@@ -136,9 +139,9 @@ export const SupplierFilterBar: React.FC<Props> = ({ filters, onChange, lang, se
       <div>
         <label className="text-[10px] font-bold text-gray-400 uppercase">{lang === 'fa' ? 'برچسب‌ها' : 'Tags'}</label>
         <div className="flex flex-wrap gap-1.5 mt-1">
-          {DEFAULT_SUPPLIER_TAGS.map(t => (
+          {tags.map(t => (
             <button
-              key={t.label}
+              key={t.id}
               type="button"
               onClick={() => toggleArr('tags', t.label)}
               className="px-2 py-1 rounded-full text-[10px] font-bold border"

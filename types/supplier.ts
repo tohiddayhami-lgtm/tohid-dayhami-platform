@@ -240,3 +240,30 @@ export interface SupplierPermissions {
   canViewFinancials: boolean;
   role: SupplierPermissionRole;
 }
+
+export interface SupplierCountryOption {
+  code: string;
+  name: string;
+  flag?: string;
+  custom?: boolean;
+}
+
+/** Custom lists for categories, countries, service types, tags — stored in Firebase. */
+export interface SupplierListSettings {
+  extraCategories: string[];
+  removedCategories: string[];
+  extraCountries: SupplierCountryOption[];
+  removedCountryCodes: string[];
+  extraServiceTypes: string[];
+  removedServiceTypes: string[];
+  extraTags: SupplierTag[];
+  removedTagLabels: string[];
+  updatedAt?: string;
+}
+
+export interface SupplierMergedLists {
+  categories: string[];
+  countries: SupplierCountryOption[];
+  serviceTypes: string[];
+  tags: SupplierTag[];
+}

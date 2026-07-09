@@ -3,10 +3,11 @@ import type { Personnel } from '../../types';
 import type {
   GlobalSupplier, SupplierProposal, SupplierEvaluationCriteria, SupplierTag,
   SupplierProduct, SupplierServiceItem, SupplierDocument, SupplierCommunication, SupplierReminder,
+  SupplierMergedLists,
 } from '../../types/supplier';
 import type { SupplierPermissions } from '../../types/supplier';
 import {
-  SUPPLIER_CATEGORIES, SUPPLIER_STATUSES, COUNTRIES, DEFAULT_SUPPLIER_TAGS,
+  SUPPLIER_STATUSES,
   STATUS_LABELS, PROPOSAL_STATUS_LABELS, SUPPLIER_PROPOSAL_STATUSES,
 } from '../../utils/supplierConstants';
 import { addActivity, addEvaluation } from '../../utils/supplierUtils';
@@ -29,6 +30,7 @@ interface Props {
   currentUser: Personnel;
   personnel: Personnel[];
   lang: 'fa' | 'en';
+  lists: SupplierMergedLists;
 }
 
 type Tab = 'general' | 'contact' | 'products' | 'proposals' | 'evaluation' | 'notes' | 'timeline' | 'documents' | 'comms' | 'reminders';
@@ -57,7 +59,7 @@ const inputCls = 'w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl 
 const labelCls = 'text-[10px] font-bold text-gray-400 uppercase block mb-1';
 
 export const SupplierProfilePanel: React.FC<Props> = ({
-  supplier: initial, onClose, onSave, permissions, currentUser, personnel, lang,
+  supplier: initial, onClose, onSave, permissions, currentUser, personnel, lang, lists,
 }) => {
   const [draft, setDraft] = useState<GlobalSupplier>(JSON.parse(JSON.stringify(initial)));
   const [tab, setTab] = useState<Tab>('general');
@@ -221,7 +223,7 @@ export const SupplierProfilePanel: React.FC<Props> = ({
                 <select className={inputCls} value={draft.productCategory || ''} disabled={!canEdit}
                   onChange={e => patch({ productCategory: e.target.value })}>
                   <option value="">—</option>
-                  {SUPPLIER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {lists.categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -235,11 +237,11 @@ export const SupplierProfilePanel: React.FC<Props> = ({
                 <label className={labelCls}>{lang === 'fa' ? 'کشور' : 'Country'}</label>
                 <select className={inputCls} value={draft.general.countryCode || ''} disabled={!canEdit}
                   onChange={e => {
-                    const c = COUNTRIES.find(x => x.code === e.target.value);
+                    const c = lists.countries.find(x => x.code === e.target.value);
                     patchGeneral({ countryCode: e.target.value, country: c?.name || '' });
                   }}>
                   <option value="">—</option>
-                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.name}</option>)}
+                  {lists.countries.map(c => <option key={c.code} value={c.code}>{c.flag || '🌍'} {c.name}</option>)}
                 </select>
               </div>
               <div>
@@ -300,8 +302,8 @@ export const SupplierProfilePanel: React.FC<Props> = ({
                 </div>
                 {canEdit && (
                   <div className="flex gap-2 flex-wrap">
-                    {DEFAULT_SUPPLIER_TAGS.slice(0, 8).map(t => (
-                      <button key={t.label} type="button" onClick={() => addTag(t)}
+                    {lists.tags.slice(0, 8).map(t => (
+                      <button key={t.id} type="button" onClick={() => addTag({ label: t.label, color: t.color })}
                         className="px-2 py-1 rounded-lg text-[10px] font-bold border" style={{ borderColor: t.color, color: t.color }}>
                         + {t.label}
                       </button>
