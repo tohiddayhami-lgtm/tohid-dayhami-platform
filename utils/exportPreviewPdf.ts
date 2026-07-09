@@ -3,7 +3,8 @@ import { jsPDF } from 'jspdf';
 
 /**
  * PDF export from the live preview element (.pp-root).
- * WYSIWYG: output matches on-screen preview (same CSS, layout, bilingual text).
+ * Pages always render at full A4 content width. Tall sections are split across
+ * pages — never scaled down (which made some pages look smaller).
  */
 
 const PAGE_W = 794;
@@ -42,25 +43,13 @@ function loadHtmlInIframe(html: string): Promise<HTMLIFrameElement> {
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
     Object.assign(iframe.style, {
-      position: 'fixed',
-      left: '0',
-      top: '0',
-      width: `${PAGE_W}px`,
-      height: `${PAGE_H}px`,
-      border: '0',
-      opacity: '0.01',
-      pointerEvents: 'none',
-      zIndex: '-1',
-      transform: 'translateX(-200vw)',
-      background: '#fff',
+      position: 'fixed', left: '0', top: '0', width: `${PAGE_W}px`, height: `${PAGE_H}px`,
+      border: '0', opacity: '0.01', pointerEvents: 'none', zIndex: '-1',
+      transform: 'translateX(-200vw)', background: '#fff',
     });
     document.body.appendChild(iframe);
     const doc = iframe.contentDocument;
-    if (!doc) {
-      iframe.remove();
-      reject(new Error('iframe document unavailable'));
-      return;
-    }
+    if (!doc) { iframe.remove(); reject(new Error('iframe document unavailable')); return; }
     doc.open();
     doc.write(html);
     doc.close();
@@ -70,65 +59,104 @@ function loadHtmlInIframe(html: string): Promise<HTMLIFrameElement> {
   });
 }
 
-/** Group preview nodes: header block, band+table pairs, each .pp-section, footer. */
-function groupPreviewUnits(root: HTMLElement): HTMLElement[][] {
+function splitSection(section: HTMLElement): HTMLElement[] {
+  const units: HTMLElement[] = [];
+  const children = Array.from(section.children) as HTMLElement[];
+  let i = 0;
+  while (i < children.length) {
+    const el = children[i];
+    if (el.classList.contains('pp-band') || el.classList.contains('pp-service-card')) {
+      units.push(el);
+      i++;
+      continue;
+    }
+    const group: HTMLElement[] = [el];
+    i++;
+    while (
+      i < children.length
+      && !children[i].classList.contains('pp-band')
+      && !children[i].classList.contains('pp-service-card')
+    ) {
+      group.push(children[i]);
+      i++;
+    }
+    if (group.length === 1) {
+      units.push(group[0]);
+    } else {
+      const wrap = document.createElement('div');
+      wrap.className = 'pp-section-part';
+      group.forEach(n => wrap.appendChild(n.cloneNode(true)));
+      units.push(wrap);
+    }
+  }
+  return units;
+}
+
+function groupPreviewUnits(root: HTMLElement): HTMLElement[] {
   const kids = Array.from(root.children).filter(el => el.tagName !== 'STYLE') as HTMLElement[];
-  const units: HTMLElement[][] = [];
+  const units: HTMLElement[] = [];
   let i = 0;
 
-  const header: HTMLElement[] = [];
   while (i < kids.length && !kids[i].classList.contains('pp-band') && !kids[i].classList.contains('pp-section')) {
-    header.push(kids[i]);
+    units.push(kids[i]);
     i++;
   }
-  if (header.length) units.push(header);
 
   while (i < kids.length) {
     const el = kids[i];
     if (el.classList.contains('pp-band')) {
-      const unit = [el];
+      const bandUnit: HTMLElement[] = [el];
       i++;
       if (i < kids.length && kids[i].tagName === 'TABLE') {
-        unit.push(kids[i]);
+        bandUnit.push(kids[i]);
         i++;
       }
-      units.push(unit);
+      const wrap = document.createElement('div');
+      wrap.className = 'pp-unit-wrap';
+      bandUnit.forEach(n => wrap.appendChild(n.cloneNode(true)));
+      units.push(wrap);
       continue;
     }
-    if (el.classList.contains('pp-section') || el.classList.contains('pp-foot')) {
-      units.push([el]);
+    if (el.classList.contains('pp-section')) {
+      units.push(...splitSection(el));
       i++;
       continue;
     }
-    units.push([el]);
+    units.push(el);
     i++;
   }
-  return units.length ? units : [kids];
+  return units;
 }
 
-function packPages(units: HTMLElement[][]): HTMLElement[][] {
+function measureHeight(el: HTMLElement): number {
+  return el.getBoundingClientRect().height + 6;
+}
+
+function packPageGroups(units: HTMLElement[], heights: number[]): HTMLElement[][] {
   const pages: HTMLElement[][] = [];
   let cur: HTMLElement[] = [];
   let used = 0;
 
-  const hOf = (els: HTMLElement[]) =>
-    els.reduce((s, el) => s + el.getBoundingClientRect().height + 6, 0);
-
-  for (const unit of units) {
-    const h = hOf(unit);
+  units.forEach((unit, idx) => {
+    const h = heights[idx] || 0;
+    if (h > CONTENT_H) {
+      if (cur.length) { pages.push(cur); cur = []; used = 0; }
+      pages.push([unit]);
+      return;
+    }
     if (cur.length && used + h > CONTENT_H) {
       pages.push(cur);
       cur = [];
       used = 0;
     }
-    cur.push(...unit);
-    used += Math.min(h, CONTENT_H);
-  }
+    cur.push(unit);
+    used += h;
+  });
   if (cur.length) pages.push(cur);
-  return pages.length ? pages : [units.flat()];
+  return pages.length ? pages : [units];
 }
 
-async function capturePage(el: HTMLElement): Promise<HTMLCanvasElement> {
+async function captureEl(el: HTMLElement): Promise<HTMLCanvasElement> {
   await (document.fonts?.ready ?? Promise.resolve());
   await new Promise(r => setTimeout(r, 50));
   return html2canvas(el, {
@@ -150,7 +178,7 @@ async function capturePage(el: HTMLElement): Promise<HTMLCanvasElement> {
         e.style.letterSpacing = '0px';
         e.style.wordSpacing = '0px';
       });
-      n.querySelectorAll('[dir="rtl"], [lang="fa"], .rtl-title, .rtl-sub, .pp-body-rtl, .rtl-block, .pkg-rtl, .lbl-rtl, .line-rtl, .pp-foot .rtl').forEach(c => {
+      n.querySelectorAll('[dir="rtl"], [lang="fa"], .rtl-title, .rtl-sub, .pp-body-rtl, .rtl-block, .pkg-rtl, .lbl-rtl, .line-rtl, .pp-foot .rtl, .svc-title-rtl, .for-rtl, .pp-bullet-rtl, .pp-area-intro-rtl').forEach(c => {
         const e = c as HTMLElement;
         e.style.fontFamily = 'Tahoma, Arial, sans-serif';
         e.style.direction = 'rtl';
@@ -165,7 +193,38 @@ async function capturePage(el: HTMLElement): Promise<HTMLCanvasElement> {
   });
 }
 
-/** Export the on-screen .pp-root preview element to a paginated A4 PDF. */
+function canvasToSlices(
+  canvas: HTMLCanvasElement,
+  contentWmm: number,
+  contentHmm: number,
+): { dataUrl: string; hMm: number }[] {
+  const sliceHeightPx = Math.floor((contentHmm / contentWmm) * canvas.width);
+  if (canvas.height <= sliceHeightPx) {
+    return [{
+      dataUrl: canvas.toDataURL('image/jpeg', 0.95),
+      hMm: (canvas.height * contentWmm) / canvas.width,
+    }];
+  }
+  const slices: { dataUrl: string; hMm: number }[] = [];
+  let offsetY = 0;
+  while (offsetY < canvas.height) {
+    const sliceH = Math.min(sliceHeightPx, canvas.height - offsetY);
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = sliceH;
+    const ctx = sliceCanvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    ctx.drawImage(canvas, 0, offsetY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+    slices.push({
+      dataUrl: sliceCanvas.toDataURL('image/jpeg', 0.95),
+      hMm: (sliceH * contentWmm) / canvas.width,
+    });
+    offsetY += sliceH;
+  }
+  return slices;
+}
+
 export async function exportPdfFromPreviewElement(rootEl: HTMLElement, filename: string): Promise<void> {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>PDF</title></head>
 <body style="margin:0;padding:0;background:#fff;">${rootEl.outerHTML}</body></html>`;
@@ -183,42 +242,55 @@ export async function exportPdfFromPreviewElement(rootEl: HTMLElement, filename:
     await inlineImagesInDoc(doc);
     await new Promise(r => setTimeout(r, 100));
 
-    const units = groupPreviewUnits(root);
-    const pageGroups = packPages(units);
-    const pageClones = pageGroups.map(group => group.map(el => el.cloneNode(true) as HTMLElement));
     const styleTemplate = root.querySelector('style')?.cloneNode(true) ?? null;
+    const flatUnits = groupPreviewUnits(root);
 
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+    const measureMount = doc.createElement('div');
+    measureMount.className = 'pp-root';
+    measureMount.style.cssText = `width:${PAGE_W}px;padding:${PAD}px;box-sizing:border-box;background:#fff;position:absolute;left:-9999px;top:0;`;
+    if (styleTemplate) measureMount.appendChild(styleTemplate.cloneNode(true));
+    flatUnits.forEach(u => measureMount.appendChild(u.cloneNode(true)));
+    body.appendChild(measureMount);
+    await new Promise(r => setTimeout(r, 80));
+
+    const styleOffset = styleTemplate ? 1 : 0;
+    const unitHeights = flatUnits.map((_, idx) => {
+      const child = measureMount.children[idx + styleOffset] as HTMLElement;
+      return child ? measureHeight(child) : 0;
+    });
+    body.removeChild(measureMount);
+
+    const pageGroups = packPageGroups(flatUnits, unitHeights);
+    const allSlices: { dataUrl: string; hMm: number }[] = [];
+
     const marginMm = 8;
     const pageWmm = 210;
     const pageHmm = 297;
     const contentWmm = pageWmm - marginMm * 2;
     const contentHmm = pageHmm - marginMm * 2 - 8;
 
-    for (let pi = 0; pi < pageClones.length; pi++) {
+    for (const pageUnits of pageGroups) {
       body.innerHTML = '';
       const pageDiv = doc.createElement('div');
       pageDiv.className = 'pp-root';
-      pageDiv.style.cssText = `width:${PAGE_W}px;min-height:${PAGE_H}px;padding:${PAD}px;box-sizing:border-box;background:#ffffff;`;
+      pageDiv.style.cssText = `width:${PAGE_W}px;padding:${PAD}px;box-sizing:border-box;background:#ffffff;`;
       if (styleTemplate) pageDiv.appendChild(styleTemplate.cloneNode(true));
-      pageClones[pi].forEach(n => pageDiv.appendChild(n));
+      pageUnits.forEach(n => pageDiv.appendChild(n.cloneNode(true)));
       body.appendChild(pageDiv);
 
-      const canvas = await capturePage(pageDiv);
-      const img = canvas.toDataURL('image/jpeg', 0.95);
-      let w = contentWmm;
-      let h = (canvas.height * contentWmm) / canvas.width;
-      if (h > contentHmm) {
-        const s = contentHmm / h;
-        h = contentHmm;
-        w = contentWmm * s;
-      }
-      if (pi > 0) pdf.addPage();
-      pdf.addImage(img, 'JPEG', marginMm + (contentWmm - w) / 2, marginMm, w, h);
+      const canvas = await captureEl(pageDiv);
+      allSlices.push(...canvasToSlices(canvas, contentWmm, contentHmm));
+    }
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+    for (let i = 0; i < allSlices.length; i++) {
+      if (i > 0) pdf.addPage();
+      const slice = allSlices[i];
+      pdf.addImage(slice.dataUrl, 'JPEG', marginMm, marginMm, contentWmm, slice.hMm);
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(8);
       pdf.setTextColor(100);
-      pdf.text(`${pi + 1} / ${pageClones.length}`, pageWmm / 2, pageHmm - 5, { align: 'center' });
+      pdf.text(`${i + 1} / ${allSlices.length}`, pageWmm / 2, pageHmm - 5, { align: 'center' });
     }
 
     pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
