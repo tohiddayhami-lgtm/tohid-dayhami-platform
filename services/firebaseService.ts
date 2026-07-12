@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics';
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, setDoc, query, orderBy, onSnapshot, deleteDoc, where, limit, writeBatch, getDoc } from 'firebase/firestore';
 import { getStorage, ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, LegalContract, CompanyCatalog, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
+import { Ticket, Customer, AppConfig, ServiceOption, Personnel, AttachedFile, PersonnelDocument, InternalMessage, Task, Meeting, MeetingBookingGuest, ConsultantCategory, ConsultationFollowUp, SystemLog, KPI, CustomForm, SalesRecord, PerformanceReport, StrategicObjective, Expense, NewsArticle, AnalyticsEvent, NotificationLog, CustomerAccount, CompanyProcess, Invoice, InvoiceSectionPreset, CommercialProposal, LegalContract, CompanyCatalog, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, MetaShopEvent, MetaExpoEvent, MetaExpoPresence, MetaExpoRegistration, MetaExpoBoothReservation, TeamBrainstormPost, CartableTodoItem, MetaShopBackupMeta, MetaShopBackupSlotNum } from '../types';
 import { generateConsultationTrackingCode } from '../utils/consultationTracking';
 import type { BookMeetingResponse } from '../utils/consultationTracking';
 import { summarizeInvoiceChanges } from '../utils/invoiceAudit';
@@ -995,6 +995,62 @@ export const deleteTeamBrainstormPostFromCloud = async (id: string) => {
 export const subscribeToTeamBrainstorm = (callback: (posts: TeamBrainstormPost[]) => void) =>
   subscribeCollection<TeamBrainstormPost>('team_brainstorm', list => {
     callback(list.map(p => normalizeTeamBrainstormPost(p)));
+  }, {
+    sort: (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
+    intervalMs: 45_000,
+    mergeDocId: true,
+  });
+
+// ── Cartable personal sticky todos ──
+function normalizeCartableTodo(item: CartableTodoItem): CartableTodoItem {
+  const col = item.column === 'doing' || item.column === 'done' ? item.column : 'todo';
+  return {
+    ...item,
+    id: item.id || '',
+    title: item.title || '',
+    column: col,
+    notes: Array.isArray(item.notes) ? item.notes : [],
+    checked: !!item.checked,
+    archived: !!item.archived,
+    ownerId: item.ownerId || '',
+    ownerName: item.ownerName || '',
+  };
+}
+
+export const saveCartableTodoToCloud = async (item: CartableTodoItem) => {
+  await setDocCloud('cartable_todos', item.id, normalizeCartableTodo(item));
+};
+
+export const updateCartableTodoInCloud = async (id: string, updates: Partial<CartableTodoItem>) => {
+  const proxy = await checkProxyMode();
+  let existing: CartableTodoItem | null = null;
+  if (proxy) {
+    existing = await proxyGet<CartableTodoItem>('cartable_todos', { doc: id });
+  } else {
+    const snap = await getDoc(doc(db, 'cartable_todos', id));
+    if (snap.exists()) {
+      const data = snap.data() as CartableTodoItem;
+      existing = normalizeCartableTodo({ ...data, id: data.id || snap.id });
+    }
+  }
+  if (!existing) throw new Error(`Cartable todo ${id} not found`);
+  const merged = normalizeCartableTodo({
+    ...existing,
+    ...updates,
+    id: existing.id || id,
+    updatedAt: new Date().toISOString(),
+  });
+  await setDocCloud('cartable_todos', id, merged);
+  return merged;
+};
+
+export const deleteCartableTodoFromCloud = async (id: string) => {
+  await deleteDocCloud('cartable_todos', id);
+};
+
+export const subscribeToCartableTodos = (callback: (items: CartableTodoItem[]) => void) =>
+  subscribeCollection<CartableTodoItem>('cartable_todos', list => {
+    callback(list.map(normalizeCartableTodo));
   }, {
     sort: (a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime(),
     intervalMs: 45_000,

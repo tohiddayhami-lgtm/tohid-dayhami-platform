@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, TeamBrainstormPost, ConsultantCategory } from '../types';
+import { Ticket, TicketStatus, ServiceOption, Personnel, Customer, AppConfig, ProjectDetails, AttachedFile, Currency, Payment, InternalMessage, Invoice, Task, Meeting, SystemLog, ProjectMilestone, ProjectRisk, ProjectTeamMember, ProjectParty, ProjectPartyType, ProjectDefinitionItem, KPI, CustomForm, PerformanceReport, NewsArticle, AnalyticsEvent, CustomerAccount, CompanyProcess, TicketLabel, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, TeamBrainstormPost, CartableTodoItem, ConsultantCategory } from '../types';
 import { IconCheck, IconActivity, IconUsers, IconBriefcase, IconLayout, IconPaperclip, IconShield, IconSettings, IconClock, IconFile, IconEdit, IconTrash, IconProject, IconMoney, IconUpload, IconPlus, IconChart, IconMail, IconInvoice, IconList, IconCalendarClock, IconHistory, IconCopy, IconSearch, IconFlag, IconAlertTriangle, IconTime, IconTrendingUp, IconRefreshCw, IconLock, IconMegaphone, IconBarChart2, IconMapPin, IconWhatsapp, IconTarget, IconClipboard, IconFolder, IconAward, IconWallet, IconMindMap, IconStar, IconTag, IconTrolley } from './Icons';
 import { ServiceManager } from './ServiceManager';
 import { PersonnelManager } from './PersonnelManager';
@@ -11,6 +11,7 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { IconNewspaper, IconGlobe, IconImage, IconPort, IconBarChart2 as IconAnalytics } from './Icons';
 import { InternalMessenger } from './InternalMessenger';
 import { TeamBrainstormPanel } from './TeamBrainstormPanel';
+import { CartableStickyTodos } from './CartableStickyTodos';
 import { InvoiceModal } from './InvoiceModal';
 import { InvoiceManager } from './InvoiceManager';
 import { getStaffCode, formatPersonnelLabel } from '../services/staffId';
@@ -44,6 +45,7 @@ interface Props {
   customers: Customer[];
   messages: InternalMessage[];
   teamBrainstormPosts?: TeamBrainstormPost[];
+  cartableTodos?: CartableTodoItem[];
   tasks: Task[];
   meetings: Meeting[];
   consultantCategories?: ConsultantCategory[];
@@ -97,6 +99,7 @@ export const AdminDashboard: React.FC<Props> = ({
   customers,
   messages,
   teamBrainstormPosts = [],
+  cartableTodos = [],
   tasks,
   meetings,
   consultantCategories = [],
@@ -1991,6 +1994,13 @@ export const AdminDashboard: React.FC<Props> = ({
                    <span className="text-xs font-bold text-teal-700 shrink-0">{lang === 'fa' ? 'ورود ←' : 'Open →'}</span>
                  </button>
                  )}
+
+                 <CartableStickyTodos
+                   currentUser={currentUser}
+                   items={cartableTodos}
+                   personnel={personnel}
+                   lang={lang}
+                 />
 
                  <div className="bg-white p-5 rounded-xl border border-gray-100 animate-fade-in">
                      <div className="flex items-center gap-3 mb-4">

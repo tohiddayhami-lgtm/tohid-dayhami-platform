@@ -414,6 +414,34 @@ export interface TeamBrainstormPost {
   updatedAt?: string;
 }
 
+/** Personal sticky todo columns on کارتابل (above daily linear report). */
+export type CartableTodoColumn = 'todo' | 'doing' | 'done';
+
+export interface CartableTodoNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface CartableTodoItem {
+  id: string;
+  title: string;
+  notes?: CartableTodoNote[];
+  column: CartableTodoColumn;
+  /** Quick tick / complete flag */
+  checked?: boolean;
+  archived?: boolean;
+  /** YYYY-MM-DD */
+  startDate?: string;
+  /** YYYY-MM-DD */
+  dueDate?: string;
+  ownerId: string;
+  ownerName: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface TaskComment {
   id: string;
   authorId: string;

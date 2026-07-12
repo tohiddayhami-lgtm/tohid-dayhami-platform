@@ -11,7 +11,7 @@ import { ExportShopPage } from './components/ExportShopPage';
 import { PublicMeetingBookingView } from './components/PublicMeetingBookingView';
 import { PublicFormView } from './components/PublicFormView';
 import { ConsultationTrackingView } from './components/ConsultationTrackingView';
-import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, CustomForm, TeamBrainstormPost, ConsultantCategory } from './types';
+import { Ticket, TicketStatus, ViewState, ServiceOption, Personnel, Customer, AppConfig, FormField, TimelineEntry, AttachedFile, InternalMessage, Task, Meeting, KPI, NewsArticle, CustomerAccount, CompanyProcess, Invoice, MetaShop, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaBazaar, CustomForm, TeamBrainstormPost, CartableTodoItem, ConsultantCategory } from './types';
 import { IconPlus, IconSearch, IconShield, IconBulb, IconNewspaper, IconLock, IconPort, IconLayout, IconMagic, IconTrendingUp, IconTarget, IconDatabase, IconFileText, IconMessageSquare, IconGlobe, IconMegaphone, IconAward, IconCloud, IconFolder, IconBriefcase, IconTrolley } from './components/Icons';
 import {
   saveTicketToCloud, updateTicketInCloud, deleteTicketFromCloud,
@@ -22,6 +22,7 @@ import {
   subscribeToTickets, subscribeToCustomers, subscribeToSettings, subscribeToCustomForms,
   subscribeToMessages, sendInternalMessage, subscribeToTasks, subscribeToMeetings, subscribeToConsultantCategories, subscribeToKPIs, sanitizeData, logSystemAction,
   subscribeToTeamBrainstorm,
+  subscribeToCartableTodos,
   subscribeToNews, logPageView, subscribeToAnalytics, saveNotificationLog,
   subscribeToCustomerAccounts, saveCustomerAccount, deleteCustomerAccount,
   subscribeToProcesses, saveProcess, deleteProcess,
@@ -369,6 +370,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [messages, setMessages] = useState<InternalMessage[]>([]);
   const [teamBrainstormPosts, setTeamBrainstormPosts] = useState<TeamBrainstormPost[]>([]);
+  const [cartableTodos, setCartableTodos] = useState<CartableTodoItem[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [metaShops, setMetaShops] = useState<MetaShop[]>(() => initialMetaShopListCache ?? []);
@@ -814,6 +816,7 @@ const App: React.FC = () => {
       });
     });
     const unsubTeamBrainstorm = subscribeToTeamBrainstorm(setTeamBrainstormPosts);
+    const unsubCartableTodos = subscribeToCartableTodos(setCartableTodos);
     const unsubTasks = subscribeToTasks((data) => setTasks(data));
     const unsubKPIs = subscribeToKPIs((data) => setKpis(data));
     const unsubAnalytics = subscribeToAnalytics((data) => setAnalyticsEvents(data));
@@ -827,7 +830,7 @@ const App: React.FC = () => {
 
     return () => {
       unsubTickets(); unsubCustomForms(); unsubCustomers(); unsubMessages();
-      unsubTeamBrainstorm(); unsubTasks(); unsubKPIs(); unsubAnalytics();
+      unsubTeamBrainstorm(); unsubCartableTodos(); unsubTasks(); unsubKPIs(); unsubAnalytics();
       unsubProcesses(); unsubInvoices();
       unsubMetaShops(); unsubMetaShopOrders(); unsubMetaShopReferrals();
       unsubMetaShopSupplierCollabs(); unsubMetaBazaars();
@@ -2685,6 +2688,7 @@ const App: React.FC = () => {
                     customers={customers}
                     messages={messages}
                     teamBrainstormPosts={teamBrainstormPosts}
+                    cartableTodos={cartableTodos}
                     tasks={tasks}
                     meetings={meetings}
                     consultantCategories={consultantCategories}
