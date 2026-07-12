@@ -203,6 +203,10 @@ export interface Invoice {
   amountPaid?: number;                   // cached sum of receipts (for archive display)
   balanceDue?: number;                   // total − amountPaid
   amountDecimals?: 0 | 1 | 2 | 3;        // per-invoice display/input precision
+  /** 0–100: denser invoice sheet (less empty space in PDF/preview). */
+  printDensity?: number;
+  /** Sheet padding in px (default 26). */
+  printPadding?: number;
 }
 
 export interface InvoiceReceipt {
@@ -1818,6 +1822,8 @@ export interface PrintLayoutSettings {
   tableMarginBottom?: number;
   footMarginTop?: number;
   serviceCardGap?: number;
+  /** Outer page padding (px). Default 22 */
+  pagePadding?: number;
   compactLevel?: number;
   pageBreakBefore?: string[];
 }

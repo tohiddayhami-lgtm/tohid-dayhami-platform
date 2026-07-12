@@ -29,6 +29,7 @@ export const BilingualPrintPreview: React.FC<Props> = ({
   const sourceRef = useRef<HTMLDivElement>(null);
   const [pageGroups, setPageGroups] = useState<HTMLElement[][]>([]);
   const [paginating, setPaginating] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const merged = useMemo(() => mergePrintLayout(layout), [layout]);
   const isFa = lang === 'fa';
 
@@ -75,16 +76,19 @@ export const BilingualPrintPreview: React.FC<Props> = ({
     }
   };
 
+  const pagePad = merged.pagePadding ?? 22;
   const pageCount = pageGroups.length;
 
   return (
     <div className="flex flex-col xl:flex-row gap-4 items-start">
-      <aside className="w-full xl:w-72 shrink-0 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto z-10">
+      <aside className="w-full xl:w-80 shrink-0 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto z-10">
         <h3 className="text-sm font-black text-gray-900 mb-1">
           {isFa ? 'تنظیم چیدمان چاپ' : 'Print layout'}
         </h3>
-        <p className="text-[10px] text-gray-400 mb-4">
-          {isFa ? 'پیش‌نمایش دقیقاً مطابق PDF چاپی است' : 'Preview matches PDF page breaks'}
+        <p className="text-[10px] text-gray-400 mb-3">
+          {isFa
+            ? 'برای کم کردن فضای خالی، «فشرده» یا «خیلی فشرده» را بزنید یا اسلایدر فشرده‌سازی را بالا ببرید.'
+            : 'Use Compact/Tight presets or raise Compact % to reduce empty page space.'}
         </p>
 
         <div className="flex flex-wrap gap-1.5 mb-4">
@@ -101,23 +105,45 @@ export const BilingualPrintPreview: React.FC<Props> = ({
           ))}
         </div>
 
-        <Slider label={isFa ? 'فاصله بین بخش‌ها' : 'Section gap'} min={0} max={30} value={merged.sectionGap ?? 4}
-          onChange={v => patch({ sectionGap: v })} disabled={readonly} />
-        <Slider label={isFa ? 'فاصله عنوان بخش' : 'Band margin'} min={0} max={40} value={merged.bandMarginTop ?? 18}
-          onChange={v => patch({ bandMarginTop: v })} disabled={readonly} />
-        <Slider label={isFa ? 'ارتفاع خط EN' : 'EN line height'} min={1.2} max={2.2} step={0.05} value={merged.bodyLineHeightEn ?? 1.65}
-          onChange={v => patch({ bodyLineHeightEn: v })} disabled={readonly} />
-        <Slider label={isFa ? 'ارتفاع خط FA' : 'RTL line height'} min={1.2} max={2.4} step={0.05} value={merged.bodyLineHeightRtl ?? 1.9}
-          onChange={v => patch({ bodyLineHeightRtl: v })} disabled={readonly} />
-        <Slider label={isFa ? 'اندازه متن' : 'Body size'} min={8} max={12} step={0.5} value={merged.bodyFontSize ?? 10}
-          onChange={v => patch({ bodyFontSize: v })} disabled={readonly} unit="pt" />
-        <Slider label={isFa ? 'اندازه عنوان' : 'Title size'} min={12} max={20} step={0.5} value={merged.titleFontSize ?? 15.5}
-          onChange={v => patch({ titleFontSize: v })} disabled={readonly} unit="pt" />
-        <Slider label={isFa ? 'فشرده‌سازی کلی' : 'Compact'} min={0} max={60} value={merged.compactLevel ?? 0}
+        <Slider label={isFa ? 'فشرده‌سازی کلی (مهم‌ترین)' : 'Overall compact (main)'} min={0} max={80} value={merged.compactLevel ?? 0}
           onChange={v => patch({ compactLevel: v })} disabled={readonly} unit="%" />
+        <Slider label={isFa ? 'حاشیه صفحه' : 'Page padding'} min={8} max={36} value={pagePad}
+          onChange={v => patch({ pagePadding: v })} disabled={readonly} />
+        <Slider label={isFa ? 'فاصله بین بخش‌ها' : 'Section gap'} min={0} max={24} value={merged.sectionGap ?? 2}
+          onChange={v => patch({ sectionGap: v })} disabled={readonly} />
+        <Slider label={isFa ? 'فاصله عنوان بخش' : 'Band margin'} min={0} max={30} value={merged.bandMarginTop ?? 12}
+          onChange={v => patch({ bandMarginTop: v })} disabled={readonly} />
+        <Slider label={isFa ? 'ارتفاع خط EN' : 'EN line height'} min={1.2} max={2.1} step={0.05} value={merged.bodyLineHeightEn ?? 1.5}
+          onChange={v => patch({ bodyLineHeightEn: v })} disabled={readonly} />
+        <Slider label={isFa ? 'ارتفاع خط FA' : 'RTL line height'} min={1.2} max={2.2} step={0.05} value={merged.bodyLineHeightRtl ?? 1.7}
+          onChange={v => patch({ bodyLineHeightRtl: v })} disabled={readonly} />
+
+        <button type="button" onClick={() => setShowAdvanced(v => !v)}
+          className="mb-2 text-[10px] font-bold text-indigo-600 hover:underline">
+          {showAdvanced ? (isFa ? '▾ جزئیات کمتر' : '▾ Less detail') : (isFa ? '▸ تنظیمات بیشتر' : '▸ More controls')}
+        </button>
+
+        {showAdvanced && (
+          <>
+            <Slider label={isFa ? 'اندازه متن' : 'Body size'} min={8} max={12} step={0.5} value={merged.bodyFontSize ?? 10}
+              onChange={v => patch({ bodyFontSize: v })} disabled={readonly} unit="pt" />
+            <Slider label={isFa ? 'اندازه عنوان' : 'Title size'} min={11} max={18} step={0.5} value={merged.titleFontSize ?? 14.5}
+              onChange={v => patch({ titleFontSize: v })} disabled={readonly} unit="pt" />
+            <Slider label={isFa ? 'پدینگ عنوان بخش' : 'Band padding'} min={0} max={16} value={merged.bandPadding ?? 6}
+              onChange={v => patch({ bandPadding: v })} disabled={readonly} />
+            <Slider label={isFa ? 'پدینگ متن' : 'Body padding'} min={0} max={16} value={merged.bodyPadding ?? 6}
+              onChange={v => patch({ bodyPadding: v })} disabled={readonly} />
+            <Slider label={isFa ? 'فاصله زیر جدول' : 'Table bottom'} min={0} max={20} value={merged.tableMarginBottom ?? 8}
+              onChange={v => patch({ tableMarginBottom: v })} disabled={readonly} />
+            <Slider label={isFa ? 'فاصله فوتر' : 'Footer margin'} min={0} max={28} value={merged.footMarginTop ?? 12}
+              onChange={v => patch({ footMarginTop: v })} disabled={readonly} />
+            <Slider label={isFa ? 'فاصله کارت خدمات' : 'Service card gap'} min={0} max={16} value={merged.serviceCardGap ?? 6}
+              onChange={v => patch({ serviceCardGap: v })} disabled={readonly} />
+          </>
+        )}
 
         {sections.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-[10px] font-bold text-gray-500 mb-2">{isFa ? 'شروع صفحه جدید قبل از:' : 'Page break before:'}</p>
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {sections.map(s => (
@@ -151,7 +177,7 @@ export const BilingualPrintPreview: React.FC<Props> = ({
             <div className="absolute -top-6 left-0 right-0 text-center text-[10px] font-bold text-slate-500">
               {isFa ? `صفحه ${pi + 1} از ${pageCount}` : `Page ${pi + 1} of ${pageCount}`}
             </div>
-            <div className="pp-root overflow-hidden" style={{ width: PAGE_W, minHeight: PAGE_H, padding: PAD, boxSizing: 'border-box' }}>
+            <div className="pp-root overflow-hidden" style={{ width: PAGE_W, minHeight: PAGE_H, padding: pagePad, boxSizing: 'border-box' }}>
               <style>{fullCss}</style>
               {units.map((u, ui) => (
                 <div key={ui} dangerouslySetInnerHTML={{ __html: u.outerHTML }} />
@@ -167,7 +193,7 @@ export const BilingualPrintPreview: React.FC<Props> = ({
         dir="ltr"
         lang="en"
         aria-hidden
-        style={{ position: 'fixed', left: -9999, top: 0, width: PAGE_W, visibility: 'hidden', pointerEvents: 'none' }}
+        style={{ position: 'fixed', left: -9999, top: 0, width: PAGE_W, visibility: 'hidden', pointerEvents: 'none', padding: pagePad, boxSizing: 'border-box' }}
       >
         <style>{fullCss}</style>
         {children}

@@ -969,8 +969,69 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4 print:hidden">{importErr}</p>
           )}
 
+          {/* Density / empty-space controls */}
+          <div className="print:hidden mb-3 bg-white border border-gray-100 rounded-xl p-3 flex flex-wrap items-center gap-4">
+            <div className="min-w-[180px] flex-1">
+              <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                <span>{lang === 'fa' ? 'فشرده‌سازی فضاهای خالی' : 'Tighten empty space'}</span>
+                <span>{draft.printDensity ?? 0}%</span>
+              </div>
+              <input
+                type="range" min={0} max={70} step={5}
+                value={draft.printDensity ?? 0}
+                disabled={readonly}
+                onChange={e => setField('printDensity', Number(e.target.value))}
+                className="w-full accent-gray-900"
+              />
+            </div>
+            <div className="min-w-[140px] w-40">
+              <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                <span>{lang === 'fa' ? 'حاشیه صفحه' : 'Page padding'}</span>
+                <span>{draft.printPadding ?? 26}px</span>
+              </div>
+              <input
+                type="range" min={12} max={36} step={2}
+                value={draft.printPadding ?? 26}
+                disabled={readonly}
+                onChange={e => setField('printPadding', Number(e.target.value))}
+                className="w-full accent-gray-900"
+              />
+            </div>
+            <div className="flex gap-1.5">
+              {[
+                { d: 0, p: 26, label: lang === 'fa' ? 'باز' : 'Open' },
+                { d: 30, p: 20, label: lang === 'fa' ? 'فشرده' : 'Compact' },
+                { d: 55, p: 14, label: lang === 'fa' ? 'خیلی فشرده' : 'Tight' },
+              ].map(pr => (
+                <button
+                  key={pr.label}
+                  type="button"
+                  disabled={readonly}
+                  onClick={() => { setField('printDensity', pr.d); setField('printPadding', pr.p); }}
+                  className="px-2 py-1.5 rounded-lg text-[10px] font-bold border border-gray-200 hover:border-gray-400 disabled:opacity-50"
+                >
+                  {pr.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* A4 sheet */}
-          <div ref={invoiceSheetRef} className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800" style={{ width: 794, maxWidth: '100%', padding: '26px 34px', boxSizing: 'border-box' }} dir="ltr">
+          <div
+            ref={invoiceSheetRef}
+            className="bg-white mx-auto rounded-lg border border-gray-100 shadow-sm invoice-content text-gray-800"
+            style={{
+              width: 794,
+              maxWidth: '100%',
+              padding: `${draft.printPadding ?? 26}px ${Math.max(18, (draft.printPadding ?? 26) + 4)}px`,
+              boxSizing: 'border-box',
+              ['--inv-density' as string]: String(draft.printDensity ?? 0),
+              ['--inv-gap' as string]: `${Math.max(4, Math.round(12 * (1 - (draft.printDensity ?? 0) / 100 * 0.7)))}px`,
+              ['--inv-block-pad' as string]: `${Math.max(6, Math.round(12 * (1 - (draft.printDensity ?? 0) / 100 * 0.65)))}px`,
+              ['--inv-mb' as string]: `${Math.max(4, Math.round(12 * (1 - (draft.printDensity ?? 0) / 100 * 0.75)))}px`,
+            }}
+            dir="ltr"
+          >
 
             <div className="invoice-pdf-sheet">
               <div className="flex justify-between items-start gap-5">
@@ -1284,8 +1345,8 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             )}
 
             {/* ── Payment details + Notes ── */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="border border-gray-200 rounded-md p-3 text-[11px] leading-relaxed">
+            <div className="grid grid-cols-2 gap-3 invoice-payment-notes-row invoice-keep-together" style={{ marginBottom: 'var(--inv-mb, 12px)', gap: 'var(--inv-gap, 12px)' }}>
+              <div className="border border-gray-200 rounded-md invoice-keep-together text-[11px] leading-relaxed" style={{ padding: 'var(--inv-block-pad, 12px)' }}>
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">PAYMENT DETAILS</p>
                   <SectionPresetControls section="paymentDetails" />
@@ -1298,7 +1359,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                   onChange={e => setField('paymentDetails', e.target.value)}
                 />
               </div>
-              <div className="border border-gray-200 rounded-md p-3">
+              <div className="border border-gray-200 rounded-md invoice-notes-box invoice-keep-together" style={{ padding: 'var(--inv-block-pad, 12px)' }}>
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
                   <SectionPresetControls section="notes" />
@@ -1308,7 +1369,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             </div>
 
             {/* ── Footer ── */}
-            <div className="invoice-footer-block mt-3 pt-3 border-t border-gray-100">
+            <div className="invoice-footer-block invoice-keep-together" style={{ marginTop: 'var(--inv-mb, 12px)', paddingTop: 'var(--inv-block-pad, 12px)' }}>
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="border border-gray-200 rounded-md p-3">
                   <p className="text-[9px] font-bold tracking-wider text-gray-400 mb-4">AUTHORIZED SIGNATURE</p>
@@ -1333,15 +1394,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             .pdf-export .invoice-pdf-capture-root {
               box-shadow: none !important;
               border: 0 !important;
-              padding: 26px 34px !important;
               box-sizing: border-box !important;
             }
             .pdf-export .invoice-pdf-sheet { overflow: visible !important; }
+            .invoice-keep-together { break-inside: avoid; page-break-inside: avoid; }
+            .invoice-notes-box { break-inside: avoid; page-break-inside: avoid; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }
               .invoice-content, .invoice-content * { visibility: visible; }
-              .invoice-content { position: absolute; left: 0; top: 0; width: 210mm !important; max-width: 210mm !important; min-height: auto !important; margin: 0; padding: 12mm !important; border: 0 !important; box-shadow: none !important; }
+              .invoice-content { position: absolute; left: 0; top: 0; width: 210mm !important; max-width: 210mm !important; min-height: auto !important; margin: 0; border: 0 !important; box-shadow: none !important; }
+              .invoice-keep-together, .invoice-notes-box, .invoice-payment-notes-row, .invoice-footer-block { break-inside: avoid; page-break-inside: avoid; }
               .print\\:hidden { display: none !important; }
               .print\\:border-0 { border: 0 !important; }
             }

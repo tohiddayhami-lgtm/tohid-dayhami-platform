@@ -3,7 +3,8 @@
 export const PAGE_W = 794;
 export const PAGE_H = 1123;
 export const PAD = 28;
-export const CONTENT_H = PAGE_H - PAD * 2 - 20;
+/** Tighter content height = pack more onto each page (less empty bottom). */
+export const CONTENT_H = PAGE_H - PAD * 2 - 8;
 
 export function splitSection(section: HTMLElement): HTMLElement[] {
   const units: HTMLElement[] = [];
@@ -16,12 +17,29 @@ export function splitSection(section: HTMLElement): HTMLElement[] {
       i++;
       continue;
     }
+    // Keep each body / bullet / intro block as its own packable unit so pages fill denser.
+    if (
+      el.classList.contains('pp-body-en')
+      || el.classList.contains('pp-body-rtl')
+      || el.classList.contains('pp-bullet-en')
+      || el.classList.contains('pp-bullet-rtl')
+      || el.classList.contains('pp-area-intro-en')
+      || el.classList.contains('pp-area-intro-rtl')
+    ) {
+      units.push(el);
+      i++;
+      continue;
+    }
     const group: HTMLElement[] = [el];
     i++;
     while (
       i < children.length
       && !children[i].classList.contains('pp-band')
       && !children[i].classList.contains('pp-service-card')
+      && !children[i].classList.contains('pp-body-en')
+      && !children[i].classList.contains('pp-body-rtl')
+      && !children[i].classList.contains('pp-bullet-en')
+      && !children[i].classList.contains('pp-bullet-rtl')
     ) {
       group.push(children[i]);
       i++;
@@ -80,7 +98,7 @@ export function groupPreviewUnits(root: HTMLElement): HTMLElement[] {
 }
 
 export function measureUnitHeight(el: HTMLElement): number {
-  return el.getBoundingClientRect().height + 6;
+  return el.getBoundingClientRect().height + 2;
 }
 
 export function packPageGroups(units: HTMLElement[], heights: number[]): HTMLElement[][] {

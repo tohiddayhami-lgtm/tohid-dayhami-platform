@@ -6,6 +6,8 @@ export const INVOICE_CAPTURE_WIDTH_PX = 794;
 
 const PAGE_MARGIN_MM = 10;
 
+type KeepRange = { top: number; bottom: number };
+
 const flattenInputsForExport = (root: HTMLElement) => {
   root.querySelectorAll('input, textarea, select').forEach((el) => {
     const node = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -84,9 +86,79 @@ const cloneInvoiceForCapture = (source: HTMLElement): HTMLElement => {
   return clone;
 };
 
-const captureSheet = async (sheetEl: HTMLElement): Promise<HTMLCanvasElement> => {
+/**
+ * Collect keep-together block ranges in canvas pixel space so PDF slices
+ * do not cut NOTES / payment boxes mid-text.
+ */
+const collectKeepRanges = (root: HTMLElement, canvasScale: number): KeepRange[] => {
+  const rootRect = root.getBoundingClientRect();
+  const nodes = root.querySelectorAll('.invoice-keep-together, .invoice-notes-box, .invoice-footer-block, table, .invoice-payment-notes-row');
+  const ranges: KeepRange[] = [];
+  nodes.forEach((n) => {
+    const el = n as HTMLElement;
+    const r = el.getBoundingClientRect();
+    if (r.height < 8) return;
+    const top = Math.max(0, Math.floor((r.top - rootRect.top) * canvasScale));
+    const bottom = Math.ceil((r.bottom - rootRect.top) * canvasScale);
+    if (bottom > top) ranges.push({ top, bottom });
+  });
+  ranges.sort((a, b) => a.top - b.top);
+  // Merge overlapping
+  const merged: KeepRange[] = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r.top <= last.bottom + 4) {
+      last.bottom = Math.max(last.bottom, r.bottom);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+  return merged;
+};
+
+/** Prefer breaks just before a keep-block rather than cutting through it. */
+const computeSmartBreaks = (
+  canvasHeight: number,
+  idealPageHeight: number,
+  keepRanges: KeepRange[],
+): number[] => {
+  const breaks: number[] = [0];
+  let y = 0;
+  const minProgress = Math.max(40, Math.floor(idealPageHeight * 0.35));
+
+  while (y + idealPageHeight < canvasHeight - 8) {
+    let candidate = y + idealPageHeight;
+    // Snap away from keep-together interiors
+    for (const range of keepRanges) {
+      if (candidate > range.top + 2 && candidate < range.bottom - 2) {
+        // Prefer breaking before the block if it still leaves a reasonable page.
+        if (range.top - y >= minProgress) {
+          candidate = range.top;
+        } else if (range.bottom - y <= idealPageHeight * 1.15) {
+          // Whole block fits if we extend slightly — break after it.
+          candidate = Math.min(range.bottom, canvasHeight);
+        } else {
+          // Block taller than a page — break at top then continue inside later.
+          candidate = range.top > y + minProgress ? range.top : candidate;
+        }
+        break;
+      }
+    }
+    // Avoid tiny leftover pages
+    if (candidate <= y + minProgress) {
+      candidate = Math.min(y + idealPageHeight, canvasHeight);
+    }
+    if (candidate >= canvasHeight - 4) break;
+    breaks.push(candidate);
+    y = candidate;
+  }
+  return breaks;
+};
+
+const captureSheet = async (sheetEl: HTMLElement): Promise<{ canvas: HTMLCanvasElement; keepRanges: KeepRange[] }> => {
   await new Promise((r) => setTimeout(r, 120));
-  return html2canvas(sheetEl, {
+  let keepRanges: KeepRange[] = [];
+  const canvas = await html2canvas(sheetEl, {
     scale: 2,
     useCORS: true,
     allowTaint: true,
@@ -112,8 +184,15 @@ const captureSheet = async (sheetEl: HTMLElement): Promise<HTMLCanvasElement> =>
         node = node.parentElement;
       }
       flattenInputsForExport(clone);
+      // Measure after flatten so NOTES full height is known
+      keepRanges = collectKeepRanges(clone, 2);
     },
   });
+  // Re-measure on live capture root as fallback if onclone ranges empty
+  if (!keepRanges.length) {
+    keepRanges = collectKeepRanges(sheetEl, 2);
+  }
+  return { canvas, keepRanges };
 };
 
 const addSliceToPdf = (
@@ -176,7 +255,11 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
     document.body.appendChild(host);
     host.appendChild(captureRoot);
 
-    const canvas = await captureSheet(captureRoot);
+    // Flatten on live clone first so height (and NOTES) match PDF
+    flattenInputsForExport(captureRoot);
+    await new Promise((r) => setTimeout(r, 60));
+
+    const { canvas, keepRanges } = await captureSheet(captureRoot);
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -190,14 +273,15 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
       return;
     }
 
-    const pageCanvasHeight = Math.floor((contentHeight / fullImgHeight) * canvas.height);
-    let yOffset = 0;
-    let pageIndex = 0;
-    while (yOffset < canvas.height) {
-      const sliceHeight = Math.min(pageCanvasHeight, canvas.height - yOffset);
-      addSliceToPdf(pdf, canvas, yOffset, sliceHeight, pageIndex === 0);
-      yOffset += sliceHeight;
-      pageIndex += 1;
+    const idealPageHeight = Math.floor((contentHeight / fullImgHeight) * canvas.height);
+    const breaks = computeSmartBreaks(canvas.height, idealPageHeight, keepRanges);
+    breaks.push(canvas.height);
+
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const y0 = breaks[i];
+      const y1 = breaks[i + 1];
+      const sliceHeight = Math.max(1, y1 - y0);
+      addSliceToPdf(pdf, canvas, y0, sliceHeight, i === 0);
     }
 
     pdf.save(filename);
