@@ -6,40 +6,69 @@ export const PAD = 28;
 /** Tighter content height = pack more onto each page (less empty bottom). */
 export const CONTENT_H = PAGE_H - PAD * 2 - 8;
 
+function isBandEl(el: HTMLElement): boolean {
+  return el.classList.contains('pp-band');
+}
+
+function isAtomicContent(el: HTMLElement): boolean {
+  return (
+    el.classList.contains('pp-body-en')
+    || el.classList.contains('pp-body-rtl')
+    || el.classList.contains('pp-bullet-en')
+    || el.classList.contains('pp-bullet-rtl')
+    || el.classList.contains('pp-area-intro-en')
+    || el.classList.contains('pp-area-intro-rtl')
+    || el.classList.contains('pp-service-card')
+    || el.tagName === 'TABLE'
+  );
+}
+
+/** Band/title must never sit alone at page bottom — glue to the first content under it. */
+function wrapBandWithLead(band: HTMLElement, lead?: HTMLElement): HTMLElement {
+  if (!lead) return band;
+  const wrap = document.createElement('div');
+  wrap.className = 'pp-band-with-lead';
+  wrap.appendChild(band.cloneNode(true));
+  wrap.appendChild(lead.cloneNode(true));
+  return wrap;
+}
+
 export function splitSection(section: HTMLElement): HTMLElement[] {
   const units: HTMLElement[] = [];
   const children = Array.from(section.children) as HTMLElement[];
   let i = 0;
   while (i < children.length) {
     const el = children[i];
-    if (el.classList.contains('pp-band') || el.classList.contains('pp-service-card')) {
+
+    // Title band + first text/table/card under it stay on the same page.
+    if (isBandEl(el)) {
+      const lead = i + 1 < children.length && !isBandEl(children[i + 1])
+        ? children[i + 1]
+        : undefined;
+      units.push(wrapBandWithLead(el, lead));
+      i += lead ? 2 : 1;
+      continue;
+    }
+
+    if (el.classList.contains('pp-service-card')) {
       units.push(el);
       i++;
       continue;
     }
-    // Keep each body / bullet / intro block as its own packable unit so pages fill denser.
-    if (
-      el.classList.contains('pp-body-en')
-      || el.classList.contains('pp-body-rtl')
-      || el.classList.contains('pp-bullet-en')
-      || el.classList.contains('pp-bullet-rtl')
-      || el.classList.contains('pp-area-intro-en')
-      || el.classList.contains('pp-area-intro-rtl')
-    ) {
+
+    if (isAtomicContent(el)) {
       units.push(el);
       i++;
       continue;
     }
+
     const group: HTMLElement[] = [el];
     i++;
     while (
       i < children.length
-      && !children[i].classList.contains('pp-band')
+      && !isBandEl(children[i])
       && !children[i].classList.contains('pp-service-card')
-      && !children[i].classList.contains('pp-body-en')
-      && !children[i].classList.contains('pp-body-rtl')
-      && !children[i].classList.contains('pp-bullet-en')
-      && !children[i].classList.contains('pp-bullet-rtl')
+      && !isAtomicContent(children[i])
     ) {
       group.push(children[i]);
       i++;
@@ -101,34 +130,68 @@ export function measureUnitHeight(el: HTMLElement): number {
   return el.getBoundingClientRect().height + 2;
 }
 
+function isBandLikeUnit(unit: HTMLElement): boolean {
+  if (unit.classList.contains('pp-band') || unit.classList.contains('pp-band-with-lead')) return true;
+  if (unit.classList.contains('pp-unit-wrap')) {
+    const kids = Array.from(unit.children) as HTMLElement[];
+    return kids.length > 0 && isBandEl(kids[0]) && kids.length === 1;
+  }
+  return false;
+}
+
+/**
+ * Pack units into pages. Prevents orphan section titles: a band never stays
+ * alone at the bottom of a page when its following content did not fit.
+ */
 export function packPageGroups(units: HTMLElement[], heights: number[]): HTMLElement[][] {
   const pages: HTMLElement[][] = [];
   let cur: HTMLElement[] = [];
   let used = 0;
 
-  units.forEach((unit, idx) => {
-    const h = heights[idx] || 0;
-
-    if (unit.classList.contains('pp-force-page-break') && cur.length) {
+  const flush = () => {
+    if (cur.length) {
       pages.push(cur);
       cur = [];
       used = 0;
+    }
+  };
+
+  units.forEach((unit, idx) => {
+    const h = heights[idx] || 0;
+    const nextH = idx + 1 < units.length ? (heights[idx + 1] || 0) : 0;
+    const hasNext = idx + 1 < units.length;
+
+    if (unit.classList.contains('pp-force-page-break') && cur.length) {
+      flush();
     }
 
     if (h > CONTENT_H) {
-      if (cur.length) { pages.push(cur); cur = []; used = 0; }
+      flush();
       pages.push([unit]);
       return;
     }
-    if (cur.length && used + h > CONTENT_H) {
-      pages.push(cur);
-      cur = [];
-      used = 0;
+
+    // Orphan-title guard: if this is a lone band and the next block won't fit
+    // after it on the current page, start a new page before the title.
+    if (
+      isBandLikeUnit(unit)
+      && hasNext
+      && !isBandLikeUnit(units[idx + 1])
+      && cur.length
+      && used + h + Math.min(nextH, 120) > CONTENT_H
+    ) {
+      flush();
     }
+
+    if (cur.length && used + h > CONTENT_H) {
+      flush();
+    }
+
     cur.push(unit);
     used += h;
   });
-  if (cur.length) pages.push(cur);
+
+  flush();
   return pages.length ? pages : [units];
 }
 
