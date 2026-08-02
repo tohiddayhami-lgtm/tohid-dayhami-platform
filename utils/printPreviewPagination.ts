@@ -19,6 +19,8 @@ function isAtomicContent(el: HTMLElement): boolean {
     || el.classList.contains('pp-area-intro-en')
     || el.classList.contains('pp-area-intro-rtl')
     || el.classList.contains('pp-service-card')
+    || el.classList.contains('pp-re-hero')
+    || el.classList.contains('pp-gallery-item')
     || el.tagName === 'TABLE'
   );
 }
@@ -42,11 +44,31 @@ export function splitSection(section: HTMLElement): HTMLElement[] {
 
     // Title band + first text/table/card under it stay on the same page.
     if (isBandEl(el)) {
-      const lead = i + 1 < children.length && !isBandEl(children[i + 1])
+      const next = i + 1 < children.length && !isBandEl(children[i + 1])
         ? children[i + 1]
         : undefined;
-      units.push(wrapBandWithLead(el, lead));
-      i += lead ? 2 : 1;
+      if (next?.classList.contains('pp-gallery')) {
+        const items = Array.from(next.children) as HTMLElement[];
+        const first = items[0];
+        units.push(wrapBandWithLead(el, first || next));
+        items.slice(1).forEach(item => units.push(item));
+        i += 2;
+        continue;
+      }
+      units.push(wrapBandWithLead(el, next));
+      i += next ? 2 : 1;
+      continue;
+    }
+
+    if (el.classList.contains('pp-gallery')) {
+      units.push(...(Array.from(el.children) as HTMLElement[]));
+      i++;
+      continue;
+    }
+
+    if (el.classList.contains('pp-gallery-item') || el.classList.contains('pp-re-hero')) {
+      units.push(el);
+      i++;
       continue;
     }
 

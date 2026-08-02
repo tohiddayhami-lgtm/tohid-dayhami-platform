@@ -689,7 +689,7 @@ export interface KeyResult {
 export interface SystemLog {
   id: string;
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'OTHER';
-  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'InvoicePreset' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar' | 'Supplier';
+  entity: 'Ticket' | 'Customer' | 'Personnel' | 'Project' | 'Task' | 'Meeting' | 'Message' | 'System' | 'KPI' | 'CustomForm' | 'Sale' | 'Report' | 'Goals' | 'Objective' | 'Expense' | 'News' | 'Invoice' | 'InvoicePreset' | 'MetaShop' | 'MetaShopOrder' | 'MetaBazaar' | 'Supplier' | 'Proposal' | 'Contract' | 'Catalog' | 'RealEstateProposal';
   entityId?: string;
   details: string;
   actorName: string;
@@ -1850,6 +1850,97 @@ export interface CommercialProposal {
   currency: string;
   rtlLanguage: ProposalRtlLanguage;
   status: ProposalStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  createdByPersonnelId?: string;
+  printLayout?: PrintLayoutSettings;
+}
+
+/** Bilingual real-estate proposal (صورت پروپوزال املاک) — Invoices tab. */
+export type RealEstateProposalStatus = 'draft' | 'sent' | 'accepted' | 'declined';
+export type RealEstateDealType = 'sale' | 'rent' | 'investment' | 'lease';
+
+export interface RealEstateProposalParty {
+  id: string;
+  labelEn: string;
+  labelRtl: string;
+  companyEn: string;
+  companyRtl: string;
+  regNo?: string;
+  country?: string;
+  repNameEn?: string;
+  repNameRtl?: string;
+  repTitleEn?: string;
+  repTitleRtl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
+export interface RealEstateProposalSection {
+  id: string;
+  sectionNum: string;
+  titleEn: string;
+  titleRtl: string;
+  contentEn: string;
+  contentRtl: string;
+}
+
+export interface RealEstatePropertyHighlight {
+  dealType: RealEstateDealType;
+  propertyTypeEn: string;
+  propertyTypeRtl: string;
+  titleEn: string;
+  titleRtl: string;
+  addressEn?: string;
+  addressRtl?: string;
+  city?: string;
+  district?: string;
+  areaSqm?: string;
+  bedrooms?: string;
+  bathrooms?: string;
+  floors?: string;
+  yearBuilt?: string;
+  furnishingEn?: string;
+  furnishingRtl?: string;
+  price?: string;
+  priceNoteEn?: string;
+  priceNoteRtl?: string;
+  currency?: string;
+  amenitiesEn?: string[];
+  amenitiesRtl?: string[];
+}
+
+export interface RealEstateProposalPhoto {
+  id: string;
+  url: string;
+  captionEn?: string;
+  captionRtl?: string;
+}
+
+export interface RealEstateProposal {
+  id: string;
+  refNo: string;
+  titleEn: string;
+  titleRtl: string;
+  subtitleEn?: string;
+  subtitleRtl?: string;
+  proposalDate: string;
+  validUntil: string;
+  logoUrl?: string;
+  logo2Url?: string;
+  contractLogoLayout?: ProposalLogoLayout;
+  contractLogoAlign?: 'start' | 'center' | 'end';
+  contractLogoSize?: 'sm' | 'md' | 'lg';
+  companyName?: string;
+  parties: RealEstateProposalParty[];
+  property: RealEstatePropertyHighlight;
+  sections: RealEstateProposalSection[];
+  /** Property photos shown at the end of the proposal. */
+  photos: RealEstateProposalPhoto[];
+  currency: string;
+  rtlLanguage: ProposalRtlLanguage;
+  status: RealEstateProposalStatus;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

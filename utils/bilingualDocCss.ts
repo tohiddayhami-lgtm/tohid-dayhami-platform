@@ -214,8 +214,74 @@ export const BILINGUAL_DOC_CSS = `
   .pp-bullet-en { font-size: 10pt; line-height: 1.6; color: #0f172a; padding: 4px 6px 4px 18px; text-indent: -12px; direction: ltr !important; }
   .pp-bullet-rtl { font-size: 10pt; line-height: 1.8; color: #0f172a; padding: 4px 18px 4px 6px; text-indent: -12px; direction: rtl !important; text-align: right !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 6px; }
   .pp-contact-line { text-align: center; font-size: 9.5pt; font-weight: 700; color: #0b1f3a; margin-top: 10px; direction: ltr !important; }
+  .pp-re-hero {
+    margin: 0 0 10px; padding: 16px 18px; border: 1px solid #cbd5e1; background:
+      linear-gradient(135deg, #0b1f3a 0%, #1e3a5f 55%, #0f766e 100%);
+    color: #fff; direction: ltr !important; page-break-inside: avoid;
+  }
+  .pp-re-badge {
+    display: inline-block; font-size: 8pt; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+    background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25); padding: 4px 10px; margin-bottom: 8px;
+  }
+  .pp-re-badge-rtl {
+    display: block; font-size: 8.5pt; font-weight: 700; margin: 4px 0 8px;
+    direction: rtl !important; text-align: right; font-family: Tahoma, "Segoe UI", Arial, sans-serif; opacity: .9;
+  }
+  .pp-re-title { margin: 0; font-size: 14pt; font-weight: 800; letter-spacing: .01em; line-height: 1.3; direction: ltr !important; }
+  .pp-re-title-rtl {
+    margin: 6px 0 0; font-size: 12.5pt; font-weight: 800; line-height: 1.45;
+    direction: rtl !important; text-align: right; font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  }
+  .pp-re-addr { margin-top: 8px; font-size: 9pt; opacity: .9; direction: ltr !important; }
+  .pp-re-addr-rtl {
+    margin-top: 2px; font-size: 9pt; opacity: .9;
+    direction: rtl !important; text-align: right; font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  }
+  .pp-re-price { margin-top: 12px; font-size: 16pt; font-weight: 900; letter-spacing: .02em; direction: ltr !important; }
+  .pp-re-price-note { font-size: 8.5pt; opacity: .85; margin-top: 2px; direction: ltr !important; }
+  .pp-re-price-note-rtl {
+    font-size: 8.5pt; opacity: .85; margin-top: 2px;
+    direction: rtl !important; text-align: right; font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  }
+  .pp-re-facts {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; direction: ltr !important;
+  }
+  .pp-re-facts span {
+    font-size: 8.5pt; font-weight: 700; background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.2); padding: 5px 10px;
+  }
+  .pp-re-amenities, .pp-re-amenities-rtl {
+    display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px;
+  }
+  .pp-re-amenities span, .pp-re-amenities-rtl span {
+    font-size: 8pt; font-weight: 600; background: #f8fafc; color: #0b1f3a;
+    border: 1px solid #e2e8f0; padding: 3px 8px;
+  }
+  .pp-re-amenities { direction: ltr !important; }
+  .pp-re-amenities-rtl {
+    direction: rtl !important; justify-content: flex-start;
+    font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  }
+  .pp-gallery {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;
+    direction: ltr !important;
+  }
+  .pp-gallery-item {
+    margin: 0; border: 1px solid #e2e8f0; background: #fff; overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .pp-gallery-item img {
+    display: block; width: 100%; height: 180px; object-fit: cover; background: #f1f5f9;
+  }
+  .pp-gallery-item figcaption {
+    padding: 8px 10px; font-size: 8.5pt; color: #334155; border-top: 1px solid #e2e8f0;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .pp-gallery-item figcaption span[dir="rtl"] {
+    font-family: Tahoma, "Segoe UI", Arial, sans-serif; text-align: right;
+  }
   @media print {
     .pp-root { max-width: none; }
-    .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table, .pp-signatures, .pp-service-card { page-break-inside: avoid; }
+    .pp-section, .pp-price-table, .pp-addon-table, .pp-parties-table, .pp-signatures, .pp-service-card, .pp-re-hero, .pp-gallery-item { page-break-inside: avoid; }
   }
 `;
