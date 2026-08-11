@@ -207,6 +207,13 @@ export interface Invoice {
   printDensity?: number;
   /** Sheet padding in px (default 26). */
   printPadding?: number;
+  /** Personnel assigned to follow up on payment / collection. */
+  followUpAssigneeId?: string;
+  followUpAssigneeName?: string;
+  followUpNote?: string;
+  followUpAt?: string;
+  followUpBy?: string;
+  followUpByPersonnelId?: string;
 }
 
 export interface InvoiceReceipt {
@@ -2150,6 +2157,8 @@ export interface NotificationConfig {
   webhookUrl?: string;
   // Events to trigger
   onNewTicket: boolean;
+  /** Invoice follow-up assignment (defaults to onNewTicket when unset). */
+  onInvoiceFollowUp?: boolean;
   onNewMessage: boolean;
   onStatusChange: boolean;
   // Meeting notifications (optional — may not exist in older Firestore configs)
@@ -2160,6 +2169,7 @@ export interface NotificationConfig {
   onDailySummary?: boolean;
   // Message templates ({recipientName}, {ticketId}, {customerName}, {senderName}, {status}, {formTitle})
   ticketTemplate: string;
+  invoiceFollowUpTemplate?: string;
   messageTemplate: string;
   statusTemplate: string;
   // Meeting templates ({recipientName}, {meetingTitle}, {meetingDate}, {meetingTime}, {meetingLocation}, {organizerName})
@@ -2179,7 +2189,7 @@ export interface NotificationConfig {
 
 export interface NotificationLog {
   id: string;
-  type: 'new_ticket' | 'new_message' | 'status_change' | 'test' | 'meeting_created' | 'meeting_updated' | 'meeting_deleted' | 'meeting_reminder' | 'daily_summary';
+  type: 'new_ticket' | 'invoice_followup' | 'new_message' | 'status_change' | 'test' | 'meeting_created' | 'meeting_updated' | 'meeting_deleted' | 'meeting_reminder' | 'daily_summary';
   recipientId: string;
   recipientName: string;
   phone: string;

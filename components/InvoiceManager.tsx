@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Invoice, InvoiceItem, InvoiceAdjustment, InvoiceTemplate, InvoiceSectionKey, InvoiceSectionPreset, Customer, Personnel, AppConfig } from '../types';
-import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload, IconMoney } from './Icons';
+import { IconPrinter, IconPlus, IconTrash, IconCheck, IconSearch, IconEdit, IconInvoice, IconUsers, IconSettings, IconUpload, IconMoney, IconArrowRight } from './Icons';
 import { uploadFileWithProgress, saveInvoiceSectionPresetToCloud, deleteInvoiceSectionPresetFromCloud, subscribeToInvoiceSectionPresets, saveCustomerToCloud } from '../services/firebaseService';
 import { Language } from '../App';
+import { StaffIdPicker } from './StaffIdPicker';
+import { notifyInvoiceFollowUp } from '../utils/invoiceFollowUpNotify';
 import {
   INVOICE_PRESET_CURRENCIES,
   INVOICE_CURRENCY_CUSTOM,
@@ -48,6 +50,7 @@ const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 interface Props {
   invoices: Invoice[];
   customers: Customer[];
+  personnel: Personnel[];
   config: AppConfig;
   currentUser: Personnel;
   lang: Language;
@@ -124,7 +127,7 @@ const emptyDraft = (config: AppConfig, user: Personnel, count: number): Invoice 
   };
 };
 
-export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, currentUser, lang, onSaveInvoice, onDeleteInvoice, onUpdateConfig, readonly = false }) => {
+export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel, config, currentUser, lang, onSaveInvoice, onDeleteInvoice, onUpdateConfig, readonly = false }) => {
   const showAllInvoices = canViewAllInvoices(currentUser);
   const visibleInvoices = useMemo(() => filterInvoicesForUser(invoices, currentUser), [invoices, currentUser]);
   const canManageCompany = isInvoiceMasterOrAdmin(currentUser);
@@ -150,6 +153,10 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
   const [loadMenuSection, setLoadMenuSection] = useState<InvoiceSectionKey | null>(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [paymentModalInv, setPaymentModalInv] = useState<Invoice | null>(null);
+  const [followUpModalInv, setFollowUpModalInv] = useState<Invoice | null>(null);
+  const [followUpAssigneeIds, setFollowUpAssigneeIds] = useState<string[]>([]);
+  const [followUpNote, setFollowUpNote] = useState('');
+  const [followUpSaving, setFollowUpSaving] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: 0, date: new Date().toISOString().split('T')[0], method: '', reference: '', note: '' });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [importErr, setImportErr] = useState('');
@@ -187,6 +194,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       uploadJson: 'آپلود JSON',
       exportJson: 'خروجی JSON',
       jsonImportErr: 'فایل JSON نامعتبر است. فرمت سمپل فاکتور را رعایت کنید.',
+      followUp: 'پیگیری',
+      followUpTitle: 'ارجاع پیگیری فاکتور',
+      followUpAssignee: 'مسئول پیگیری',
+      followUpNote: 'یادداشت پیگیری (اختیاری)',
+      followUpSubmit: 'ارجاع و ارسال نوتیف',
+      followUpDone: 'ارجاع پیگیری انجام شد.',
+      followUpCol: 'پیگیری',
+      followUpHint: 'پیام داخلی و واتساپ (در صورت فعال بودن) برای پرسنل ارسال می‌شود.',
+      followUpPick: 'یک پرسنل برای پیگیری انتخاب کنید.',
     },
     en: {
       title: 'Invoices', archive: 'Invoice Archive', newInvoice: 'New Invoice', companyInfo: 'Company Info',
@@ -211,6 +227,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       uploadJson: 'Upload JSON',
       exportJson: 'Export JSON',
       jsonImportErr: 'Invalid JSON file. Use the invoice sample format.',
+      followUp: 'Follow up',
+      followUpTitle: 'Assign invoice follow-up',
+      followUpAssignee: 'Follow-up assignee',
+      followUpNote: 'Follow-up note (optional)',
+      followUpSubmit: 'Assign & notify',
+      followUpDone: 'Follow-up assigned.',
+      followUpCol: 'Follow-up',
+      followUpHint: 'Sends an internal message and WhatsApp (if enabled) to the assignee.',
+      followUpPick: 'Select one person for follow-up.',
     },
   }[lang];
 
@@ -638,6 +663,59 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     }
   };
 
+  const openFollowUpModal = (inv: Invoice) => {
+    if (readonly) return;
+    if (!canEditInvoice(currentUser, inv)) { denyAccess(); return; }
+    setFollowUpModalInv(inv);
+    setFollowUpAssigneeIds(inv.followUpAssigneeId ? [inv.followUpAssigneeId] : []);
+    setFollowUpNote(inv.followUpNote || '');
+  };
+
+  const handleFollowUpAssign = async () => {
+    if (!followUpModalInv || readonly) return;
+    const assigneeId = followUpAssigneeIds[0];
+    if (!assigneeId) {
+      alert(t.followUpPick);
+      return;
+    }
+    const assignee = personnel.find(p => p.id === assigneeId);
+    if (!assignee) {
+      alert(lang === 'fa' ? 'پرسنل یافت نشد.' : 'Personnel not found.');
+      return;
+    }
+    setFollowUpSaving(true);
+    try {
+      const updated = recompute({
+        ...followUpModalInv,
+        followUpAssigneeId: assignee.id,
+        followUpAssigneeName: assignee.fullName,
+        followUpNote: followUpNote.trim() || undefined,
+        followUpAt: new Date().toISOString(),
+        followUpBy: currentUser.fullName,
+        followUpByPersonnelId: currentUser.id,
+      });
+      await onSaveInvoice(updated);
+      await notifyInvoiceFollowUp({
+        invoice: updated,
+        assignee,
+        assigner: currentUser,
+        note: followUpNote.trim() || undefined,
+        config,
+        personnel,
+        lang,
+      });
+      setFollowUpModalInv(null);
+      setFollowUpAssigneeIds([]);
+      setFollowUpNote('');
+      alert(t.followUpDone);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      alert(lang === 'fa' ? `خطا در ارجاع پیگیری:\n${detail}` : `Follow-up failed:\n${detail}`);
+    } finally {
+      setFollowUpSaving(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (readonly) return;
     const inv = invoices.find(i => i.id === id);
@@ -865,6 +943,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                     <th className="px-4 py-3 font-medium">{t.date}</th>
                     <th className="px-4 py-3 font-medium">{t.amount}</th>
                     <th className="px-4 py-3 font-medium">{t.status}</th>
+                    <th className="px-4 py-3 font-medium">{t.followUpCol}</th>
                     <th className="px-4 py-3 font-medium text-center">{t.actions}</th>
                   </tr>
                 </thead>
@@ -890,8 +969,25 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
                         )}
                       </td>
                       <td className="px-4 py-3"><span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${archiveStatusCls(inv)}`}>{archiveStatusLabel(inv)}</span></td>
+                      <td className="px-4 py-3 text-xs text-gray-600">
+                        {inv.followUpAssigneeName ? (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium">
+                              {inv.followUpAssigneeName}
+                            </span>
+                            {inv.followUpAt && (
+                              <div className="text-[10px] text-gray-400 mt-0.5" dir="ltr">{fmtDate(inv.followUpAt.slice(0, 10))}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
+                          {editable && (
+                            <button onClick={() => openFollowUpModal(inv)} title={t.followUp} className="p-1.5 text-violet-600 hover:bg-violet-50 rounded-lg"><IconArrowRight className="w-4 h-4" /></button>
+                          )}
                           {editable && balance > 0 && (
                             <button onClick={() => openPaymentModal(inv)} title={lang === 'fa' ? 'ثبت واریز' : 'Record payment'} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"><IconMoney className="w-4 h-4" /></button>
                           )}
@@ -1490,6 +1586,48 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
             <div className="flex gap-2 mt-6">
               <button type="button" onClick={() => setPaymentModalInv(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
               <button type="button" disabled={paymentSaving} onClick={handleRecordPayment} className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">Record Payment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Follow-up assignment modal ── */}
+      {followUpModalInv && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 print:hidden" onClick={() => !followUpSaving && setFollowUpModalInv(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()} dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+            <h4 className="font-bold text-gray-900 mb-1">{t.followUpTitle}</h4>
+            <p className="text-xs text-gray-500 mb-1">{followUpModalInv.number} · {followUpModalInv.customerName}</p>
+            <p className="text-[11px] text-violet-600/80 mb-4">{t.followUpHint}</p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
+              <div className="flex justify-between gap-4"><span className="text-gray-500">{t.amount}</span><span className="font-bold" dir="ltr">{fmtMoney(followUpModalInv.total, followUpModalInv.currency || 'OMR', followUpModalInv)}</span></div>
+              <div className="flex justify-between gap-4"><span className="text-gray-500">{lang === 'fa' ? 'مانده' : 'Balance due'}</span><span className="font-bold text-amber-600" dir="ltr">{fmtMoney(invoiceBalanceDue(followUpModalInv), followUpModalInv.currency || 'OMR', followUpModalInv)}</span></div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-2">{t.followUpAssignee}</label>
+                <StaffIdPicker
+                  personnel={personnel.filter(p => p.isActive !== false)}
+                  selectedIds={followUpAssigneeIds}
+                  onChange={ids => setFollowUpAssigneeIds(ids.slice(-1))}
+                  lang={lang}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 mb-2">{t.followUpNote}</label>
+                <textarea
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400 min-h-[80px] resize-y"
+                  value={followUpNote}
+                  onChange={e => setFollowUpNote(e.target.value)}
+                  placeholder={lang === 'fa' ? 'مثلاً: تماس با مشتری برای وصول مانده تا پایان هفته' : 'e.g. Call customer about balance due by end of week'}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button type="button" disabled={followUpSaving} onClick={() => setFollowUpModalInv(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">{t.cancel}</button>
+              <button type="button" disabled={followUpSaving || followUpAssigneeIds.length === 0} onClick={handleFollowUpAssign} className="flex-1 px-4 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                <IconArrowRight className="w-4 h-4" />
+                {followUpSaving ? (lang === 'fa' ? 'در حال ارسال…' : 'Sending…') : t.followUpSubmit}
+              </button>
             </div>
           </div>
         </div>
