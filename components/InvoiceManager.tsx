@@ -26,6 +26,7 @@ import {
   removeInvoiceReceipt,
 } from '../utils/invoicePayments';
 import { isInvoiceCancelled, isInvoiceActiveForStats } from '../utils/invoiceCancel';
+import { textDirection } from '../utils/textDirection';
 import {
   canViewAllInvoices,
   canEditInvoice,
@@ -1353,6 +1354,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
               maxWidth: '100%',
               padding: `${draft.printPadding ?? 26}px ${Math.max(18, (draft.printPadding ?? 26) + 4)}px`,
               boxSizing: 'border-box',
+              fontFamily: "'Vazirmatn', Tahoma, 'Segoe UI', sans-serif",
               ['--inv-density' as string]: String(draft.printDensity ?? 0),
               ['--inv-gap' as string]: `${Math.max(4, Math.round(12 * (1 - (draft.printDensity ?? 0) / 100 * 0.7)))}px`,
               ['--inv-block-pad' as string]: `${Math.max(6, Math.round(12 * (1 - (draft.printDensity ?? 0) / 100 * 0.65)))}px`,
@@ -1541,8 +1543,31 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   <tr key={idx} className="border-b border-gray-100 align-top">
                     <td className="px-2 py-2 text-gray-400">{idx + 1}</td>
                     <td className="px-2 py-2">
-                      <input className="invoice-block-field w-full font-semibold outline-none bg-transparent leading-snug" style={{ color: accent }} placeholder="Service title" value={item.description.split('\n')[0] || ''} onChange={e => { const rest = item.description.split('\n').slice(1).join('\n'); setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value); }} readOnly={readonly} />
-                      <input className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:border-0" placeholder="Details (sub-line)" value={item.description.split('\n').slice(1).join('\n')} onChange={e => { const first = item.description.split('\n')[0] || ''; setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first); }} readOnly={readonly} />
+                      <input
+                        className="invoice-block-field w-full font-semibold outline-none bg-transparent leading-snug"
+                        style={{ color: accent, unicodeBidi: 'isolate' }}
+                        dir={textDirection(item.description.split('\n')[0] || '')}
+                        placeholder="Service title"
+                        value={item.description.split('\n')[0] || ''}
+                        onChange={e => {
+                          const rest = item.description.split('\n').slice(1).join('\n');
+                          setItem(idx, 'description', rest ? `${e.target.value}\n${rest}` : e.target.value);
+                        }}
+                        readOnly={readonly}
+                      />
+                      <textarea
+                        className="invoice-block-field w-full text-[10px] text-gray-500 outline-none bg-transparent leading-snug mt-0.5 print:border-0 resize-none"
+                        style={{ unicodeBidi: 'plaintext' }}
+                        dir={textDirection(item.description.split('\n').slice(1).join('\n'))}
+                        rows={Math.min(6, Math.max(2, item.description.split('\n').slice(1).filter(Boolean).length || 2))}
+                        placeholder="Details (EN / فارسی)"
+                        value={item.description.split('\n').slice(1).join('\n')}
+                        onChange={e => {
+                          const first = item.description.split('\n')[0] || '';
+                          setItem(idx, 'description', e.target.value ? `${first}\n${e.target.value}` : first);
+                        }}
+                        readOnly={readonly}
+                      />
                     </td>
                     <td className="px-2 py-2 text-center"><input type="number" min="0" className="invoice-inline-field w-full outline-none bg-transparent text-center" value={item.quantity} onChange={e => setItem(idx, 'quantity', parseInt(e.target.value) || 0)} readOnly={readonly} /></td>
                     <td className="px-2 py-2 text-right">
@@ -1696,7 +1721,9 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                 </div>
                 <textarea
                   rows={3}
-                  className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-snug whitespace-pre-wrap dir-ltr"
+                  className="w-full text-[11px] text-gray-700 outline-none bg-transparent resize-none leading-snug whitespace-pre-wrap"
+                  style={{ unicodeBidi: 'plaintext' }}
+                  dir={textDirection(draft.paymentDetails || '')}
                   placeholder="Paste or type your bank / payment details here…"
                   value={draft.paymentDetails || ''}
                   onChange={e => setField('paymentDetails', e.target.value)}
@@ -1707,7 +1734,15 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   <p className="text-[10px] font-bold tracking-wider text-gray-400">NOTES / TERMS</p>
                   <SectionPresetControls section="notes" />
                 </div>
-                <textarea rows={4} className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed" placeholder={'Project Details & Timeline\n• ...'} value={draft.note || ''} onChange={e => setField('note', e.target.value)} />
+                <textarea
+                  rows={4}
+                  className="w-full text-[11px] text-gray-600 outline-none bg-transparent resize-none leading-relaxed whitespace-pre-wrap"
+                  style={{ unicodeBidi: 'plaintext' }}
+                  dir={textDirection(draft.note || '')}
+                  placeholder={'Project Details & Timeline\n• ...'}
+                  value={draft.note || ''}
+                  onChange={e => setField('note', e.target.value)}
+                />
               </div>
             </div>
 
@@ -1743,6 +1778,10 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
             .invoice-keep-together { break-inside: avoid; page-break-inside: avoid; }
             .invoice-notes-box { break-inside: avoid; page-break-inside: avoid; }
             .invoice-cancelled-stamp { break-inside: avoid; page-break-inside: avoid; }
+            .invoice-content textarea,
+            .invoice-content input[dir="rtl"] {
+              unicode-bidi: plaintext;
+            }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }

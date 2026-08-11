@@ -22,32 +22,64 @@ const flattenInputsForExport = (root: HTMLElement) => {
         return;
       }
     }
-    const span = document.createElement('span');
-    if (node.tagName === 'SELECT') {
-      const sel = node as HTMLSelectElement;
-      span.textContent = sel.options[sel.selectedIndex]?.text || sel.value;
-    } else if (node.tagName === 'TEXTAREA') {
-      span.textContent = node.value;
-      span.style.whiteSpace = 'pre-wrap';
-      span.style.display = 'block';
-    } else {
-      span.textContent = node.value;
+    const isTextarea = node.tagName === 'TEXTAREA';
+    const rawValue = isTextarea
+      ? (node as HTMLTextAreaElement).value
+      : node.tagName === 'SELECT'
+        ? ((node as HTMLSelectElement).options[(node as HTMLSelectElement).selectedIndex]?.text || (node as HTMLSelectElement).value)
+        : (node as HTMLInputElement).value;
+
+    // Multi-line / Persian: render as isolated lines so BiDi doesn't scramble glyphs.
+    if (isTextarea || (typeof rawValue === 'string' && /[\u0600-\u06FF]/.test(rawValue) && rawValue.includes('\n'))) {
+      const wrap = document.createElement('div');
+      const cs = window.getComputedStyle(node);
+      wrap.style.font = cs.font;
+      wrap.style.color = cs.color;
+      wrap.style.width = '100%';
+      wrap.style.lineHeight = cs.lineHeight || '1.35';
+      wrap.style.whiteSpace = 'pre-wrap';
+      wrap.style.unicodeBidi = 'isolate';
+      const lines = String(rawValue || '').split('\n');
+      lines.forEach((line, i) => {
+        const p = document.createElement('div');
+        p.textContent = line || '\u00a0';
+        p.dir = /[\u0600-\u06FF]/.test(line) ? 'rtl' : 'ltr';
+        p.style.unicodeBidi = 'isolate';
+        p.style.textAlign = /[\u0600-\u06FF]/.test(line) ? 'right' : (cs.textAlign || 'left');
+        if (i > 0) p.style.marginTop = '2px';
+        wrap.appendChild(p);
+      });
+      node.replaceWith(wrap);
+      return;
     }
+
+    const span = document.createElement('span');
+    span.textContent = String(rawValue || '');
     const inline = node.classList.contains('invoice-inline-field');
     const block = node.classList.contains('invoice-block-field');
     const cs = window.getComputedStyle(node);
     span.style.font = cs.font;
     span.style.color = cs.color;
-    span.style.textAlign = cs.textAlign;
     span.style.padding = '0';
     span.style.margin = '0';
     span.style.lineHeight = cs.lineHeight;
+    span.style.unicodeBidi = 'isolate';
+    const hasRtl = /[\u0600-\u06FF]/.test(String(rawValue || ''));
+    span.dir = hasRtl ? 'rtl' : (node.getAttribute('dir') || 'ltr');
+    if (hasRtl) {
+      span.style.textAlign = 'right';
+      span.style.display = 'block';
+      span.style.width = '100%';
+    } else {
+      span.style.textAlign = cs.textAlign;
+    }
     if (node.tagName === 'TEXTAREA' || block) {
       span.style.display = 'block';
       span.style.width = '100%';
       if (block) span.style.marginBottom = '3px';
+      span.style.whiteSpace = 'pre-wrap';
     } else if (inline || node.tagName === 'SELECT') {
-      span.style.display = 'inline';
+      if (!hasRtl) span.style.display = 'inline';
     } else {
       span.style.display = 'block';
       span.style.width = '100%';
@@ -254,6 +286,13 @@ export async function exportInvoicePdf(element: HTMLElement, filename: string): 
   try {
     document.body.appendChild(host);
     host.appendChild(captureRoot);
+
+    // Wait for Vazirmatn (and other webfonts) so Persian glyphs shape correctly in the canvas.
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+    } catch { /* ignore */ }
+
+    captureRoot.style.fontFamily = "'Vazirmatn', Tahoma, 'Segoe UI', sans-serif";
 
     // Flatten on live clone first so height (and NOTES) match PDF
     flattenInputsForExport(captureRoot);
