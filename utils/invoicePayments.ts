@@ -1,12 +1,16 @@
 import { Invoice, InvoiceReceipt } from '../types';
+import { isInvoiceCancelled } from './invoiceCancel';
 
 export const invoiceAmountPaid = (inv: Invoice): number =>
   (inv.receipts || []).reduce((sum, r) => sum + (r.amount || 0), 0);
 
-export const invoiceBalanceDue = (inv: Invoice): number =>
-  Math.max(0, (inv.total || 0) - invoiceAmountPaid(inv));
+export const invoiceBalanceDue = (inv: Invoice): number => {
+  if (isInvoiceCancelled(inv)) return 0;
+  return Math.max(0, (inv.total || 0) - invoiceAmountPaid(inv));
+};
 
-export const invoicePaymentStatus = (inv: Invoice): 'unpaid' | 'partial' | 'paid' => {
+export const invoicePaymentStatus = (inv: Invoice): 'unpaid' | 'partial' | 'paid' | 'cancelled' => {
+  if (isInvoiceCancelled(inv)) return 'cancelled';
   const paid = invoiceAmountPaid(inv);
   const total = inv.total || 0;
   if (total <= 0 || paid <= 0) return 'unpaid';
@@ -15,6 +19,10 @@ export const invoicePaymentStatus = (inv: Invoice): 'unpaid' | 'partial' | 'paid
 };
 
 export const withInvoicePaymentMeta = (inv: Invoice): Invoice => {
+  if (isInvoiceCancelled(inv)) {
+    const paid = invoiceAmountPaid(inv);
+    return { ...inv, amountPaid: paid, balanceDue: 0, status: 'cancelled' };
+  }
   const paid = invoiceAmountPaid(inv);
   const balance = invoiceBalanceDue(inv);
   let status = inv.status || 'draft';

@@ -25,6 +25,7 @@ import {
   addInvoiceReceipt,
   removeInvoiceReceipt,
 } from '../utils/invoicePayments';
+import { isInvoiceCancelled, isInvoiceActiveForStats } from '../utils/invoiceCancel';
 import {
   canViewAllInvoices,
   canEditInvoice,
@@ -46,6 +47,8 @@ import { CatalogManager } from './CatalogManager';
 import { RealEstateProposalManager } from './RealEstateProposalManager';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
+
+const ARCHIVE_PAGE_SIZE = 10;
 
 interface Props {
   invoices: Invoice[];
@@ -136,6 +139,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
   const [mode, setMode] = useState<'archive' | 'editor' | 'company'>('archive');
   const [draft, setDraft] = useState<Invoice | null>(null);
   const [search, setSearch] = useState('');
+  const [archivePage, setArchivePage] = useState(1);
   const [saving, setSaving] = useState(false);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -176,7 +180,22 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
       number: 'شماره', customer: 'مشتری', date: 'تاریخ', amount: 'مبلغ', status: 'وضعیت', issuer: 'صادرکننده', actions: 'عملیات',
       edit: 'ویرایش', del: 'حذف', print: 'چاپ', save: 'ذخیره', cancel: 'انصراف', back: 'بازگشت به آرشیو',
       deleteConfirm: 'این فاکتور حذف شود؟',
-      draft: 'پیش‌نویس', issued: 'صادر شده', paid: 'پرداخت شده',
+      draft: 'پیش‌نویس', issued: 'صادر شده', paid: 'پرداخت شده', cancelled: 'کنسل شده',
+      cancelInvoice: 'کنسل فاکتور',
+      restoreInvoice: 'بازگردانی فاکتور',
+      cancelConfirm: 'این فاکتور کنسل شود؟ در محاسبات مالی لحاظ نمی‌شود.',
+      cancelReasonPrompt: 'دلیل کنسل (اختیاری):',
+      cancelDone: 'فاکتور کنسل شد.',
+      restoreConfirm: 'فاکتور از حالت کنسل خارج شود؟',
+      restoreDone: 'فاکتور بازگردانی شد.',
+      cancelledStamp: 'کنسل شده',
+      cancelledTotal: 'جمع کنسل‌ها',
+      cancelledCount: 'تعداد کنسل',
+      page: 'صفحه',
+      of: 'از',
+      prev: 'قبلی',
+      next: 'بعدی',
+      showing: 'نمایش',
       pickCustomer: 'انتخاب از بانک مشتریان',
       regenNo: 'تولید شماره جدید',
       saveCompany: 'ذخیره اطلاعات شرکت', savedOk: 'ذخیره شد ✓',
@@ -210,7 +229,22 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
       number: 'No.', customer: 'Customer', date: 'Date', amount: 'Amount', status: 'Status', issuer: 'Issued by', actions: 'Actions',
       edit: 'Edit', del: 'Delete', print: 'Print', save: 'Save', cancel: 'Cancel', back: 'Back to archive',
       deleteConfirm: 'Delete this invoice?',
-      draft: 'Draft', issued: 'Issued', paid: 'Paid',
+      draft: 'Draft', issued: 'Issued', paid: 'Paid', cancelled: 'Cancelled',
+      cancelInvoice: 'Cancel invoice',
+      restoreInvoice: 'Restore invoice',
+      cancelConfirm: 'Cancel this invoice? It will be excluded from financial totals.',
+      cancelReasonPrompt: 'Cancellation reason (optional):',
+      cancelDone: 'Invoice cancelled.',
+      restoreConfirm: 'Restore this invoice from cancelled status?',
+      restoreDone: 'Invoice restored.',
+      cancelledStamp: 'CANCELLED',
+      cancelledTotal: 'Cancelled total',
+      cancelledCount: 'Cancelled count',
+      page: 'Page',
+      of: 'of',
+      prev: 'Previous',
+      next: 'Next',
+      showing: 'Showing',
       pickCustomer: 'Pick from Customer Bank',
       regenNo: 'New number',
       saveCompany: 'Save company info', savedOk: 'Saved ✓',
@@ -239,15 +273,21 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
     },
   }[lang];
 
-  const statusLabel = (s?: Invoice['status']) => s === 'paid' ? t.paid : s === 'issued' ? t.issued : t.draft;
-  const statusCls = (s?: Invoice['status']) => s === 'paid' ? 'bg-emerald-100 text-emerald-700' : s === 'issued' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
+  const statusLabel = (s?: Invoice['status']) =>
+    s === 'cancelled' ? t.cancelled : s === 'paid' ? t.paid : s === 'issued' ? t.issued : t.draft;
+  const statusCls = (s?: Invoice['status']) =>
+    s === 'cancelled' ? 'bg-red-100 text-red-700 line-through decoration-red-400/60' :
+    s === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+    s === 'issued' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
   const archiveStatusLabel = (inv: Invoice) => {
+    if (isInvoiceCancelled(inv)) return t.cancelled;
     const ps = invoicePaymentStatus(inv);
     if (ps === 'paid') return t.paid;
     if (ps === 'partial') return lang === 'fa' ? 'پرداخت جزئی' : 'Partial';
     return statusLabel(inv.status);
   };
   const archiveStatusCls = (inv: Invoice) => {
+    if (isInvoiceCancelled(inv)) return 'bg-red-100 text-red-700';
     const ps = invoicePaymentStatus(inv);
     if (ps === 'paid') return 'bg-emerald-100 text-emerald-700';
     if (ps === 'partial') return 'bg-amber-100 text-amber-700';
@@ -256,15 +296,45 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return visibleInvoices;
-    return visibleInvoices.filter(i => i.number.toLowerCase().includes(q) || (i.customerName || '').toLowerCase().includes(q) || (i.companyName || '').toLowerCase().includes(q) || (i.issuedBy || '').toLowerCase().includes(q));
+    const base = !q ? visibleInvoices : visibleInvoices.filter(i =>
+      i.number.toLowerCase().includes(q)
+      || (i.customerName || '').toLowerCase().includes(q)
+      || (i.companyName || '').toLowerCase().includes(q)
+      || (i.issuedBy || '').toLowerCase().includes(q));
+    return [...base].sort((a, b) =>
+      new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
   }, [visibleInvoices, search]);
 
+  const archivePageCount = Math.max(1, Math.ceil(filtered.length / ARCHIVE_PAGE_SIZE));
+  const paginatedFiltered = useMemo(() => {
+    const page = Math.min(archivePage, archivePageCount);
+    const start = (page - 1) * ARCHIVE_PAGE_SIZE;
+    return filtered.slice(start, start + ARCHIVE_PAGE_SIZE);
+  }, [filtered, archivePage, archivePageCount]);
+
+  useEffect(() => {
+    setArchivePage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (archivePage > archivePageCount) setArchivePage(archivePageCount);
+  }, [archivePage, archivePageCount]);
+
   const archiveStats = useMemo(() => {
-    const byCur: Record<string, { count: number; invoiced: number; paid: number; due: number }> = {};
+    const byCur: Record<string, {
+      count: number; invoiced: number; paid: number; due: number;
+      cancelledCount: number; cancelledTotal: number;
+    }> = {};
     for (const inv of visibleInvoices) {
       const c = inv.currency || 'OMR';
-      if (!byCur[c]) byCur[c] = { count: 0, invoiced: 0, paid: 0, due: 0 };
+      if (!byCur[c]) {
+        byCur[c] = { count: 0, invoiced: 0, paid: 0, due: 0, cancelledCount: 0, cancelledTotal: 0 };
+      }
+      if (isInvoiceCancelled(inv)) {
+        byCur[c].cancelledCount += 1;
+        byCur[c].cancelledTotal += inv.total || 0;
+        continue;
+      }
       byCur[c].count += 1;
       byCur[c].invoiced += inv.total || 0;
       byCur[c].paid += invoiceAmountPaid(inv);
@@ -613,6 +683,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
   };
 
   const openPaymentModal = (inv: Invoice) => {
+    if (isInvoiceCancelled(inv)) return;
     setPaymentModalInv(inv);
     const balance = invoiceBalanceDue(inv);
     setPaymentForm({
@@ -664,7 +735,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
   };
 
   const openFollowUpModal = (inv: Invoice) => {
-    if (readonly) return;
+    if (readonly || isInvoiceCancelled(inv)) return;
     if (!canEditInvoice(currentUser, inv)) { denyAccess(); return; }
     setFollowUpModalInv(inv);
     setFollowUpAssigneeIds(inv.followUpAssigneeId ? [inv.followUpAssigneeId] : []);
@@ -730,6 +801,56 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       alert(lang === 'fa' ? `خطا در حذف فاکتور:\n${detail}` : `Failed to delete invoice:\n${detail}`);
+    }
+  };
+
+  const handleCancelInvoice = async (inv: Invoice) => {
+    if (readonly) return;
+    if (!canEditInvoice(currentUser, inv)) { denyAccess(); return; }
+    if (isInvoiceCancelled(inv)) return;
+    if (!window.confirm(t.cancelConfirm)) return;
+    const reason = window.prompt(t.cancelReasonPrompt) ?? '';
+    try {
+      const updated = recompute({
+        ...inv,
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: currentUser.fullName,
+        cancelledByPersonnelId: currentUser.id,
+        cancelReason: reason.trim() || undefined,
+      });
+      await onSaveInvoice(updated);
+      if (draft?.id === inv.id) setDraft(updated);
+      alert(t.cancelDone);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      alert(lang === 'fa' ? `خطا در کنسل:\n${detail}` : `Cancel failed:\n${detail}`);
+    }
+  };
+
+  const handleRestoreInvoice = async (inv: Invoice) => {
+    if (readonly) return;
+    if (!canEditInvoice(currentUser, inv)) { denyAccess(); return; }
+    if (!isInvoiceCancelled(inv)) return;
+    if (!window.confirm(t.restoreConfirm)) return;
+    try {
+      const restoredStatus: Invoice['status'] =
+        invoiceAmountPaid(inv) >= (inv.total || 0) - 0.0001 ? 'paid'
+        : invoiceAmountPaid(inv) > 0 ? 'issued' : 'draft';
+      const updated = recompute({
+        ...inv,
+        status: restoredStatus,
+        cancelledAt: undefined,
+        cancelledBy: undefined,
+        cancelledByPersonnelId: undefined,
+        cancelReason: undefined,
+      });
+      await onSaveInvoice(updated);
+      if (draft?.id === inv.id) setDraft(updated);
+      alert(t.restoreDone);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      alert(lang === 'fa' ? `خطا در بازگردانی:\n${detail}` : `Restore failed:\n${detail}`);
     }
   };
   const handleSaveCompany = () => { onUpdateConfig({ ...config, invoiceTemplate: companyForm }); setCompanySaved(true); setTimeout(() => setCompanySaved(false), 2500); };
@@ -898,26 +1019,31 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   {Object.keys(archiveStats).length > 1 && (
                     <p className="text-xs font-bold text-gray-500 mb-2">{currency}</p>
                   )}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                     <div className="rounded-xl border border-gray-100 bg-white p-3">
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wide">Total Invoiced</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wide">{lang === 'fa' ? 'جمع فاکتورها' : 'Total Invoiced'}</p>
                       <p className="text-lg font-black text-gray-900 mt-0.5">{fmtMoney(s.invoiced, currency)}</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{s.count} invoice{s.count !== 1 ? 's' : ''}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{s.count} {lang === 'fa' ? 'فاکتور فعال' : 'active invoice(s)'}</p>
                     </div>
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
-                      <p className="text-[10px] text-emerald-600 uppercase tracking-wide">Total Received</p>
+                      <p className="text-[10px] text-emerald-600 uppercase tracking-wide">{lang === 'fa' ? 'دریافت‌شده' : 'Total Received'}</p>
                       <p className="text-lg font-black text-emerald-700 mt-0.5">{fmtMoney(s.paid, currency)}</p>
                       <p className="text-[10px] text-emerald-600/70 mt-0.5">{s.invoiced > 0 ? `${Math.round((s.paid / s.invoiced) * 100)}% collected` : '—'}</p>
                     </div>
                     <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
-                      <p className="text-[10px] text-amber-600 uppercase tracking-wide">Outstanding</p>
+                      <p className="text-[10px] text-amber-600 uppercase tracking-wide">{lang === 'fa' ? 'مانده' : 'Outstanding'}</p>
                       <p className="text-lg font-black text-amber-700 mt-0.5">{fmtMoney(s.due, currency)}</p>
-                      <p className="text-[10px] text-amber-600/70 mt-0.5">Balance due</p>
+                      <p className="text-[10px] text-amber-600/70 mt-0.5">{lang === 'fa' ? 'قابل وصول' : 'Balance due'}</p>
                     </div>
                     <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
-                      <p className="text-[10px] text-indigo-600 uppercase tracking-wide">Status</p>
-                      <p className="text-lg font-black text-indigo-800 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'paid').length} paid</p>
-                      <p className="text-[10px] text-indigo-600/70 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'partial').length} partial · {visibleInvoices.filter(i => (i.currency || 'OMR') === currency && invoicePaymentStatus(i) === 'unpaid').length} open</p>
+                      <p className="text-[10px] text-indigo-600 uppercase tracking-wide">{t.status}</p>
+                      <p className="text-lg font-black text-indigo-800 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && isInvoiceActiveForStats(i) && invoicePaymentStatus(i) === 'paid').length} paid</p>
+                      <p className="text-[10px] text-indigo-600/70 mt-0.5">{visibleInvoices.filter(i => (i.currency || 'OMR') === currency && isInvoiceActiveForStats(i) && invoicePaymentStatus(i) === 'partial').length} partial · {visibleInvoices.filter(i => (i.currency || 'OMR') === currency && isInvoiceActiveForStats(i) && invoicePaymentStatus(i) === 'unpaid').length} open</p>
+                    </div>
+                    <div className="rounded-xl border border-red-200 bg-red-50/50 p-3">
+                      <p className="text-[10px] text-red-600 uppercase tracking-wide">{t.cancelledTotal}</p>
+                      <p className="text-lg font-black text-red-700 mt-0.5 line-through decoration-red-400/70">{fmtMoney(s.cancelledTotal, currency)}</p>
+                      <p className="text-[10px] text-red-600/80 mt-0.5">{s.cancelledCount} {lang === 'fa' ? 'فاکتور کنسل' : 'cancelled'}</p>
                     </div>
                   </div>
                 </div>
@@ -948,23 +1074,26 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map(inv => {
+                  {paginatedFiltered.map(inv => {
                     const paid = invoiceAmountPaid(inv);
                     const balance = invoiceBalanceDue(inv);
                     const curInv = inv.currency || 'OMR';
                     const editable = canEditInvoice(currentUser, inv);
+                    const cancelled = isInvoiceCancelled(inv);
                     return (
-                    <tr key={inv.id} className="hover:bg-gray-50/60">
-                      <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">{inv.number}</td>
-                      <td className="px-4 py-3"><div className="font-medium text-gray-800">{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
+                    <tr key={inv.id} className={`hover:bg-gray-50/60 ${cancelled ? 'bg-red-50/30 opacity-80' : ''}`}>
+                      <td className="px-4 py-3 font-mono text-gray-700 text-xs" dir="ltr">
+                        <span className={cancelled ? 'line-through text-red-600/80' : ''}>{inv.number}</span>
+                      </td>
+                      <td className="px-4 py-3"><div className={`font-medium ${cancelled ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{inv.customerName}</div>{inv.companyName && <div className="text-xs text-gray-400">{inv.companyName}</div>}</td>
                       {showAllInvoices && <td className="px-4 py-3 text-gray-600 text-xs">{inv.issuedBy || '—'}</td>}
                       <td className="px-4 py-3 text-gray-500" dir="ltr">{fmtDate(inv.date)}</td>
                       <td className="px-4 py-3" dir="ltr">
-                        <div className="font-bold text-gray-800">{fmtMoney(inv.total, curInv, inv)}</div>
-                        {paid > 0 && (
+                        <div className={`font-bold ${cancelled ? 'text-red-600 line-through' : 'text-gray-800'}`}>{fmtMoney(inv.total, curInv, inv)}</div>
+                        {!cancelled && paid > 0 && (
                           <div className="text-[10px] mt-0.5 text-emerald-600">Paid {fmtMoney(paid, curInv, inv)}</div>
                         )}
-                        {balance > 0 && paid > 0 && (
+                        {!cancelled && balance > 0 && paid > 0 && (
                           <div className="text-[10px] text-amber-600">Due {fmtMoney(balance, curInv, inv)}</div>
                         )}
                       </td>
@@ -984,12 +1113,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          {editable && (
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          {editable && !cancelled && (
                             <button onClick={() => openFollowUpModal(inv)} title={t.followUp} className="p-1.5 text-violet-600 hover:bg-violet-50 rounded-lg"><IconArrowRight className="w-4 h-4" /></button>
                           )}
-                          {editable && balance > 0 && (
+                          {editable && !cancelled && balance > 0 && (
                             <button onClick={() => openPaymentModal(inv)} title={lang === 'fa' ? 'ثبت واریز' : 'Record payment'} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"><IconMoney className="w-4 h-4" /></button>
+                          )}
+                          {editable && !cancelled && (
+                            <button onClick={() => handleCancelInvoice(inv)} title={t.cancelInvoice} className="px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-50 rounded-lg border border-red-200">{lang === 'fa' ? 'کنسل' : 'Cancel'}</button>
+                          )}
+                          {editable && cancelled && (
+                            <button onClick={() => handleRestoreInvoice(inv)} title={t.restoreInvoice} className="px-2 py-1 text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg border border-emerald-200">{lang === 'fa' ? 'بازگردانی' : 'Restore'}</button>
                           )}
                           <button onClick={() => startEdit(inv)} title={editable ? t.edit : (lang === 'fa' ? 'مشاهده' : 'View')} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg"><IconEdit className="w-4 h-4" /></button>
                           {editable && <button onClick={() => handleDelete(inv.id)} title={t.del} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><IconTrash className="w-4 h-4" /></button>}
@@ -1000,6 +1135,34 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {filtered.length > ARCHIVE_PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50/80">
+              <p className="text-xs text-gray-500">
+                {t.showing} {Math.min((archivePage - 1) * ARCHIVE_PAGE_SIZE + 1, filtered.length)}–{Math.min(archivePage * ARCHIVE_PAGE_SIZE, filtered.length)} {lang === 'fa' ? 'از' : 'of'} {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={archivePage <= 1}
+                  onClick={() => setArchivePage(p => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  {t.prev}
+                </button>
+                <span className="text-xs font-semibold text-gray-600 px-2">
+                  {t.page} {archivePage} {t.of} {archivePageCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={archivePage >= archivePageCount}
+                  onClick={() => setArchivePage(p => Math.min(archivePageCount, p + 1))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                >
+                  {t.next}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1099,7 +1262,22 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   {decimalOptions}
                 </select>
               </div>
-              <select value={draft.status || 'draft'} onChange={e => setField('status', e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none"><option value="draft">{t.draft}</option><option value="issued">{t.issued}</option><option value="paid">{t.paid}</option></select>
+              <select value={draft.status === 'cancelled' ? 'cancelled' : (draft.status || 'draft')} onChange={e => { if (e.target.value !== 'cancelled') setField('status', e.target.value); }} disabled={isInvoiceCancelled(draft) || readonly} className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white outline-none disabled:opacity-60">
+                <option value="draft">{t.draft}</option>
+                <option value="issued">{t.issued}</option>
+                <option value="paid">{t.paid}</option>
+                {isInvoiceCancelled(draft) && <option value="cancelled">{t.cancelled}</option>}
+              </select>
+              {!readonly && !isInvoiceCancelled(draft) && (
+                <button type="button" onClick={() => handleCancelInvoice(draft)} className="px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm font-bold hover:bg-red-100">
+                  {t.cancelInvoice}
+                </button>
+              )}
+              {!readonly && isInvoiceCancelled(draft) && (
+                <button type="button" onClick={() => handleRestoreInvoice(draft)} className="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-bold hover:bg-emerald-100">
+                  {t.restoreInvoice}
+                </button>
+              )}
               <button type="button" onClick={exportCurrentJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">{t.exportJson}</button>
               <button onClick={handleExportPdf} disabled={pdfGenerating} className="flex items-center gap-1.5 bg-gray-700 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-gray-800 disabled:opacity-50"><IconPrinter className="w-4 h-4" />{pdfGenerating ? 'PDF…' : 'PDF'}</button>
               {!readonly && <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 disabled:opacity-50"><IconCheck className="w-4 h-4" />{t.save}</button>}
@@ -1173,7 +1351,22 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
             dir="ltr"
           >
 
-            <div className="invoice-pdf-sheet">
+            <div className="invoice-pdf-sheet relative overflow-hidden">
+              {isInvoiceCancelled(draft) && (
+                <div className="invoice-cancelled-stamp pointer-events-none absolute inset-0 z-20 flex items-center justify-center" aria-hidden>
+                  <div
+                    className="select-none font-black uppercase tracking-[0.2em] text-red-600/22 border-[6px] border-red-500/25 rounded-2xl px-10 py-6 rotate-[-18deg] text-5xl"
+                    style={{ textShadow: '0 0 1px rgba(220,38,38,0.15)' }}
+                  >
+                    {t.cancelledStamp}
+                  </div>
+                </div>
+              )}
+              {isInvoiceCancelled(draft) && draft.cancelReason && (
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800 print:border-red-300">
+                  <span className="font-bold">{lang === 'fa' ? 'دلیل کنسل:' : 'Cancellation reason:'}</span> {draft.cancelReason}
+                </div>
+              )}
               <div className="flex justify-between items-start gap-5">
                 <div className="min-w-0">
                   {template.logoUrl && (
@@ -1539,6 +1732,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
             .pdf-export .invoice-pdf-sheet { overflow: visible !important; }
             .invoice-keep-together { break-inside: avoid; page-break-inside: avoid; }
             .invoice-notes-box { break-inside: avoid; page-break-inside: avoid; }
+            .invoice-cancelled-stamp { break-inside: avoid; page-break-inside: avoid; }
             @media print {
               @page { size: A4 portrait; margin: 12mm; }
               body * { visibility: hidden; }

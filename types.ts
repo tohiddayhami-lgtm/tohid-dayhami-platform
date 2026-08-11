@@ -189,7 +189,12 @@ export interface Invoice {
   note?: string;
   issuedBy: string;
   issuedByPersonnelId?: string;    // personnel id of issuer (for access control)
-  status?: 'draft' | 'issued' | 'paid';  // archive status
+  status?: 'draft' | 'issued' | 'paid' | 'cancelled';  // archive status
+  /** Set when status becomes cancelled — excluded from revenue stats. */
+  cancelledAt?: string;
+  cancelledBy?: string;
+  cancelledByPersonnelId?: string;
+  cancelReason?: string;
   createdAt?: string;                      // when first created (for sorting the archive)
   documentTitle?: string;                  // header title — e.g. INVOICE, PROFORMA INVOICE
   qtyColumnLabel?: string;                 // line items table — default "QTY"

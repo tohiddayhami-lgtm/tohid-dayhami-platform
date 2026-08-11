@@ -18,7 +18,7 @@ const plusDays = (days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-const STATUS: NonNullable<Invoice['status']>[] = ['draft', 'issued', 'paid'];
+const STATUS: NonNullable<Invoice['status']>[] = ['draft', 'issued', 'paid', 'cancelled'];
 
 export interface InvoiceImportContext {
   actor?: { fullName?: string; id?: string };
