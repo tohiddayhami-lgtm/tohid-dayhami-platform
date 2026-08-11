@@ -756,8 +756,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
     }
     setFollowUpSaving(true);
     try {
+      const linked = followUpModalInv.customerId
+        ? customers.find(c => c.id === followUpModalInv.customerId)
+        : undefined;
+      const phone = followUpModalInv.customerPhone?.trim()
+        || linked?.phoneNumber?.trim()
+        || linked?.whatsappNumber?.trim()
+        || '';
+      const email = followUpModalInv.customerEmail?.trim() || linked?.email?.trim() || '';
       const updated = recompute({
         ...followUpModalInv,
+        customerPhone: phone || followUpModalInv.customerPhone,
+        customerEmail: email || followUpModalInv.customerEmail,
         followUpAssigneeId: assignee.id,
         followUpAssigneeName: assignee.fullName,
         followUpNote: followUpNote.trim() || undefined,

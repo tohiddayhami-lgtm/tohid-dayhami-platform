@@ -7,8 +7,14 @@ import {
   sendMasterCopy,
   sendWhatsAppNotification,
 } from '../services/notificationService';
-import { formatInvoiceMoney } from './invoiceMoney';
-import { invoiceBalanceDue } from './invoicePayments';
+import { formatInvoiceMoney, getInvoiceAmountDecimals } from './invoiceMoney';
+import { invoiceAmountPaid, invoiceBalanceDue } from './invoicePayments';
+import { isInvoiceCancelled } from './invoiceCancel';
+
+const money = (inv: Invoice, amount: number) =>
+  formatInvoiceMoney(amount, inv.currency || 'OMR', getInvoiceAmountDecimals(inv));
+
+const dash = (v?: string) => (v && String(v).trim() ? String(v).trim() : '—');
 
 export async function notifyInvoiceFollowUp(opts: {
   invoice: Invoice;
@@ -21,10 +27,14 @@ export async function notifyInvoiceFollowUp(opts: {
 }): Promise<void> {
   const { invoice, assignee, assigner, note, config, personnel, lang } = opts;
   const fa = lang === 'fa';
-  const cur = invoice.currency || 'OMR';
+  const cancelled = isInvoiceCancelled(invoice);
+  const paid = invoiceAmountPaid(invoice);
   const balance = invoiceBalanceDue(invoice);
-  const totalLabel = formatInvoiceMoney(invoice.total, cur, invoice);
-  const balanceLabel = formatInvoiceMoney(balance, cur, invoice);
+  const totalLabel = money(invoice, invoice.total || 0);
+  const paidLabel = money(invoice, paid);
+  const balanceLabel = money(invoice, balance);
+  const subTotalLabel = money(invoice, invoice.subTotal || 0);
+  const taxLabel = money(invoice, invoice.taxAmount || 0);
 
   const subject = fa
     ? `پیگیری فاکتور ${invoice.number} — ${invoice.customerName || '—'}`
@@ -33,22 +43,35 @@ export async function notifyInvoiceFollowUp(opts: {
   const bodyLines = [
     fa ? 'یک فاکتور برای پیگیری به شما ارجاع شد.' : 'An invoice has been assigned to you for follow-up.',
     '',
-    `${fa ? 'شماره' : 'No.'}: ${invoice.number}`,
-    `${fa ? 'مشتری' : 'Customer'}: ${invoice.customerName || '—'}`,
-    `${fa ? 'مبلغ' : 'Total'}: ${totalLabel}`,
-    `${fa ? 'مانده' : 'Balance due'}: ${balanceLabel}`,
-    `${fa ? 'ارجاع از' : 'Referred by'}: ${assigner.fullName}`,
+    '────────────────────',
+    `${fa ? '🧾 شماره فاکتور' : '🧾 Invoice No.'}: ${invoice.number}`,
+    `${fa ? '👤 مشتری' : '👤 Customer'}: ${dash(invoice.customerName)}`,
+    ...(invoice.companyName ? [`${fa ? '🏢 شرکت' : '🏢 Company'}: ${invoice.companyName}`] : []),
+    `${fa ? '📞 تماس' : '📞 Phone'}: ${dash(invoice.customerPhone)}`,
+    ...(invoice.customerEmail ? [`${fa ? '✉️ ایمیل' : '✉️ Email'}: ${invoice.customerEmail}`] : []),
+    ...(invoice.customerAddress ? [`${fa ? '📍 آدرس' : '📍 Address'}: ${invoice.customerAddress}`] : []),
+    '',
+    `${fa ? '💰 جمع اقلام' : '💰 Subtotal'}: ${subTotalLabel}`,
+    ...(invoice.taxAmount ? [`${fa ? '🧾 مالیات' : '🧾 VAT'}: ${taxLabel}`] : []),
+    `${fa ? '💵 مبلغ کل' : '💵 Total'}: ${totalLabel}`,
+    `${fa ? '✅ پرداخت‌شده' : '✅ Paid'}: ${paidLabel}`,
+    `${fa ? '📌 مانده' : '📌 Balance due'}: ${cancelled ? (fa ? '— (کنسل)' : '— (cancelled)') : balanceLabel}`,
+    '',
+    `${fa ? '📅 تاریخ فاکتور' : '📅 Invoice date'}: ${dash(invoice.date)}`,
+    ...(invoice.dueDate ? [`${fa ? '⏰ سررسید' : '⏰ Due date'}: ${invoice.dueDate}`] : []),
+    `${fa ? '👨‍💼 ارجاع از' : '👨‍💼 Referred by'}: ${assigner.fullName}`,
+    '────────────────────',
   ];
   if (note?.trim()) {
-    bodyLines.push('', fa ? 'یادداشت:' : 'Note:', note.trim());
+    bodyLines.push('', fa ? '📝 یادداشت پیگیری:' : '📝 Follow-up note:', note.trim());
   }
-  bodyLines.push('', fa ? 'بخش: فاکتورها → آرشیو فاکتورها' : 'Section: Invoices → Invoice Archive');
+  bodyLines.push('', fa ? '📂 بخش: فاکتورها → آرشیو فاکتورها' : '📂 Section: Invoices → Invoice Archive');
 
   if (assignee.id !== assigner.id) {
     const msg: InternalMessage = {
       id: `notify-inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: assigner.id,
-      senderName: fa ? 'سیستم — فاکتور' : 'System — Invoice',
+      senderName: fa ? 'سیستم — پیگیری فاکتور' : 'System — Invoice follow-up',
       recipientIds: [assignee.id],
       recipientNames: [assignee.fullName],
       subject,
@@ -70,9 +93,13 @@ export async function notifyInvoiceFollowUp(opts: {
   const waMsg = renderTemplate(nc?.invoiceFollowUpTemplate || DEFAULT_INVOICE_FOLLOWUP_TEMPLATE, {
     recipientName: assignee.fullName,
     invoiceNumber: invoice.number,
-    customerName: invoice.customerName || '',
+    customerName: dash(invoice.customerName),
+    customerPhone: dash(invoice.customerPhone),
     invoiceTotal: totalLabel,
-    balanceDue: balanceLabel,
+    amountPaid: paidLabel,
+    balanceDue: cancelled ? (fa ? 'کنسل' : 'Cancelled') : balanceLabel,
+    invoiceDate: dash(invoice.date),
+    dueDate: dash(invoice.dueDate),
     followUpNote,
     senderName: assigner.fullName,
     ticketId: invoice.number,
