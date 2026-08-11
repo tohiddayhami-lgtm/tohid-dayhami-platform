@@ -642,7 +642,17 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     if (readonly) return;
     const inv = invoices.find(i => i.id === id);
     if (inv && !canDeleteInvoice(currentUser, inv)) { denyAccess(); return; }
-    if (window.confirm(t.deleteConfirm)) await onDeleteInvoice(id);
+    if (!id) {
+      alert(lang === 'fa' ? 'شناسه فاکتور نامعتبر است.' : 'Invalid invoice id.');
+      return;
+    }
+    if (!window.confirm(t.deleteConfirm)) return;
+    try {
+      await onDeleteInvoice(id);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      alert(lang === 'fa' ? `خطا در حذف فاکتور:\n${detail}` : `Failed to delete invoice:\n${detail}`);
+    }
   };
   const handleSaveCompany = () => { onUpdateConfig({ ...config, invoiceTemplate: companyForm }); setCompanySaved(true); setTimeout(() => setCompanySaved(false), 2500); };
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

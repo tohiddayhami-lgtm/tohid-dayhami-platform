@@ -46,8 +46,10 @@ function parseValue(v) {
 // ── plain JS → Firestore REST ──────────────────────────────────────────────
 
 function toFirestoreDoc(data) {
-  const { id, ...rest } = data;
-  return { fields: toFields(rest) };
+  // Keep `id` inside the document body so client SDK reads (without mergeDocId)
+  // still have a usable id for edit/delete.
+  const fields = toFields(data && typeof data === 'object' ? data : {});
+  return { fields };
 }
 
 function toFields(obj) {

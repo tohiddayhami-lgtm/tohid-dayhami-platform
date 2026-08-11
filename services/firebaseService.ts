@@ -321,12 +321,32 @@ async function updateDocCloud(col: string, id: string, updates: Record<string, u
 }
 
 async function deleteDocCloud(col: string, id: string) {
+  if (!id) throw new Error(`delete_failed:${col}/(empty id)`);
   const proxy = await checkProxyMode();
   if (proxy) {
-    const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error(`Proxy delete ${r.status}`);
+    try {
+      const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!r.ok && r.status !== 404) throw new Error(`Proxy delete ${r.status}`);
+    } catch (proxyErr) {
+      try {
+        await deleteDoc(doc(db, col, id));
+        clearProxyMode();
+      } catch {
+        throw proxyErr instanceof Error ? proxyErr : new Error(String(proxyErr));
+      }
+    }
   } else {
-    await deleteDoc(doc(db, col, id));
+    try {
+      await deleteDoc(doc(db, col, id));
+    } catch (directErr) {
+      forceProxyMode();
+      try {
+        const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
+        if (!r.ok && r.status !== 404) throw new Error(`Proxy delete ${r.status}`);
+      } catch {
+        throw directErr instanceof Error ? directErr : new Error(String(directErr));
+      }
+    }
   }
 }
 
@@ -1139,13 +1159,18 @@ export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) =>
 };
 
 export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
+    if (!id) throw new Error('Invoice id is required for delete');
     const proxy = await checkProxyMode();
     let data: unknown = null;
-    if (proxy) {
+    try {
+      if (proxy) {
         data = await proxyGet('invoices', { doc: id });
-    } else {
+      } else {
         const snap = await getDoc(doc(db, 'invoices', id));
         data = snap.exists() ? snap.data() : null;
+      }
+    } catch {
+      data = null;
     }
     await deleteDocCloud('invoices', id);
     const inv = data as Invoice | null;
@@ -1165,6 +1190,7 @@ export const subscribeToInvoices = (callback: (invoices: Invoice[]) => void) =>
   subscribeCollection<Invoice>('invoices', callback, {
     sort: (a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime(),
     intervalMs: 45_000,
+    mergeDocId: true,
   });
 
 // ── Commercial Proposals (Invoices → Proposals tab) ──
