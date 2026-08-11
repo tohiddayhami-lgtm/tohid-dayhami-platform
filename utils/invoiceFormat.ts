@@ -123,7 +123,7 @@ export function parseInvoiceJson(input: unknown, ctx?: InvoiceImportContext): In
     : root) as Record<string, unknown>;
 
   if (!str(raw.customerName) && !str(raw.number) && !Array.isArray(raw.items)) {
-    throw new Error('missing_fields');
+    throw new Error('missing_fields: need customerName / number / items[]');
   }
 
   const base = emptyInvoiceImportBase(ctx);

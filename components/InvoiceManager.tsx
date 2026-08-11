@@ -292,7 +292,18 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result || ''));
+        let text = String(reader.result || '');
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
+        const parsed = JSON.parse(text);
+        // Reject common mix-ups early with a clear message
+        if (parsed && typeof parsed === 'object') {
+          const root = parsed as Record<string, unknown>;
+          if (root.proposal || root.contract || root.catalog || root.realEstateProposal) {
+            throw new Error(lang === 'fa'
+              ? 'این فایل مربوط به پروپوزال/قرارداد/کاتالوگ است؛ در تب فاکتورها فقط فرمت invoice را آپلود کنید.'
+              : 'This file is a proposal/contract/catalog — use invoice JSON in the Invoices tab.');
+          }
+        }
         const invoice = parseInvoiceJson(parsed, invoiceImportCtx());
         invoice.id = `inv-${Date.now()}`;
         invoice.createdAt = new Date().toISOString();
@@ -304,10 +315,12 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
           receipts: [],
         }));
         setMode('editor');
-      } catch {
-        setImportErr(t.jsonImportErr);
+      } catch (e) {
+        if (e instanceof SyntaxError) setImportErr(t.jsonImportErr);
+        else setImportErr(e instanceof Error && e.message ? e.message : t.jsonImportErr);
       }
     };
+    reader.onerror = () => setImportErr(t.jsonImportErr);
     reader.readAsText(file);
   };
 
@@ -521,7 +534,7 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       location: inv.customerAddress || '',
       phoneNumber: phoneRaw,
       whatsappNumber: phoneRaw,
-      email: inv.customerEmail,
+      email: inv.customerEmail || '',
       firstContact: new Date().toISOString(),
       totalTickets: 0,
       source: 'Invoice',
@@ -539,7 +552,13 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
     if (!draft.customerName.trim()) { alert(lang === 'fa' ? 'نام مشتری را وارد کنید.' : 'Enter customer name.'); return; }
     setSaving(true);
     try {
-      const customerId = await upsertCustomerFromInvoice(draft);
+      let customerId = draft.customerId;
+      try {
+        customerId = await upsertCustomerFromInvoice(draft) || draft.customerId;
+      } catch (custErr) {
+        console.warn('Invoice customer upsert failed', custErr);
+        // Continue — invoice save must not depend on CRM customer sync
+      }
       const toSave = recompute({
         ...draft,
         customerId: customerId || draft.customerId,
@@ -549,7 +568,10 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, config, c
       });
       await onSaveInvoice(toSave);
       setMode('archive'); setDraft(null);
-    } catch { alert(lang === 'fa' ? 'خطا در ذخیره' : 'Save failed'); }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      alert(lang === 'fa' ? `خطا در ذخیره فاکتور:\n${detail}` : `Failed to save invoice:\n${detail}`);
+    }
     finally { setSaving(false); }
   };
 

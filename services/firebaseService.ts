@@ -91,7 +91,7 @@ const checkProxyMode = (): Promise<boolean> => {
   _proxyChecking = true;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1000); // reduced from 1500ms
+  const timer = setTimeout(() => controller.abort(), 2500); // was 1000 — slow networks were false-flagged as Iran proxy
 
   return fetch(
     `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/settings/appConfig?key=${firebaseConfig.apiKey}`,
@@ -144,6 +144,8 @@ const proxyGet = async <T>(col: string, opts: { doc?: string; slug?: string; ord
   try {
     const r = await fetch(`${_fb}?${p}`, { signal: controller.signal });
     clearTimeout(timer);
+    // Missing docs must not abort creates (new invoice / customer / …).
+    if (r.status === 404) return null as T;
     if (!r.ok) throw new Error(`Proxy ${r.status}`);
     return r.json() as Promise<T>;
   } catch (e) {
@@ -158,7 +160,15 @@ const proxyWrite = async (col: string, docId: string, data: unknown): Promise<vo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!r.ok) throw new Error(`Proxy write ${r.status}`);
+  if (!r.ok) {
+    const detail = await r.text().catch(() => '');
+    throw new Error(`Proxy write ${r.status}${detail ? `: ${detail.slice(0, 180)}` : ''}`);
+  }
+};
+
+const clearProxyMode = () => {
+  _proxyMode = false;
+  try { localStorage.setItem(_PROXY_LS_KEY, JSON.stringify({ v: '0', ts: Date.now() })); } catch {}
 };
 
 const proxyPoll = <T>(
@@ -254,18 +264,59 @@ async function setDocCloud(col: string, id: string, data: unknown) {
   if (!payload || typeof payload !== 'object') {
     throw new Error(`sanitize_failed:${col}/${id}`);
   }
-  if (proxy) await proxyWrite(col, id, payload);
-  else await setDoc(doc(db, col, id), payload);
+  if (proxy) {
+    try {
+      await proxyWrite(col, id, payload);
+    } catch (proxyErr) {
+      // False-positive Iran proxy (slow network / local Vite) — fall back to direct Firestore.
+      try {
+        await setDoc(doc(db, col, id), payload);
+        clearProxyMode();
+      } catch {
+        throw proxyErr instanceof Error ? proxyErr : new Error(String(proxyErr));
+      }
+    }
+  } else {
+    try {
+      await setDoc(doc(db, col, id), payload);
+    } catch (directErr) {
+      forceProxyMode();
+      try {
+        await proxyWrite(col, id, payload);
+      } catch {
+        throw directErr instanceof Error ? directErr : new Error(String(directErr));
+      }
+    }
+  }
 }
 
 async function updateDocCloud(col: string, id: string, updates: Record<string, unknown>) {
   const proxy = await checkProxyMode();
   const payload = sanitizeData(updates);
   if (proxy) {
-    const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
-    await proxyWrite(col, id, { ...existing, ...payload, id });
+    try {
+      const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
+      await proxyWrite(col, id, { ...existing, ...payload, id });
+    } catch (proxyErr) {
+      try {
+        await updateDoc(doc(db, col, id), payload);
+        clearProxyMode();
+      } catch {
+        throw proxyErr instanceof Error ? proxyErr : new Error(String(proxyErr));
+      }
+    }
   } else {
-    await updateDoc(doc(db, col, id), payload);
+    try {
+      await updateDoc(doc(db, col, id), payload);
+    } catch (directErr) {
+      forceProxyMode();
+      try {
+        const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
+        await proxyWrite(col, id, { ...existing, ...payload, id });
+      } catch {
+        throw directErr instanceof Error ? directErr : new Error(String(directErr));
+      }
+    }
   }
 }
 
@@ -1061,11 +1112,15 @@ export const subscribeToCartableTodos = (callback: (items: CartableTodoItem[]) =
 export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) => {
     const proxy = await checkProxyMode();
     let prev: Invoice | null = null;
-    if (proxy) {
+    try {
+      if (proxy) {
         prev = await proxyGet<Invoice>('invoices', { doc: invoice.id });
-    } else {
+      } else {
         const snap = await getDoc(doc(db, 'invoices', invoice.id));
         prev = snap.exists() ? (snap.data() as Invoice) : null;
+      }
+    } catch {
+      prev = null; // missing/unreachable prev must not block create/update
     }
     await setDocCloud('invoices', invoice.id, invoice);
     const details = summarizeInvoiceChanges(prev, invoice);
