@@ -14,6 +14,8 @@ interface Props {
   items: CartableTodoItem[];
   personnel: Personnel[];
   lang: Language;
+  canToggle?: boolean;
+  onDisable?: () => void;
 }
 
 const COLUMNS: {
@@ -31,7 +33,7 @@ const COLUMNS: {
 
 const uid = (p: string) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-export const CartableStickyTodos: React.FC<Props> = ({ currentUser, items, personnel, lang }) => {
+export const CartableStickyTodos: React.FC<Props> = ({ currentUser, items, personnel, lang, canToggle, onDisable }) => {
   const T = lang === 'fa';
   const isMaster = currentUser.username === 'master';
 
@@ -181,6 +183,16 @@ export const CartableStickyTodos: React.FC<Props> = ({ currentUser, items, perso
             <IconArchive className="w-3.5 h-3.5" />
             {showArchive ? (T ? 'بازگشت به لیست' : 'Back to list') : (T ? 'آرشیو' : 'Archive')}
           </button>
+          {canToggle && onDisable && (
+            <button
+              type="button"
+              onClick={onDisable}
+              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-gray-800 hover:border-gray-400 font-bold"
+              title={T ? 'مخفی کردن این بخش' : 'Hide this section'}
+            >
+              {T ? 'غیرفعال کردن' : 'Turn off'}
+            </button>
+          )}
         </div>
       </div>
 

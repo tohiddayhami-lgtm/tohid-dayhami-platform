@@ -60,6 +60,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaar
   // Local State for Daily Tips
   const [dailyTips, setDailyTips] = useState<string[]>(config.dailyTips || []);
   const [showDailyTips, setShowDailyTips] = useState<boolean>(config.showDailyTips || false);
+  const [cartableStickyTodosEnabled, setCartableStickyTodosEnabled] = useState<boolean>(config.cartableStickyTodosEnabled !== false);
   const [newTip, setNewTip] = useState('');
 
   // Local State for Featured Businesses
@@ -110,6 +111,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaar
     });
     setDailyTips(config.dailyTips || []);
     setShowDailyTips(config.showDailyTips || false);
+    setCartableStickyTodosEnabled(config.cartableStickyTodosEnabled !== false);
     setFeaturedBusinesses(config.featuredBusinesses || []);
     setAssignmentConfig(normalizeAssignmentConfig(config.assignmentConfig));
     setSocialLinks(config.socialLinks || []);
@@ -138,6 +140,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaar
       invoiceTemplate: invoiceTemplate,
       dailyTips: dailyTips,
       showDailyTips: showDailyTips,
+      cartableStickyTodosEnabled,
       featuredBusinesses: featuredBusinesses,
       assignmentConfig: assignmentConfig,
       socialLinks: socialLinks,
@@ -159,6 +162,7 @@ export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaar
       invoiceTemplate: invoiceTemplate,
       dailyTips: dailyTips,
       showDailyTips: showDailyTips,
+      cartableStickyTodosEnabled,
       featuredBusinesses: featuredBusinesses,
       assignmentConfig: assignmentConfig
     });
@@ -577,6 +581,20 @@ function onFormSubmit(e) {
                   ))}
                 </select>
               </div>
+           </div>
+
+           <div className="mb-8 bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start gap-3">
+             <input
+               type="checkbox"
+               id="cartable_sticky_todos"
+               checked={cartableStickyTodosEnabled}
+               onChange={e => { setCartableStickyTodosEnabled(e.target.checked); setSaveSuccess(false); }}
+               className="mt-0.5 w-5 h-5 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
+             />
+             <label htmlFor="cartable_sticky_todos" className="cursor-pointer select-none">
+               <span className="block font-bold text-gray-800">نمایش یادداشت‌های کارتابل (نوت استیکری)</span>
+               <span className="block text-xs text-gray-500 mt-0.5">اگر خاموش باشد، بخش «یادداشت‌های کارتابل» در صفحه کارتابل برای هیچ‌کس نمایش داده نمی‌شود. داده‌ها حذف نمی‌شوند.</span>
+             </label>
            </div>
 
            {/* ── Social Links ── */}

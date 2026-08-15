@@ -2255,6 +2255,8 @@ export interface AppConfig {
   labels?: TicketLabel[];
   /** Saved Google Sheet databases for cartable import. */
   cartableSheetSources?: CartableSheetSource[];
+  /** Sticky-note todos on کارتابل. Default true; when false the whole board is hidden. */
+  cartableStickyTodosEnabled?: boolean;
 }
 
 /** A registered Google Sheet used as a data source for cartable imports. */

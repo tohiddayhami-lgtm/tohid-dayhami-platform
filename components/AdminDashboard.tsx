@@ -1995,12 +1995,30 @@ export const AdminDashboard: React.FC<Props> = ({
                  </button>
                  )}
 
-                 <CartableStickyTodos
-                   currentUser={currentUser}
-                   items={cartableTodos}
-                   personnel={personnel}
-                   lang={lang}
-                 />
+                 {config.cartableStickyTodosEnabled !== false ? (
+                   <CartableStickyTodos
+                     currentUser={currentUser}
+                     items={cartableTodos}
+                     personnel={personnel}
+                     lang={lang}
+                     canToggle={isAdmin || isMaster}
+                     onDisable={() => onUpdateConfig({ ...config, cartableStickyTodosEnabled: false })}
+                   />
+                 ) : (isAdmin || isMaster) ? (
+                   <div className="bg-white px-4 py-3 rounded-xl border border-dashed border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                     <div>
+                       <p className="text-sm font-bold text-gray-700">{lang === 'fa' ? 'یادداشت‌های کارتابل' : 'Cartable sticky todos'}</p>
+                       <p className="text-[11px] text-gray-400">{lang === 'fa' ? 'این بخش الان غیرفعال است و برای پرسنل نمایش داده نمی‌شود.' : 'This section is off and hidden for everyone.'}</p>
+                     </div>
+                     <button
+                       type="button"
+                       onClick={() => onUpdateConfig({ ...config, cartableStickyTodosEnabled: true })}
+                       className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600"
+                     >
+                       {lang === 'fa' ? 'فعال کردن' : 'Turn on'}
+                     </button>
+                   </div>
+                 ) : null}
 
                  <div className="bg-white p-5 rounded-xl border border-gray-100 animate-fade-in">
                      <div className="flex items-center gap-3 mb-4">
