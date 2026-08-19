@@ -92,6 +92,14 @@ export const metaFromForm = (form: CustomForm): PageMeta => ({
   type: 'website',
 });
 
+export const metaFromNewsList = (lang: 'fa' | 'en' = 'fa'): PageMeta => ({
+  title: lang === 'en' ? 'Export News & Articles' : 'اخبار و مقالات صادراتی',
+  description: lang === 'en'
+    ? 'Latest export, trade, customs regulations and target market news'
+    : 'آخرین اخبار حوزه صادرات، بازرگانی، قوانین گمرکی و بازارهای هدف',
+  type: 'website',
+});
+
 export const metaFromNews = (article: NewsArticle, lang: 'fa' | 'en' = 'fa'): PageMeta => {
   const title = lang === 'en' && article.titleEn ? article.titleEn : article.title;
   const description = lang === 'en' && article.summaryEn ? article.summaryEn : (article.metaDescription || article.summary);
@@ -153,7 +161,12 @@ export function applyPageMeta(meta: PageMeta, fallback?: PageMeta) {
     setMeta('twitter:image', image);
     setMeta('twitter:card', 'summary_large_image');
   }
-  if (url) setOg('og:url', url);
+  if (url) {
+    setOg('og:url', url);
+    let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
+    link.href = url;
+  }
   setOg('og:type', type);
   if (siteName) setOg('og:site_name', siteName);
 }

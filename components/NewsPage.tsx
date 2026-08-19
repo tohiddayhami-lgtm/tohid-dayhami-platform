@@ -99,9 +99,31 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
 
   const selectedArticle = selectedId ? articles.find(a => a.id === selectedId) : null;
 
+  // JSON-LD for search engines that render JavaScript
+  useEffect(() => {
+    const elId = 'news-jsonld';
+    document.getElementById(elId)?.remove();
+    if (!selectedArticle) return;
+    const script = document.createElement('script');
+    script.id = elId;
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: selectedArticle.title,
+      description: selectedArticle.metaDescription || selectedArticle.summary,
+      image: selectedArticle.coverImage ? [selectedArticle.coverImage] : undefined,
+      datePublished: selectedArticle.publishedAt,
+      author: { '@type': 'Person', name: selectedArticle.author || 'توحید دیهمی' },
+      keywords: (selectedArticle.tags || []).join(', ') || undefined,
+    });
+    document.head.appendChild(script);
+    return () => { document.getElementById(elId)?.remove(); };
+  }, [selectedArticle]);
+
   if (selectedArticle) {
     return (
-      <div className="max-w-3xl mx-auto animate-fade-in py-4">
+      <article className="max-w-3xl mx-auto animate-fade-in py-4">
         <button onClick={goBackToList}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 mb-6 transition-colors">
           <IconArrowRight className="w-3.5 h-3.5 rotate-180" />
@@ -148,12 +170,12 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
         >
           {lang === 'en' && selectedArticle.contentEn ? selectedArticle.contentEn : selectedArticle.content}
         </div>
-      </div>
+      </article>
     );
   }
 
   return (
-    <div className="animate-fade-in py-2">
+    <main className="animate-fade-in py-2">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -289,6 +311,6 @@ export const NewsPage: React.FC<Props> = ({ articles, lang, onBack, isLoading = 
         )}
         </>
       )}
-    </div>
+    </main>
   );
 };

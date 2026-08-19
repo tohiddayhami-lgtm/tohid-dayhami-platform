@@ -134,6 +134,14 @@ function absUrl(origin, url) {
   return `${origin.replace(/\/$/, '')}/${String(url).replace(/^\//, '')}`;
 }
 
+async function loadPublishedNews() {
+  const all = await listCollection('news');
+  const now = Date.now();
+  return all
+    .filter(a => a.isPublished !== false && new Date(a.publishedAt).getTime() <= now)
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+}
+
 async function loadSiteDefaults() {
   const cfg = await getDoc('settings', 'appConfig');
   return {
@@ -244,14 +252,26 @@ async function resolveMeta(searchOrParams, origin) {
     if (newsId) {
       const article = await getDoc('news', newsId);
       if (article && article.isPublished !== false) {
-        return {
-          title: article.title?.trim() || 'خبر',
-          description: truncate(article.metaDescription || article.summary || ''),
-          image: absUrl(origin, article.coverImage || defaults.image),
-          siteName: defaults.siteName,
-          type: 'article',
-        };
+        const pubTime = new Date(article.publishedAt).getTime();
+        if (pubTime <= Date.now()) {
+          return {
+            title: `${article.title?.trim() || 'خبر'} | ${defaults.siteName}`,
+            description: truncate(article.metaDescription || article.summary || ''),
+            image: absUrl(origin, article.coverImage || defaults.image),
+            siteName: defaults.siteName,
+            type: 'article',
+            keywords: article.metaKeywords || (article.tags || []).join(', '),
+          };
+        }
       }
+    } else {
+      return {
+        title: `اخبار و مقالات صادراتی | ${defaults.siteName}`,
+        description: truncate('آخرین اخبار حوزه صادرات، بازرگانی، قوانین گمرکی، بازارهای هدف و راهنمای صادرات'),
+        image: absUrl(origin, defaults.image),
+        siteName: defaults.siteName,
+        type: 'website',
+      };
     }
   }
 
@@ -291,16 +311,118 @@ function humanAppUrl(canonicalUrl) {
   return u.toString();
 }
 
-function renderHtml(meta, canonicalUrl, forCrawler = true) {
-  const { title, description, image, siteName, type } = meta;
+function articleUrl(origin, id) {
+  return `${origin}/?page=news&id=${encodeURIComponent(id)}`;
+}
+
+function renderArticleBody(article, origin) {
+  const url = articleUrl(origin, article.id);
+  const img = article.coverImage
+    ? `<figure><img src="${esc(article.coverImage)}" alt="${esc(article.title)}" style="max-width:100%;height:auto;border-radius:8px" /></figure>`
+    : '';
+  const tags = (article.tags || []).length
+    ? `<p>${(article.tags || []).map(t => `<span>#${esc(t)}</span>`).join(' ')}</p>`
+    : '';
+  const content = esc(article.content || '').replace(/\n/g, '<br />');
+  return `<article itemscope itemtype="https://schema.org/NewsArticle">
+  <header>
+    <p><a href="${esc(origin)}/?page=news">← بازگشت به اخبار</a></p>
+    <h1 itemprop="headline">${esc(article.title)}</h1>
+    <p><span itemprop="author">${esc(article.author || '')}</span> · <time itemprop="datePublished" datetime="${esc(article.publishedAt)}">${esc(article.publishedAt?.slice(0, 10) || '')}</time></p>
+    ${article.category ? `<p>${esc(article.category)}</p>` : ''}
+  </header>
+  ${img}
+  <p itemprop="description"><strong>${esc(article.summary || '')}</strong></p>
+  <div itemprop="articleBody">${content}</div>
+  ${tags}
+  <p><a href="${esc(url)}">مشاهده در وبسایت</a></p>
+</article>`;
+}
+
+function renderNewsListBody(articles, origin) {
+  const items = articles.slice(0, 50).map(a => {
+    const url = articleUrl(origin, a.id);
+    return `<li>
+      <article>
+        <h2><a href="${esc(url)}">${esc(a.title)}</a></h2>
+        <p>${esc(truncate(a.summary || '', 200))}</p>
+        <p><small>${esc(a.author || '')} · ${esc(a.publishedAt?.slice(0, 10) || '')}</small></p>
+      </article>
+    </li>`;
+  }).join('\n');
+  return `<main>
+  <h1>اخبار و مقالات صادراتی</h1>
+  <p>آخرین اخبار حوزه صادرات، بازرگانی، قوانین گمرکی و بازارهای هدف</p>
+  <ul style="list-style:none;padding:0">${items}</ul>
+</main>`;
+}
+
+function articleJsonLd(article, origin) {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.title,
+    description: article.metaDescription || article.summary || '',
+    image: article.coverImage ? [article.coverImage] : undefined,
+    datePublished: article.publishedAt,
+    author: { '@type': 'Person', name: article.author || 'توحید دیهمی' },
+    publisher: { '@type': 'Organization', name: 'پلتفرم توحید دیهمی' },
+    mainEntityOfPage: { '@type': 'WebPage', '@id': articleUrl(origin, article.id) },
+    keywords: (article.tags || []).join(', ') || undefined,
+  });
+}
+
+function newsListJsonLd(articles, origin) {
+  return JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'اخبار و مقالات صادراتی',
+    description: 'آخرین اخبار حوزه صادرات و بازرگانی',
+    url: `${origin}/?page=news`,
+    hasPart: articles.slice(0, 20).map(a => ({
+      '@type': 'NewsArticle',
+      headline: a.title,
+      url: articleUrl(origin, a.id),
+      datePublished: a.publishedAt,
+    })),
+  });
+}
+
+async function resolveCrawlerContent(params, origin) {
+  if (params.get('page') !== 'news') return {};
+
+  const newsId = params.get('id');
+  if (newsId) {
+    const article = await getDoc('news', newsId);
+    if (!article || article.isPublished === false) return {};
+    if (new Date(article.publishedAt).getTime() > Date.now()) return {};
+    return {
+      bodyHtml: renderArticleBody(article, origin),
+      jsonLd: articleJsonLd(article, origin),
+    };
+  }
+
+  const articles = await loadPublishedNews();
+  return {
+    bodyHtml: renderNewsListBody(articles, origin),
+    jsonLd: newsListJsonLd(articles, origin),
+  };
+}
+
+function renderHtml(meta, canonicalUrl, forCrawler = true, extras = {}) {
+  const { title, description, image, siteName, type, keywords } = meta;
+  const { bodyHtml, jsonLd } = extras;
   const appUrl = humanAppUrl(canonicalUrl);
+  const defaultBody = `<p><a href="${esc(appUrl)}">${esc(title)}</a></p>`;
   return `<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
   <title>${esc(title)}</title>
   ${description ? `<meta name="description" content="${esc(description)}" />` : ''}
+  ${keywords ? `<meta name="keywords" content="${esc(keywords)}" />` : ''}
   <meta property="og:title" content="${esc(title)}" />
   ${description ? `<meta property="og:description" content="${esc(description)}" />` : ''}
   ${image ? `<meta property="og:image" content="${esc(image)}" />` : ''}
@@ -312,10 +434,18 @@ function renderHtml(meta, canonicalUrl, forCrawler = true) {
   ${description ? `<meta name="twitter:description" content="${esc(description)}" />` : ''}
   ${image ? `<meta name="twitter:image" content="${esc(image)}" />` : ''}
   <link rel="canonical" href="${esc(canonicalUrl)}" />
+  ${jsonLd ? `<script type="application/ld+json">${jsonLd}</script>` : ''}
   ${forCrawler ? '' : `<meta http-equiv="refresh" content="0;url=${esc(appUrl)}" />`}
+  <style>
+    body { font-family: Tahoma, 'Segoe UI', sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.8; color: #1d1d1f; }
+    h1 { font-size: 1.75rem; line-height: 1.4; }
+    h2 { font-size: 1.1rem; margin: 1.5rem 0 0.25rem; }
+    a { color: #2563eb; }
+    img { margin: 1rem 0; }
+  </style>
 </head>
 <body>
-  <p><a href="${esc(appUrl)}">${esc(title)}</a></p>
+  ${bodyHtml || defaultBody}
   ${forCrawler ? '' : `<script>location.replace(${JSON.stringify(appUrl)});</script>`}
 </body>
 </html>`;
@@ -332,7 +462,8 @@ export default async function handler(req, res) {
   try {
     const meta = await resolveMeta(params, origin);
     const forCrawler = isPreviewCrawler(req);
-    const html = renderHtml(meta, canonicalUrl, forCrawler);
+    const crawlerExtras = forCrawler ? await resolveCrawlerContent(params, origin) : {};
+    const html = renderHtml(meta, canonicalUrl, forCrawler, crawlerExtras);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
     return res.status(200).send(html);

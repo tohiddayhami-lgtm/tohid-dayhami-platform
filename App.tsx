@@ -34,7 +34,7 @@ import {
   subscribeToMetaBazaars, saveMetaBazaarToCloud, deleteMetaBazaarFromCloud, getMetaBazaarBySlug,
   getTicketById,
 } from './services/firebaseService';
-import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromBazaar } from './utils/pageMeta';
+import { applyPageMeta, defaultSiteMeta, metaFromMetaShop, metaFromMetaShopProduct, metaFromForm, metaFromNews, metaFromNewsList, metaFromBazaar } from './utils/pageMeta';
 import { shopProductsNeedFullHydration } from './utils/metaShopChunks';
 import { readMetaShopShellCache, writeMetaShopShellCache } from './utils/metaShopShellCache';
 import { readMetaShopProductsCache, writeMetaShopProductsCache } from './utils/metaShopProductsCache';
@@ -514,8 +514,8 @@ const App: React.FC = () => {
       if (articleId) {
         const article = news.find(a => a.id === articleId);
         if (article) applyPageMeta({ ...metaFromNews(article, lang === 'fa' ? 'fa' : 'en'), url: window.location.href }, siteMeta);
-        else applyPageMeta(siteMeta);
-      } else applyPageMeta(siteMeta);
+        else applyPageMeta({ ...metaFromNewsList(lang === 'fa' ? 'fa' : 'en'), url: window.location.href }, siteMeta);
+      } else applyPageMeta({ ...metaFromNewsList(lang === 'fa' ? 'fa' : 'en'), url: window.location.href }, siteMeta);
       return;
     }
     if (view === 'bazaar' && publicBazaar) {
