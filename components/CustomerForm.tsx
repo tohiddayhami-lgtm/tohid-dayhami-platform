@@ -209,46 +209,93 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
     const safetyTimer = setTimeout(() => { setIsSubmitting(false); }, 45000);
 
     try {
-      const ticketsToCreate: Ticket[] = [];
-      const generatedIds: string[] = [];
       const description = [
         requestDesc ? `شرح درخواست:\n${requestDesc}` : '',
         formData['description'] ? `اطلاعات محصول:\n${formData['description']}` : '',
       ].filter(Boolean).join('\n\n') || '';
 
-      for (const serviceId of selectedServiceIds) {
-        const selectedService = services.find(s => s.id === serviceId);
+      // Prefer deep-linked service as primary when selected; otherwise first checked.
+      const orderedIds = (() => {
+        if (initialServiceId && selectedServiceIds.includes(initialServiceId)) {
+          return [initialServiceId, ...selectedServiceIds.filter(id => id !== initialServiceId)];
+        }
+        return [...selectedServiceIds];
+      })();
+      const primaryServiceId = orderedIds[0];
+      const primaryService = services.find(s => s.id === primaryServiceId);
+      const primarySubs = selectedSubServices[primaryServiceId] || [];
+      const additionalServices = orderedIds.slice(1).map(serviceId => ({
+        serviceId,
+        selectedSubServices: selectedSubServices[serviceId] || [],
+      }));
+
+      const serviceLines = orderedIds.map(serviceId => {
+        const svc = services.find(s => s.id === serviceId);
+        const title = (lang === 'en' && svc?.titleEn ? svc.titleEn : svc?.title) || serviceId;
         const subs = selectedSubServices[serviceId] || [];
-        // Stable ID per service — retrying after a network error reuses the same Firestore document
-        const ticketId = getStableId(serviceId);
-        generatedIds.push(ticketId);
+        const subTitles = subs.map(subId => {
+          const sub = svc?.subServices?.find(s => s.id === subId);
+          return (lang === 'en' && sub?.titleEn ? sub.titleEn : sub?.title) || subId;
+        }).filter(Boolean);
+        return subTitles.length ? `- ${title} (${subTitles.join('، ')})` : `- ${title}`;
+      });
+      const servicesBlock = (lang === 'fa' ? 'خدمات درخواستی:\n' : 'Requested services:\n') + serviceLines.join('\n');
 
-        const effectiveDescription = serviceId === 's_other' && otherText
-          ? `${description}\n\nسایر: ${otherText}`.trim()
-          : description;
-
-        let analysisSummary = effectiveDescription;
-        try {
-          if (effectiveDescription.length > 10) {
-            const analysis = await analyzeTicket(effectiveDescription, (lang === 'en' && selectedService?.titleEn ? selectedService.titleEn : selectedService?.title) || 'General');
-            analysisSummary = analysis.summary;
-          }
-        } catch { }
-
-        ticketsToCreate.push({
-          id: ticketId, customerName: formData['fullName'], companyName: formData['companyName'],
-          location: formData['location'], phoneNumber: formData['phoneNumber'], whatsappNumber: formData['whatsappNumber'],
-          businessType: formData['businessType'], serviceId, selectedSubServices: subs, description: effectiveDescription,
-          files: validFiles, status: TicketStatus.SUBMITTED, createdAt: new Date().toISOString(),
-          aiAnalysis: analysisSummary, priority: 'Medium',
-          timeline: [{ type: 'creation', title: lang === 'fa' ? 'ثبت درخواست' : 'Request Submitted', description: lang === 'fa' ? `درخواست سرویس ${selectedService?.title} ثبت شد.` : `Service request submitted.`, actorName: formData['fullName'] || 'Customer', timestamp: new Date().toISOString() }],
-          customData: formData, discountApplied: false
-        });
+      let effectiveDescription = [servicesBlock, description].filter(Boolean).join('\n\n');
+      if (orderedIds.includes('s_other') && otherText) {
+        effectiveDescription = `${effectiveDescription}\n\n${lang === 'fa' ? 'سایر' : 'Other'}: ${otherText}`.trim();
       }
 
-      await onSubmit(ticketsToCreate);
+      // One stable ID for the whole multi-service request (retries overwrite same doc)
+      const ticketId = getStableId('combined');
+      const countLabel = orderedIds.length > 1
+        ? (lang === 'fa' ? `${orderedIds.length} خدمت` : `${orderedIds.length} services`)
+        : ((lang === 'en' && primaryService?.titleEn ? primaryService.titleEn : primaryService?.title) || '');
+
+      let analysisSummary = effectiveDescription;
+      try {
+        if (effectiveDescription.length > 10) {
+          const analysis = await analyzeTicket(
+            effectiveDescription,
+            (lang === 'en' && primaryService?.titleEn ? primaryService.titleEn : primaryService?.title) || 'General',
+          );
+          analysisSummary = analysis.summary;
+        }
+      } catch { }
+
+      const ticket: Ticket = {
+        id: ticketId,
+        customerName: formData['fullName'],
+        companyName: formData['companyName'],
+        location: formData['location'],
+        phoneNumber: formData['phoneNumber'],
+        whatsappNumber: formData['whatsappNumber'],
+        businessType: formData['businessType'],
+        serviceId: primaryServiceId,
+        selectedSubServices: primarySubs,
+        additionalServices: additionalServices.length ? additionalServices : undefined,
+        description: effectiveDescription,
+        files: validFiles,
+        status: TicketStatus.SUBMITTED,
+        createdAt: new Date().toISOString(),
+        aiAnalysis: analysisSummary,
+        priority: 'Medium',
+        timeline: [{
+          type: 'creation',
+          title: lang === 'fa' ? 'ثبت درخواست' : 'Request Submitted',
+          description: lang === 'fa'
+            ? `درخواست ثبت شد (${countLabel}).`
+            : `Request submitted (${countLabel}).`,
+          actorName: formData['fullName'] || 'Customer',
+          timestamp: new Date().toISOString(),
+        }],
+        customData: formData,
+        discountApplied: false,
+      };
+
+      await onSubmit([ticket]);
       clearTimeout(safetyTimer);
-      setSuccessTicketIds(generatedIds);
+      setSuccessTicketIds([ticketId]);
     } catch (error: any) {
       clearTimeout(safetyTimer);
       // On failure, release the guard so the user can retry — stable IDs ensure no duplicate doc
@@ -342,9 +389,14 @@ export const CustomerForm: React.FC<Props> = ({ config, services, onSubmit, onCa
 
         {/* Service Selection */}
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 pb-2 border-b border-gray-100">
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 pb-2 border-b border-gray-100">
             {t.service}
           </label>
+          <p className="text-[11px] text-gray-400 mb-2.5">
+            {lang === 'fa'
+              ? 'می‌توانید چند خدمت را تیک بزنید — همه در قالب یک درخواست ثبت می‌شوند.'
+              : 'You can select multiple services — they will be saved as one request.'}
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {orderedServices.map(service => {
               const isSelected = selectedServiceIds.includes(service.id);

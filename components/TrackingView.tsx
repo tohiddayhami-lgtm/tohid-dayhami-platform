@@ -281,6 +281,12 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     return lang === 'en' && s?.titleEn ? s.titleEn : (s?.title || id);
   };
 
+  const allServiceTitles = (ticket: { serviceId: string; additionalServices?: { serviceId: string }[] }) => {
+    const titles = [serviceTitle(ticket.serviceId)];
+    for (const a of ticket.additionalServices || []) titles.push(serviceTitle(a.serviceId));
+    return titles.filter(Boolean).join(' + ');
+  };
+
   const handleUploadFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList) return;
@@ -435,7 +441,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-gray-100 rtl:divide-x-reverse">
                   {[
                     { label: t.applicant, value: foundTicket.customerName },
-                    { label: t.service,   value: serviceTitle(foundTicket.serviceId) },
+                    { label: t.service,   value: allServiceTitles(foundTicket) },
                     { label: t.date,      value: new Date(foundTicket.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') },
                     { label: t.priority,  value: foundTicket.priority || 'Normal' },
                   ].map((item, i) => (
@@ -697,7 +703,7 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                       <span className="font-mono text-sm font-bold text-gray-900 tracking-wide" dir="ltr">{tk.id}</span>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {serviceTitle(tk.serviceId)} · {new Date(tk.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}
+                      {allServiceTitles(tk)} · {new Date(tk.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

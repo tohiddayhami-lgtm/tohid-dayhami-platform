@@ -1228,6 +1228,25 @@ export const AdminDashboard: React.FC<Props> = ({
                                                     </div>
                                                 </div>
                                             )}
+                                            <div className="col-span-2 pt-2 border-t border-gray-100">
+                                                <span className="text-gray-500 block mb-2">{lang === 'fa' ? 'خدمات درخواستی' : 'Requested services'}</span>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <span className="bg-gray-900 text-white px-2.5 py-1 rounded text-xs font-medium">
+                                                        {getServiceTitle(selectedTicket.serviceId)}
+                                                    </span>
+                                                    {(selectedTicket.additionalServices || []).map((asvc, idx) => (
+                                                        <span key={idx} className="bg-indigo-50 text-indigo-800 px-2.5 py-1 rounded text-xs border border-indigo-100 font-medium">
+                                                            {getServiceTitle(asvc.serviceId)}
+                                                            {(asvc.selectedSubServices || []).length > 0 && (
+                                                                <span className="opacity-70">
+                                                                    {' — '}
+                                                                    {(asvc.selectedSubServices || []).map(sid => getSubServiceTitle(asvc.serviceId, sid)).join('، ')}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -2172,7 +2191,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                 </div>
                             </td>
                             <td className="px-4 py-3">
-                                <div className="text-sm font-medium text-gray-700">{getServiceTitle(ticket.serviceId)}</div>
+                                <div className="text-sm font-medium text-gray-700">{getServiceTitle(ticket.serviceId)}{(ticket.additionalServices || []).length > 0 && (<span className="ms-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">+{(ticket.additionalServices || []).length}</span>)}</div>
                                 <div className="text-[10px] text-gray-400 dir-ltr">{new Date(ticket.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                             </td>
                             <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(ticket.status)}`}>{ticket.status}</span></td>

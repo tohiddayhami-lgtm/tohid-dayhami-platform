@@ -338,6 +338,8 @@ export interface Ticket {
   businessType?: string;
   serviceId: string;
   selectedSubServices?: string[];
+  /** Extra services checked in the same form submission (stored on one ticket). */
+  additionalServices?: { serviceId: string; selectedSubServices?: string[] }[];
   description: string;
   files?: AttachedFile[];
   status: TicketStatus;
