@@ -49,6 +49,17 @@ import { RealEstateProposalManager } from './RealEstateProposalManager';
 
 const normalizePhone = (p: string) => (p || '').replace(/\D/g, '');
 
+/** Calendar month key YYYY-MM from invoice date (fallback: createdAt). */
+const invoiceMonthKey = (inv: Invoice): string => {
+  const raw = (inv.date || inv.createdAt || '').trim();
+  if (!raw) return 'unknown';
+  const m = raw.match(/^(\d{4})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return 'unknown';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const ARCHIVE_PAGE_SIZE = 10;
 
 interface Props {
@@ -343,6 +354,83 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
     }
     return byCur;
   }, [visibleInvoices]);
+
+  /** Group invoices by calendar month (YYYY-MM) from invoice date. */
+  const formatMonthLabel = (key: string): string => {
+    if (key === 'unknown') return lang === 'fa' ? 'بدون تاریخ' : 'Unknown date';
+    const [y, mo] = key.split('-').map(Number);
+    if (!y || !mo) return key;
+    try {
+      return new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR' : 'en-US', {
+        year: 'numeric',
+        month: 'long',
+      }).format(new Date(y, mo - 1, 1));
+    } catch {
+      return key;
+    }
+  };
+
+  type MonthCurStat = {
+    monthKey: string;
+    currency: string;
+    count: number;
+    invoiced: number;
+    paid: number;
+    due: number;
+    cancelledCount: number;
+    cancelledTotal: number;
+    paidCount: number;
+    partialCount: number;
+    unpaidCount: number;
+  };
+
+  const monthlyArchiveStats = useMemo(() => {
+    const map: Record<string, MonthCurStat> = {};
+    for (const inv of visibleInvoices) {
+      const monthKey = invoiceMonthKey(inv);
+      const currency = inv.currency || 'OMR';
+      const id = `${monthKey}__${currency}`;
+      if (!map[id]) {
+        map[id] = {
+          monthKey, currency,
+          count: 0, invoiced: 0, paid: 0, due: 0,
+          cancelledCount: 0, cancelledTotal: 0,
+          paidCount: 0, partialCount: 0, unpaidCount: 0,
+        };
+      }
+      const row = map[id];
+      if (isInvoiceCancelled(inv)) {
+        row.cancelledCount += 1;
+        row.cancelledTotal += inv.total || 0;
+        continue;
+      }
+      row.count += 1;
+      row.invoiced += inv.total || 0;
+      row.paid += invoiceAmountPaid(inv);
+      row.due += invoiceBalanceDue(inv);
+      const ps = invoicePaymentStatus(inv);
+      if (ps === 'paid') row.paidCount += 1;
+      else if (ps === 'partial') row.partialCount += 1;
+      else row.unpaidCount += 1;
+    }
+    return Object.values(map).sort((a, b) => {
+      if (a.monthKey !== b.monthKey) return b.monthKey.localeCompare(a.monthKey);
+      return a.currency.localeCompare(b.currency);
+    });
+  }, [visibleInvoices]);
+
+  const monthlyGroups = useMemo(() => {
+    const order: string[] = [];
+    const byMonth: Record<string, MonthCurStat[]> = {};
+    for (const row of monthlyArchiveStats) {
+      if (!byMonth[row.monthKey]) {
+        byMonth[row.monthKey] = [];
+        order.push(row.monthKey);
+      }
+      byMonth[row.monthKey].push(row);
+    }
+    return order.map(monthKey => ({ monthKey, rows: byMonth[monthKey] }));
+  }, [monthlyArchiveStats]);
 
   const denyAccess = () => alert(lang === 'fa' ? 'شما مجوز ویرایش این فاکتور را ندارید.' : 'You do not have permission to edit this invoice.');
 
@@ -1059,6 +1147,85 @@ export const InvoiceManager: React.FC<Props> = ({ invoices, customers, personnel
                   </div>
                 </div>
               ))}
+
+              {/* Monthly breakdown */}
+              {monthlyGroups.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-gray-200/80">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      {lang === 'fa' ? 'گزارش ماهانه فروش' : 'Monthly Sales Report'}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {monthlyGroups.length} {lang === 'fa' ? 'ماه' : 'month(s)'}
+                    </p>
+                  </div>
+                  <div className="space-y-3 max-h-[28rem] overflow-y-auto pe-1">
+                    {monthlyGroups.map(({ monthKey, rows }) => (
+                      <div key={monthKey} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                        <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2">
+                          <p className="text-sm font-bold text-gray-800" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+                            {formatMonthLabel(monthKey)}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-mono" dir="ltr">{monthKey !== 'unknown' ? monthKey : '—'}</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead>
+                              <tr className="text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-50">
+                                <th className="px-3 py-2 font-medium">{lang === 'fa' ? 'ارز' : 'Currency'}</th>
+                                <th className="px-3 py-2 font-medium">{lang === 'fa' ? 'تعداد' : 'Count'}</th>
+                                <th className="px-3 py-2 font-medium">{lang === 'fa' ? 'فروش / فاکتور' : 'Invoiced'}</th>
+                                <th className="px-3 py-2 font-medium text-emerald-600">{lang === 'fa' ? 'دریافت' : 'Received'}</th>
+                                <th className="px-3 py-2 font-medium text-amber-600">{lang === 'fa' ? 'مانده' : 'Due'}</th>
+                                <th className="px-3 py-2 font-medium">{lang === 'fa' ? 'وضعیت' : 'Status'}</th>
+                                <th className="px-3 py-2 font-medium text-red-600">{lang === 'fa' ? 'کنسل' : 'Cancelled'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {rows.map(row => (
+                                <tr key={`${row.monthKey}-${row.currency}`} className="hover:bg-slate-50/60">
+                                  <td className="px-3 py-2.5 font-bold text-gray-700">{row.currency}</td>
+                                  <td className="px-3 py-2.5 text-gray-700">
+                                    <span className="font-semibold">{row.count}</span>
+                                    <span className="text-gray-400 ms-1">{lang === 'fa' ? 'فعال' : 'active'}</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 font-bold text-gray-900">{fmtMoney(row.invoiced, row.currency)}</td>
+                                  <td className="px-3 py-2.5 font-semibold text-emerald-700">
+                                    {fmtMoney(row.paid, row.currency)}
+                                    {row.invoiced > 0 && (
+                                      <span className="block text-[10px] font-normal text-emerald-600/70">
+                                        {Math.round((row.paid / row.invoiced) * 100)}%
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 font-semibold text-amber-700">{fmtMoney(row.due, row.currency)}</td>
+                                  <td className="px-3 py-2.5 text-gray-600">
+                                    <span className="text-emerald-700">{row.paidCount} paid</span>
+                                    <span className="text-gray-300 mx-1">·</span>
+                                    <span className="text-amber-700">{row.partialCount} partial</span>
+                                    <span className="text-gray-300 mx-1">·</span>
+                                    <span>{row.unpaidCount} open</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-red-600">
+                                    {row.cancelledCount > 0 ? (
+                                      <>
+                                        <span className="font-semibold line-through decoration-red-400/60">{fmtMoney(row.cancelledTotal, row.currency)}</span>
+                                        <span className="block text-[10px]">{row.cancelledCount} {lang === 'fa' ? 'فاکتور' : 'inv.'}</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <div className="p-4 border-b border-gray-100">
