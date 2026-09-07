@@ -15,7 +15,7 @@ interface Props {
 }
 
 export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, services, onUpdatePersonnel, onUpdateServices, lang }) => {
-  const [activeTab, setActiveTab] = useState<'new_sale' | 'my_sales' | 'all_sales' | 'commissions' | 'leaderboard'>('my_sales');
+  const [activeTab, setActiveTab] = useState<'new_sale' | 'my_sales' | 'all_sales' | 'commissions' | 'leaderboard' | 'payouts'>('my_sales');
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
   const [currentRates, setCurrentRates] = useState<{ USD_IRR: number; OMR_IRR: number }>({ USD_IRR: 600000, OMR_IRR: 1560000 });
 
@@ -46,6 +46,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
   
   // Edit Sales State (Master Only)
   const [editingSale, setEditingSale] = useState<SalesRecord | null>(null);
+  const [expandedPayoutUserId, setExpandedPayoutUserId] = useState<string | null>(null);
+  const [payoutBusyId, setPayoutBusyId] = useState<string | null>(null);
 
   const t = {
       fa: {
@@ -56,7 +58,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
               my: 'فروش‌های من',
               all: 'کل فروش‌ها',
               settings: 'تنظیمات کمیسیون',
-              top: 'برترین‌ها'
+              top: 'برترین‌ها',
+              payouts: 'پرداخت پرسنل'
           },
           form: {
               salesperson: 'فروشنده',
@@ -109,6 +112,27 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
               title: 'برترین‌های فروش (بر اساس سودآوری)',
               profit: 'سود خالص شرکت:',
               sales: 'فروش ناخالص:'
+          },
+          payouts: {
+              title: 'خلاصه فروش و پرداخت پرسنل',
+              hint: 'برای هر کارشناس: کل فروش، مبلغ قابل‌دریافت (کمیسیون)، و وضعیت پرداخت.',
+              seller: 'پرسنل',
+              totalSales: 'کل فروش',
+              due: 'مبلغ قابل دریافت',
+              paid: 'پرداخت‌شده',
+              pending: 'باقیمانده',
+              count: 'تعداد فروش',
+              status: 'وضعیت',
+              allPaid: 'پرداخت شده',
+              hasPending: 'در انتظار پرداخت',
+              markAllPaid: 'ثبت پرداخت کامل',
+              markAllPaidConfirm: 'همه کمیسیون‌های پرداخت‌نشده این پرسنل به‌عنوان «پرداخت شده» ثبت شود؟',
+              undoAll: 'برگرداندن به پرداخت‌نشده',
+              undoConfirm: 'وضعیت همه کمیسیون‌های این پرسنل به «در انتظار» برگردد؟',
+              noSales: 'در این دوره فروشی ثبت نشده.',
+              viewSales: 'جزئیات فروش‌ها',
+              hideSales: 'بستن جزئیات',
+              paying: 'در حال ثبت...'
           }
       },
       en: {
@@ -119,7 +143,8 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
               my: 'My Sales',
               all: 'All Sales',
               settings: 'Commission Settings',
-              top: 'Leaderboard'
+              top: 'Leaderboard',
+              payouts: 'Staff Payouts'
           },
           form: {
               salesperson: 'Salesperson',
@@ -166,6 +191,27 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
               title: 'Top Performers (By Company Profit)',
               profit: 'Company Net Profit:',
               sales: 'Gross Sales:'
+          },
+          payouts: {
+              title: 'Staff sales & payout summary',
+              hint: 'Per agent: total sales, commission due, and payment status.',
+              seller: 'Staff',
+              totalSales: 'Total Sales',
+              due: 'Amount Due',
+              paid: 'Paid',
+              pending: 'Pending',
+              count: 'Sales count',
+              status: 'Status',
+              allPaid: 'Paid',
+              hasPending: 'Payment pending',
+              markAllPaid: 'Mark fully paid',
+              markAllPaidConfirm: 'Mark all unpaid commissions for this person as paid?',
+              undoAll: 'Revert to unpaid',
+              undoConfirm: 'Revert all commissions for this person to pending?',
+              noSales: 'No sales in this period.',
+              viewSales: 'View sales',
+              hideSales: 'Hide details',
+              paying: 'Saving...'
           }
       }
   }[lang];
@@ -270,6 +316,26 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
       await updateSalesRecord(sale.id, { commissionPaid: newState }, currentUser.fullName);
   };
 
+  /** Mark all unpaid (or all paid) commissions for one salesperson. */
+  const setPersonCommissionPaid = async (salespersonId: string, paid: boolean) => {
+      if (!isMaster) return;
+      const confirmMsg = paid ? t.payouts.markAllPaidConfirm : t.payouts.undoConfirm;
+      if (!window.confirm(confirmMsg)) return;
+      setPayoutBusyId(salespersonId);
+      try {
+          const targets = salesRecords.filter(r =>
+              r.salespersonId === salespersonId
+              && (!selectedMonth || r.depositDate.startsWith(selectedMonth))
+              && Boolean(r.commissionPaid) !== paid
+          );
+          for (const sale of targets) {
+              await updateSalesRecord(sale.id, { commissionPaid: paid }, currentUser.fullName);
+          }
+      } finally {
+          setPayoutBusyId(null);
+      }
+  };
+
   const handleUpdateCommission = (serviceId: string, newRate: number) => {
       if (!selectedUserForCommission) return; 
       const updatedPersonnel = personnel.map(p => {
@@ -361,6 +427,47 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
 
   const stats = calculateStats(filteredSales);
 
+  /** Per-person sales + commission due/paid for admin payouts tab. */
+  const personPayoutSummaries = (() => {
+      const periodSales = selectedMonth
+          ? salesRecords.filter(r => r.depositDate.startsWith(selectedMonth))
+          : salesRecords;
+      const byId: Record<string, {
+          id: string;
+          name: string;
+          sales: SalesRecord[];
+          totalSales: number;
+          totalCommission: number;
+          paidCommission: number;
+          pendingCommission: number;
+          count: number;
+      }> = {};
+      for (const r of periodSales) {
+          if (!byId[r.salespersonId]) {
+              byId[r.salespersonId] = {
+                  id: r.salespersonId,
+                  name: r.salespersonName || personnel.find(p => p.id === r.salespersonId)?.fullName || r.salespersonId,
+                  sales: [],
+                  totalSales: 0,
+                  totalCommission: 0,
+                  paidCommission: 0,
+                  pendingCommission: 0,
+                  count: 0,
+              };
+          }
+          const row = byId[r.salespersonId];
+          row.sales.push(r);
+          row.count += 1;
+          const saleOmr = toOMR(r.saleAmount, r.currency, r);
+          const commOmr = toOMR(r.commissionAmount, r.currency, r);
+          row.totalSales += saleOmr;
+          row.totalCommission += commOmr;
+          if (r.commissionPaid) row.paidCommission += commOmr;
+          else row.pendingCommission += commOmr;
+      }
+      return Object.values(byId).sort((a, b) => b.pendingCommission - a.pendingCommission || b.totalSales - a.totalSales);
+  })();
+
   return (
     <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm gap-4">
@@ -378,6 +485,7 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                 {isMaster && (
                     <>
                         <button onClick={() => setActiveTab('all_sales')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'all_sales' ? 'bg-white shadow text-green-600' : 'text-gray-500'}`}>{t.tabs.all}</button>
+                        <button onClick={() => setActiveTab('payouts')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'payouts' ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}>{t.tabs.payouts}</button>
                         <button onClick={() => setActiveTab('commissions')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'commissions' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>{t.tabs.settings}</button>
                         {/* Top sellers leaderboard — visible to master only */}
                         <button onClick={() => setActiveTab('leaderboard')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'leaderboard' ? 'bg-white shadow text-amber-600' : 'text-gray-500'}`}>{t.tabs.top}</button>
@@ -387,7 +495,7 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
         </div>
 
         {/* Filters */}
-        {(activeTab === 'my_sales' || activeTab === 'all_sales' || activeTab === 'leaderboard') && (
+        {(activeTab === 'my_sales' || activeTab === 'all_sales' || activeTab === 'leaderboard' || activeTab === 'payouts') && (
             <div className="flex flex-col md:flex-row gap-4 mb-4">
                 <div className="bg-white px-4 py-2 rounded-xl border border-gray-200 flex items-center gap-2 shadow-sm">
                     <IconCalendar className="w-5 h-5 text-gray-400" />
@@ -761,6 +869,156 @@ export const SalesDashboard: React.FC<Props> = ({ currentUser, personnel, servic
                         })}
                     </div>
                 </div>
+            </div>
+        )}
+
+        {/* Staff payouts — master / admin */}
+        {activeTab === 'payouts' && isMaster && (
+            <div className="space-y-4">
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                        <IconWallet className="w-5 h-5 text-emerald-600" />
+                        {t.payouts.title}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">{t.payouts.hint}</p>
+                </div>
+
+                {personPayoutSummaries.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center text-sm text-gray-400">
+                        {t.payouts.noSales}
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {personPayoutSummaries.map(person => {
+                            const fullyPaid = person.pendingCommission <= 0.0001 && person.totalCommission > 0;
+                            const noCommission = person.totalCommission <= 0.0001;
+                            const expanded = expandedPayoutUserId === person.id;
+                            const busy = payoutBusyId === person.id;
+                            return (
+                                <div
+                                    key={person.id}
+                                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${fullyPaid ? 'border-emerald-200' : 'border-gray-100'}`}
+                                >
+                                    <div className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="font-bold text-gray-900 text-sm md:text-base">{person.name}</p>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                                    noCommission ? 'bg-gray-100 text-gray-500'
+                                                    : fullyPaid ? 'bg-emerald-100 text-emerald-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    {noCommission ? '—' : fullyPaid ? t.payouts.allPaid : t.payouts.hasPending}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400 mt-1">{person.count} {t.payouts.count}</p>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 lg:max-w-2xl">
+                                            <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">{t.payouts.totalSales}</p>
+                                                <p className="text-sm font-black text-gray-800 mt-0.5">{formatOMR(person.totalSales)} <span className="text-[10px] font-normal text-gray-400">OMR</span></p>
+                                            </div>
+                                            <div className="rounded-xl bg-indigo-50/50 border border-indigo-100 px-3 py-2">
+                                                <p className="text-[10px] text-indigo-600 font-bold uppercase">{t.payouts.due}</p>
+                                                <p className="text-sm font-black text-indigo-800 mt-0.5">{formatOMR(person.totalCommission)} <span className="text-[10px] font-normal text-indigo-400">OMR</span></p>
+                                            </div>
+                                            <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 px-3 py-2">
+                                                <p className="text-[10px] text-emerald-600 font-bold uppercase">{t.payouts.paid}</p>
+                                                <p className="text-sm font-black text-emerald-700 mt-0.5">{formatOMR(person.paidCommission)} <span className="text-[10px] font-normal text-emerald-500">OMR</span></p>
+                                            </div>
+                                            <div className="rounded-xl bg-amber-50/50 border border-amber-100 px-3 py-2">
+                                                <p className="text-[10px] text-amber-600 font-bold uppercase">{t.payouts.pending}</p>
+                                                <p className="text-sm font-black text-amber-700 mt-0.5">{formatOMR(person.pendingCommission)} <span className="text-[10px] font-normal text-amber-500">OMR</span></p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedPayoutUserId(expanded ? null : person.id)}
+                                                className="px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                            >
+                                                {expanded ? t.payouts.hideSales : t.payouts.viewSales}
+                                            </button>
+                                            {person.pendingCommission > 0.0001 && (
+                                                <button
+                                                    type="button"
+                                                    disabled={busy}
+                                                    onClick={() => setPersonCommissionPaid(person.id, true)}
+                                                    className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 flex items-center gap-1.5"
+                                                >
+                                                    <IconCheck className="w-3.5 h-3.5" />
+                                                    {busy ? t.payouts.paying : t.payouts.markAllPaid}
+                                                </button>
+                                            )}
+                                            {person.paidCommission > 0.0001 && person.pendingCommission <= 0.0001 && (
+                                                <button
+                                                    type="button"
+                                                    disabled={busy}
+                                                    onClick={() => setPersonCommissionPaid(person.id, false)}
+                                                    className="px-3 py-2 rounded-xl text-xs font-bold border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                                                >
+                                                    {busy ? t.payouts.paying : t.payouts.undoAll}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {expanded && (
+                                        <div className="border-t border-gray-100 overflow-x-auto">
+                                            <table className="w-full text-right text-xs">
+                                                <thead className="bg-gray-50 text-gray-500">
+                                                    <tr>
+                                                        <th className="px-4 py-2 font-medium">{t.table.customer}</th>
+                                                        <th className="px-4 py-2 font-medium">{t.table.service}</th>
+                                                        <th className="px-4 py-2 font-medium">{t.table.amount}</th>
+                                                        <th className="px-4 py-2 font-medium">{t.table.commission}</th>
+                                                        <th className="px-4 py-2 font-medium">{t.table.date}</th>
+                                                        <th className="px-4 py-2 font-medium">{t.table.status}</th>
+                                                        <th className="px-4 py-2 font-medium text-center">{t.table.actions}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50">
+                                                    {[...person.sales]
+                                                        .sort((a, b) => (b.depositDate || '').localeCompare(a.depositDate || ''))
+                                                        .map(sale => (
+                                                        <tr key={sale.id} className={sale.commissionPaid ? 'bg-emerald-50/30' : ''}>
+                                                            <td className="px-4 py-2.5 text-gray-700">{sale.customerName}</td>
+                                                            <td className="px-4 py-2.5 text-gray-600">{sale.serviceTitle}</td>
+                                                            <td className="px-4 py-2.5 font-semibold text-gray-800">
+                                                                {formatOMR(toOMR(sale.saleAmount, sale.currency, sale))} OMR
+                                                            </td>
+                                                            <td className={`px-4 py-2.5 font-bold ${sale.commissionPaid ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                                                {formatOMR(toOMR(sale.commissionAmount, sale.currency, sale))} OMR
+                                                            </td>
+                                                            <td className="px-4 py-2.5 text-gray-500" dir="ltr">{sale.depositDate}</td>
+                                                            <td className="px-4 py-2.5">
+                                                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${sale.commissionPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                    {sale.commissionPaid ? t.table.paid : t.table.pending}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-2.5 text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleCommissionPaid(sale)}
+                                                                    className={`p-1.5 rounded-lg ${sale.commissionPaid ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600'}`}
+                                                                    title={t.table.markPaid}
+                                                                >
+                                                                    <IconWallet className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         )}
 
