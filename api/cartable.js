@@ -1,10 +1,11 @@
 /**
- * Public ingest API: website signups → customers (+ optional cartable ticket).
+ * Cartable API: website signups + read existing requests.
  *
- * GET  /api/cartable  → usage docs (no secret)
- * POST /api/cartable  → register customer
- * Auth: header X-Api-Key  or  Authorization: Bearer <key>
- * Key: env CARTABLE_API_KEY  or  settings/appConfig.cartableApiKey
+ * GET  /api/cartable              → docs (no key)
+ * GET  /api/cartable + X-Api-Key  → all tickets (requests)
+ * GET  /api/cartable?resource=customers + key → all customers
+ * GET  /api/cartable?id=TICKET_ID + key → one ticket
+ * POST /api/cartable + key        → register customer
  */
 
 import crypto from 'crypto';
@@ -75,6 +76,36 @@ async function setDoc(col, id, data) {
     const t = await r.text().catch(() => '');
     throw new Error(`firestore write ${col}/${id}: ${r.status} ${t.slice(0, 300)}`);
   }
+}
+
+async function listCollection(col, pageSize, pageToken) {
+  const qs = new URLSearchParams({
+    pageSize: String(Math.min(Math.max(Number(pageSize) || 200, 1), 300)),
+    key: API_KEY,
+  });
+  if (pageToken) qs.set('pageToken', pageToken);
+  const r = await fetch(`${BASE}/${col}?${qs}`);
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`firestore list ${col}: ${r.status} ${t.slice(0, 200)}`);
+  }
+  const data = await r.json();
+  return {
+    items: (data.documents || []).map(parseDoc),
+    nextPageToken: data.nextPageToken || '',
+  };
+}
+
+async function listAll(col, maxItems) {
+  const out = [];
+  let pageToken = '';
+  const cap = Math.min(Math.max(Number(maxItems) || 2500, 1), 4000);
+  do {
+    const page = await listCollection(col, 300, pageToken);
+    out.push(...page.items);
+    pageToken = page.nextPageToken;
+  } while (pageToken && out.length < cap);
+  return { items: out.slice(0, cap), nextPageToken: out.length >= cap ? pageToken : '' };
 }
 
 async function queryByField(col, field, value) {
@@ -152,46 +183,101 @@ function flattenExtra(extra) {
   return out;
 }
 
+function publicTicket(t) {
+  const cd = { ...(t.customData || {}) };
+  delete cd.__assigneePersonnelId;
+  delete cd.__assigneeRole;
+  delete cd.whatsappNotified;
+  return {
+    id: t.id,
+    createdAt: t.createdAt || '',
+    status: t.status || '',
+    name: t.customerName || '',
+    company: t.companyName || '',
+    phone: t.phoneNumber || '',
+    whatsapp: t.whatsappNumber || t.phoneNumber || '',
+    city: t.location || '',
+    serviceId: t.serviceId || '',
+    title: cd.formTitle || '',
+    description: t.description || '',
+    data: cd,
+  };
+}
+
+function publicCustomer(c) {
+  return {
+    id: c.id,
+    name: c.fullName || '',
+    company: c.companyName || '',
+    phone: c.phoneNumber || '',
+    whatsapp: c.whatsappNumber || c.phoneNumber || '',
+    email: c.email || '',
+    city: c.location || '',
+    source: c.source || '',
+    firstContact: c.firstContact || '',
+    totalTickets: Number(c.totalTickets || 0),
+  };
+}
+
+function sortByDateDesc(items, field) {
+  return items.sort((a, b) => String(b[field] || '').localeCompare(String(a[field] || '')));
+}
+
 function docs(origin) {
   return {
-    name: 'Cartable Customer API',
+    name: 'Cartable API',
     endpoint: `${origin}/api/cartable`,
-    method: 'POST',
     auth: {
       header: 'X-Api-Key: <cartableApiKey>',
       alt: 'Authorization: Bearer <cartableApiKey>',
     },
-    required: ['name', 'phone'],
-    body: {
-      name: 'string — نام و نام خانوادگی',
-      phone: 'string — موبایل',
-      email: 'string — اختیاری',
-      company: 'string — اختیاری',
-      city: 'string — اختیاری',
-      whatsapp: 'string — اختیاری، پیش‌فرض همان phone',
-      note: 'string — توضیحات ثبت‌نام',
-      source: 'string — منبع، پیش‌فرض Website',
-      serviceId: 'string — اختیاری',
-      createTicket: 'boolean — اگر true در کارتابل هم درخواست ساخته می‌شود (پیش‌فرض true)',
-      extra: 'object — فیلدهای اضافه',
+    list: {
+      method: 'GET',
+      url: `${origin}/api/cartable`,
+      description: 'همه درخواست‌های ثبت‌شده کارتابل',
+      customers: `${origin}/api/cartable?resource=customers`,
+      one: `${origin}/api/cartable?id=TICKET_ID`,
     },
-    example: {
-      name: 'Ali Mohammadi',
-      phone: '09121234567',
-      email: 'ali@example.com',
-      company: 'Pars Trading',
-      city: 'تهران',
-      source: 'Website signup',
-      note: 'ثبت‌نام از وب‌سایت',
-    },
-    response: {
-      ok: true,
-      customerId: 'C-…',
-      ticketId: 'WEB-…',
-      created: true,
+    create: {
+      method: 'POST',
+      required: ['name', 'phone'],
+      body: {
+        name: 'string — نام و نام خانوادگی',
+        phone: 'string — موبایل',
+        email: 'string — اختیاری',
+        company: 'string — اختیاری',
+        city: 'string — اختیاری',
+        whatsapp: 'string — اختیاری، پیش‌فرض همان phone',
+        note: 'string — توضیحات ثبت‌نام',
+        source: 'string — منبع، پیش‌فرض Website',
+        serviceId: 'string — اختیاری',
+        createTicket: 'boolean — اگر true در کارتابل هم درخواست ساخته می‌شود (پیش‌فرض true)',
+        extra: 'object — فیلدهای اضافه',
+      },
+      example: {
+        name: 'Ali Mohammadi',
+        phone: '09121234567',
+        email: 'ali@example.com',
+        company: 'Pars Trading',
+        city: 'تهران',
+        source: 'Website signup',
+        note: 'ثبت‌نام از وب‌سایت',
+      },
     },
     note: 'کلید را در فرانت‌اند عمومی نگذارید. از سرور وب‌سایت صدا بزنید.',
   };
+}
+
+async function requireApiKey(req, body) {
+  const cfg = await getDoc('settings', 'appConfig');
+  const expected = String(process.env.CARTABLE_API_KEY || cfg?.cartableApiKey || '').trim();
+  if (!expected) {
+    return { error: 403, json: { error: 'api_key_not_configured', message: 'در کارتابل یک کلید API بسازید.' } };
+  }
+  if (!keysEqual(readKey(req, body || {}), expected)) {
+    return { error: 401, json: { error: 'unauthorized' } };
+  }
+  return { ok: true };
 }
 
 export default async function handler(req, res) {
@@ -204,7 +290,38 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      return res.status(200).json(docs(origin));
+      const sentKey = readKey(req, { apiKey: req.query?.apiKey, key: req.query?.key });
+      if (!sentKey) return res.status(200).json(docs(origin));
+      const gate = await requireApiKey(req, { apiKey: req.query?.apiKey, key: req.query?.key });
+      if (!gate.ok) return res.status(gate.error).json(gate.json);
+
+      const oneId = String(req.query?.id || '').trim();
+      if (oneId) {
+        const ticket = await getDoc('tickets', oneId);
+        if (!ticket) return res.status(404).json({ error: 'not_found' });
+        return res.status(200).json({ ok: true, request: publicTicket(ticket) });
+      }
+
+      const resource = String(req.query?.resource || 'tickets').toLowerCase();
+      if (resource === 'customers') {
+        const listed = await listAll('customers');
+        const customers = sortByDateDesc(listed.items.map(publicCustomer), 'firstContact');
+        return res.status(200).json({
+          ok: true,
+          count: customers.length,
+          customers,
+          nextPageToken: listed.nextPageToken || undefined,
+        });
+      }
+
+      const listed = await listAll('tickets');
+      const requests = sortByDateDesc(listed.items.map(publicTicket), 'createdAt');
+      return res.status(200).json({
+        ok: true,
+        count: requests.length,
+        requests,
+        nextPageToken: listed.nextPageToken || undefined,
+      });
     }
 
     if (req.method !== 'POST') {
@@ -212,17 +329,8 @@ export default async function handler(req, res) {
     }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const cfg = await getDoc('settings', 'appConfig');
-    const expected = String(process.env.CARTABLE_API_KEY || cfg?.cartableApiKey || '').trim();
-    if (!expected) {
-      return res.status(403).json({
-        error: 'api_key_not_configured',
-        message: 'در کارتابل یک کلید API بسازید و با هدر X-Api-Key بفرستید.',
-      });
-    }
-    if (!keysEqual(readKey(req, body), expected)) {
-      return res.status(401).json({ error: 'unauthorized' });
-    }
+    const gate = await requireApiKey(req, body);
+    if (!gate.ok) return res.status(gate.error).json(gate.json);
 
     const src = body.customer && typeof body.customer === 'object' ? { ...body, ...body.customer } : body;
     const name = pick(src, ['name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی']);

@@ -22,14 +22,29 @@ export const CartableIngestApiCard: React.FC<Props> = ({ config, lang, onUpdateC
   const key = (config.cartableApiKey || '').trim();
 
   const claudePrompt = useMemo(() => {
-    return `این API کارتابل توحید دیهمی است. وقتی کاربری در وب‌سایت ثبت‌نام کرد، از **سرور** وب‌سایت (نه مرورگر عمومی) این درخواست را بفرست تا مشتری در دیتابیس و کارتابل ذخیره شود.
+    return `این API کارتابل توحید دیهمی است. از **سرور** وب‌سایت (نه مرورگر عمومی) استفاده کن.
 
+کلید:
+X-Api-Key: ${key || '<کلید کارتابل>'}
+
+1) خواندن همه درخواست‌های ثبت‌شده:
+GET ${endpoint}
+Header: X-Api-Key
+
+پاسخ: { ok: true, count, requests: [{ id, createdAt, status, name, company, phone, whatsapp, city, title, description, data }] }
+
+مشتری‌ها:
+GET ${endpoint}?resource=customers
+
+یک درخواست:
+GET ${endpoint}?id=TICKET_ID
+
+2) ثبت مشتری جدید از فرم سایت:
 POST ${endpoint}
 Headers:
   Content-Type: application/json
   X-Api-Key: ${key || '<کلید کارتابل>'}
-
-Body JSON:
+Body:
 {
   "name": "نام کامل",
   "phone": "0912xxxxxxx",
@@ -37,15 +52,14 @@ Body JSON:
   "company": "شرکت (اختیاری)",
   "city": "شهر (اختیاری)",
   "source": "Website signup",
-  "note": "توضیح ثبت‌نام",
+  "note": "ثبت‌نام از وب‌سایت",
   "createTicket": true
 }
 
 قوانین:
-- name و phone الزامی است.
-- اگر همان شماره از قبل باشد، مشتری آپدیت می‌شود و درخواست جدید در کارتابل ساخته می‌شود.
-- پاسخ موفق: { ok: true, customerId, ticketId, created }
-- کلید را در فرانت‌اند عمومی قرار نده.`.trim();
+- برای خواندن لیست حتماً هدر X-Api-Key بفرست.
+- name و phone برای ثبت الزامی است.
+- کلید را در فرانت‌اند عمومی نگذار.`.trim();
   }, [endpoint, key]);
 
   const copy = async (text: string, id: string) => {
