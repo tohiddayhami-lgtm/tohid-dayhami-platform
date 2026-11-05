@@ -870,7 +870,7 @@ export const deleteTicketFromCloud = async (id: string) => {
 export const subscribeToTickets = (callback: (tickets: Ticket[]) => void) =>
   subscribeCollection<Ticket>('tickets', callback, {
     sort: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    intervalMs: 180_000,
+    intervalMs: 15_000,
     mergeDocId: true,
   });
 
@@ -906,7 +906,7 @@ export const saveCustomersBulkToCloud = async (customers: Customer[]) => {
 };
 
 export const subscribeToCustomers = (callback: (customers: Customer[]) => void) =>
-  subscribeCollection<Customer>('customers', callback, { intervalMs: 180_000 });
+  subscribeCollection<Customer>('customers', callback, { intervalMs: 15_000 });
 
 export const findCustomerByLoyaltyCode = async (code: string): Promise<Customer | null> => {
     if (!code) return null;

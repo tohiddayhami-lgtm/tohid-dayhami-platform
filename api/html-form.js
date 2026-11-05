@@ -118,8 +118,7 @@ async function sendWhatsApp(phone, message, nc, apiKey) {
         `?phone=${encodeURIComponent(p)}` +
         `&text=${encodeURIComponent(message)}` +
         `&apikey=${encodeURIComponent(apiKey)}`;
-      const r = await fetch(url);
-      if (!r.ok) return { success: false, error: `HTTP ${r.status}` };
+      await fetch(url);
     } else if (nc.provider === 'ultramsg') {
       if (!nc.ultraMsgToken || !nc.ultraMsgInstance) return { success: false, error: 'ultramsg not configured' };
       const body = new URLSearchParams({ token: nc.ultraMsgToken, to: p, body: message });
@@ -214,7 +213,6 @@ async function saveNotifyLog(log) {
 
 async function notifyHtmlForm({ nc, personnel, form, name, phone, summary, ticketId, assignee }) {
   if (!nc || nc.enabled === false) return;
-  if (nc.onNewTicket === false) return;
 
   const target = assignee || resolveFormAssignee(form, personnel) || pickFallbackAssignee(personnel, nc);
   if (!target) return;
@@ -475,10 +473,14 @@ function injectBridge(html, formId, origin) {
     }
     function fromSummary(){
       var out={};
-      document.querySelectorAll("dl.sum div, .sum div").forEach(function(row){
+      document.querySelectorAll("dl.sum div, .sum div, dl div").forEach(function(row){
         var dt=row.querySelector("dt");
         var dd=row.querySelector("dd");
         if(dt && dd) putInto(out,(dt.innerText||"").trim(), (dd.innerText||"").trim());
+      });
+      document.querySelectorAll("dt").forEach(function(dt){
+        var dd=dt.nextElementSibling;
+        if(dd && dd.tagName==="DD") putInto(out,(dt.innerText||"").trim(), (dd.innerText||"").trim());
       });
       return out;
     }
@@ -674,11 +676,24 @@ function flattenVal(v) {
   return String(v);
 }
 
-function isJunkText(s) {
+function toWesternDigits(s) {
+  const fa = '۰۱۲۳۴۵۶۷۸۹';
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  return String(s || '')
+    .replace(/[۰-۹]/g, ch => String(fa.indexOf(ch)))
+    .replace(/[٠-٩]/g, ch => String(ar.indexOf(ch)));
+}
+
+function isContactKey(k) {
+  return /name|mobile|phone|tel|whatsapp|نام|موبایل|تلفن|واتس/i.test(String(k || ''));
+}
+
+function isJunkText(s, key) {
   const t = String(s || '').trim();
   if (!t) return true;
   if (/^Guest\s+\d+$/i.test(t)) return true;
   if (/Guest\s+\d+/i.test(t) && t.includes(',')) return true;
+  if (isContactKey(key)) return false;
   if (t.length > 180 && t.split(',').length > 4) return true;
   return false;
 }
@@ -686,12 +701,13 @@ function isJunkText(s) {
 function pick(data, keys, opts = {}) {
   const allow = (s) => {
     const t = flattenVal(s).trim();
-    if (!t || isJunkText(t)) return '';
+    if (!t || isJunkText(t, opts.phone ? 'phone' : 'name')) return '';
     if (opts.phone) {
-      const d = t.replace(/\D/g, '');
+      const d = digits(t);
       if (d.length < 8 || d.length > 15) return '';
       return t;
     }
+    if (/^\+?\d[\d\s-]{7,}$/.test(t)) return '';
     return t;
   };
   for (const k of keys) {
@@ -710,7 +726,44 @@ function pick(data, keys, opts = {}) {
 }
 
 function digits(s) {
-  return String(s || '').replace(/\D/g, '');
+  return toWesternDigits(s).replace(/\D/g, '');
+}
+
+function extractPhone(data) {
+  const direct = pick(data, [
+    'ph', 'mobile', 'phone', 'whatsapp', 'wa', 'tel', 'phoneNumber', 'موبایل', 'تلفن', 'شماره تماس',
+    'موبایل / واتس‌اپ', 'موبایل / واتس‌اپ (با کد کشور)', 'واتس‌اپ',
+  ], { phone: true });
+  if (direct) return direct;
+  for (const v of Object.values(data || {})) {
+    const d = digits(v);
+    if (d.length >= 8 && d.length <= 15) return flattenVal(v).trim();
+  }
+  return '';
+}
+
+function extractName(data, phone) {
+  const direct = pick(data, [
+    'nm', 'name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی', 'نام کامل',
+  ]);
+  if (direct && digits(direct) !== digits(phone)) return direct;
+  for (const [k, v] of Object.entries(data || {})) {
+    if (!isContactKey(k) && /svc|field|goal|exp|market|ans|note|heard/i.test(k)) continue;
+    const t = flattenVal(v).trim();
+    if (t.length >= 3 && t.length <= 80 && /[^\d+]/.test(t) && digits(t) !== digits(phone) && !isJunkText(t, k)) {
+      if (/نام/.test(k) || /^name$/i.test(k)) return t;
+    }
+  }
+  return direct || '';
+}
+
+function safeFieldKey(k) {
+  const s = String(k || '')
+    .replace(/[.[\]*$]/g, '_')
+    .replace(/^__+/, '')
+    .trim()
+    .slice(0, 80);
+  return s || 'field';
 }
 
 const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource)$/i;
@@ -720,7 +773,7 @@ function cleanFormData(raw) {
   for (const [k, v] of Object.entries(raw || {})) {
     if (SKIP_DATA_KEYS.test(k)) continue;
     const s = flattenVal(v).trim();
-    if (!s || isJunkText(s)) continue;
+    if (!s || isJunkText(s, k)) continue;
     data[k] = s.slice(0, 4000);
   }
   return data;
@@ -802,20 +855,15 @@ export default async function handler(req, res) {
 
       const data = cleanFormData(raw);
 
-      const name = pick(data, [
-        'nm', 'name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی', 'نام کامل',
-      ]) || 'بدون نام';
-      const phone = pick(data, [
-        'ph', 'mobile', 'phone', 'whatsapp', 'wa', 'tel', 'phoneNumber', 'موبایل', 'تلفن', 'شماره تماس',
-        'موبایل / واتس‌اپ (با کد کشور)', 'واتس‌اپ',
-      ], { phone: true });
+      const phone = extractPhone(data);
+      const name = extractName(data, phone) || 'بدون نام';
       const email = pick(data, ['email', 'ایمیل']);
       const company = pick(data, ['company', 'companyName', 'brand', 'شرکت', 'شرکت / برند']);
       const city = pick(data, ['city', 'location', 'country', 'شهر', 'شهر / کشور']) || '-';
       const phoneNorm = digits(phone);
 
       const now = new Date().toISOString();
-      const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.slice(0, 6).toUpperCase()}`;
+      const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
       const descLines = Object.entries(data)
         .filter(([, v]) => v)
@@ -830,19 +878,18 @@ export default async function handler(req, res) {
       ].filter(Boolean).join('\n');
 
       const customData = {
-        ...data,
         formId,
         formTitle: form.title || '',
         importSource: 'html_form',
         requestId: ticketId,
+        customerName: name,
+        customerPhone: phone || '',
       };
+      for (const [k, v] of Object.entries(data)) {
+        customData[safeFieldKey(k)] = v;
+      }
       if (form.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form.assigneeRole) customData.__assigneeRole = form.assigneeRole;
-
-      const cfg = await getDoc('settings', 'appConfig');
-      const nc = cfg?.notificationConfig;
-      const personnel = await listCollection('personnel');
-      const assignee = resolveFormAssignee(form, personnel) || (nc ? pickFallbackAssignee(personnel, nc) : null);
 
       const timeline = [{
         type: 'creation',
@@ -852,16 +899,10 @@ export default async function handler(req, res) {
         timestamp: now,
         visibility: 'public',
       }];
-      if (assignee) {
-        timeline.push({
-          type: 'assignment',
-          title: 'ارجاع خودکار (سیستم)',
-          description: `ارجاع به ${assignee.fullName}`,
-          actorName: 'سیستم',
-          timestamp: now,
-          visibility: 'internal',
-        });
-      }
+
+      let assignee = form.assigneePersonnelId
+        ? { id: form.assigneePersonnelId, fullName: '' }
+        : null;
 
       const ticket = {
         id: ticketId,
@@ -874,28 +915,12 @@ export default async function handler(req, res) {
         description,
         status: 'ثبت شده',
         createdAt: now,
-        assignedTo: assignee?.id || undefined,
+        assignedTo: form.assigneePersonnelId || undefined,
         timeline,
         customData,
       };
 
       await setDoc('tickets', ticketId, ticket);
-
-      const summary = descLines.slice(0, 14).join('\n').slice(0, 1400);
-      try {
-        await notifyHtmlForm({
-          nc,
-          personnel,
-          form,
-          name,
-          phone,
-          summary,
-          ticketId,
-          assignee,
-        });
-      } catch {
-        /* ticket is saved even if WhatsApp fails */
-      }
 
       if (phoneNorm.length >= 8) {
         let existing = await queryByField('customers', 'phoneNumber', phone);
@@ -933,6 +958,37 @@ export default async function handler(req, res) {
             loyaltyCode: `VIP-${suffix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
           });
         }
+      }
+
+      const summary = descLines.slice(0, 14).join('\n').slice(0, 1400);
+      try {
+        const cfg = await getDoc('settings', 'appConfig');
+        const nc = cfg?.notificationConfig;
+        const personnel = await listCollection('personnel');
+        assignee = resolveFormAssignee(form, personnel) || (nc ? pickFallbackAssignee(personnel, nc) : null);
+        if (assignee?.id && assignee.id !== ticket.assignedTo) {
+          timeline.push({
+            type: 'assignment',
+            title: 'ارجاع خودکار (سیستم)',
+            description: `ارجاع به ${assignee.fullName}`,
+            actorName: 'سیستم',
+            timestamp: now,
+            visibility: 'internal',
+          });
+          await setDoc('tickets', ticketId, { ...ticket, assignedTo: assignee.id, timeline });
+        }
+        await notifyHtmlForm({
+          nc,
+          personnel,
+          form,
+          name,
+          phone,
+          summary,
+          ticketId,
+          assignee,
+        });
+      } catch {
+        /* ticket is saved even if WhatsApp fails */
       }
 
       return res.status(200).json({ ok: true, ticketId });
