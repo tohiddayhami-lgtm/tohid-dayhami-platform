@@ -394,6 +394,21 @@ ${faviconTags(favicon)}
 
 function injectBridge(html, formId, origin) {
   const endpoint = `${origin}/api/html-form`;
+  const freshKey = `td-html-fresh-${formId}`;
+  const boot = `<script>(function(){
+    try{
+      if(!sessionStorage.getItem(${JSON.stringify(freshKey)})) return;
+      var keys=[];
+      for(var i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
+      keys.forEach(function(key){
+        if(!key) return;
+        if(key===${JSON.stringify(formId)} || /^(arka-|htmlform|form-draft|td-form)/i.test(key) || /arka-/i.test(key)){
+          try{ localStorage.removeItem(key); }catch(e){}
+        }
+      });
+      try{ sessionStorage.removeItem(${JSON.stringify("td-html-sent-"+formId)}); }catch(e){}
+    }catch(e){}
+  })();<\/script>`;
   const script = `<script>(function(){
     var FORM_ID=${JSON.stringify(formId)};
     var ENDPOINT=${JSON.stringify(endpoint)};
@@ -605,25 +620,65 @@ function injectBridge(html, formId, origin) {
     function markSent(data){
       try{ sessionStorage.setItem(sentStoreKey(), payloadKey(data)); }catch(e){}
     }
-    function resetToStart(){
+    function freshKey(){ return "td-html-fresh-"+FORM_ID; }
+    function wipeFormMemory(){
       SNAP={};
-      try{ sessionStorage.removeItem(sentStoreKey()); }catch(e){}
       try{
-        ["arka-exs","arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID].forEach(function(k){
-          try{ localStorage.removeItem(k); }catch(e){}
+        var keys=[];
+        for(var i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
+        keys.forEach(function(key){
+          if(!key) return;
+          if(key===FORM_ID || /^(arka-|htmlform|form-draft|td-form)/i.test(key) || /arka-/i.test(key)){
+            try{ localStorage.removeItem(key); }catch(e){}
+          }
         });
       }catch(e){}
       try{
         document.querySelectorAll("input,textarea").forEach(function(el){
           if(el.type==="checkbox"||el.type==="radio") el.checked=false;
-          else el.value="";
+          else if(el.type!=="hidden") el.value="";
         });
         document.querySelectorAll("select").forEach(function(el){ el.selectedIndex=0; });
       }catch(e){}
-      try{ location.reload(); }catch(e){}
+    }
+    try{
+      var _setItem=Storage.prototype.setItem;
+      Storage.prototype.setItem=function(k,v){
+        try{
+          if(this===localStorage && sessionStorage.getItem(freshKey()) && (k===FORM_ID || /^(arka-|htmlform|form-draft|td-form)/i.test(String(k||"")) || /arka-/i.test(String(k||"")))) return;
+        }catch(e){}
+        return _setItem.apply(this, arguments);
+      };
+    }catch(e){}
+    try{
+      window.addEventListener("pagehide", function(){
+        try{ if(sessionStorage.getItem(freshKey())) wipeFormMemory(); }catch(e){}
+      });
+    }catch(e){}
+    try{
+      if(sessionStorage.getItem(freshKey())){
+        wipeFormMemory();
+        window.addEventListener("load", function(){
+          wipeFormMemory();
+          setTimeout(function(){ try{ sessionStorage.removeItem(freshKey()); }catch(e){} }, 80);
+        });
+      }
+    }catch(e){}
+    function resetToStart(){
+      wipeFormMemory();
+      try{ sessionStorage.setItem(freshKey(),"1"); }catch(e){}
+      try{
+        var u=new URL(location.href);
+        u.searchParams.set("_n", String(Date.now()));
+        location.replace(u.toString());
+      }catch(e){
+        try{ location.reload(); }catch(e2){}
+      }
     }
     function showSuccess(){
       hideBusy();
+      wipeFormMemory();
+      try{ sessionStorage.setItem(freshKey(),"1"); }catch(e){}
       try{
         var old=document.getElementById("td-form-ok");
         if(old) old.remove();
@@ -631,13 +686,14 @@ function injectBridge(html, formId, origin) {
         el.id="td-form-ok";
         el.setAttribute("role","dialog");
         el.style.cssText="position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tahoma,sans-serif";
-        el.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:18px;padding:28px 24px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)"><div style="width:52px;height:52px;border-radius:50%;background:#d1fae5;color:#047857;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font:700 26px/1 Tahoma,sans-serif">✓</div><div style="font:700 16px/1.8 Tahoma,sans-serif">فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند</div><button type="button" id="td-form-ok-btn" style="margin-top:18px;background:#0f766e;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:700 14px Tahoma,sans-serif;cursor:pointer">بازگشت به ابتدا</button></div>';
+        el.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:18px;padding:28px 24px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)"><div style="width:52px;height:52px;border-radius:50%;background:#d1fae5;color:#047857;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font:700 26px/1 Tahoma,sans-serif">✓</div><div style="font:700 16px/1.8 Tahoma,sans-serif">فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند</div><button type="button" id="td-form-ok-btn" style="margin-top:18px;background:#0f766e;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:700 14px Tahoma,sans-serif;cursor:pointer">شروع فرم جدید</button></div>';
         document.body.appendChild(el);
         var btn=document.getElementById("td-form-ok-btn");
-        if(btn) btn.onclick=function(){ resetToStart(); };
+        if(btn) btn.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); resetToStart(); };
+        setTimeout(resetToStart, 2500);
       }catch(e){
         toast("فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند", true);
-        setTimeout(resetToStart, 2200);
+        setTimeout(resetToStart, 1800);
       }
     }
     async function submitToCrm(){
@@ -694,9 +750,13 @@ function injectBridge(html, formId, origin) {
       submitToCrm();
     },true);
   })();<\/script>`;
-  if (/<body[^>]*>/i.test(html)) return html.replace(/<body[^>]*>/i, m => `${m}\n${script}`);
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}\n</body>`);
-  return `${script}\n${html}`;
+  let out = String(html || '');
+  if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, m => `${m}\n${boot}`);
+  else if (/<html[^>]*>/i.test(out)) out = out.replace(/<html[^>]*>/i, m => `${m}\n<head>${boot}</head>`);
+  else out = `${boot}\n${out}`;
+  if (/<body[^>]*>/i.test(out)) return out.replace(/<body[^>]*>/i, m => `${m}\n${script}`);
+  if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, `${script}\n</body>`);
+  return `${script}\n${out}`;
 }
 
 function flattenVal(v) {
