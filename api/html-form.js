@@ -262,7 +262,7 @@ function injectBridge(html, formId, origin) {
     function fromStorage(){
       var out={};
       try{
-        var prefer=["arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID];
+        var prefer=["arka-exs","arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID];
         prefer.forEach(function(key){
           var raw=localStorage.getItem(key);
           if(!raw) return;
@@ -363,13 +363,65 @@ function injectBridge(html, formId, origin) {
         if(el) el.style.display="none";
       }catch(e){}
     }
+    function payloadKey(data){
+      try{ return JSON.stringify(data); }catch(e){ return ""; }
+    }
+    function sentStoreKey(){ return "td-html-sent-"+FORM_ID; }
+    function alreadySent(data){
+      try{
+        var prev=sessionStorage.getItem(sentStoreKey());
+        var key=payloadKey(data);
+        return !!(prev && key && prev===key);
+      }catch(e){ return false; }
+    }
+    function markSent(data){
+      try{ sessionStorage.setItem(sentStoreKey(), payloadKey(data)); }catch(e){}
+    }
+    function resetToStart(){
+      SNAP={};
+      try{ sessionStorage.removeItem(sentStoreKey()); }catch(e){}
+      try{
+        ["arka-exs","arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID].forEach(function(k){
+          try{ localStorage.removeItem(k); }catch(e){}
+        });
+      }catch(e){}
+      try{
+        document.querySelectorAll("input,textarea").forEach(function(el){
+          if(el.type==="checkbox"||el.type==="radio") el.checked=false;
+          else el.value="";
+        });
+        document.querySelectorAll("select").forEach(function(el){ el.selectedIndex=0; });
+      }catch(e){}
+      try{ location.reload(); }catch(e){}
+    }
+    function showSuccess(){
+      hideBusy();
+      try{
+        var old=document.getElementById("td-form-ok");
+        if(old) old.remove();
+        var el=document.createElement("div");
+        el.id="td-form-ok";
+        el.setAttribute("role","dialog");
+        el.style.cssText="position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tahoma,sans-serif";
+        el.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:18px;padding:28px 24px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)"><div style="width:52px;height:52px;border-radius:50%;background:#d1fae5;color:#047857;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font:700 26px/1 Tahoma,sans-serif">✓</div><div style="font:700 16px/1.8 Tahoma,sans-serif">فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند</div><button type="button" id="td-form-ok-btn" style="margin-top:18px;background:#0f766e;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:700 14px Tahoma,sans-serif;cursor:pointer">بازگشت به ابتدا</button></div>';
+        document.body.appendChild(el);
+        var btn=document.getElementById("td-form-ok-btn");
+        if(btn) btn.onclick=function(){ resetToStart(); };
+      }catch(e){
+        toast("فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند", true);
+        setTimeout(resetToStart, 2200);
+      }
+    }
     async function submitToCrm(){
-      if(inFlight){ showBusy(); return false; }
-      if(Date.now()-lastSentAt<2500) return true;
+      if(inFlight) return false;
       var data=collect();
       if(!Object.keys(data).length){
         toast("لطفاً فرم را تکمیل کنید", false);
         return false;
+      }
+      if(alreadySent(data)){
+        showSuccess();
+        return true;
       }
       inFlight=true;
       showBusy();
@@ -382,7 +434,8 @@ function injectBridge(html, formId, origin) {
         hideBusy();
         if(!r.ok){ toast("خطا در ثبت در سامانه. دوباره تلاش کنید.", false); return false; }
         lastSentAt=Date.now();
-        toast("در کارتابل ثبت شد", true);
+        markSent(data);
+        showSuccess();
         return true;
       }catch(e){
         hideBusy();
@@ -399,7 +452,11 @@ function injectBridge(html, formId, origin) {
       if(!btn) return;
       e.preventDefault();
       e.stopPropagation();
-      submitToCrm();
+      if(btn.disabled) return;
+      btn.disabled=true;
+      submitToCrm().then(function(ok){
+        if(!ok) btn.disabled=false;
+      });
     },true);
     document.addEventListener("submit",function(e){
       var form=e.target;
