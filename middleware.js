@@ -39,5 +39,7 @@ export default function middleware(request) {
 
   const dest = new URL(request.url);
   dest.pathname = '/api/og-meta';
+  const htmlformMatch = url.pathname.match(/^\/htmlform\/([^/]+)\/?$/);
+  if (htmlformMatch) dest.searchParams.set('htmlform', htmlformMatch[1]);
   return rewrite(dest);
 }

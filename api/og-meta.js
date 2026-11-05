@@ -233,13 +233,18 @@ async function resolveMeta(searchOrParams, origin) {
     }
   }
 
-  const formId = p.get('form');
+  const formId = p.get('form') || p.get('htmlform');
   if (formId) {
     const form = await getDoc('custom_forms', formId);
     if (form) {
+      const title = form.title?.trim() || 'فرم آنلاین';
       return {
-        title: form.title?.trim() || 'فرم آنلاین',
-        description: truncate(form.description?.trim() || form.category || 'ثبت درخواست آنلاین'),
+        title,
+        description: truncate(
+          form.description?.trim()
+          || (form.category ? `فرم ${form.category}` : '')
+          || `فرم «${title}» — ${defaults.siteName}`,
+        ),
         image: defaults.image,
         siteName: defaults.siteName,
         type: 'website',
@@ -456,8 +461,13 @@ export default async function handler(req, res) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const origin = `${proto}://${host}`;
   const params = searchParamsFromReq(req);
-  const qs = params.toString();
-  const canonicalUrl = qs ? `${origin}/?${qs}` : `${origin}/`;
+  const htmlFormId = params.get('htmlform');
+  const qsParams = new URLSearchParams(params);
+  qsParams.delete('htmlform');
+  const qs = qsParams.toString();
+  const canonicalUrl = htmlFormId
+    ? `${origin}/htmlform/${encodeURIComponent(htmlFormId)}`
+    : (qs ? `${origin}/?${qs}` : `${origin}/`);
 
   try {
     const meta = await resolveMeta(params, origin);

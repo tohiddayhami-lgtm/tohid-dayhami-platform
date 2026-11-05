@@ -118,6 +118,33 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+function injectPreviewMeta(html, form, origin, formId) {
+  const title = String(form.title || '').trim() || 'فرم آنلاین';
+  const desc = String(form.description || '').trim()
+    || (form.category ? `فرم ${form.category}` : '')
+    || `فرم «${title}» — پلتفرم توحید دیهمی`;
+  const url = `${origin}/htmlform/${formId}`;
+  const tags = `
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}" />
+<meta property="og:title" content="${esc(title)}" />
+<meta property="og:description" content="${esc(desc)}" />
+<meta property="og:url" content="${esc(url)}" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="پلتفرم توحید دیهمی" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="${esc(title)}" />
+<meta name="twitter:description" content="${esc(desc)}" />
+<link rel="canonical" href="${esc(url)}" />
+`;
+  let out = String(html || '');
+  out = out.replace(/<title[^>]*>[\s\S]*?<\/title>/i, '');
+  out = out.replace(/<meta[^>]+(?:property|name)=["'](?:og:title|og:description|og:url|twitter:title|twitter:description|description)["'][^>]*>/gi, '');
+  if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, m => `${m}\n${tags}`);
+  if (/<html[^>]*>/i.test(out)) return out.replace(/<html[^>]*>/i, m => `${m}\n<head>${tags}</head>`);
+  return `<!DOCTYPE html><html lang="fa" dir="rtl"><head>${tags}</head><body>${out}</body></html>`;
+}
+
 function injectBridge(html, formId, origin) {
   const endpoint = `${origin}/api/html-form`;
   const script = `<script>(function(){
@@ -472,7 +499,7 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(closedPage('فرم ناقص است', 'فایل HTML این فرم ذخیره نشده.'));
       }
-      const html = injectBridge(String(body.html), id, origin);
+      const html = injectBridge(injectPreviewMeta(String(body.html), form, origin, id), id, origin);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).send(html);
