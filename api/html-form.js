@@ -74,6 +74,200 @@ async function setDoc(col, id, data) {
   }
 }
 
+async function listCollection(col) {
+  const docs = [];
+  let pageToken;
+  do {
+    const qs = new URLSearchParams({ pageSize: '200', key: API_KEY });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const r = await fetch(`${BASE}/${col}?${qs}`);
+    if (!r.ok) break;
+    const data = await r.json();
+    for (const doc of data.documents || []) docs.push(parseDoc(doc));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return docs;
+}
+
+function waMeLink(phone) {
+  let d = digits(phone);
+  if (!d) return '';
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('09')) d = `98${d.slice(1)}`;
+  return `https://wa.me/${d}`;
+}
+
+function normalizeNotifyPhone(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('09')) return `+98${d.slice(1)}`;
+  if (d.startsWith('989')) return `+${d}`;
+  if (d.startsWith('98')) return `+${d}`;
+  if (d.startsWith('00')) return `+${d.slice(2)}`;
+  return `+${d}`;
+}
+
+async function sendWhatsApp(phone, message, nc, apiKey) {
+  if (!nc || !phone || !message) return { success: false, error: 'missing' };
+  const p = normalizeNotifyPhone(phone);
+  try {
+    if (nc.provider === 'callmebot') {
+      if (!apiKey) return { success: false, error: 'no api key' };
+      const url =
+        `https://api.callmebot.com/whatsapp.php` +
+        `?phone=${encodeURIComponent(p)}` +
+        `&text=${encodeURIComponent(message)}` +
+        `&apikey=${encodeURIComponent(apiKey)}`;
+      const r = await fetch(url);
+      if (!r.ok) return { success: false, error: `HTTP ${r.status}` };
+    } else if (nc.provider === 'ultramsg') {
+      if (!nc.ultraMsgToken || !nc.ultraMsgInstance) return { success: false, error: 'ultramsg not configured' };
+      const body = new URLSearchParams({ token: nc.ultraMsgToken, to: p, body: message });
+      const r = await fetch(`https://api.ultramsg.com/${nc.ultraMsgInstance}/messages/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      if (!r.ok) return { success: false, error: `HTTP ${r.status}` };
+    } else if (nc.provider === 'webhook') {
+      if (!nc.webhookUrl) return { success: false, error: 'no webhook' };
+      await fetch(nc.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: p, message }),
+      });
+    } else {
+      return { success: false, error: 'unknown provider' };
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: String(e && e.message ? e.message : e) };
+  }
+}
+
+function isActivePerson(p) {
+  return (p.status || 'active') === 'active';
+}
+
+function notifReady(nc, id) {
+  const phones = nc.personnelPhones || {};
+  const keys = nc.personnelApiKeys || {};
+  if (!phones[id]) return false;
+  if (nc.provider === 'callmebot' && !keys[id]) return false;
+  return true;
+}
+
+function pickFallbackAssignee(personnel, nc) {
+  const active = personnel.filter(isActivePerson);
+  const isManager = p => (p.roles || []).some(r => typeof r === 'string' && r.includes('مدیر'));
+  const ready = id => notifReady(nc, id);
+  return (
+    active.find(p => p.username === 'master' && ready(p.id))
+    || active.find(p => isManager(p) && ready(p.id))
+    || active.find(p => p.username === 'master')
+    || active.find(p => isManager(p))
+    || active.find(p => ready(p.id))
+    || null
+  );
+}
+
+function resolveFormAssignee(form, personnel) {
+  if (form.assigneePersonnelId) {
+    return personnel.find(p => p.id === form.assigneePersonnelId && isActivePerson(p)) || null;
+  }
+  if (form.assigneeRole) {
+    const role = String(form.assigneeRole).trim().toLowerCase();
+    const eligible = personnel.filter(p =>
+      isActivePerson(p) && (p.roles || []).some(r => r && String(r).trim().toLowerCase() === role),
+    );
+    if (eligible.length) return eligible[0];
+  }
+  return null;
+}
+
+function buildFormNotifyMessage({ recipientName, formTitle, name, phone, summary, ticketId }) {
+  const wa = waMeLink(phone);
+  const lines = [
+    `سلام ${recipientName || ''} 👋`.trim(),
+    `یک درخواست جدید از فرم «${formTitle || 'HTML'}» ثبت شد.`,
+    '',
+    `👤 مشتری: ${name || 'بدون نام'}`,
+    phone ? `📞 شماره: ${phone}` : '📞 شماره: —',
+    wa ? `💬 واتساپ مشتری: ${wa}` : '',
+    '',
+    '📝 شرح درخواست:',
+    summary || '—',
+    '',
+    `📋 کد: ${ticketId}`,
+  ];
+  return lines.filter(l => l !== '').join('\n').slice(0, 3500);
+}
+
+async function saveNotifyLog(log) {
+  const id = `NL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  try {
+    await setDoc('notification_logs', id, { ...log, id });
+  } catch {
+    /* non-fatal */
+  }
+}
+
+async function notifyHtmlForm({ nc, personnel, form, name, phone, summary, ticketId, assignee }) {
+  if (!nc || nc.enabled === false) return;
+  if (nc.onNewTicket === false) return;
+
+  const target = assignee || resolveFormAssignee(form, personnel) || pickFallbackAssignee(personnel, nc);
+  if (!target) return;
+
+  const msg = buildFormNotifyMessage({
+    recipientName: target.fullName,
+    formTitle: form.title,
+    name,
+    phone,
+    summary,
+    ticketId,
+  });
+
+  const staffPhone = nc.personnelPhones?.[target.id];
+  if (staffPhone) {
+    const result = await sendWhatsApp(staffPhone, msg, nc, nc.personnelApiKeys?.[target.id]);
+    await saveNotifyLog({
+      type: 'new_ticket',
+      recipientId: target.id,
+      recipientName: target.fullName || '',
+      phone: staffPhone,
+      message: msg,
+      status: result.success ? 'sent' : 'failed',
+      error: result.error,
+      ticketId,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  const masterId = nc.masterRecipientId;
+  if (masterId && masterId !== target.id) {
+    const masterPhone = nc.personnelPhones?.[masterId];
+    const masterKey = nc.personnelApiKeys?.[masterId];
+    if (masterPhone && (nc.provider !== 'callmebot' || masterKey)) {
+      const master = personnel.find(p => p.id === masterId);
+      const masterMsg = `📋 رونوشت مدیریتی (Master)\n👤 گیرنده اصلی: ${target.fullName || ''}\n────────────\n${msg}`;
+      const result = await sendWhatsApp(masterPhone, masterMsg, nc, masterKey);
+      await saveNotifyLog({
+        type: 'new_ticket',
+        recipientId: masterId,
+        recipientName: master?.fullName || 'Master',
+        phone: masterPhone,
+        message: masterMsg,
+        status: result.success ? 'sent' : 'failed',
+        error: result.error,
+        ticketId,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+}
+
 async function queryByField(col, field, value) {
   const r = await fetch(`${BASE}:runQuery?key=${API_KEY}`, {
     method: 'POST',
@@ -645,6 +839,30 @@ export default async function handler(req, res) {
       if (form.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form.assigneeRole) customData.__assigneeRole = form.assigneeRole;
 
+      const cfg = await getDoc('settings', 'appConfig');
+      const nc = cfg?.notificationConfig;
+      const personnel = await listCollection('personnel');
+      const assignee = resolveFormAssignee(form, personnel) || (nc ? pickFallbackAssignee(personnel, nc) : null);
+
+      const timeline = [{
+        type: 'creation',
+        title: 'درخواست جدید از فرم HTML',
+        description: `درخواست جداگانه از فرم «${form.title || ''}»${name !== 'بدون نام' ? ` — ${name}` : ''}`,
+        actorName: 'سیستم',
+        timestamp: now,
+        visibility: 'public',
+      }];
+      if (assignee) {
+        timeline.push({
+          type: 'assignment',
+          title: 'ارجاع خودکار (سیستم)',
+          description: `ارجاع به ${assignee.fullName}`,
+          actorName: 'سیستم',
+          timestamp: now,
+          visibility: 'internal',
+        });
+      }
+
       const ticket = {
         id: ticketId,
         customerName: name,
@@ -656,18 +874,28 @@ export default async function handler(req, res) {
         description,
         status: 'ثبت شده',
         createdAt: now,
-        timeline: [{
-          type: 'creation',
-          title: 'درخواست جدید از فرم HTML',
-          description: `درخواست جداگانه از فرم «${form.title || ''}»${name !== 'بدون نام' ? ` — ${name}` : ''}`,
-          actorName: 'سیستم',
-          timestamp: now,
-          visibility: 'public',
-        }],
+        assignedTo: assignee?.id || undefined,
+        timeline,
         customData,
       };
 
       await setDoc('tickets', ticketId, ticket);
+
+      const summary = descLines.slice(0, 14).join('\n').slice(0, 1400);
+      try {
+        await notifyHtmlForm({
+          nc,
+          personnel,
+          form,
+          name,
+          phone,
+          summary,
+          ticketId,
+          assignee,
+        });
+      } catch {
+        /* ticket is saved even if WhatsApp fails */
+      }
 
       if (phoneNorm.length >= 8) {
         let existing = await queryByField('customers', 'phoneNumber', phone);
