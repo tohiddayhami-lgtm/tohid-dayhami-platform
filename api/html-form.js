@@ -134,12 +134,21 @@ function injectBridge(html, formId, origin) {
       if(typeof v==="object") try{return JSON.stringify(v)}catch(e){return String(v)}
       return String(v);
     }
+    function isNoiseKey(k){
+      return /^(id|color|ts|v|L|lang|step|visitors|password|token)$/i.test(k);
+    }
+    function isNoiseVal(s){
+      if(!s) return true;
+      if(/^Guest\\s+\\d+$/i.test(s)) return true;
+      if(/Guest\\s+\\d+/i.test(s) && (s.match(/,/g)||[]).length>=1) return true;
+      return false;
+    }
     function putInto(obj,k,v){
-      if(!k) return;
+      if(!k || isNoiseKey(k)) return;
       var s=flatten(v).trim();
-      if(!s || s==="{}" || s==="[]") return;
-      if(obj[k] && obj[k]!==s) obj[k]=obj[k]+", "+s;
-      else obj[k]=s;
+      if(!s || s==="{}" || s==="[]" || isNoiseVal(s)) return;
+      if(s.length>4000) s=s.slice(0,4000);
+      obj[k]=s;
     }
     function mergeObj(obj, src){
       if(!src || typeof src!=="object") return;
@@ -182,16 +191,40 @@ function injectBridge(html, formId, origin) {
       var v=c.getAttribute("data-val")||(c.innerText||"").trim();
       if(k && v) putInto(SNAP,k,v);
     },true);
+    function looksLikeVisitor(o){
+      if(!o || typeof o!=="object") return true;
+      if(/^Guest\\s+\\d+$/i.test(String(o.name||""))) return true;
+      if(o.color && o.id && String(o.id).indexOf("v_")==0) return true;
+      return false;
+    }
+    function looksLikeFormState(o){
+      if(!o || typeof o!=="object" || Array.isArray(o)) return false;
+      if(looksLikeVisitor(o)) return false;
+      if(o.S && typeof o.S==="object" && !Array.isArray(o.S)) return true;
+      var keys=Object.keys(o).join(" ").toLowerCase();
+      return /(nm|ph|mobile|phone|whatsapp|fullName|fullname|نام|موبایل|email|شرکت)/i.test(keys);
+    }
+    function takeFormObj(out,o){
+      if(!looksLikeFormState(o)) return;
+      if(o.S && typeof o.S==="object") mergeObj(out,o.S);
+      else mergeObj(out,o);
+    }
     function fromStorage(){
       var out={};
       try{
+        var prefer=["arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID];
+        prefer.forEach(function(key){
+          var raw=localStorage.getItem(key);
+          if(!raw) return;
+          try{ takeFormObj(out, JSON.parse(raw)); }catch(e){}
+        });
         for(var i=0;i<localStorage.length;i++){
           var key=localStorage.key(i);
+          if(!key || prefer.indexOf(key)>=0) continue;
+          if(!/(arka|htmlform|form-draft|td-form|req)/i.test(key)) continue;
           var raw=localStorage.getItem(key);
-          if(!raw || raw[0]!=="{" && raw[0]!=="[") continue;
-          var o=JSON.parse(raw);
-          if(o && o.S && typeof o.S==="object") mergeObj(out,o.S);
-          else if(o && typeof o==="object" && !Array.isArray(o)) mergeObj(out,o);
+          if(!raw || (raw[0]!=="{" && raw[0]!=="[")) continue;
+          try{ takeFormObj(out, JSON.parse(raw)); }catch(e){}
         }
       }catch(e){}
       return out;
@@ -207,14 +240,12 @@ function injectBridge(html, formId, origin) {
     }
     function collect(){
       var data={};
-      mergeObj(data, SNAP);
       mergeObj(data, fromStorage());
-      mergeObj(data, fromSummary());
-      try{ mergeObj(data, window.S); }catch(e){}
-      try{ mergeObj(data, window.formData); }catch(e){}
-      try{ mergeObj(data, window.state); }catch(e){}
+      try{ if(window.S && typeof window.S==="object") mergeObj(data, window.S); }catch(e){}
+      try{ if(looksLikeFormState(window.formData)) mergeObj(data, window.formData); }catch(e){}
       document.querySelectorAll("input,textarea,select").forEach(function(el,i){ readEl(el,i); });
       mergeObj(data, SNAP);
+      mergeObj(data, fromSummary());
       document.querySelectorAll("[aria-pressed=true],[data-selected=true],.chip[aria-pressed=true]").forEach(function(el,i){
         putInto(data, el.getAttribute("data-key")||labelOf(el)||"choice_"+(i+1), el.getAttribute("data-val")||(el.innerText||"").trim());
       });
@@ -305,15 +336,35 @@ function flattenVal(v) {
   return String(v);
 }
 
-function pick(data, keys) {
+function isJunkText(s) {
+  const t = String(s || '').trim();
+  if (!t) return true;
+  if (/^Guest\s+\d+$/i.test(t)) return true;
+  if (/Guest\s+\d+/i.test(t) && t.includes(',')) return true;
+  if (t.length > 180 && t.split(',').length > 4) return true;
+  return false;
+}
+
+function pick(data, keys, opts = {}) {
+  const allow = (s) => {
+    const t = flattenVal(s).trim();
+    if (!t || isJunkText(t)) return '';
+    if (opts.phone) {
+      const d = t.replace(/\D/g, '');
+      if (d.length < 8 || d.length > 15) return '';
+      return t;
+    }
+    return t;
+  };
   for (const k of keys) {
-    if (data[k] != null && String(flattenVal(data[k])).trim()) return flattenVal(data[k]).trim();
+    const s = allow(data[k]);
+    if (s) return s;
   }
   const lowerKeys = keys.map(k => String(k).toLowerCase());
   for (const [dk, dv] of Object.entries(data || {})) {
     const dl = String(dk).toLowerCase();
     if (lowerKeys.some(k => dl === k || dl.includes(k) || k.includes(dl))) {
-      const s = flattenVal(dv).trim();
+      const s = allow(dv);
       if (s) return s;
     }
   }
@@ -323,6 +374,43 @@ function pick(data, keys) {
 function digits(s) {
   return String(s || '').replace(/\D/g, '');
 }
+
+const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource)$/i;
+
+function cleanFormData(raw) {
+  const data = {};
+  for (const [k, v] of Object.entries(raw || {})) {
+    if (SKIP_DATA_KEYS.test(k)) continue;
+    const s = flattenVal(v).trim();
+    if (!s || isJunkText(s)) continue;
+    data[k] = s.slice(0, 4000);
+  }
+  return data;
+}
+
+const FIELD_LABELS = {
+  nm: 'نام',
+  name: 'نام',
+  fullName: 'نام',
+  full_name: 'نام',
+  ph: 'موبایل',
+  mobile: 'موبایل',
+  phone: 'موبایل',
+  tel: 'تلفن',
+  whatsapp: 'واتس‌اپ',
+  wa: 'واتس‌اپ',
+  email: 'ایمیل',
+  company: 'شرکت',
+  brand: 'برند',
+  city: 'شهر',
+  location: 'موقعیت',
+  country: 'کشور',
+  svc: 'خدمات',
+  service: 'خدمات',
+  msg: 'توضیحات',
+  message: 'توضیحات',
+  note: 'یادداشت',
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -371,19 +459,15 @@ export default async function handler(req, res) {
       }
       if (form.isClosed) return res.status(403).json({ error: 'form_closed' });
 
-      const data = {};
-      for (const [k, v] of Object.entries(raw)) {
-        const s = flattenVal(v).trim();
-        if (s) data[k] = s.slice(0, 4000);
-      }
+      const data = cleanFormData(raw);
 
       const name = pick(data, [
-        'name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی', 'نام کامل',
+        'nm', 'name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی', 'نام کامل',
       ]) || 'بدون نام';
       const phone = pick(data, [
-        'mobile', 'phone', 'whatsapp', 'tel', 'phoneNumber', 'موبایل', 'تلفن', 'شماره تماس',
+        'ph', 'mobile', 'phone', 'whatsapp', 'wa', 'tel', 'phoneNumber', 'موبایل', 'تلفن', 'شماره تماس',
         'موبایل / واتس‌اپ (با کد کشور)', 'واتس‌اپ',
-      ]);
+      ], { phone: true });
       const email = pick(data, ['email', 'ایمیل']);
       const company = pick(data, ['company', 'companyName', 'brand', 'شرکت', 'شرکت / برند']);
       const city = pick(data, ['city', 'location', 'country', 'شهر', 'شهر / کشور']) || '-';
@@ -394,14 +478,22 @@ export default async function handler(req, res) {
 
       const descLines = Object.entries(data)
         .filter(([, v]) => v)
-        .map(([k, v]) => `${k}: ${v}`);
-      const description = `[فرم HTML: ${form.title || ''}]\n${descLines.join('\n')}`;
+        .map(([k, v]) => `${FIELD_LABELS[k] || k}: ${v}`);
+      const description = [
+        `درخواست جدید از فرم «${form.title || 'HTML'}»`,
+        `شناسه درخواست: ${ticketId}`,
+        name !== 'بدون نام' ? `ثبت‌کننده: ${name}` : '',
+        phone ? `شماره: ${phone}` : '',
+        '',
+        ...descLines,
+      ].filter(Boolean).join('\n');
 
       const customData = {
         ...data,
         formId,
         formTitle: form.title || '',
         importSource: 'html_form',
+        requestId: ticketId,
       };
       if (form.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form.assigneeRole) customData.__assigneeRole = form.assigneeRole;
@@ -419,8 +511,8 @@ export default async function handler(req, res) {
         createdAt: now,
         timeline: [{
           type: 'creation',
-          title: 'ثبت از فرم HTML',
-          description: `فرم "${form.title || ''}" توسط ${name} پر شد`,
+          title: 'درخواست جدید از فرم HTML',
+          description: `درخواست جداگانه از فرم «${form.title || ''}»${name !== 'بدون نام' ? ` — ${name}` : ''}`,
           actorName: 'سیستم',
           timestamp: now,
           visibility: 'public',
@@ -430,15 +522,18 @@ export default async function handler(req, res) {
 
       await setDoc('tickets', ticketId, ticket);
 
-      if (phoneNorm.length >= 6) {
+      if (phoneNorm.length >= 8) {
         let existing = await queryByField('customers', 'phoneNumber', phone);
         if (!existing && phone !== phoneNorm) {
           existing = await queryByField('customers', 'phoneNumber', phoneNorm);
         }
         if (existing) {
+          const keepName = name !== 'بدون نام' && !isJunkText(name)
+            ? name
+            : (existing.fullName || name);
           await setDoc('customers', existing.id, {
             ...existing,
-            fullName: name !== 'بدون نام' ? name : existing.fullName,
+            fullName: keepName,
             companyName: company || existing.companyName,
             location: city !== '-' ? city : (existing.location || '-'),
             whatsappNumber: phone || existing.whatsappNumber,
@@ -454,7 +549,7 @@ export default async function handler(req, res) {
             fullName: name,
             companyName: company || undefined,
             location: city,
-            phoneNumber: phone,
+            phoneNumber: phoneNorm.length === digits(phone).length ? phone : phone,
             whatsappNumber: phone,
             email: email || undefined,
             firstContact: now,
