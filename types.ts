@@ -2264,6 +2264,8 @@ export interface AppConfig {
   cartableSheetSources?: CartableSheetSource[];
   /** Sticky-note todos on کارتابل. Default true; when false the whole board is hidden. */
   cartableStickyTodosEnabled?: boolean;
+  /** Secret for POST /api/cartable website signup ingest. */
+  cartableApiKey?: string;
 }
 
 /** A registered Google Sheet used as a data source for cartable imports. */

@@ -33,6 +33,7 @@ import { SupplierManager } from './suppliers/SupplierManager';
 import { canAccessSuppliers } from '../utils/supplierAccess';
 import { CustomerBank } from './CustomerBank';
 import { CartableSheetImporter } from './CartableSheetImporter';
+import { CartableIngestApiCard } from './CartableIngestApiCard';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -1995,6 +1996,14 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
+
+                 {(isAdmin || isMaster) && (
+                   <CartableIngestApiCard
+                     config={config}
+                     lang={lang}
+                     onUpdateConfig={onUpdateConfig}
+                   />
+                 )}
 
                  <CartableSheetImporter
                    personnel={personnel}

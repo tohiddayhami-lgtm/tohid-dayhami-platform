@@ -41,6 +41,9 @@
     "api/html-form.js": {
       "maxDuration": 30
     },
+    "api/cartable.js": {
+      "maxDuration": 30
+    },
     "api/fb.js": {
       "maxDuration": 60
     },

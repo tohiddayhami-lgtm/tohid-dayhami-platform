@@ -309,8 +309,8 @@ async function updateDocCloud(col: string, id: string, updates: Record<string, u
   const payload = sanitizeData(updates);
   if (proxy) {
     try {
-      const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
-      await proxyWrite(col, id, { ...existing, ...payload, id });
+    const existing = (await proxyGet<Record<string, unknown>>(col, { doc: id })) || { id };
+    await proxyWrite(col, id, { ...existing, ...payload, id });
     } catch (proxyErr) {
       try {
         await updateDoc(doc(db, col, id), payload);
@@ -321,7 +321,7 @@ async function updateDocCloud(col: string, id: string, updates: Record<string, u
     }
   } else {
     try {
-      await updateDoc(doc(db, col, id), payload);
+    await updateDoc(doc(db, col, id), payload);
     } catch (directErr) {
       forceProxyMode();
       try {
@@ -339,7 +339,7 @@ async function deleteDocCloud(col: string, id: string) {
   const proxy = await checkProxyMode();
   if (proxy) {
     try {
-      const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const r = await fetch(`${_fb}?col=${encodeURIComponent(col)}&doc=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!r.ok && r.status !== 404) throw new Error(`Proxy delete ${r.status}`);
     } catch (proxyErr) {
       try {
@@ -351,7 +351,7 @@ async function deleteDocCloud(col: string, id: string) {
     }
   } else {
     try {
-      await deleteDoc(doc(db, col, id));
+    await deleteDoc(doc(db, col, id));
     } catch (directErr) {
       forceProxyMode();
       try {
@@ -1147,9 +1147,9 @@ export const saveInvoiceToCloud = async (invoice: Invoice, actor?: Personnel) =>
     const proxy = await checkProxyMode();
     let prev: Invoice | null = null;
     try {
-      if (proxy) {
+    if (proxy) {
         prev = await proxyGet<Invoice>('invoices', { doc: invoice.id });
-      } else {
+    } else {
         const snap = await getDoc(doc(db, 'invoices', invoice.id));
         prev = snap.exists() ? (snap.data() as Invoice) : null;
       }
@@ -1177,9 +1177,9 @@ export const deleteInvoiceFromCloud = async (id: string, actor?: Personnel) => {
     const proxy = await checkProxyMode();
     let data: unknown = null;
     try {
-      if (proxy) {
+    if (proxy) {
         data = await proxyGet('invoices', { doc: id });
-      } else {
+    } else {
         const snap = await getDoc(doc(db, 'invoices', id));
         data = snap.exists() ? snap.data() : null;
       }
@@ -1882,8 +1882,8 @@ export const deleteMetaShopFromCloud = async (id: string) => {
     throw new Error('شناسه فروشگاه نامعتبر است — صفحه را رفرش کنید و دوباره تلاش کنید.');
   }
 
-  const proxy = await checkProxyMode();
-  let data: unknown = null;
+    const proxy = await checkProxyMode();
+    let data: unknown = null;
   let shell: MetaShop | null = null;
   try {
     if (proxy) {
@@ -1891,7 +1891,7 @@ export const deleteMetaShopFromCloud = async (id: string) => {
       shell = data as MetaShop | null;
     } else {
       const snap = await getDoc(doc(db, 'metaShops', shopId));
-      data = snap.exists() ? snap.data() : null;
+        data = snap.exists() ? snap.data() : null;
       shell = data as MetaShop | null;
     }
   } catch {
@@ -1949,10 +1949,10 @@ export const fetchMetaShopsList = async (): Promise<MetaShop[]> => {
 };
 
 export const fetchMetaBazaarsList = async (): Promise<MetaBazaar[]> => {
-  try {
-    const proxy = await checkProxyMode();
+    try {
+        const proxy = await checkProxyMode();
     let items: MetaBazaar[] = [];
-    if (proxy) {
+        if (proxy) {
       const rows = await proxyGet<MetaBazaar[]>('metaBazaars', {});
       items = Array.isArray(rows) ? rows : [];
     } else {
@@ -2544,7 +2544,7 @@ export const fetchMetaShopEvents = async (shopId: string): Promise<MetaShopEvent
             items = Array.isArray(rows) ? rows : [];
         } else {
             const q = query(collection(db, 'metaShopEvents'), where('shopId', '==', shopId), limit(500));
-            const snap = await getDocs(q);
+        const snap = await getDocs(q);
             items = snap.docs.map(d => d.data() as MetaShopEvent);
         }
         return items
