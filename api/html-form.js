@@ -125,6 +125,7 @@ function injectBridge(html, formId, origin) {
     var ENDPOINT=${JSON.stringify(endpoint)};
     var inFlight=false;
     var lastSentAt=0;
+    var SNAP={};
     var SUBMIT_RE=/ثبت\\s*نهایی|ثبت\\s*فرم|ثبت\\s*درخواست|ارسال\\s*نهایی|ارسال\\s*فرم|ارسال\\s*درخواست|ارسال در واتس|send on whatsapp|\\bsubmit\\b|\\bsend\\b|confirm\\s*and\\s*send/i;
     var NAV_RE=/^(ادامه|بعدی|قبلی|بازگشت|ویرایش|لغو|انصراف|next|continue|back|prev|previous|edit|cancel)$/i;
     function flatten(v){
@@ -133,13 +134,24 @@ function injectBridge(html, formId, origin) {
       if(typeof v==="object") try{return JSON.stringify(v)}catch(e){return String(v)}
       return String(v);
     }
+    function putInto(obj,k,v){
+      if(!k) return;
+      var s=flatten(v).trim();
+      if(!s || s==="{}" || s==="[]") return;
+      if(obj[k] && obj[k]!==s) obj[k]=obj[k]+", "+s;
+      else obj[k]=s;
+    }
+    function mergeObj(obj, src){
+      if(!src || typeof src!=="object") return;
+      Object.keys(src).forEach(function(k){ putInto(obj,k,src[k]); });
+    }
     function labelOf(el){
       if(!el) return "";
       if(el.id){
-        var lab=document.querySelector('label[for="'+el.id.replace(/"/g,"")+'"]');
+        var lab=document.querySelector('label[for="'+String(el.id).replace(/"/g,"")+'"]');
         if(lab) return (lab.innerText||"").split("\\n")[0].trim();
       }
-      var wrap=el.closest("label");
+      var wrap=el.closest && el.closest("label");
       if(wrap) return (wrap.innerText||"").split("\\n")[0].trim();
       return (el.getAttribute("aria-label")||el.getAttribute("placeholder")||"").trim();
     }
@@ -149,39 +161,62 @@ function injectBridge(html, formId, origin) {
       if(!key || key==="f-copytext") return "field_"+(i+1);
       return key.slice(0,80);
     }
+    function readEl(el,i){
+      if(!el || el.type==="file" || el.type==="button" || el.type==="submit" || el.type==="reset") return;
+      if(el.id==="f-copytext") return;
+      var key=fieldKey(el,i||0);
+      if(el.type==="checkbox"){ if(el.checked) putInto(SNAP,key, el.value && el.value!=="on" ? el.value : "true"); return; }
+      if(el.type==="radio"){ if(el.checked) putInto(SNAP,key, el.value||"true"); return; }
+      if(el.tagName==="SELECT" && el.multiple){
+        putInto(SNAP,key, Array.prototype.map.call(el.selectedOptions||[],function(o){return o.text||o.value}).join(", "));
+        return;
+      }
+      if(el.value) putInto(SNAP,key, el.value);
+    }
+    document.addEventListener("input",function(e){ if(e.target) readEl(e.target,0); },true);
+    document.addEventListener("change",function(e){ if(e.target) readEl(e.target,0); },true);
+    document.addEventListener("click",function(e){
+      var c=e.target && e.target.closest && e.target.closest(".chip,[data-key][data-val]");
+      if(!c) return;
+      var k=c.getAttribute("data-key")||c.getAttribute("data-k");
+      var v=c.getAttribute("data-val")||(c.innerText||"").trim();
+      if(k && v) putInto(SNAP,k,v);
+    },true);
+    function fromStorage(){
+      var out={};
+      try{
+        for(var i=0;i<localStorage.length;i++){
+          var key=localStorage.key(i);
+          var raw=localStorage.getItem(key);
+          if(!raw || raw[0]!=="{" && raw[0]!=="[") continue;
+          var o=JSON.parse(raw);
+          if(o && o.S && typeof o.S==="object") mergeObj(out,o.S);
+          else if(o && typeof o==="object" && !Array.isArray(o)) mergeObj(out,o);
+        }
+      }catch(e){}
+      return out;
+    }
+    function fromSummary(){
+      var out={};
+      document.querySelectorAll("dl.sum div, .sum div").forEach(function(row){
+        var dt=row.querySelector("dt");
+        var dd=row.querySelector("dd");
+        if(dt && dd) putInto(out,(dt.innerText||"").trim(), (dd.innerText||"").trim());
+      });
+      return out;
+    }
     function collect(){
       var data={};
-      function put(k,v){
-        if(!k) return;
-        var s=flatten(v).trim();
-        if(!s) return;
-        if(data[k] && data[k]!==s) data[k]=data[k]+", "+s;
-        else data[k]=s;
-      }
-      try{
-        if(window.S && typeof window.S==="object"){
-          Object.keys(window.S).forEach(function(k){ put(k, window.S[k]); });
-        }
-      }catch(e){}
-      try{
-        if(window.formData && typeof window.formData==="object"){
-          Object.keys(window.formData).forEach(function(k){ put(k, window.formData[k]); });
-        }
-      }catch(e){}
-      document.querySelectorAll("input,textarea,select").forEach(function(el,i){
-        if(el.type==="file" || el.type==="hidden" && el.id==="f-copytext") return;
-        if(el.type==="button" || el.type==="submit" || el.type==="reset") return;
-        var key=fieldKey(el,i);
-        if(el.type==="checkbox"){
-          if(el.checked) put(key, el.value && el.value!=="on" ? el.value : "true");
-        } else if(el.type==="radio"){
-          if(el.checked) put(key, el.value||"true");
-        } else if(el.tagName==="SELECT" && el.multiple){
-          put(key, Array.prototype.map.call(el.selectedOptions,function(o){return o.text||o.value}).join(", "));
-        } else if(el.value) put(key, el.type==="select-one" ? (el.options[el.selectedIndex]&&el.options[el.selectedIndex].text)||el.value : el.value);
-      });
+      mergeObj(data, SNAP);
+      mergeObj(data, fromStorage());
+      mergeObj(data, fromSummary());
+      try{ mergeObj(data, window.S); }catch(e){}
+      try{ mergeObj(data, window.formData); }catch(e){}
+      try{ mergeObj(data, window.state); }catch(e){}
+      document.querySelectorAll("input,textarea,select").forEach(function(el,i){ readEl(el,i); });
+      mergeObj(data, SNAP);
       document.querySelectorAll("[aria-pressed=true],[data-selected=true],.chip[aria-pressed=true]").forEach(function(el,i){
-        put(el.getAttribute("data-key")||labelOf(el)||"choice_"+(i+1), el.getAttribute("data-val")||(el.innerText||"").trim());
+        putInto(data, el.getAttribute("data-key")||labelOf(el)||"choice_"+(i+1), el.getAttribute("data-val")||(el.innerText||"").trim());
       });
       return data;
     }
@@ -256,8 +291,9 @@ function injectBridge(html, formId, origin) {
       submitToCrm();
     },true);
   })();<\/script>`;
+  if (/<body[^>]*>/i.test(html)) return html.replace(/<body[^>]*>/i, m => `${m}\n${script}`);
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}\n</body>`);
-  return `${html}\n${script}`;
+  return `${script}\n${html}`;
 }
 
 function flattenVal(v) {
