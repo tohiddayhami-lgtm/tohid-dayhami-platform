@@ -1263,6 +1263,67 @@ const App: React.FC = () => {
     }
   };
 
+  const htmlFormNotifiedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!currentUser) return;
+    const nc = appConfig.notificationConfig;
+    if (!nc?.enabled || nc.onNewTicket === false) return;
+    const run = async () => {
+      for (const ticket of tickets) {
+        if (ticket.customData?.importSource !== 'html_form') continue;
+        if (ticket.customData?.whatsappNotified === '1') {
+          htmlFormNotifiedRef.current.add(ticket.id);
+          continue;
+        }
+        if (htmlFormNotifiedRef.current.has(ticket.id)) continue;
+        const ageMs = Date.now() - new Date(ticket.createdAt).getTime();
+        if (!isFinite(ageMs) || ageMs < 0 || ageMs > 30 * 60 * 1000) continue;
+        htmlFormNotifiedRef.current.add(ticket.id);
+        const assignedTo = ticket.assignedTo || getCeoFallbackId();
+        if (!assignedTo) continue;
+        const digits = (ticket.phoneNumber || '').replace(/\D/g, '');
+        const wa = digits ? `https://wa.me/${digits.startsWith('09') ? '98' + digits.slice(1) : digits}` : '';
+        try {
+          const assignee = personnel.find(p => p.id === assignedTo);
+          const msg = [
+            renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
+              recipientName: assignee?.fullName || '',
+              ticketId: ticket.id || '',
+              customerName: ticket.customerName || '',
+              formTitle: ticket.customData?.formTitle || ticket.serviceId || '',
+              senderName: 'سیستم',
+              status: ticket.status || '',
+            }),
+            ticket.phoneNumber && ticket.phoneNumber !== '-' ? `📞 ${ticket.phoneNumber}` : '',
+            wa ? `💬 ${wa}` : '',
+          ].filter(Boolean).join('\n');
+          const phone = nc.personnelPhones?.[assignedTo];
+          if (phone) {
+            const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assignedTo]);
+            await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee?.fullName || '', phone, msg, result, ticket.id));
+          }
+          await sendMasterCopy({
+            config: nc,
+            personnel,
+            message: msg,
+            originalRecipientId: assignedTo,
+            originalRecipientName: assignee?.fullName || '',
+            logType: 'new_ticket',
+            ticketId: ticket.id,
+            saveLog: saveNotificationLog,
+          });
+          await updateTicketInCloud(ticket.id, {
+            customData: { ...(ticket.customData || {}), whatsappNotified: '1' },
+          });
+        } catch (e) {
+          htmlFormNotifiedRef.current.delete(ticket.id);
+          console.warn('HTML form WhatsApp notify skipped', e);
+        }
+      }
+    };
+    run();
+  }, [tickets, currentUser, appConfig.notificationConfig, personnel]);
+
   /** Sheet/CSV imports: skip service-role routing (avoids fragile auto-assign on incomplete service records). */
   const saveSheetImportTicket = async (ticket: Ticket) => {
     if (!ticket.id) {

@@ -109,17 +109,22 @@ function normalizeNotifyPhone(phone) {
 
 async function sendWhatsApp(phone, message, nc, apiKey) {
   if (!nc || !phone || !message) return { success: false, error: 'missing' };
+  const provider = nc.provider || 'callmebot';
   const p = normalizeNotifyPhone(phone);
   try {
-    if (nc.provider === 'callmebot') {
+    if (provider === 'callmebot') {
       if (!apiKey) return { success: false, error: 'no api key' };
+      const text = String(message).slice(0, 700);
       const url =
         `https://api.callmebot.com/whatsapp.php` +
         `?phone=${encodeURIComponent(p)}` +
-        `&text=${encodeURIComponent(message)}` +
+        `&text=${encodeURIComponent(text)}` +
         `&apikey=${encodeURIComponent(apiKey)}`;
-      await fetch(url);
-    } else if (nc.provider === 'ultramsg') {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      await fetch(url, { signal: ctrl.signal });
+      clearTimeout(t);
+    } else if (provider === 'ultramsg') {
       if (!nc.ultraMsgToken || !nc.ultraMsgInstance) return { success: false, error: 'ultramsg not configured' };
       const body = new URLSearchParams({ token: nc.ultraMsgToken, to: p, body: message });
       const r = await fetch(`https://api.ultramsg.com/${nc.ultraMsgInstance}/messages/chat`, {
@@ -128,7 +133,7 @@ async function sendWhatsApp(phone, message, nc, apiKey) {
         body,
       });
       if (!r.ok) return { success: false, error: `HTTP ${r.status}` };
-    } else if (nc.provider === 'webhook') {
+    } else if (provider === 'webhook') {
       if (!nc.webhookUrl) return { success: false, error: 'no webhook' };
       await fetch(nc.webhookUrl, {
         method: 'POST',
@@ -184,22 +189,30 @@ function resolveFormAssignee(form, personnel) {
   return null;
 }
 
-function buildFormNotifyMessage({ recipientName, formTitle, name, phone, summary, ticketId }) {
+function buildFormNotifyMessage({ recipientName, formTitle, name, phone, ticketId }) {
   const wa = waMeLink(phone);
-  const lines = [
+  return [
     `سلام ${recipientName || ''} 👋`.trim(),
-    `یک درخواست جدید از فرم «${formTitle || 'HTML'}» ثبت شد.`,
-    '',
-    `👤 مشتری: ${name || 'بدون نام'}`,
-    phone ? `📞 شماره: ${phone}` : '📞 شماره: —',
-    wa ? `💬 واتساپ مشتری: ${wa}` : '',
-    '',
-    '📝 شرح درخواست:',
-    summary || '—',
-    '',
-    `📋 کد: ${ticketId}`,
-  ];
-  return lines.filter(l => l !== '').join('\n').slice(0, 3500);
+    `درخواست جدید: ${formTitle || 'فرم'}`,
+    `👤 ${name || 'بدون نام'}`,
+    phone ? `📞 ${phone}` : '',
+    wa ? `💬 ${wa}` : '',
+    `📋 ${ticketId}`,
+  ].filter(Boolean).join('\n').slice(0, 700);
+}
+
+function notifyRecipients(nc, personnel, preferred) {
+  const readyIds = [];
+  const seen = new Set();
+  const add = id => {
+    if (!id || seen.has(id) || !notifReady(nc, id)) return;
+    seen.add(id);
+    readyIds.push(id);
+  };
+  add(preferred?.id);
+  add(nc.masterRecipientId);
+  for (const id of Object.keys(nc.personnelPhones || {})) add(id);
+  return readyIds.map(id => personnel.find(p => p.id === id) || { id, fullName: '' });
 }
 
 async function saveNotifyLog(log) {
@@ -211,24 +224,26 @@ async function saveNotifyLog(log) {
   }
 }
 
-async function notifyHtmlForm({ nc, personnel, form, name, phone, summary, ticketId, assignee }) {
-  if (!nc || nc.enabled === false) return;
+async function notifyHtmlForm({ nc, personnel, form, name, phone, ticketId, assignee }) {
+  if (!nc || nc.enabled === false) return false;
+  const ncUse = { ...nc, provider: nc.provider || 'callmebot' };
+  const preferred = assignee || resolveFormAssignee(form, personnel) || pickFallbackAssignee(personnel, ncUse);
+  const targets = notifyRecipients(ncUse, personnel, preferred);
+  if (!targets.length) return false;
 
-  const target = assignee || resolveFormAssignee(form, personnel) || pickFallbackAssignee(personnel, nc);
-  if (!target) return;
-
-  const msg = buildFormNotifyMessage({
-    recipientName: target.fullName,
-    formTitle: form.title,
-    name,
-    phone,
-    summary,
-    ticketId,
-  });
-
-  const staffPhone = nc.personnelPhones?.[target.id];
-  if (staffPhone) {
-    const result = await sendWhatsApp(staffPhone, msg, nc, nc.personnelApiKeys?.[target.id]);
+  let any = false;
+  for (const target of targets) {
+    const staffPhone = ncUse.personnelPhones?.[target.id];
+    const apiKey = ncUse.personnelApiKeys?.[target.id];
+    if (!staffPhone) continue;
+    const msg = buildFormNotifyMessage({
+      recipientName: target.fullName,
+      formTitle: form.title || form.titleEn,
+      name,
+      phone,
+      ticketId,
+    });
+    const result = await sendWhatsApp(staffPhone, msg, ncUse, apiKey);
     await saveNotifyLog({
       type: 'new_ticket',
       recipientId: target.id,
@@ -240,30 +255,9 @@ async function notifyHtmlForm({ nc, personnel, form, name, phone, summary, ticke
       ticketId,
       createdAt: new Date().toISOString(),
     });
+    if (result.success) any = true;
   }
-
-  const masterId = nc.masterRecipientId;
-  if (masterId && masterId !== target.id) {
-    const masterPhone = nc.personnelPhones?.[masterId];
-    const masterKey = nc.personnelApiKeys?.[masterId];
-    if (masterPhone && (nc.provider !== 'callmebot' || masterKey)) {
-      const master = personnel.find(p => p.id === masterId);
-      const masterMsg = `📋 رونوشت مدیریتی (Master)\n👤 گیرنده اصلی: ${target.fullName || ''}\n────────────\n${msg}`;
-      const result = await sendWhatsApp(masterPhone, masterMsg, nc, masterKey);
-      await saveNotifyLog({
-        type: 'new_ticket',
-        recipientId: masterId,
-        recipientName: master?.fullName || 'Master',
-        phone: masterPhone,
-        message: masterMsg,
-        status: result.success ? 'sent' : 'failed',
-        error: result.error,
-        ticketId,
-        createdAt: new Date().toISOString(),
-      });
-    }
-  }
-
+  return any;
 }
 
 async function queryByField(col, field, value) {
@@ -989,7 +983,6 @@ export default async function handler(req, res) {
         }
       }
 
-      const summary = descLines.slice(0, 14).join('\n').slice(0, 1400);
       try {
         const cfg = await getDoc('settings', 'appConfig');
         const nc = cfg?.notificationConfig;
@@ -1004,18 +997,25 @@ export default async function handler(req, res) {
             timestamp: now,
             visibility: 'internal',
           });
-          await setDoc('tickets', ticketId, { ...ticket, assignedTo: assignee.id, timeline });
+          ticket.assignedTo = assignee.id;
+          ticket.timeline = timeline;
+          await setDoc('tickets', ticketId, ticket);
         }
-        await notifyHtmlForm({
+        const sent = await notifyHtmlForm({
           nc,
           personnel,
           form,
           name,
           phone,
-          summary,
           ticketId,
           assignee,
         });
+        if (sent) {
+          await setDoc('tickets', ticketId, {
+            ...ticket,
+            customData: { ...ticket.customData, whatsappNotified: '1' },
+          });
+        }
       } catch {
         /* ticket is saved even if WhatsApp fails */
       }
