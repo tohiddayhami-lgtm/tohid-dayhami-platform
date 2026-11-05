@@ -5,6 +5,7 @@ import { Language } from '../App';
 import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud } from '../services/firebaseService';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
+import { formPublicPath, uniqueFormSlug } from '../utils/formPublicUrl';
 
 interface Props {
   customForms: CustomForm[];
@@ -344,9 +345,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   // Use ?form= query param — survives Instagram/WhatsApp/Telegram link sharing
   // (hash fragments are often stripped by social media in-app browsers)
   const getPublicUrl = (form: CustomForm) =>
-    form.kind === 'html'
-      ? `${window.location.origin}/htmlform/${form.id}`
-      : `${window.location.origin}${window.location.pathname}?form=${form.id}`;
+    `${window.location.origin}${formPublicPath(form)}`;
 
   const copyLink = (form: CustomForm) => {
     navigator.clipboard.writeText(getPublicUrl(form)).then(() => {
@@ -403,6 +402,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       alert(lang === 'fa' ? 'عنوان فرم را وارد کنید.' : 'Enter a form title.');
       return;
     }
+    if (!htmlTitleEn.trim()) {
+      alert(lang === 'fa' ? 'عنوان انگلیسی را وارد کنید تا روی لینک واتساپ نمایش داده شود.' : 'Enter the English title — it appears in the share link.');
+      return;
+    }
     if (!htmlSource.trim()) {
       alert(lang === 'fa' ? 'فایل HTML را انتخاب یا پیست کنید.' : 'Upload or paste the HTML file.');
       return;
@@ -410,12 +413,14 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setHtmlSaving(true);
     try {
       const id = htmlEditingId || `html_${Date.now()}`;
+      const slug = uniqueFormSlug(htmlTitleEn.trim() || htmlTitle.trim(), customForms, id);
       const meta: CustomForm = {
         id,
         title: htmlTitle.trim(),
         titleEn: htmlTitleEn.trim() || undefined,
+        slug,
         category: htmlCategory.trim() || 'HTML',
-        description: lang === 'fa' ? 'فرم HTML میزبانی‌شده — پاسخ‌ها به کارتابل می‌روند.' : 'Hosted HTML form — submissions go to the cartable.',
+        description: '',
         fields: [],
         allowedRoles: [],
         isPublic: true,
@@ -431,8 +436,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         await updateCustomFormInCloud(htmlEditingId, {
           title: meta.title,
           titleEn: meta.titleEn,
+          slug,
           category: meta.category,
-          description: meta.description,
           kind: 'html',
           htmlFileName: meta.htmlFileName,
           isPublic: true,
@@ -488,12 +493,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     if (!draft.title.trim()) return;
     setSaving(true);
     try {
+      const slug = uniqueFormSlug(draft.titleEn.trim() || draft.title.trim(), customForms, editingId || undefined);
       if (editingId) {
-        await updateCustomFormInCloud(editingId, { ...draft }, currentUser.fullName);
+        await updateCustomFormInCloud(editingId, { ...draft, slug }, currentUser.fullName);
       } else {
         const id = `cf_${Date.now()}`;
         await saveCustomFormToCloud({
-          id, ...draft,
+          id, ...draft, slug,
           createdAt: new Date().toISOString(),
           createdBy: currentUser.fullName,
         }, currentUser.fullName);
@@ -1690,8 +1696,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>{lang === 'fa' ? 'عنوان انگلیسی' : 'English title'}</label>
-                <input className={inputCls} value={htmlTitleEn} onChange={e => setHtmlTitleEn(e.target.value)} dir="ltr" />
+                <label className={labelCls}>{lang === 'fa' ? 'عنوان انگلیسی (روی لینک)' : 'English title (in URL)'}</label>
+                <input className={inputCls} value={htmlTitleEn} onChange={e => setHtmlTitleEn(e.target.value)} dir="ltr" placeholder="e.g. Export of Services Course" />
               </div>
               <div>
                 <label className={labelCls}>{lang === 'fa' ? 'دسته‌بندی' : 'Category'}</label>

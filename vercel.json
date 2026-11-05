@@ -15,6 +15,8 @@
   "rewrites": [
     { "source": "/sitemap.xml",           "destination": "/api/sitemap" },
     { "source": "/robots.txt",            "destination": "/robots.txt"  },
+    { "source": "/f/:slug",               "destination": "/api/html-form?slug=:slug" },
+    { "source": "/form/:slug",            "destination": "/api/html-form?slug=:slug" },
     { "source": "/htmlform/:id",          "destination": "/api/html-form?id=:id" },
     {
       "source": "/:path*",

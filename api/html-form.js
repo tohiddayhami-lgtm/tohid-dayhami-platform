@@ -290,6 +290,36 @@ async function queryByField(col, field, value) {
   return doc?.fields ? parseDoc(doc) : null;
 }
 
+function slugifyFormName(s) {
+  const ascii = String(s || '')
+    .replace(/['’]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 60);
+  return ascii || 'form';
+}
+
+function formPublicSlug(form) {
+  if (form.slug && String(form.slug).trim()) return String(form.slug).trim();
+  const fromEn = slugifyFormName(form.titleEn || '');
+  if (fromEn !== 'form') return fromEn;
+  const fromTitle = slugifyFormName(form.title || '');
+  if (fromTitle !== 'form') return fromTitle;
+  return slugifyFormName(form.id || 'form');
+}
+
+async function findFormByRef(ref) {
+  const key = String(ref || '').trim();
+  if (!key) return null;
+  const byId = await getDoc('custom_forms', key);
+  if (byId) return byId;
+  const bySlug = await queryByField('custom_forms', 'slug', key);
+  if (bySlug) return bySlug;
+  const all = await listCollection('custom_forms');
+  return all.find(f => formPublicSlug(f) === key.toLowerCase()) || null;
+}
+
 function originFromReq(req) {
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'www.tohiddayhami.com';
   const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -332,11 +362,9 @@ function esc(s) {
 }
 
 function injectPreviewMeta(html, form, origin, formId, favicon) {
-  const title = String(form.title || '').trim() || 'فرم آنلاین';
-  const desc = String(form.description || '').trim()
-    || (form.category ? `فرم ${form.category}` : '')
-    || `فرم «${title}» — پلتفرم توحید دیهمی`;
-  const url = `${origin}/htmlform/${formId}`;
+  const title = String(form.title || form.titleEn || '').trim() || 'فرم آنلاین';
+  const desc = String(form.description || form.descriptionEn || form.titleEn || title).trim();
+  const url = `${origin}/f/${formPublicSlug(form)}`;
   const tags = `
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}" />
@@ -813,19 +841,20 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const id = String(req.query.id || req.query.formId || '').trim();
-      if (!id) return res.status(400).send('form id required');
-      const form = await getDoc('custom_forms', id);
+      const ref = String(req.query.id || req.query.formId || req.query.slug || '').trim();
+      if (!ref) return res.status(400).send('form id required');
+      const form = await findFormByRef(ref);
       const cfg = await getDoc('settings', 'appConfig');
       const favicon = cfg?.favicon || '';
       if (!form || form.kind !== 'html' || form.isPublic === false) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(closedPage('فرم یافت نشد', 'این فرم در دسترس نیست.', favicon));
       }
+      const id = form.id;
       if (form.isClosed) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(closedPage(
-          form.title || 'فرم',
+          form.title || form.titleEn || 'فرم',
           form.closedMessage || 'مهلت تکمیل این فرم به پایان رسیده است.',
           favicon,
         ));

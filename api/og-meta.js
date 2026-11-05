@@ -112,6 +112,56 @@ async function loadShopBySlug(slug) {
   return shop;
 }
 
+function slugifyFormName(s) {
+  const ascii = String(s || '')
+    .replace(/['’]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 60);
+  return ascii || 'form';
+}
+
+function formPublicSlug(form) {
+  if (form.slug && String(form.slug).trim()) return String(form.slug).trim();
+  const fromEn = slugifyFormName(form.titleEn || '');
+  if (fromEn !== 'form') return fromEn;
+  const fromTitle = slugifyFormName(form.title || '');
+  if (fromTitle !== 'form') return fromTitle;
+  return slugifyFormName(form.id || 'form');
+}
+
+async function findFormByRef(ref) {
+  const key = String(ref || '').trim();
+  if (!key) return null;
+  const byId = await getDoc('custom_forms', key);
+  if (byId) return byId;
+  const bySlug = await queryByField('custom_forms', 'slug', key);
+  if (bySlug) return bySlug;
+  const all = await listCollection('custom_forms');
+  return all.find(f => formPublicSlug(f) === key.toLowerCase()) || null;
+}
+
+function formPreviewMeta(form, defaults) {
+  const title = String(form.title || form.titleEn || '').trim() || 'فرم آنلاین';
+  const rawDesc = String(form.description || form.descriptionEn || '').trim();
+  const descLooksInternal = !rawDesc || /^فرم HTML/i.test(rawDesc) || /hosted html form/i.test(rawDesc) || rawDesc === 'HTML';
+  const description = truncate(
+    descLooksInternal
+      ? (form.titleEn || title)
+      : rawDesc,
+  );
+  return {
+    title,
+    description,
+    image: defaults.image,
+    favicon: defaults.favicon,
+    siteName: defaults.siteName,
+    type: 'website',
+    formSlug: formPublicSlug(form),
+  };
+}
+
 function truncate(s, max = 160) {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
   if (!t) return '';
@@ -234,24 +284,10 @@ async function resolveMeta(searchOrParams, origin) {
     }
   }
 
-  const formId = p.get('form') || p.get('htmlform');
-  if (formId) {
-    const form = await getDoc('custom_forms', formId);
-    if (form) {
-      const title = form.title?.trim() || 'فرم آنلاین';
-      return {
-        title,
-        description: truncate(
-          form.description?.trim()
-          || (form.category ? `فرم ${form.category}` : '')
-          || `فرم «${title}» — ${defaults.siteName}`,
-        ),
-        image: defaults.image,
-        favicon: defaults.favicon,
-        siteName: defaults.siteName,
-        type: 'website',
-      };
-    }
+  const formRef = p.get('form') || p.get('htmlform') || p.get('slug');
+  if (formRef) {
+    const form = await findFormByRef(formRef);
+    if (form) return formPreviewMeta(form, defaults);
   }
 
   if (p.get('page') === 'news') {
@@ -477,16 +513,19 @@ export default async function handler(req, res) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const origin = `${proto}://${host}`;
   const params = searchParamsFromReq(req);
-  const htmlFormId = params.get('htmlform');
+  const htmlFormRef = params.get('htmlform') || params.get('slug') || params.get('form');
   const qsParams = new URLSearchParams(params);
   qsParams.delete('htmlform');
+  qsParams.delete('slug');
   const qs = qsParams.toString();
-  const canonicalUrl = htmlFormId
-    ? `${origin}/htmlform/${encodeURIComponent(htmlFormId)}`
-    : (qs ? `${origin}/?${qs}` : `${origin}/`);
 
   try {
     const meta = await resolveMeta(params, origin);
+    const canonicalUrl = meta.formSlug
+      ? `${origin}/f/${encodeURIComponent(meta.formSlug)}`
+      : (htmlFormRef
+        ? `${origin}/f/${encodeURIComponent(htmlFormRef)}`
+        : (qs ? `${origin}/?${qs}` : `${origin}/`));
     const forCrawler = isPreviewCrawler(req);
     const crawlerExtras = forCrawler ? await resolveCrawlerContent(params, origin) : {};
     const html = renderHtml(meta, canonicalUrl, forCrawler, crawlerExtras);

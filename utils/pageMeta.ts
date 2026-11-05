@@ -87,8 +87,8 @@ export const metaFromMetaShopProduct = (
 };
 
 export const metaFromForm = (form: CustomForm): PageMeta => ({
-  title: form.title?.trim() || 'فرم آنلاین',
-  description: truncate(form.description?.trim() || form.titleEn?.trim() || form.category || 'ثبت درخواست آنلاین', 160),
+  title: form.title?.trim() || form.titleEn?.trim() || 'فرم آنلاین',
+  description: truncate(form.description?.trim() || form.titleEn?.trim() || form.title?.trim() || 'ثبت درخواست آنلاین', 160),
   type: 'website',
 });
 

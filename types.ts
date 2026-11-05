@@ -592,6 +592,8 @@ export interface CustomForm {
   /** HTML-hosted public form (uploaded index.html) vs builder fields. */
   kind?: 'fields' | 'html';
   htmlFileName?: string;
+  /** Public URL slug from the English title, e.g. export-services-course */
+  slug?: string;
   createdAt: string;
   createdBy: string;
 }
