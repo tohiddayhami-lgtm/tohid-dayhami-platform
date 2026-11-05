@@ -271,14 +271,41 @@ function injectBridge(html, formId, origin) {
       try{
         var n=document.createElement("div");
         n.setAttribute("role","status");
-        n.style.cssText="position:fixed;bottom:16px;inset-inline:16px;z-index:99999;background:"+(ok?"#065f46":"#7f1d1d")+";color:#fff;padding:12px 16px;border-radius:10px;font:600 13px Tahoma,sans-serif;text-align:center";
+        n.style.cssText="position:fixed;bottom:16px;inset-inline:16px;z-index:100001;background:"+(ok?"#065f46":"#7f1d1d")+";color:#fff;padding:12px 16px;border-radius:10px;font:600 13px Tahoma,sans-serif;text-align:center";
         n.textContent=msg;
         document.body.appendChild(n);
         setTimeout(function(){ n.remove(); },4500);
       }catch(e){}
     }
+    function showBusy(){
+      try{
+        var el=document.getElementById("td-form-busy");
+        if(!el){
+          el=document.createElement("div");
+          el.id="td-form-busy";
+          el.setAttribute("role","status");
+          el.setAttribute("aria-live","assertive");
+          el.style.cssText="position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;font-family:Tahoma,sans-serif";
+          el.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:16px;padding:22px 28px;min-width:220px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)"><div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#0f766e;border-radius:50%;margin:0 auto 14px;animation:td-spin .8s linear infinite"></div><div style="font:700 15px Tahoma,sans-serif">در حال ثبت درخواست…</div><div style="margin-top:6px;font:400 12px Tahoma,sans-serif;color:#64748b">لطفاً چند لحظه صبر کنید</div></div>';
+          if(!document.getElementById("td-form-busy-style")){
+            var st=document.createElement("style");
+            st.id="td-form-busy-style";
+            st.textContent="@keyframes td-spin{to{transform:rotate(360deg)}}";
+            document.head.appendChild(st);
+          }
+          document.body.appendChild(el);
+        }
+        el.style.display="flex";
+      }catch(e){}
+    }
+    function hideBusy(){
+      try{
+        var el=document.getElementById("td-form-busy");
+        if(el) el.style.display="none";
+      }catch(e){}
+    }
     async function submitToCrm(){
-      if(inFlight) return false;
+      if(inFlight){ showBusy(); return false; }
       if(Date.now()-lastSentAt<2500) return true;
       var data=collect();
       if(!Object.keys(data).length){
@@ -286,21 +313,25 @@ function injectBridge(html, formId, origin) {
         return false;
       }
       inFlight=true;
+      showBusy();
       try{
         var r=await fetch(ENDPOINT,{
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({formId:FORM_ID,data:data})
         });
+        hideBusy();
         if(!r.ok){ toast("خطا در ثبت در سامانه. دوباره تلاش کنید.", false); return false; }
         lastSentAt=Date.now();
         toast("در کارتابل ثبت شد", true);
         return true;
       }catch(e){
+        hideBusy();
         toast("خطا در اتصال. دوباره تلاش کنید.", false);
         return false;
       }finally{
         inFlight=false;
+        hideBusy();
       }
     }
     document.addEventListener("click",function(e){
