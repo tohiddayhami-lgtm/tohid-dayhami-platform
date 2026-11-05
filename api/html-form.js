@@ -193,7 +193,7 @@ function buildFormNotifyMessage({ recipientName, formTitle, name, phone, ticketI
   const wa = waMeLink(phone);
   return [
     `سلام ${recipientName || ''} 👋`.trim(),
-    `درخواست جدید: ${formTitle || 'فرم'}`,
+    `📌 موضوع: ${formTitle || 'فرم'}`,
     `👤 ${name || 'بدون نام'}`,
     phone ? `📞 ${phone}` : '',
     wa ? `💬 ${wa}` : '',
@@ -238,7 +238,7 @@ async function notifyHtmlForm({ nc, personnel, form, name, phone, ticketId, assi
     if (!staffPhone) continue;
     const msg = buildFormNotifyMessage({
       recipientName: target.fullName,
-      formTitle: form.title || form.titleEn,
+      formTitle: displayFormTitle(form) || form.title || form.titleEn,
       name,
       phone,
       ticketId,
@@ -292,6 +292,16 @@ function slugifyFormName(s) {
     .toLowerCase()
     .slice(0, 60);
   return ascii || 'form';
+}
+
+function displayFormTitle(form) {
+  const t = String(form && form.title || '').trim();
+  const en = String(form && form.titleEn || '').trim();
+  if (t && !/^html$/i.test(t)) return t;
+  if (en && !/^html$/i.test(en)) return en;
+  const slug = String(form && form.slug || '').replace(/[-_]+/g, ' ').trim();
+  if (slug && !/^html/i.test(slug)) return slug;
+  return '';
 }
 
 function formPublicSlug(form) {
@@ -888,11 +898,13 @@ export default async function handler(req, res) {
       const now = new Date().toISOString();
       const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
+      const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
       const descLines = Object.entries(data)
         .filter(([, v]) => v)
         .map(([k, v]) => `${FIELD_LABELS[k] || k}: ${v}`);
       const description = [
-        `درخواست جدید از فرم «${form.title || 'HTML'}»`,
+        `موضوع: ${formTitle}`,
+        `درخواست جدید از فرم «${formTitle}»`,
         `شناسه درخواست: ${ticketId}`,
         name !== 'بدون نام' ? `ثبت‌کننده: ${name}` : '',
         phone ? `شماره: ${phone}` : '',
@@ -902,15 +914,18 @@ export default async function handler(req, res) {
 
       const customData = {
         formId,
-        formTitle: form.title || '',
+        formTitle,
         importSource: 'html_form',
         requestId: ticketId,
         customerName: name,
         customerPhone: phone || '',
       };
       for (const [k, v] of Object.entries(data)) {
-        customData[safeFieldKey(k)] = v;
+        const sk = safeFieldKey(k);
+        if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource') continue;
+        customData[sk] = v;
       }
+      customData.formTitle = formTitle;
       if (form.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form.assigneeRole) customData.__assigneeRole = form.assigneeRole;
 

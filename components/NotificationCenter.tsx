@@ -351,7 +351,8 @@ export const NotificationCenter: React.FC<Props> = ({ config, personnel, onUpdat
             <code className="bg-amber-100 px-1 rounded mx-1">{'{ticketId}'}</code> کد رهگیری ·
             <code className="bg-amber-100 px-1 rounded">{'{customerName}'}</code> نام مشتری ·
             <code className="bg-amber-100 px-1 rounded mx-1">{'{senderName}'}</code> نام فرستنده ·
-            <code className="bg-amber-100 px-1 rounded">{'{status}'}</code> وضعیت جدید
+            <code className="bg-amber-100 px-1 rounded">{'{status}'}</code> وضعیت جدید ·
+            <code className="bg-amber-100 px-1 rounded mx-1">{'{formTitle}'}</code> عنوان فرم
           </div>
           {([
             { key: 'ticketTemplate',  label: 'قالب درخواست جدید در کارتابل',    def: DEFAULT_TICKET_TEMPLATE },

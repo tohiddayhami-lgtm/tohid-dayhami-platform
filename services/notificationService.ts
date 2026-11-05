@@ -2,7 +2,7 @@
 import { NotificationConfig, NotificationLog, Personnel } from '../types';
 
 export const DEFAULT_TICKET_TEMPLATE =
-  'سلام {recipientName} 👋\nیک درخواست جدید به کارتابل شما ارجاع داده شد.\n\n📋 کد رهگیری: {ticketId}\n👤 متقاضی: {customerName}\n\nبرای مشاهده وارد پنل کاربری شوید.';
+  'سلام {recipientName} 👋\nیک درخواست جدید به کارتابل شما ارجاع داده شد.\n\n📌 موضوع: {formTitle}\n👤 متقاضی: {customerName}\n📋 کد رهگیری: {ticketId}\n\nبرای مشاهده وارد پنل کاربری شوید.';
 
 export const DEFAULT_INVOICE_FOLLOWUP_TEMPLATE =
   'سلام {recipientName} 👋\nیک فاکتور برای پیگیری به شما ارجاع شد.\n\n🧾 شماره: {invoiceNumber}\n👤 مشتری: {customerName}\n📞 تماس: {customerPhone}\n💰 مبلغ کل: {invoiceTotal}\n✅ پرداخت‌شده: {amountPaid}\n📌 مانده: {balanceDue}\n📅 تاریخ: {invoiceDate}\n\n{followUpNote}\n\nبرای پیگیری وارد بخش فاکتورها شوید.';

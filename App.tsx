@@ -1182,14 +1182,16 @@ const App: React.FC = () => {
             const ageMs = new Date().getTime() - new Date(ticket.createdAt).getTime();
             const isRecent = isFinite(ageMs) && ageMs >= 0 && ageMs < 30 * 60 * 1000;
             if (isRecent && nc?.enabled && nc.onNewTicket) {
-              const msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
+              const formTitle = (ticket.customData?.formTitle || '').trim();
+              let msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
                 recipientName: assignee.fullName,
                 ticketId: ticket.id,
                 customerName: ticket.customerName || '',
-                formTitle: ticket.customData?.formTitle || ticket.serviceId,
+                formTitle,
                 senderName: 'سیستم',
                 status: ticket.status,
               });
+              if (formTitle && !msg.includes(formTitle)) msg = `📌 موضوع: ${formTitle}\n${msg}`;
               const phone = nc.personnelPhones?.[assigneeId];
               if (phone) {
                 const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assigneeId]);
@@ -1244,14 +1246,16 @@ const App: React.FC = () => {
     try {
       const assignee = personnel.find(p => p.id === assignedTo);
       if (!assignee) return;
-      const msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
+      const formTitle = (ticket.customData?.formTitle || '').trim();
+      let msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
         recipientName: assignee.fullName || '',
         ticketId: ticket.id || '',
         customerName: ticket.customerName || '',
-        formTitle: ticket.customData?.formTitle || ticket.serviceId || '',
+        formTitle,
         senderName: 'سیستم',
         status: ticket.status || '',
       });
+      if (formTitle && !msg.includes(formTitle)) msg = `📌 موضوع: ${formTitle}\n${msg}`;
       const phone = nc.personnelPhones?.[assignedTo];
       if (phone) {
         const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assignedTo]);
@@ -1285,15 +1289,18 @@ const App: React.FC = () => {
         const wa = digits ? `https://wa.me/${digits.startsWith('09') ? '98' + digits.slice(1) : digits}` : '';
         try {
           const assignee = personnel.find(p => p.id === assignedTo);
-          const msg = [
-            renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
+          const formTitle = (ticket.customData?.formTitle || '').trim();
+          const templated = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
               recipientName: assignee?.fullName || '',
               ticketId: ticket.id || '',
               customerName: ticket.customerName || '',
-              formTitle: ticket.customData?.formTitle || ticket.serviceId || '',
+              formTitle,
               senderName: 'سیستم',
               status: ticket.status || '',
-            }),
+            });
+          const msg = [
+            formTitle && !templated.includes(formTitle) ? `📌 موضوع: ${formTitle}` : '',
+            templated,
             ticket.phoneNumber && ticket.phoneNumber !== '-' ? `📞 ${ticket.phoneNumber}` : '',
             wa ? `💬 ${wa}` : '',
           ].filter(Boolean).join('\n');

@@ -773,16 +773,27 @@ export const AdminDashboard: React.FC<Props> = ({
   }, [isMaster, currentUser]);
 
   const getServiceTitle = (id: string, ticket?: Ticket) => {
+      const junk = (s?: string) => {
+          const v = (s || '').trim();
+          if (!v) return true;
+          if (/^html$/i.test(v)) return true;
+          if (/^form:/i.test(v)) return true;
+          if (/^html[_-]/i.test(v)) return true;
+          return false;
+      };
       const stored = ticket?.customData?.formTitle?.trim();
-      if (stored) return stored;
+      if (!junk(stored)) return stored as string;
       if (id?.startsWith('form:')) {
           const fid = id.slice('form:'.length);
           const form = customForms.find(f => f.id === fid);
-          if (form) return lang === 'en' && form.titleEn ? form.titleEn : form.title;
+          if (form) {
+              const t = (lang === 'en' && form.titleEn ? form.titleEn : form.title) || form.titleEn || '';
+              if (!junk(t)) return t;
+          }
           return lang === 'en' ? 'Online form' : 'فرم آنلاین';
       }
       const s = services.find(svc => svc.id === id);
-      if (!s) return id;
+      if (!s) return junk(id) ? (lang === 'en' ? 'Online form' : 'فرم آنلاین') : id;
       return lang === 'en' && s.titleEn ? s.titleEn : s.title;
   };
 
