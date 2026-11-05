@@ -758,7 +758,6 @@ export const AdminDashboard: React.FC<Props> = ({
   }, [isMaster, activeTab]);
 
   useEffect(() => {
-      if (activeTab === 'forms') {
           const unsubForms = subscribeToCustomForms((forms) => {
               const allowedForms = forms.filter(f => {
                 if (isMaster) return true;
@@ -771,11 +770,18 @@ export const AdminDashboard: React.FC<Props> = ({
               setCustomForms(allowedForms);
           });
           return () => unsubForms();
-      }
-  }, [activeTab, currentUser]);
+  }, [isMaster, currentUser]);
 
-  const getServiceTitle = (id: string) => {
-      const s = services.find(s => s.id === id);
+  const getServiceTitle = (id: string, ticket?: Ticket) => {
+      const stored = ticket?.customData?.formTitle?.trim();
+      if (stored) return stored;
+      if (id?.startsWith('form:')) {
+          const fid = id.slice('form:'.length);
+          const form = customForms.find(f => f.id === fid);
+          if (form) return lang === 'en' && form.titleEn ? form.titleEn : form.title;
+          return lang === 'en' ? 'Online form' : 'فرم آنلاین';
+      }
+      const s = services.find(svc => svc.id === id);
       if (!s) return id;
       return lang === 'en' && s.titleEn ? s.titleEn : s.title;
   };
@@ -842,7 +848,7 @@ export const AdminDashboard: React.FC<Props> = ({
           const matchesCustomer = (t.customerName || '').toLowerCase().includes(term);
           const matchesCompany = (t.companyName || '').toLowerCase().includes(term); 
           const matchesPhone = (t.phoneNumber || '').includes(term);
-          const matchesService = (getServiceTitle(t.serviceId) || '').toLowerCase().includes(term);
+          const matchesService = (getServiceTitle(t.serviceId, t) || '').toLowerCase().includes(term);
           const matchesAssignee = (getAssigneeName(t.assignedTo) || '').toLowerCase().includes(term);
           const matchesDesc = (t.description || '').toLowerCase().includes(term);
           if (!matchesId && !matchesCustomer && !matchesCompany && !matchesPhone && !matchesService && !matchesAssignee && !matchesDesc) return false;
@@ -1118,7 +1124,7 @@ export const AdminDashboard: React.FC<Props> = ({
       const totalCollected = allProjects.reduce((sum, t) => sum + (t.projectData?.payments?.reduce((p, c) => p + c.amount, 0) || 0), 0);
       const pending = totalRevenue - totalCollected;
       const serviceRevenue: Record<string, number> = {};
-      allProjects.forEach(t => { const sName = getServiceTitle(t.serviceId); serviceRevenue[sName] = (serviceRevenue[sName] || 0) + (t.projectData?.tariff?.amount || 0); });
+      allProjects.forEach(t => { const sName = getServiceTitle(t.serviceId, t); serviceRevenue[sName] = (serviceRevenue[sName] || 0) + (t.projectData?.tariff?.amount || 0); });
       return (
           <div className="space-y-6 animate-fade-in">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1232,7 +1238,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                                 <span className="text-gray-500 block mb-2">{lang === 'fa' ? 'خدمات درخواستی' : 'Requested services'}</span>
                                                 <div className="flex flex-wrap gap-2">
                                                     <span className="bg-gray-900 text-white px-2.5 py-1 rounded text-xs font-medium">
-                                                        {getServiceTitle(selectedTicket.serviceId)}
+                                                        {getServiceTitle(selectedTicket.serviceId, selectedTicket)}
                                                     </span>
                                                     {(selectedTicket.additionalServices || []).map((asvc, idx) => (
                                                         <span key={idx} className="bg-indigo-50 text-indigo-800 px-2.5 py-1 rounded text-xs border border-indigo-100 font-medium">
@@ -2191,7 +2197,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                 </div>
                             </td>
                             <td className="px-4 py-3">
-                                <div className="text-sm font-medium text-gray-700">{getServiceTitle(ticket.serviceId)}{(ticket.additionalServices || []).length > 0 && (<span className="ms-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">+{(ticket.additionalServices || []).length}</span>)}</div>
+                                <div className="text-sm font-medium text-gray-700">{getServiceTitle(ticket.serviceId, ticket)}{(ticket.additionalServices || []).length > 0 && (<span className="ms-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">+{(ticket.additionalServices || []).length}</span>)}</div>
                                 <div className="text-[10px] text-gray-400 dir-ltr">{new Date(ticket.createdAt).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
                             </td>
                             <td className="px-4 py-3"><span className={`px-2 py-1 rounded text-xs font-bold ${getStatusBadge(ticket.status)}`}>{ticket.status}</span></td>
@@ -2289,7 +2295,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                             ) : <span className="text-gray-300 text-xs">—</span>}
                                         </td>
                                         <td className="px-4 py-4">
-                                            <div className="text-gray-700">{getServiceTitle(project.serviceId)}</div>
+                                            <div className="text-gray-700">{getServiceTitle(project.serviceId, project)}</div>
                                             <div className={`inline-flex items-center gap-1 text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded ${getPriorityBadge(project.priority || 'Medium').bg} ${getPriorityBadge(project.priority || 'Medium').text}`}>
                                                 <IconFlag className="w-2.5 h-2.5" /> {project.priority}
                                             </div>
