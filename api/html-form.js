@@ -176,7 +176,7 @@ function injectBridge(html, formId, origin) {
     var inFlight=false;
     var lastSentAt=0;
     var SNAP={};
-    var SUBMIT_RE=/ثبت\\s*نهایی|ثبت\\s*فرم|ثبت\\s*درخواست|ارسال\\s*نهایی|ارسال\\s*فرم|ارسال\\s*درخواست|ارسال در واتس|send on whatsapp|\\bsubmit\\b|\\bsend\\b|confirm\\s*and\\s*send/i;
+    var SUBMIT_RE=/ثبت\\s*نهایی|ثبت\\s*فرم|ثبت\\s*درخواست|ارسال\\s*نهایی|ارسال\\s*فرم|ارسال\\s*درخواست|\\bsubmit\\b|confirm\\s*and\\s*send/i;
     var NAV_RE=/^(ادامه|بعدی|قبلی|بازگشت|ویرایش|لغو|انصراف|next|continue|back|prev|previous|edit|cancel)$/i;
     function flatten(v){
       if(v==null) return "";
@@ -304,17 +304,26 @@ function injectBridge(html, formId, origin) {
     function btnText(el){
       return ((el.innerText||el.value||el.getAttribute("aria-label")||"")+" ").replace(/\\s+/g," ").trim();
     }
+    function isWhatsAppEl(el){
+      if(!el) return false;
+      var href=(el.getAttribute && (el.getAttribute("href")||"")) || "";
+      var id=(el.id||"")+" "+(el.className||"");
+      if(/wa\\.me|whatsapp|api\\.whatsapp/i.test(href)) return true;
+      if(/\\b(b-wa|wa-link)\\b/i.test(id) || el.id==="wa") return true;
+      if(/^whatsapp$/i.test((el.innerText||"").replace(/\\s+/g," ").trim())) return true;
+      return false;
+    }
     function isSubmitEl(el){
       if(!el || !el.closest) return null;
       var btn=el.closest("button,input[type=submit],input[type=button],a[href], [type=submit], [role=button]");
       if(!btn) return null;
+      if(isWhatsAppEl(btn) || btn.closest && btn.closest("a[href*='whatsapp'],a[href*='wa.me'],.wa-link,#wa,#b-wa")) return null;
       var t=btnText(btn);
       if(NAV_RE.test(t)) return null;
-      var href=btn.getAttribute("href")||"";
-      if(btn.id==="b-wa" || /wa\\.me|whatsapp/i.test(href)) return btn;
+      if(/whatsapp|واتس\\s*اپ/i.test(t) && !/ثبت|ارسال\\s*نهایی/i.test(t)) return null;
       if((btn.getAttribute("type")||"").toLowerCase()==="submit") return btn;
       if(SUBMIT_RE.test(t)) return btn;
-      if(/submit/i.test(btn.id||"") || /\\bsubmit\\b/i.test(btn.className||"")) return btn;
+      if(/^(b-)?submit$/i.test(btn.id||"") || /\\bsubmit\\b/i.test(btn.className||"")) return btn;
       return null;
     }
     function toast(msg, ok){
@@ -385,15 +394,12 @@ function injectBridge(html, formId, origin) {
       }
     }
     document.addEventListener("click",function(e){
+      if(e.target && e.target.closest && e.target.closest("a[href*='whatsapp'],a[href*='wa.me'],.wa-link,#wa,#b-wa")) return;
       var btn=isSubmitEl(e.target);
       if(!btn) return;
-      var href=btn.tagName==="A" ? (btn.getAttribute("href")||"") : "";
       e.preventDefault();
       e.stopPropagation();
-      submitToCrm().then(function(ok){
-        if(!ok) return;
-        if(href && href!=="#" && !/^javascript:/i.test(href)) window.open(href,"_blank","noopener");
-      });
+      submitToCrm();
     },true);
     document.addEventListener("submit",function(e){
       var form=e.target;
