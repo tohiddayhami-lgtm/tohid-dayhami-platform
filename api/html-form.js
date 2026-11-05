@@ -104,8 +104,29 @@ function originFromReq(req) {
   return `${proto}://${host}`;
 }
 
-function closedPage(title, message) {
+function faviconType(href) {
+  const p = String(href || '').split('?')[0].toLowerCase();
+  if (p.endsWith('.svg')) return 'image/svg+xml';
+  if (p.endsWith('.png')) return 'image/png';
+  if (p.endsWith('.webp')) return 'image/webp';
+  if (p.endsWith('.ico')) return 'image/x-icon';
+  if (p.endsWith('.jpg') || p.endsWith('.jpeg')) return 'image/jpeg';
+  return '';
+}
+
+function faviconTags(href) {
+  if (!href) return '';
+  const type = faviconType(href);
+  const t = type ? ` type="${type}"` : '';
+  const u = esc(href);
+  return `<link rel="icon"${t} href="${u}" />
+<link rel="shortcut icon"${t} href="${u}" />
+<link rel="apple-touch-icon" href="${u}" />`;
+}
+
+function closedPage(title, message, favicon) {
   return `<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${esc(title)}</title>
+${faviconTags(favicon)}
 <style>body{font-family:Tahoma,sans-serif;max-width:520px;margin:4rem auto;padding:0 1.25rem;line-height:1.8;color:#1d1d1f;text-align:center}</style>
 </head><body><h1>${esc(title)}</h1><p>${esc(message)}</p></body></html>`;
 }
@@ -118,7 +139,7 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-function injectPreviewMeta(html, form, origin, formId) {
+function injectPreviewMeta(html, form, origin, formId, favicon) {
   const title = String(form.title || '').trim() || 'فرم آنلاین';
   const desc = String(form.description || '').trim()
     || (form.category ? `فرم ${form.category}` : '')
@@ -136,9 +157,11 @@ function injectPreviewMeta(html, form, origin, formId) {
 <meta name="twitter:title" content="${esc(title)}" />
 <meta name="twitter:description" content="${esc(desc)}" />
 <link rel="canonical" href="${esc(url)}" />
+${faviconTags(favicon)}
 `;
   let out = String(html || '');
   out = out.replace(/<title[^>]*>[\s\S]*?<\/title>/i, '');
+  out = out.replace(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]*>/gi, '');
   out = out.replace(/<meta[^>]+(?:property|name)=["'](?:og:title|og:description|og:url|twitter:title|twitter:description|description)["'][^>]*>/gi, '');
   if (/<head[^>]*>/i.test(out)) return out.replace(/<head[^>]*>/i, m => `${m}\n${tags}`);
   if (/<html[^>]*>/i.test(out)) return out.replace(/<html[^>]*>/i, m => `${m}\n<head>${tags}</head>`);
@@ -483,23 +506,26 @@ export default async function handler(req, res) {
       const id = String(req.query.id || req.query.formId || '').trim();
       if (!id) return res.status(400).send('form id required');
       const form = await getDoc('custom_forms', id);
+      const cfg = await getDoc('settings', 'appConfig');
+      const favicon = cfg?.favicon || '';
       if (!form || form.kind !== 'html' || form.isPublic === false) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(404).send(closedPage('فرم یافت نشد', 'این فرم در دسترس نیست.'));
+        return res.status(404).send(closedPage('فرم یافت نشد', 'این فرم در دسترس نیست.', favicon));
       }
       if (form.isClosed) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(200).send(closedPage(
           form.title || 'فرم',
           form.closedMessage || 'مهلت تکمیل این فرم به پایان رسیده است.',
+          favicon,
         ));
       }
       const body = await getDoc('html_form_bodies', id);
       if (!body?.html) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(404).send(closedPage('فرم ناقص است', 'فایل HTML این فرم ذخیره نشده.'));
+        return res.status(404).send(closedPage('فرم ناقص است', 'فایل HTML این فرم ذخیره نشده.', favicon));
       }
-      const html = injectBridge(injectPreviewMeta(String(body.html), form, origin, id), id, origin);
+      const html = injectBridge(injectPreviewMeta(String(body.html), form, origin, id, favicon), id, origin);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).send(html);

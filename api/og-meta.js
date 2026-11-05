@@ -148,6 +148,7 @@ async function loadSiteDefaults() {
     title: cfg?.seoTitle || cfg?.ogTitle || cfg?.appTitle || 'پلتفرم توحید دیهمی',
     description: cfg?.seoDescription || cfg?.ogDescription || cfg?.appSubtitle || '',
     image: cfg?.ogImage || cfg?.favicon || '',
+    favicon: cfg?.favicon || '',
     siteName: cfg?.appTitle || 'پلتفرم توحید دیهمی',
   };
 }
@@ -246,6 +247,7 @@ async function resolveMeta(searchOrParams, origin) {
           || `فرم «${title}» — ${defaults.siteName}`,
         ),
         image: defaults.image,
+        favicon: defaults.favicon,
         siteName: defaults.siteName,
         type: 'website',
       };
@@ -415,7 +417,20 @@ async function resolveCrawlerContent(params, origin) {
 }
 
 function renderHtml(meta, canonicalUrl, forCrawler = true, extras = {}) {
-  const { title, description, image, siteName, type, keywords } = meta;
+  const { title, description, image, siteName, type, keywords, favicon } = meta;
+  const icon = favicon || image;
+  const iconType = (() => {
+    const p = String(icon || '').split('?')[0].toLowerCase();
+    if (p.endsWith('.svg')) return 'image/svg+xml';
+    if (p.endsWith('.png')) return 'image/png';
+    if (p.endsWith('.ico')) return 'image/x-icon';
+    return '';
+  })();
+  const iconTags = icon
+    ? `<link rel="icon"${iconType ? ` type="${iconType}"` : ''} href="${esc(icon)}" />
+  <link rel="shortcut icon" href="${esc(icon)}" />
+  <link rel="apple-touch-icon" href="${esc(icon)}" />`
+    : '';
   const { bodyHtml, jsonLd } = extras;
   const appUrl = humanAppUrl(canonicalUrl);
   const defaultBody = `<p><a href="${esc(appUrl)}">${esc(title)}</a></p>`;
@@ -426,6 +441,7 @@ function renderHtml(meta, canonicalUrl, forCrawler = true, extras = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index, follow" />
   <title>${esc(title)}</title>
+  ${iconTags}
   ${description ? `<meta name="description" content="${esc(description)}" />` : ''}
   ${keywords ? `<meta name="keywords" content="${esc(keywords)}" />` : ''}
   <meta property="og:title" content="${esc(title)}" />
