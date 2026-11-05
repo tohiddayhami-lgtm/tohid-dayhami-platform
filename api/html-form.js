@@ -889,11 +889,213 @@ const FIELD_LABELS = {
   location: 'موقعیت',
   country: 'کشور',
   svc: 'خدمات',
-  service: 'خدمات',
+  service: 'خدمت قابل صدور',
   msg: 'توضیحات',
   message: 'توضیحات',
-  note: 'یادداشت',
+  note: 'توضیح',
 };
+
+const ARKA_MAPS = {
+  field: {
+    design: 'طراحی و گرافیک',
+    dev: 'برنامه‌نویسی و فناوری',
+    consult: 'مشاوره و کوچینگ',
+    teach: 'آموزش و تدریس',
+    translate: 'ترجمه و محتوا',
+    marketing: 'دیجیتال مارکتینگ',
+    eng: 'مهندسی و معماری',
+    health: 'سلامت و درمان',
+    tourism: 'گردشگری و خدمات سفر',
+    company: 'شرکت خدماتی',
+    other: 'سایر',
+  },
+  exp: {
+    none: 'هنوز شروع نکرده‌ام',
+    some: 'چند تجربه پراکنده داشته‌ام',
+    active: 'فعال هستم و می‌خواهم بزرگ‌تر شوم',
+  },
+  markets: {
+    gcc: 'کشورهای حاشیه خلیج فارس',
+    iraq: 'عراق',
+    turkey: 'ترکیه',
+    europe: 'اروپا',
+    na: 'آمریکای شمالی',
+    cis: 'آسیای میانه و قفقاز',
+    unknown: 'هنوز نمی‌دانم',
+  },
+  goal: {
+    first: 'گرفتن اولین مشتری خارجی',
+    fx: 'درآمد ارزی پایدار',
+    team: 'صادرات خدمات شرکت / تیمم',
+    move: 'آماده‌شدن برای کار بین‌المللی',
+  },
+  heard: {
+    insta: 'اینستاگرام',
+    friend: 'معرفی دوستان',
+    site: 'وب‌سایت',
+    wa: 'واتس‌اپ',
+    other: 'سایر',
+  },
+};
+
+const ARKA_GAPS = {
+  skill: 'فروش خدمت به مشتری خارجی',
+  rial: 'درآمد ارزی',
+  price: 'قیمت‌گذاری بین‌المللی',
+  find: 'پیدا کردن مشتری خارجی',
+  pay: 'دریافت پول از خارج',
+  contract: 'قرارداد و شرایط همکاری',
+  brand: 'معرفی حرفه‌ای به مشتری خارجی',
+};
+
+const REPORT_META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified)$/i;
+const RAW_CODE_KEYS = /^(ans|field|fieldOther|exp|markets|goal|heard|nm|ph|wa|svc|msg)$/i;
+
+function maybeParseJson(v) {
+  if (v && typeof v === 'object') return v;
+  const s = flattenVal(v).trim();
+  if (!s) return s;
+  if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+    try { return JSON.parse(s); } catch { return s; }
+  }
+  return s;
+}
+
+function tokensOf(v) {
+  const parsed = maybeParseJson(v);
+  if (Array.isArray(parsed)) return parsed.map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+  if (parsed && typeof parsed === 'object') return Object.keys(parsed).filter(k => parsed[k]);
+  return String(parsed || '').split(/[،,|/]+/).map(x => x.trim()).filter(Boolean);
+}
+
+function mapCodes(kind, v) {
+  const dict = ARKA_MAPS[kind] || {};
+  const out = [];
+  const seen = new Set();
+  for (const tok of tokensOf(v)) {
+    const mapped = dict[tok] || dict[tok.toLowerCase()] || tok;
+    if (!mapped || mapped === 'سایر') continue;
+    if (seen.has(mapped)) continue;
+    seen.add(mapped);
+    out.push(mapped);
+  }
+  return out.join('، ');
+}
+
+function gapsFromAns(v) {
+  const parsed = maybeParseJson(v);
+  const flags = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? Object.entries(parsed).filter(([, val]) => val === true || val === 'true' || val === 1 || val === '1' || val === 'yes')
+    : [];
+  return flags.map(([k]) => ARKA_GAPS[k] || ARKA_GAPS[k.toLowerCase()] || k);
+}
+
+function assessmentText(ansVal, ready) {
+  if (ready && /شکاف|مورد/.test(ready)) return ready;
+  const gaps = gapsFromAns(ansVal);
+  const total = Object.keys(ARKA_GAPS).length;
+  if (!gaps.length && !ansVal) return ready || '';
+  const pct = total ? Math.round((gaps.length / total) * 100) : 0;
+  return `${pct}٪ شکاف · ${gaps.length} از ${total} مورد`;
+}
+
+function pickReady(data, keys) {
+  for (const k of keys) {
+    const s = flattenVal(data[k]).trim();
+    if (s && !/^[{\[]/.test(s)) return s;
+  }
+  return '';
+}
+
+function looksRawCode(s) {
+  return /^[a-z][a-z0-9_-]{0,24}$/i.test(String(s || '').trim());
+}
+
+function reportRows(data) {
+  const name = pickReady(data, ['نام و نام خانوادگی', 'نام کامل', 'نام', 'fullName', 'full_name', 'name', 'nm']);
+  const phone = pickReady(data, ['موبایل / واتس‌اپ', 'موبایل', 'شماره تماس', 'تلفن', 'phone', 'mobile', 'ph', 'whatsapp']);
+  const email = pickReady(data, ['ایمیل', 'email']);
+  const city = pickReady(data, ['شهر / کشور', 'شهر', 'city']);
+  const fieldOther = pickReady(data, ['fieldOther', 'حوزه شما']);
+  let field = pickReady(data, ['حوزه کاری']) || mapCodes('field', data.field);
+  if ((!field || field === 'سایر' || data.field === 'other') && fieldOther) field = fieldOther;
+  else if (fieldOther && field && !field.includes(fieldOther)) field = `${field}، ${fieldOther}`;
+  const service = pickReady(data, ['خدمت قابل صدور', 'service']);
+  const exp = pickReady(data, ['تجربه', 'تجربه صادرات']) || mapCodes('exp', data.exp);
+  const goal = pickReady(data, ['هدف']) || mapCodes('goal', data.goal);
+  const markets = pickReady(data, ['بازارهای هدف']) || mapCodes('markets', data.markets);
+  const heard = pickReady(data, ['آشنایی از']) || mapCodes('heard', data.heard);
+  const note = pickReady(data, ['توضیح', 'توضیحات', 'یادداشت', 'note', 'message', 'msg']);
+  const assessmentReady = pickReady(data, ['نتیجه خودسنجی']);
+  const assessment = assessmentText(data.ans, assessmentReady);
+  const gaps = gapsFromAns(data.ans);
+
+  const rows = [];
+  const used = new Set();
+  const add = (label, value) => {
+    const v = flattenVal(value).trim();
+    if (!v || v === '{}' || v === '[]') return;
+    const sig = `${label}:${v.replace(/\s+/g, ' ')}`;
+    if (used.has(sig) || used.has(v.replace(/\s+/g, ' ').toLowerCase() + '@' + label)) return;
+    used.add(sig);
+    rows.push({ label, value: v });
+  };
+
+  add('نام', name);
+  add('موبایل', phone);
+  add('ایمیل', email);
+  add('شهر', city);
+  add('نتیجه خودسنجی', assessment);
+  if (gaps.length) add('موارد نیازمند آموزش', gaps.join('، '));
+  add('حوزه کاری', field);
+  add('خدمت قابل صدور', service);
+  add('تجربه صادرات', exp);
+  add('هدف', goal);
+  add('بازارهای هدف', markets);
+  add('آشنایی از', heard);
+  add('توضیح', note);
+
+  const takenCanon = new Set(rows.map(r => r.label));
+  for (const [k, raw] of Object.entries(data || {})) {
+    if (REPORT_META_KEYS.test(k) || RAW_CODE_KEYS.test(k) || SKIP_DATA_KEYS.test(k)) continue;
+    if (/^(name|mobile|phone|email|city|service|note|message)$/i.test(k)) continue;
+    if (/نام|موبایل|ایمیل|شهر|خودسنجی|حوزه|تجربه|هدف|بازار|آشنایی|توضیح|خدمت/.test(k)) continue;
+    const v = flattenVal(maybeParseJson(raw)).trim();
+    if (!v || looksRawCode(v) || v.startsWith('{') || v.startsWith('[')) continue;
+    const label = FIELD_LABELS[k] || k;
+    if (takenCanon.has(label)) continue;
+    if (rows.some(r => r.value === v)) continue;
+    add(label, v);
+  }
+  return rows;
+}
+
+function buildFormDescription(formTitle, ticketId, name, phone, data) {
+  const rows = reportRows(data);
+  const identity = new Set(['نام', 'موبایل', 'ایمیل', 'شهر']);
+  const lines = [
+    `موضوع: ${formTitle}`,
+    `شناسه درخواست: ${ticketId}`,
+    '',
+    'مشخصات متقاضی',
+  ];
+  const seen = new Set();
+  const put = (label, value) => {
+    const v = flattenVal(value).trim();
+    if (!v || seen.has(label)) return;
+    seen.add(label);
+    lines.push(`${label}: ${v}`);
+  };
+  if (name && name !== 'بدون نام') put('نام', name);
+  if (phone) put('موبایل', phone);
+  rows.filter(r => identity.has(r.label)).forEach(r => put(r.label, r.value));
+  const extra = rows.filter(r => !identity.has(r.label));
+  if (extra.length) {
+    lines.push('', 'پاسخ‌های فرم');
+    extra.forEach(r => lines.push(`${r.label}: ${r.value}`));
+  }
+  return lines.join('\n').trim();
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -951,7 +1153,7 @@ export default async function handler(req, res) {
       const phone = extractPhone(data);
       const name = extractName(data, phone) || 'بدون نام';
       const email = pick(data, ['email', 'ایمیل']);
-      const company = pick(data, ['company', 'companyName', 'brand', 'شرکت', 'شرکت / برند']);
+      const company = pick(data, ['company', 'companyName', 'شرکت', 'شرکت / برند']);
       const city = pick(data, ['city', 'location', 'country', 'شهر', 'شهر / کشور']) || '-';
       const phoneNorm = digits(phone);
 
@@ -959,18 +1161,8 @@ export default async function handler(req, res) {
       const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
-      const descLines = Object.entries(data)
-        .filter(([, v]) => v)
-        .map(([k, v]) => `${FIELD_LABELS[k] || k}: ${v}`);
-      const description = [
-        `موضوع: ${formTitle}`,
-        `درخواست جدید از فرم «${formTitle}»`,
-        `شناسه درخواست: ${ticketId}`,
-        name !== 'بدون نام' ? `ثبت‌کننده: ${name}` : '',
-        phone ? `شماره: ${phone}` : '',
-        '',
-        ...descLines,
-      ].filter(Boolean).join('\n');
+      const answers = reportRows(data);
+      const description = buildFormDescription(formTitle, ticketId, name, phone, data);
 
       const customData = {
         formId,
@@ -980,10 +1172,10 @@ export default async function handler(req, res) {
         customerName: name,
         customerPhone: phone || '',
       };
-      for (const [k, v] of Object.entries(data)) {
-        const sk = safeFieldKey(k);
+      for (const row of answers) {
+        const sk = safeFieldKey(row.label);
         if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource') continue;
-        customData[sk] = v;
+        customData[sk] = row.value;
       }
       customData.formTitle = formTitle;
       if (form.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
