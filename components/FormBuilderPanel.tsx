@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption, TicketStatus } from '../types';
 import { Language } from '../App';
-import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud } from '../services/firebaseService';
+import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud } from '../services/firebaseService';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 
@@ -49,6 +49,7 @@ const emptyDraft = (): FormDraft => ({
   title: '', titleEn: '', category: '', description: '', descriptionEn: '',
   fields: [], allowedRoles: [], allowedPersonnelIds: [], allowAttachments: false,
   isPublic: true, assigneePersonnelId: '', assigneeRole: '',
+  kind: 'fields', htmlFileName: '',
 });
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors";
@@ -286,6 +287,17 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [connectAssigneeType, setConnectAssigneeType] = useState<'person' | 'role'>('person');
   const [connectAssigneeId, setConnectAssigneeId] = useState('');
   const [connectAssigneeRole, setConnectAssigneeRole] = useState('');
+  const [htmlModalOpen, setHtmlModalOpen] = useState(false);
+  const [htmlEditingId, setHtmlEditingId] = useState<string | null>(null);
+  const [htmlTitle, setHtmlTitle] = useState('');
+  const [htmlTitleEn, setHtmlTitleEn] = useState('');
+  const [htmlCategory, setHtmlCategory] = useState('HTML');
+  const [htmlSource, setHtmlSource] = useState('');
+  const [htmlFileName, setHtmlFileName] = useState('');
+  const [htmlAssigneePersonnelId, setHtmlAssigneePersonnelId] = useState('');
+  const [htmlAssigneeRole, setHtmlAssigneeRole] = useState('');
+  const [htmlSaving, setHtmlSaving] = useState(false);
+  const htmlFileRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
   const saveReqUrl = () => {
     onUpdateRequestUrl?.(reqUrlDraft.trim());
@@ -332,7 +344,9 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   // Use ?form= query param — survives Instagram/WhatsApp/Telegram link sharing
   // (hash fragments are often stripped by social media in-app browsers)
   const getPublicUrl = (form: CustomForm) =>
-    `${window.location.origin}${window.location.pathname}?form=${form.id}`;
+    form.kind === 'html'
+      ? `${window.location.origin}/htmlform/${form.id}`
+      : `${window.location.origin}${window.location.pathname}?form=${form.id}`;
 
   const copyLink = (form: CustomForm) => {
     navigator.clipboard.writeText(getPublicUrl(form)).then(() => {
@@ -352,7 +366,100 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setView('builder');
   };
 
+  const openHtmlModal = (form?: CustomForm) => {
+    setHtmlEditingId(form?.id || null);
+    setHtmlTitle(form?.title || '');
+    setHtmlTitleEn(form?.titleEn || '');
+    setHtmlCategory(form?.category || 'HTML');
+    setHtmlFileName(form?.htmlFileName || '');
+    setHtmlAssigneePersonnelId(form?.assigneePersonnelId || '');
+    setHtmlAssigneeRole(form?.assigneeRole || '');
+    setHtmlSource('');
+    setHtmlModalOpen(true);
+    if (form?.id && form.kind === 'html') {
+      getHtmlFormBodyFromCloud(form.id).then(html => { if (html) setHtmlSource(html); }).catch(() => {});
+    }
+  };
+
+  const handleHtmlFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setHtmlFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = String(ev.target?.result || '');
+      setHtmlSource(text);
+      if (!htmlTitle.trim()) {
+        const m = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (m?.[1]) setHtmlTitle(m[1].trim());
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleSaveHtmlForm = async () => {
+    if (!htmlTitle.trim()) {
+      alert(lang === 'fa' ? 'عنوان فرم را وارد کنید.' : 'Enter a form title.');
+      return;
+    }
+    if (!htmlSource.trim()) {
+      alert(lang === 'fa' ? 'فایل HTML را انتخاب یا پیست کنید.' : 'Upload or paste the HTML file.');
+      return;
+    }
+    setHtmlSaving(true);
+    try {
+      const id = htmlEditingId || `html_${Date.now()}`;
+      const meta: CustomForm = {
+        id,
+        title: htmlTitle.trim(),
+        titleEn: htmlTitleEn.trim() || undefined,
+        category: htmlCategory.trim() || 'HTML',
+        description: lang === 'fa' ? 'فرم HTML میزبانی‌شده — پاسخ‌ها به کارتابل می‌روند.' : 'Hosted HTML form — submissions go to the cartable.',
+        fields: [],
+        allowedRoles: [],
+        isPublic: true,
+        kind: 'html',
+        htmlFileName: htmlFileName || 'index.html',
+        assigneePersonnelId: htmlAssigneePersonnelId || undefined,
+        assigneeRole: htmlAssigneeRole || undefined,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser.fullName,
+      };
+      if (htmlEditingId) {
+        const existing = customForms.find(f => f.id === htmlEditingId);
+        await updateCustomFormInCloud(htmlEditingId, {
+          title: meta.title,
+          titleEn: meta.titleEn,
+          category: meta.category,
+          description: meta.description,
+          kind: 'html',
+          htmlFileName: meta.htmlFileName,
+          isPublic: true,
+          assigneePersonnelId: meta.assigneePersonnelId,
+          assigneeRole: meta.assigneeRole,
+        }, currentUser.fullName);
+        if (existing) {
+          meta.createdAt = existing.createdAt;
+          meta.createdBy = existing.createdBy;
+        }
+      } else {
+        await saveCustomFormToCloud(meta, currentUser.fullName);
+      }
+      await saveHtmlFormBodyToCloud(id, htmlSource);
+      setHtmlModalOpen(false);
+    } catch {
+      alert(lang === 'fa' ? 'خطا در ذخیره فرم HTML.' : 'Could not save the HTML form.');
+    } finally {
+      setHtmlSaving(false);
+    }
+  };
+
   const openEdit = (form: CustomForm) => {
+    if (form.kind === 'html') {
+      openHtmlModal(form);
+      return;
+    }
     setEditingId(form.id);
     setDraft({
       title: form.title, titleEn: form.titleEn || '', category: form.category,
@@ -362,11 +469,20 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       allowAttachments: form.allowAttachments ?? false,
       isPublic: form.isPublic ?? false,
       assigneePersonnelId: form.assigneePersonnelId || '', assigneeRole: form.assigneeRole || '',
+      kind: form.kind || 'fields', htmlFileName: form.htmlFileName || '',
     });
     setView('builder');
   };
 
-  const openPreview = (form: CustomForm) => { setPreviewForm(form); setPreviewLang(lang); setView('preview'); };
+  const openPreview = (form: CustomForm) => {
+    if (form.kind === 'html') {
+      window.open(getPublicUrl(form), '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setPreviewForm(form);
+    setPreviewLang(lang);
+    setView('preview');
+  };
 
   const handleSave = async () => {
     if (!draft.title.trim()) return;
@@ -412,6 +528,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       const parsed = JSON.parse(jsonText);
       if (!parsed.title || !Array.isArray(parsed.fields)) throw new Error('فرمت JSON معتبر نیست');
       setDraft({
+        ...emptyDraft(),
         title: parsed.title || '', titleEn: parsed.titleEn || '',
         category: parsed.category || '', description: parsed.description || '',
         descriptionEn: parsed.descriptionEn || '', isPublic: parsed.isPublic ?? true,
@@ -1556,6 +1673,71 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         );
       })()}
 
+      {htmlModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود فرم HTML' : 'Upload HTML form'}</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                {lang === 'fa'
+                  ? 'هر فرم HTML که آپلود کنید کار می‌کند. وقتی مخاطب دکمه «ثبت نهایی / ثبت / ارسال» را بزند، پاسخ در کارتابل و بانک مشتریان ذخیره می‌شود.'
+                  : 'Any uploaded HTML form works. When the visitor clicks Submit / Send, the response is saved to the cartable and customer bank.'}
+              </p>
+            </div>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'عنوان' : 'Title'}</label>
+              <input className={inputCls} value={htmlTitle} onChange={e => setHtmlTitle(e.target.value)} placeholder={lang === 'fa' ? 'مثلاً فرم درخواست آرکا' : 'e.g. ARKA request form'} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'عنوان انگلیسی' : 'English title'}</label>
+                <input className={inputCls} value={htmlTitleEn} onChange={e => setHtmlTitleEn(e.target.value)} dir="ltr" />
+              </div>
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'دسته‌بندی' : 'Category'}</label>
+                <input className={inputCls} value={htmlCategory} onChange={e => setHtmlCategory(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'ارجاع به پرسنل' : 'Assign to person'}</label>
+                <select className={inputCls} value={htmlAssigneePersonnelId} onChange={e => { setHtmlAssigneePersonnelId(e.target.value); if (e.target.value) setHtmlAssigneeRole(''); }}>
+                  <option value="">{lang === 'fa' ? '— انتخاب —' : '— none —'}</option>
+                  {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'یا ارجاع به نقش' : 'Or assign by role'}</label>
+                <select className={inputCls} value={htmlAssigneeRole} onChange={e => { setHtmlAssigneeRole(e.target.value); if (e.target.value) setHtmlAssigneePersonnelId(''); }}>
+                  <option value="">{lang === 'fa' ? '— انتخاب —' : '— none —'}</option>
+                  {uniqueRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'فایل HTML' : 'HTML file'}</label>
+              <input ref={htmlFileRef} type="file" accept=".html,.htm,text/html" className="hidden" onChange={handleHtmlFile} />
+              <button type="button" onClick={() => htmlFileRef.current?.click()} className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                {htmlFileName ? htmlFileName : (lang === 'fa' ? 'انتخاب فایل index.html' : 'Choose index.html')}
+              </button>
+              <textarea
+                className={inputCls + ' mt-2 font-mono text-[11px] dir-ltr'}
+                rows={6}
+                value={htmlSource}
+                onChange={e => setHtmlSource(e.target.value)}
+                placeholder="<!doctype html>..."
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setHtmlModalOpen(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">{lang === 'fa' ? 'لغو' : 'Cancel'}</button>
+              <button type="button" onClick={handleSaveHtmlForm} disabled={htmlSaving} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60">
+                {htmlSaving ? (lang === 'fa' ? 'در حال ذخیره...' : 'Saving...') : (lang === 'fa' ? 'ذخیره و ساخت لینک' : 'Save & create link')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirm */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1616,6 +1798,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               <button onClick={() => setJsonImportOpen(true)} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
                 <IconUpload className="w-3.5 h-3.5" />
                 {lang === 'fa' ? 'ورود JSON' : 'Import JSON'}
+              </button>
+              <button onClick={() => openHtmlModal()} className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 transition-colors">
+                <IconUpload className="w-3.5 h-3.5" />
+                {lang === 'fa' ? 'آپلود فرم HTML' : 'Upload HTML form'}
               </button>
               <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors">
                 <IconPlus className="w-4 h-4" />
@@ -1702,7 +1888,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             {searchQ ? (lang === 'fa' ? 'فرمی پیدا نشد.' : 'No forms found.') : (lang === 'fa' ? 'هیچ فرمی وجود ندارد.' : 'No forms yet.')}
           </p>
           {!searchQ && isEditor && (
-            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'با کلیک روی «فرم جدید» شروع کنید.' : 'Click "New Form" to get started.'}</p>
+            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'فرم جدید بسازید یا فایل HTML آپلود کنید.' : 'Create a form or upload an HTML file.'}</p>
           )}
         </div>
       ) : (
@@ -1718,6 +1904,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                     {form.isClosed && (
                       <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                         ⏳ {lang === 'fa' ? 'بسته‌شده' : 'Closed'}
+                      </span>
+                    )}
+                    {form.kind === 'html' && (
+                      <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
+                        HTML
                       </span>
                     )}
                     {form.isPublic && (
@@ -1739,7 +1930,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 {form.titleEn && <p className="text-xs text-gray-400 mb-1.5" dir="ltr">{form.titleEn}</p>}
                 {form.description && <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{form.description}</p>}
                 <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
-                  <span>{form.fields.length} {lang === 'fa' ? 'فیلد' : 'fields'}</span>
+                  <span>{form.kind === 'html' ? (form.htmlFileName || 'index.html') : `${(form.fields || []).length} ${lang === 'fa' ? 'فیلد' : 'fields'}`}</span>
                   <button
                     type="button"
                     onClick={() => goToFormArchive(form.id)}
@@ -1775,6 +1966,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 )}
                 {isEditor && (
                   <>
+                    {form.kind !== 'html' && (
+                      <>
                     <button
                       onClick={() => setGoogleFormFor(form)}
                       title={lang === 'fa' ? 'ساخت نسخه گوگل‌فرم از این فرم' : 'Generate a Google Form version'}
@@ -1789,6 +1982,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                     >
                       JSON
                     </button>
+                      </>
+                    )}
                     <button
                       onClick={() => toggleClosed(form)}
                       title={form.isClosed ? (lang === 'fa' ? 'فعال‌سازی مجدد فرم' : 'Reopen form') : (lang === 'fa' ? 'بستن فرم (توقف دریافت پاسخ)' : 'Close form (stop submissions)')}

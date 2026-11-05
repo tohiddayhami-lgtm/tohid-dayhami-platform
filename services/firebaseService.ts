@@ -2283,7 +2283,27 @@ export const updateCustomFormInCloud = async (id: string, updates: Partial<Custo
 
 export const deleteCustomFormFromCloud = async (id: string, actorName: string) => {
     await deleteDocCloud('custom_forms', id);
+    try { await deleteDocCloud('html_form_bodies', id); } catch { /* optional companion doc */ }
     logSystemAction('DELETE', 'CustomForm', `فرم حذف شد`, actorName, id);
+};
+
+export const saveHtmlFormBodyToCloud = async (formId: string, html: string): Promise<void> => {
+  await setDocCloud('html_form_bodies', formId, {
+    id: formId,
+    html,
+    updatedAt: new Date().toISOString(),
+  });
+};
+
+export const getHtmlFormBodyFromCloud = async (formId: string): Promise<string | null> => {
+  const proxy = await checkProxyMode();
+  if (proxy) {
+    const docBody = await proxyGet<{ html?: string }>('html_form_bodies', { doc: formId });
+    return docBody?.html || null;
+  }
+  const snap = await getDoc(doc(db, 'html_form_bodies', formId));
+  if (!snap.exists()) return null;
+  return (snap.data() as { html?: string }).html || null;
 };
 
 export const subscribeToCustomForms = (callback: (forms: CustomForm[]) => void) =>

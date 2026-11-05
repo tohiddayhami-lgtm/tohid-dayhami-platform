@@ -589,6 +589,9 @@ export interface CustomForm {
   closedMessage?: string;        // optional custom message shown when the form is closed
   assigneePersonnelId?: string;  // assign to specific person
   assigneeRole?: string;         // assign to first person with this role
+  /** HTML-hosted public form (uploaded index.html) vs builder fields. */
+  kind?: 'fields' | 'html';
+  htmlFileName?: string;
   createdAt: string;
   createdBy: string;
 }
