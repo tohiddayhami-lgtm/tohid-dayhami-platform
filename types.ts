@@ -594,8 +594,12 @@ export interface CustomForm {
   htmlFileName?: string;
   /** Entry HTML inside a hosted ZIP, e.g. go/index.html */
   packEntry?: string;
-  /** Files extracted from the ZIP and stored in Firebase Storage */
-  packFiles?: { path: string; url: string }[];
+  /** Download URL of the uploaded ZIP */
+  packZipUrl?: string;
+  /** Common folder stripped from ZIP paths, e.g. arka */
+  packRoot?: string;
+  /** Logical files inside the ZIP (path is relative; url is optional legacy) */
+  packFiles?: { path: string; url?: string }[];
   packFileCount?: number;
   /** Public URL slug from the English title, e.g. export-services-course */
   slug?: string;

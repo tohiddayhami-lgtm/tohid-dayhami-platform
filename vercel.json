@@ -44,7 +44,7 @@
       "maxDuration": 30
     },
     "api/hosted-pack.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     },
     "api/cartable.js": {
       "maxDuration": 30

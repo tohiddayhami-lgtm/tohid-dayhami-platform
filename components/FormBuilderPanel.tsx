@@ -2,8 +2,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption, TicketStatus } from '../types';
 import { Language } from '../App';
-import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud, hostedPackStoragePath, uploadBytesAtPath, deleteFile } from '../services/firebaseService';
-import { readHostedPackZip } from '../utils/hostedPack';
+import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud, uploadFile, deleteFile, getStorageErrorMessage } from '../services/firebaseService';
+import { listHostedPackZip } from '../utils/hostedPack';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 import { formPublicPath, uniqueFormSlug } from '../utils/formPublicUrl';
@@ -513,40 +513,34 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       return;
     }
     setPackSaving(true);
-    setPackProgress(lang === 'fa' ? 'در حال خواندن ZIP...' : 'Reading ZIP...');
+    setPackProgress(lang === 'fa' ? 'در حال بررسی ZIP...' : 'Checking ZIP...');
     try {
       const id = packEditingId || `pack_${Date.now()}`;
       const existing = customForms.find(f => f.id === id);
       let packFiles = existing?.packFiles || [];
       let packEntry = existing?.packEntry || 'index.html';
+      let packZipUrl = existing?.packZipUrl || '';
+      let packRoot = existing?.packRoot || '';
       if (packZip) {
-        const unpacked = await readHostedPackZip(packZip);
-        packEntry = unpacked.entry;
-        const uploaded: { path: string; url: string }[] = [];
-        let done = 0;
-        const queue = [...unpacked.files];
-        const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-          while (queue.length) {
-            const item = queue.shift();
-            if (!item) break;
-            const { url } = await uploadBytesAtPath(
-              hostedPackStoragePath(id, item.path),
-              item.blob,
-              item.mime,
-            );
-            uploaded.push({ path: item.path, url });
-            done += 1;
-            setPackProgress(lang === 'fa'
-              ? `آپلود فایل‌ها ${done} از ${unpacked.files.length}`
-              : `Uploading ${done} / ${unpacked.files.length}`);
-          }
-        });
-        await Promise.all(workers);
-        for (const old of packFiles) {
-          if (!old?.url) continue;
-          try { await deleteFile(old.url); } catch { /* leftover */ }
+        const listed = await listHostedPackZip(packZip);
+        packEntry = listed.entry;
+        packRoot = listed.root;
+        packFiles = listed.paths.map(path => ({ path }));
+        setPackProgress(lang === 'fa' ? 'در حال آپلود فایل ZIP...' : 'Uploading ZIP...');
+        const { url } = await uploadFile(
+          packZip,
+          'documents',
+          (p) => setPackProgress(lang === 'fa' ? `آپلود ZIP ${Math.round(p)}٪` : `Uploading ZIP ${Math.round(p)}%`),
+          packZip.type || 'application/zip',
+        );
+        if (existing?.packZipUrl && existing.packZipUrl !== url) {
+          try { await deleteFile(existing.packZipUrl); } catch { /* leftover zip */ }
         }
-        packFiles = uploaded;
+        packZipUrl = url;
+      }
+      if (!packZipUrl) {
+        alert(lang === 'fa' ? 'فایل ZIP را انتخاب کنید.' : 'Choose a ZIP file.');
+        return;
       }
       const slug = uniqueFormSlug(packTitleEn.trim() || packTitle.trim(), customForms, id);
       const meta: CustomForm = {
@@ -562,6 +556,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         kind: 'pack',
         htmlFileName: packFileName || 'pack.zip',
         packEntry,
+        packZipUrl,
+        packRoot,
         packFiles,
         packFileCount: packFiles.length,
         assigneePersonnelId: packAssigneePersonnelId || undefined,
@@ -569,6 +565,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         createdAt: existing?.createdAt || new Date().toISOString(),
         createdBy: existing?.createdBy || currentUser.fullName,
       };
+      setPackProgress(lang === 'fa' ? 'در حال ذخیره لینک...' : 'Saving link...');
       if (packEditingId) {
         await updateCustomFormInCloud(id, {
           title: meta.title,
@@ -578,6 +575,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
           kind: 'pack',
           htmlFileName: meta.htmlFileName,
           packEntry,
+          packZipUrl,
+          packRoot,
           packFiles,
           packFileCount: packFiles.length,
           isPublic: true,
@@ -590,13 +589,14 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       setPackModalOpen(false);
     } catch (err) {
       const code = err instanceof Error ? err.message : '';
+      const storageMsg = getStorageErrorMessage(err);
       const msg = code === 'no_html'
         ? (lang === 'fa' ? 'داخل ZIP باید حداقل یک فایل HTML باشد (مثلاً index.html).' : 'The ZIP must contain at least one HTML file (e.g. index.html).')
-        : code === 'zip_too_large'
-          ? (lang === 'fa' ? 'حجم محتویات ZIP بیش از حد مجاز است.' : 'Unzipped contents are too large.')
+        : code === 'empty_zip'
+          ? (lang === 'fa' ? 'این ZIP خالی است یا خوانده نشد.' : 'This ZIP is empty or could not be read.')
           : code === 'too_many_files'
             ? (lang === 'fa' ? 'تعداد فایل‌های داخل ZIP زیاد است.' : 'Too many files inside the ZIP.')
-            : (lang === 'fa' ? 'خطا در ذخیره فلیپ‌بوک. دوباره تلاش کنید.' : 'Could not save the flipbook. Try again.');
+            : storageMsg || (lang === 'fa' ? 'خطا در ذخیره فلیپ‌بوک. دوباره تلاش کنید.' : 'Could not save the flipbook. Try again.');
       alert(msg);
     } finally {
       setPackSaving(false);

@@ -167,9 +167,7 @@ function isHtml(path) {
   return /\.html?$/i.test(path);
 }
 
-function resolvePackFile(form, requested) {
-  const files = Array.isArray(form.packFiles) ? form.packFiles : [];
-  const byPath = new Map(files.map(f => [normalizePath(f.path), f]));
+function candidatePaths(form, requested) {
   const tryPaths = [];
   const req = normalizePath(requested);
   if (req) tryPaths.push(req);
@@ -183,10 +181,52 @@ function resolvePackFile(form, requested) {
     tryPaths.push('index.html');
     tryPaths.push('magazine/index.html');
   }
-  for (const p of tryPaths) {
-    const hit = byPath.get(p);
-    if (hit?.url) return { path: p, url: hit.url };
+  return tryPaths.filter(Boolean);
+}
+
+function resolveLogicalPath(form, requested) {
+  const listed = new Set((Array.isArray(form.packFiles) ? form.packFiles : []).map(f => normalizePath(f.path)));
+  const tries = candidatePaths(form, requested);
+  for (const p of tries) {
+    if (!listed.size || listed.has(p)) return p;
   }
+  return tries[0] || '';
+}
+
+function resolveLegacyFile(form, logical) {
+  const files = Array.isArray(form.packFiles) ? form.packFiles : [];
+  return files.find(f => normalizePath(f.path) === logical && f.url) || null;
+}
+
+let zipCache = { url: '', zip: null };
+
+async function loadPackZip(url) {
+  if (zipCache.url === url && zipCache.zip) return zipCache.zip;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`zip_fetch_${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  const mod = await import('jszip');
+  const JSZip = mod.default || mod;
+  const zip = await JSZip.loadAsync(buf);
+  zipCache = { url, zip };
+  return zip;
+}
+
+function zipEntry(zip, logical, root) {
+  const tries = [logical];
+  if (root) tries.push(`${root}/${logical}`);
+  tries.push(`arka/${logical}`);
+  for (const t of tries) {
+    const f = zip.file(t);
+    if (f && !f.dir) return f;
+  }
+  const want = String(logical || '').replace(/\\/g, '/').toLowerCase();
+  const names = Object.keys(zip.files || {});
+  const hit = names.find(n => {
+    const nn = String(n).replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+    return nn === want || nn.endsWith(`/${want}`) || (root && nn === `${String(root).toLowerCase()}/${want}`);
+  });
+  if (hit && zip.files[hit] && !zip.files[hit].dir) return zip.file(hit);
   return null;
 }
 
@@ -264,31 +304,53 @@ export default async function handler(req, res) {
     }
 
     const requested = pathFromReq(req);
-    const file = resolvePackFile(form, requested);
-    if (!file) {
+    const logical = resolveLogicalPath(form, requested);
+    if (!logical) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(closedPage('فایل نیست', 'این مسیر داخل بسته وجود ندارد.'));
     }
 
-    if (!isHtml(file.path)) {
+    let bytes = null;
+    const legacy = resolveLegacyFile(form, logical);
+    if (form.packZipUrl) {
+      const zip = await loadPackZip(form.packZipUrl);
+      const entry = zipEntry(zip, logical, form.packRoot);
+      if (!entry) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(404).send(closedPage('فایل نیست', 'این مسیر داخل بسته وجود ندارد.'));
+      }
+      bytes = await entry.async('nodebuffer');
+    } else if (legacy?.url) {
+      if (!isHtml(logical)) {
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Content-Type', mimeFor(logical));
+        return res.redirect(302, legacy.url);
+      }
+      const fetched = await fetch(legacy.url);
+      if (!fetched.ok) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(502).send(closedPage('خطا', 'نتوانستیم فایل را بخوانیم.'));
+      }
+      bytes = Buffer.from(await fetched.arrayBuffer());
+    } else {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(closedPage('فایل نیست', 'بسته هنوز آپلود نشده.'));
+    }
+
+    if (!isHtml(logical)) {
       res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.setHeader('Content-Type', mimeFor(file.path));
-      return res.redirect(302, file.url);
+      res.setHeader('Content-Type', mimeFor(logical));
+      return res.status(200).send(bytes);
     }
 
     const cfg = await getDoc('settings', 'appConfig');
-    const fetched = await fetch(file.url);
-    if (!fetched.ok) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(502).send(closedPage('خطا', 'نتوانستیم فایل را بخوانیم.'));
-    }
-    const html = await fetched.text();
+    const html = bytes.toString('utf8');
     const slug = formPublicSlug(form);
     const injected = injectPackHtml(html, {
       formId: form.id,
       origin,
       slug,
-      filePath: file.path,
+      filePath: logical,
       favicon: cfg?.favicon || '',
     });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

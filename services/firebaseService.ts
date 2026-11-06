@@ -574,7 +574,7 @@ const normalizeStoragePath = (pathOrUrl: string) => {
     return assertCentralStoragePath(path);
 };
 
-const getStorageErrorMessage = (error: unknown) => {
+export const getStorageErrorMessage = (error: unknown) => {
     const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
     const storagePath = typeof error === "object" && error && "storagePath" in error ? String((error as { storagePath?: unknown }).storagePath) : "نامشخص";
     const fileSize = typeof error === "object" && error && "fileSize" in error ? Number((error as { fileSize?: unknown }).fileSize) : NaN;
@@ -2322,7 +2322,11 @@ export const deleteCustomFormFromCloud = async (id: string, actorName: string) =
     let packFiles: { url?: string }[] = [];
     try {
         const snap = await getDoc(doc(db, 'custom_forms', id));
-        if (snap.exists()) packFiles = ((snap.data() as CustomForm).packFiles || []);
+        if (snap.exists()) {
+            const data = snap.data() as CustomForm;
+            packFiles = data.packFiles || [];
+            if (data.packZipUrl) packFiles = [...packFiles, { url: data.packZipUrl }];
+        }
     } catch { /* still delete the form doc */ }
     await deleteDocCloud('custom_forms', id);
     try { await deleteDocCloud('html_form_bodies', id); } catch { /* optional companion doc */ }
