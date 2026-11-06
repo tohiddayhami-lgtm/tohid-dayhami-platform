@@ -19,7 +19,8 @@
     { "source": "/form/:slug",            "destination": "/api/html-form?slug=:slug" },
     { "source": "/htmlform/:id",          "destination": "/api/html-form?id=:id" },
     { "source": "/p/:slug",               "destination": "/api/hosted-pack?slug=:slug" },
-    { "source": "/p/:slug/(.*)",          "destination": "/api/hosted-pack?slug=:slug&path=$1" },
+    { "source": "/p/:slug/",              "destination": "/api/hosted-pack?slug=:slug" },
+    { "source": "/p/:slug/:path*",        "destination": "/api/hosted-pack?slug=:slug&path=:path*" },
     {
       "source": "/:path*",
       "has": [

@@ -6,6 +6,8 @@
  * POST /api/arka-forms     → alias
  */
 
+import JSZip from 'jszip';
+
 const PROJECT_ID = 'company-crm-103aa';
 const API_KEY = 'AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
@@ -167,6 +169,16 @@ function isHtml(path) {
   return /\.html?$/i.test(path);
 }
 
+function normName(p) {
+  return normalizePath(p).toLowerCase();
+}
+
+function stripOneFolder(p) {
+  const n = normalizePath(p);
+  const i = n.indexOf('/');
+  return i === -1 ? n : n.slice(i + 1);
+}
+
 function candidatePaths(form, requested) {
   const tryPaths = [];
   const req = normalizePath(requested);
@@ -178,19 +190,20 @@ function candidatePaths(form, requested) {
   if (!req) {
     tryPaths.push(normalizePath(form.packEntry || ''));
     tryPaths.push('go/index.html');
-    tryPaths.push('index.html');
     tryPaths.push('magazine/index.html');
+    tryPaths.push('index.html');
   }
-  return tryPaths.filter(Boolean);
+  return [...new Set(tryPaths.filter(Boolean))];
 }
 
 function resolveLogicalPath(form, requested) {
-  const listed = new Set((Array.isArray(form.packFiles) ? form.packFiles : []).map(f => normalizePath(f.path)));
+  const files = Array.isArray(form.packFiles) ? form.packFiles : [];
+  const listed = new Set(files.map(f => normalizePath(f && f.path)).filter(Boolean));
   const tries = candidatePaths(form, requested);
   for (const p of tries) {
-    if (!listed.size || listed.has(p)) return p;
+    if (!listed.size || listed.has(p) || listed.has(stripOneFolder(p))) return p;
   }
-  return tries[0] || '';
+  return tries[0] || normalizePath(form.packEntry || '') || 'index.html';
 }
 
 function resolveLegacyFile(form, logical) {
@@ -205,28 +218,34 @@ async function loadPackZip(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`zip_fetch_${r.status}`);
   const buf = Buffer.from(await r.arrayBuffer());
-  const mod = await import('jszip');
-  const JSZip = mod.default || mod;
   const zip = await JSZip.loadAsync(buf);
   zipCache = { url, zip };
   return zip;
 }
 
+function zipFileList(zip) {
+  return Object.keys(zip.files || {}).filter(n => zip.files[n] && !zip.files[n].dir);
+}
+
 function zipEntry(zip, logical, root) {
-  const tries = [logical];
-  if (root) tries.push(`${root}/${logical}`);
-  tries.push(`arka/${logical}`);
-  for (const t of tries) {
-    const f = zip.file(t);
-    if (f && !f.dir) return f;
+  const names = zipFileList(zip);
+  const want = normName(logical);
+  const prefixed = root ? normName(`${root}/${logical}`) : '';
+  const score = (n) => {
+    const nn = normName(n);
+    if (nn === want || nn === prefixed) return 0;
+    if (stripOneFolder(nn) === want) return 1;
+    if (want && (nn.endsWith(`/${want}`) || nn.endsWith(want))) return 2;
+    return 99;
+  };
+  const ranked = names.map(n => ({ n, s: score(n) })).filter(x => x.s < 99).sort((a, b) => a.s - b.s);
+  if (ranked.length) return zip.files[ranked[0].n];
+  if (!want || want.endsWith('index.html') || !want.includes('.')) {
+    const html = names.find(n => /(?:^|\/)go\/index\.html$/i.test(n))
+      || names.find(n => /(?:^|\/)index\.html$/i.test(n))
+      || names.find(n => /\.html?$/i.test(n));
+    if (html) return zip.files[html];
   }
-  const want = String(logical || '').replace(/\\/g, '/').toLowerCase();
-  const names = Object.keys(zip.files || {});
-  const hit = names.find(n => {
-    const nn = String(n).replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
-    return nn === want || nn.endsWith(`/${want}`) || (root && nn === `${String(root).toLowerCase()}/${want}`);
-  });
-  if (hit && zip.files[hit] && !zip.files[hit].dir) return zip.file(hit);
   return null;
 }
 
@@ -314,7 +333,9 @@ export default async function handler(req, res) {
     const legacy = resolveLegacyFile(form, logical);
     if (form.packZipUrl) {
       const zip = await loadPackZip(form.packZipUrl);
-      const entry = zipEntry(zip, logical, form.packRoot);
+      const entry = zipEntry(zip, logical, form.packRoot)
+        || zipEntry(zip, form.packEntry || 'go/index.html', form.packRoot)
+        || zipEntry(zip, '', form.packRoot);
       if (!entry) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(closedPage('فایل نیست', 'این مسیر داخل بسته وجود ندارد.'));
