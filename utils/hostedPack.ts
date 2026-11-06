@@ -56,11 +56,12 @@ export function pickPackEntry(paths: string[]): string {
   const html = paths.filter(p => /\.(html?|HTML?)$/.test(p));
   const rank = (p: string) => {
     const n = p.replace(/\\/g, '/').toLowerCase();
-    if (n === 'go/index.html' || n.endsWith('/go/index.html')) return 0;
-    if (n === 'index.html') return 1;
-    if (n === 'magazine/index.html') return 2;
-    if (n.endsWith('/index.html')) return 3;
-    return 4;
+    if (n === 'magazine/index.html' || n.endsWith('/magazine/index.html')) return 0;
+    if (n.includes('magazine') && n.endsWith('/index.html')) return 1;
+    if (n === 'index.html') return 2;
+    if (n === 'go/index.html' || n.endsWith('/go/index.html')) return 3;
+    if (n.endsWith('/index.html')) return 4;
+    return 5;
   };
   html.sort((a, b) => rank(a) - rank(b) || a.length - b.length);
   return html[0] || paths[0] || 'index.html';

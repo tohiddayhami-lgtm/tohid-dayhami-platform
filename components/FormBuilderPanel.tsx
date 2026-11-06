@@ -312,6 +312,8 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [packAssigneeRole, setPackAssigneeRole] = useState('');
   const [packSaving, setPackSaving] = useState(false);
   const [packProgress, setPackProgress] = useState('');
+  const [packEntry, setPackEntry] = useState('magazine/index.html');
+  const [packHtmlPages, setPackHtmlPages] = useState<string[]>([]);
   useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
   const saveReqUrl = () => {
     onUpdateRequestUrl?.(reqUrlDraft.trim());
@@ -483,6 +485,9 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setPackAssigneePersonnelId(form?.assigneePersonnelId || '');
     setPackAssigneeRole(form?.assigneeRole || '');
     setPackProgress('');
+    const htmls = (form?.packFiles || []).map(f => f.path).filter(p => /\.html?$/i.test(p || ''));
+    setPackHtmlPages(htmls);
+    setPackEntry(form?.packEntry || (htmls.find(p => /magazine\/index\.html$/i.test(p)) || htmls[0] || 'magazine/index.html'));
     setPackModalOpen(true);
   };
 
@@ -497,6 +502,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setPackZip(file);
     setPackFileName(file.name);
     if (!packTitle.trim()) setPackTitle(file.name.replace(/\.zip$/i, '').replace(/[-_]+/g, ' '));
+    listHostedPackZip(file).then(listed => {
+      const htmls = listed.paths.filter(p => /\.html?$/i.test(p));
+      setPackHtmlPages(htmls);
+      setPackEntry(listed.entry);
+    }).catch(() => {
+      setPackHtmlPages([]);
+    });
   };
 
   const handleSavePackForm = async () => {
@@ -518,12 +530,12 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       const id = packEditingId || `pack_${Date.now()}`;
       const existing = customForms.find(f => f.id === id);
       let packFiles = existing?.packFiles || [];
-      let packEntry = existing?.packEntry || 'index.html';
+      let startPage = packEntry || existing?.packEntry || 'magazine/index.html';
       let packZipUrl = existing?.packZipUrl || '';
       let packRoot = existing?.packRoot || '';
       if (packZip) {
         const listed = await listHostedPackZip(packZip);
-        packEntry = listed.entry;
+        startPage = packEntry || listed.entry;
         packRoot = listed.root;
         packFiles = listed.paths.map(path => ({ path }));
         setPackProgress(lang === 'fa' ? 'در حال آپلود فایل ZIP...' : 'Uploading ZIP...');
@@ -555,7 +567,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         isPublic: true,
         kind: 'pack',
         htmlFileName: packFileName || 'pack.zip',
-        packEntry,
+        packEntry: startPage,
         packZipUrl,
         packRoot,
         packFiles,
@@ -574,7 +586,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
           category: meta.category,
           kind: 'pack',
           htmlFileName: meta.htmlFileName,
-          packEntry,
+          packEntry: startPage,
           packZipUrl,
           packRoot,
           packFiles,
@@ -1949,6 +1961,16 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               </button>
               {packEditingId && !packZip && (
                 <p className="text-[11px] text-gray-400 mt-1">{lang === 'fa' ? 'اگر ZIP جدید ندهید، فایل‌های قبلی نگه داشته می‌شوند.' : 'Leave empty to keep the files already uploaded.'}</p>
+              )}
+              {packHtmlPages.length > 0 && (
+                <div className="mt-3">
+                  <label className={labelCls}>{lang === 'fa' ? 'صفحه شروع (مجله / فرم)' : 'Start page'}</label>
+                  <select className={inputCls} value={packEntry} onChange={e => setPackEntry(e.target.value)}>
+                    {packHtmlPages.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
               )}
               {packProgress && <p className="text-xs text-indigo-600 mt-2 font-medium">{packProgress}</p>}
             </div>

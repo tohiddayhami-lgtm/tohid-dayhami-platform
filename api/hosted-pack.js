@@ -189,8 +189,8 @@ function candidatePaths(form, requested) {
   }
   if (!req) {
     tryPaths.push(normalizePath(form.packEntry || ''));
-    tryPaths.push('go/index.html');
     tryPaths.push('magazine/index.html');
+    tryPaths.push('go/index.html');
     tryPaths.push('index.html');
   }
   return [...new Set(tryPaths.filter(Boolean))];
@@ -241,8 +241,9 @@ function zipEntry(zip, logical, root) {
   const ranked = names.map(n => ({ n, s: score(n) })).filter(x => x.s < 99).sort((a, b) => a.s - b.s);
   if (ranked.length) return zip.files[ranked[0].n];
   if (!want || want.endsWith('index.html') || !want.includes('.')) {
-    const html = names.find(n => /(?:^|\/)go\/index\.html$/i.test(n))
-      || names.find(n => /(?:^|\/)index\.html$/i.test(n))
+    const html = names.find(n => /(?:^|\/)magazine\/index\.html$/i.test(n))
+      || names.find(n => /(?:^|\/)index\.html$/i.test(n) && !/\/go\//i.test(n))
+      || names.find(n => /(?:^|\/)go\/index\.html$/i.test(n))
       || names.find(n => /\.html?$/i.test(n));
     if (html) return zip.files[html];
   }
@@ -334,7 +335,7 @@ export default async function handler(req, res) {
     if (form.packZipUrl) {
       const zip = await loadPackZip(form.packZipUrl);
       const entry = zipEntry(zip, logical, form.packRoot)
-        || zipEntry(zip, form.packEntry || 'go/index.html', form.packRoot)
+        || zipEntry(zip, form.packEntry || 'magazine/index.html', form.packRoot)
         || zipEntry(zip, '', form.packRoot);
       if (!entry) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
