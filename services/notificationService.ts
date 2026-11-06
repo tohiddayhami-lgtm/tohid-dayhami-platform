@@ -123,12 +123,12 @@ export const sendMasterCopy = async (opts: {
   const { config, personnel, message, originalRecipientId, originalRecipientName, logType, ticketId, meetingId, saveLog } = opts;
   const masterId = config.masterRecipientId;
   if (!masterId || masterId === originalRecipientId) return;
+  const master = personnel.find(p => p.id === masterId);
+  if (!master || (master.status || 'active') !== 'active') return;
   const phone = config.personnelPhones?.[masterId];
   if (!phone) return;
   const apiKey = config.personnelApiKeys?.[masterId];
   if (config.provider === 'callmebot' && !apiKey) return;
-
-  const master = personnel.find(p => p.id === masterId);
   const masterMsg = `📋 رونوشت مدیریتی (Master)\n👤 گیرنده اصلی: ${originalRecipientName}\n────────────\n${message}`;
   const result = await sendWhatsAppNotification(phone, masterMsg, config, apiKey);
   await saveLog(buildLog(logType, masterId, master?.fullName || 'Master', phone, masterMsg, result, ticketId, meetingId));

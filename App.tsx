@@ -1171,7 +1171,7 @@ const App: React.FC = () => {
         if (!assigneeId) assigneeId = resolveServiceRouting(ticket);
         if (!assigneeId && autoMode) assigneeId = calculateAssignee(ticket.serviceId);
         if (assigneeId) {
-          const assignee = personnel.find(p => p.id === assigneeId);
+          const assignee = personnel.find(p => p.id === assigneeId && (p.status || 'active') === 'active');
           if (assignee) {
             assignProcessedRef.current.add(ticket.id);
             await updateTicketInCloud(ticket.id, { assignedTo: assigneeId, timeline: [...(ticket.timeline || []), { type: 'assignment', title: 'ارجاع خودکار (سیستم)', description: `ارجاع هوشمند به ${assignee.fullName}`, actorName: 'System Bot', timestamp: new Date().toISOString(), visibility: 'internal' }] });
@@ -1245,7 +1245,7 @@ const App: React.FC = () => {
     if (!nc?.enabled || !nc.onNewTicket) return;
     try {
       const assignee = personnel.find(p => p.id === assignedTo);
-      if (!assignee) return;
+      if (!assignee || (assignee.status || 'active') !== 'active') return;
       const formTitle = (ticket.customData?.formTitle || '').trim();
       let msg = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
         recipientName: assignee.fullName || '',
@@ -1282,16 +1282,17 @@ const App: React.FC = () => {
         if (htmlFormNotifiedRef.current.has(ticket.id)) continue;
         const ageMs = Date.now() - new Date(ticket.createdAt).getTime();
         if (!isFinite(ageMs) || ageMs < 0 || ageMs > 30 * 60 * 1000) continue;
+        const liveStaff = (id?: string) =>
+          personnel.find(p => p.id === id && (p.status || 'active') === 'active');
+        const assignee = liveStaff(ticket.assignedTo) || liveStaff(getCeoFallbackId());
+        if (!assignee) continue;
         htmlFormNotifiedRef.current.add(ticket.id);
-        const assignedTo = ticket.assignedTo || getCeoFallbackId();
-        if (!assignedTo) continue;
         const digits = (ticket.phoneNumber || '').replace(/\D/g, '');
         const wa = digits ? `https://wa.me/${digits.startsWith('09') ? '98' + digits.slice(1) : digits}` : '';
         try {
-          const assignee = personnel.find(p => p.id === assignedTo);
           const formTitle = (ticket.customData?.formTitle || '').trim();
           const templated = renderTemplate(nc.ticketTemplate || DEFAULT_TICKET_TEMPLATE, {
-              recipientName: assignee?.fullName || '',
+              recipientName: assignee.fullName || '',
               ticketId: ticket.id || '',
               customerName: ticket.customerName || '',
               formTitle,
@@ -1304,17 +1305,17 @@ const App: React.FC = () => {
             ticket.phoneNumber && ticket.phoneNumber !== '-' ? `📞 ${ticket.phoneNumber}` : '',
             wa ? `💬 ${wa}` : '',
           ].filter(Boolean).join('\n');
-          const phone = nc.personnelPhones?.[assignedTo];
+          const phone = nc.personnelPhones?.[assignee.id];
           if (phone) {
-            const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assignedTo]);
-            await saveNotificationLog(buildLog('new_ticket', assignedTo, assignee?.fullName || '', phone, msg, result, ticket.id));
+            const result = await sendWhatsAppNotification(phone, msg, nc, nc.personnelApiKeys?.[assignee.id]);
+            await saveNotificationLog(buildLog('new_ticket', assignee.id, assignee.fullName || '', phone, msg, result, ticket.id));
           }
           await sendMasterCopy({
             config: nc,
             personnel,
             message: msg,
-            originalRecipientId: assignedTo,
-            originalRecipientName: assignee?.fullName || '',
+            originalRecipientId: assignee.id,
+            originalRecipientName: assignee.fullName || '',
             logType: 'new_ticket',
             ticketId: ticket.id,
             saveLog: saveNotificationLog,

@@ -201,18 +201,28 @@ function buildFormNotifyMessage({ recipientName, formTitle, name, phone, ticketI
   ].filter(Boolean).join('\n').slice(0, 700);
 }
 
+function currentStaffById(personnel, id) {
+  if (!id) return null;
+  const person = personnel.find(p => p.id === id);
+  if (!person || !isActivePerson(person)) return null;
+  return person;
+}
+
 function notifyRecipients(nc, personnel, preferred) {
   const readyIds = [];
   const seen = new Set();
   const add = id => {
     if (!id || seen.has(id) || !notifReady(nc, id)) return;
+    if (!currentStaffById(personnel, id)) return;
     seen.add(id);
     readyIds.push(id);
   };
   add(preferred?.id);
   add(nc.masterRecipientId);
-  for (const id of Object.keys(nc.personnelPhones || {})) add(id);
-  return readyIds.map(id => personnel.find(p => p.id === id) || { id, fullName: '' });
+  for (const person of personnel) {
+    if (isActivePerson(person)) add(person.id);
+  }
+  return readyIds.map(id => currentStaffById(personnel, id)).filter(Boolean);
 }
 
 async function saveNotifyLog(log) {
@@ -233,6 +243,7 @@ async function notifyHtmlForm({ nc, personnel, form, name, phone, ticketId, assi
 
   let any = false;
   for (const target of targets) {
+    if (!currentStaffById(personnel, target.id)) continue;
     const staffPhone = ncUse.personnelPhones?.[target.id];
     const apiKey = ncUse.personnelApiKeys?.[target.id];
     if (!staffPhone) continue;

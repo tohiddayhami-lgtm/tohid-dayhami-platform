@@ -454,7 +454,27 @@ export const PersonnelManager: React.FC<Props> = ({ personnel, metaShops = [], c
     handleCancelEdit();
   };
 
-  const handleRemove = (id: string) => { if (window.confirm(t.deleteConfirm)) { onUpdate(personnel.filter(p => p.id !== id)); if (editingId === id) handleCancelEdit(); } };
+  const handleRemove = (id: string) => {
+    if (!window.confirm(t.deleteConfirm)) return;
+    onUpdate(personnel.filter(p => p.id !== id));
+    const nc = config.notificationConfig;
+    if (nc) {
+      const personnelPhones = { ...(nc.personnelPhones || {}) };
+      const personnelApiKeys = { ...(nc.personnelApiKeys || {}) };
+      delete personnelPhones[id];
+      delete personnelApiKeys[id];
+      onUpdateConfig({
+        ...config,
+        notificationConfig: {
+          ...nc,
+          personnelPhones,
+          personnelApiKeys,
+          masterRecipientId: nc.masterRecipientId === id ? undefined : nc.masterRecipientId,
+        },
+      });
+    }
+    if (editingId === id) handleCancelEdit();
+  };
   const handleAddRole = () => {
     const name = newRoleName.trim();
     if (!name || availableRoles.includes(name)) return;
