@@ -301,18 +301,19 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [htmlSaving, setHtmlSaving] = useState(false);
   const htmlFileRef = useRef<HTMLInputElement>(null);
   const packFileRef = useRef<HTMLInputElement>(null);
+  const hostFileRef = useRef<HTMLInputElement>(null);
   const [packModalOpen, setPackModalOpen] = useState(false);
   const [packEditingId, setPackEditingId] = useState<string | null>(null);
   const [packTitle, setPackTitle] = useState('');
   const [packTitleEn, setPackTitleEn] = useState('');
-  const [packCategory, setPackCategory] = useState('Flipbook');
+  const [packCategory, setPackCategory] = useState('وب');
   const [packFileName, setPackFileName] = useState('');
   const [packZip, setPackZip] = useState<File | null>(null);
   const [packAssigneePersonnelId, setPackAssigneePersonnelId] = useState('');
   const [packAssigneeRole, setPackAssigneeRole] = useState('');
   const [packSaving, setPackSaving] = useState(false);
   const [packProgress, setPackProgress] = useState('');
-  const [packEntry, setPackEntry] = useState('magazine/index.html');
+  const [packEntry, setPackEntry] = useState('index.html');
   const [packHtmlPages, setPackHtmlPages] = useState<string[]>([]);
   useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
   const saveReqUrl = () => {
@@ -397,19 +398,13 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
 
   const handleHtmlFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setHtmlFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = String(ev.target?.result || '');
-      setHtmlSource(text);
-      if (!htmlTitle.trim()) {
-        const m = text.match(/<title[^>]*>([^<]+)<\/title>/i);
-        if (m?.[1]) setHtmlTitle(m[1].trim());
-      }
-    };
-    reader.readAsText(file);
     e.target.value = '';
+    if (!file) return;
+    if (/\.zip$/i.test(file.name)) {
+      ingestHostFile(file);
+      return;
+    }
+    applyHtmlFile(file);
   };
 
   const handleSaveHtmlForm = async () => {
@@ -479,7 +474,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setPackEditingId(form?.id || null);
     setPackTitle(form?.title || '');
     setPackTitleEn(form?.titleEn || '');
-    setPackCategory(form?.category || 'Flipbook');
+    setPackCategory(form?.category || 'وب');
     setPackFileName(form?.htmlFileName || '');
     setPackZip(null);
     setPackAssigneePersonnelId(form?.assigneePersonnelId || '');
@@ -487,8 +482,50 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     setPackProgress('');
     const htmls = (form?.packFiles || []).map(f => f.path).filter(p => /\.html?$/i.test(p || ''));
     setPackHtmlPages(htmls);
-    setPackEntry(form?.packEntry || (htmls.find(p => /magazine\/index\.html$/i.test(p)) || htmls[0] || 'magazine/index.html'));
+    setPackEntry(form?.packEntry || (htmls.find(p => /(^|\/)index\.html$/i.test(p)) || htmls.find(p => /magazine\/index\.html$/i.test(p)) || htmls[0] || 'index.html'));
     setPackModalOpen(true);
+  };
+
+  const applyPackZip = (file: File) => {
+    setPackZip(file);
+    setPackFileName(file.name);
+    setPackTitle(prev => prev.trim() ? prev : file.name.replace(/\.zip$/i, '').replace(/[-_]+/g, ' '));
+    listHostedPackZip(file).then(listed => {
+      const pages = listed.paths.filter(p => /\.(html?|pdf)$/i.test(p));
+      setPackHtmlPages(pages);
+      setPackEntry(listed.entry);
+    }).catch(() => {
+      setPackHtmlPages([]);
+    });
+  };
+
+  const applyHtmlFile = (file: File) => {
+    setHtmlFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = String(ev.target?.result || '');
+      setHtmlSource(text);
+      setHtmlTitle(prev => {
+        if (prev.trim()) return prev;
+        const m = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+        return m?.[1]?.trim() || file.name.replace(/\.html?$/i, '');
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  const ingestHostFile = (file: File) => {
+    if (/\.zip$/i.test(file.name)) {
+      openPackModal();
+      queueMicrotask(() => applyPackZip(file));
+      return;
+    }
+    if (/\.(html?|htm)$/i.test(file.name) || file.type.includes('html')) {
+      openHtmlModal();
+      queueMicrotask(() => applyHtmlFile(file));
+      return;
+    }
+    alert(lang === 'fa' ? 'فایل HTML یا ZIP انتخاب کنید.' : 'Choose an HTML or ZIP file.');
   };
 
   const handlePackFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -496,19 +533,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     e.target.value = '';
     if (!file) return;
     if (!/\.zip$/i.test(file.name)) {
-      alert(lang === 'fa' ? 'فقط فایل ZIP قبول است.' : 'Only a ZIP file is accepted.');
+      ingestHostFile(file);
       return;
     }
-    setPackZip(file);
-    setPackFileName(file.name);
-    if (!packTitle.trim()) setPackTitle(file.name.replace(/\.zip$/i, '').replace(/[-_]+/g, ' '));
-    listHostedPackZip(file).then(listed => {
-      const htmls = listed.paths.filter(p => /\.html?$/i.test(p));
-      setPackHtmlPages(htmls);
-      setPackEntry(listed.entry);
-    }).catch(() => {
-      setPackHtmlPages([]);
-    });
+    applyPackZip(file);
   };
 
   const handleSavePackForm = async () => {
@@ -530,7 +558,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
       const id = packEditingId || `pack_${Date.now()}`;
       const existing = customForms.find(f => f.id === id);
       let packFiles = existing?.packFiles || [];
-      let startPage = packEntry || existing?.packEntry || 'magazine/index.html';
+      let startPage = packEntry || existing?.packEntry || 'index.html';
       let packZipUrl = existing?.packZipUrl || '';
       let packRoot = existing?.packRoot || '';
       if (packZip) {
@@ -1843,11 +1871,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود فرم HTML' : 'Upload HTML form'}</h3>
+              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود HTML' : 'Upload HTML'}</h3>
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                 {lang === 'fa'
-                  ? 'هر فرم HTML که آپلود کنید کار می‌کند. وقتی مخاطب دکمه «ثبت نهایی / ثبت / ارسال» را بزند، پاسخ در کارتابل و بانک مشتریان ذخیره می‌شود.'
-                  : 'Any uploaded HTML form works. When the visitor clicks Submit / Send, the response is saved to the cartable and customer bank.'}
+                  ? 'یک فایل HTML یا اپلیکیشن تک‌صفحه‌ای را آپلود کنید. لینک عمومی مثل همین‌جا اجرا می‌شود. اگر چند فایل (عکس، PDF، JS) دارید، به‌جای این ZIP بگذارید. دکمه ثبت به کارتابل می‌رود.'
+                  : 'Upload a single HTML page or app. It runs on a public link. If you have images, PDF, or JS alongside it, upload a ZIP instead. Submit still goes to the cartable.'}
               </p>
             </div>
             <div>
@@ -1882,9 +1910,9 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             </div>
             <div>
               <label className={labelCls}>{lang === 'fa' ? 'فایل HTML' : 'HTML file'}</label>
-              <input ref={htmlFileRef} type="file" accept=".html,.htm,text/html" className="hidden" onChange={handleHtmlFile} />
+              <input ref={htmlFileRef} type="file" accept=".html,.htm,.zip,text/html,application/zip" className="hidden" onChange={handleHtmlFile} />
               <button type="button" onClick={() => htmlFileRef.current?.click()} className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                {htmlFileName ? htmlFileName : (lang === 'fa' ? 'انتخاب فایل index.html' : 'Choose index.html')}
+                {htmlFileName ? htmlFileName : (lang === 'fa' ? 'انتخاب HTML یا ZIP' : 'Choose HTML or ZIP')}
               </button>
               <textarea
                 className={inputCls + ' mt-2 font-mono text-[11px] dir-ltr'}
@@ -1908,20 +1936,19 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود فلیپ‌بوک ZIP' : 'Upload flipbook ZIP'}</h3>
+              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود ZIP / اپلیکیشن' : 'Upload ZIP / app'}</h3>
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                 {lang === 'fa'
-                  ? 'یک فایل ZIP بسازید که HTML فلیپ‌بوک، عکس صفحات و در صورت نیاز PDF داخلش باشد. پوشهٔ ریشه می‌تواند یک پوشه مثل arka باشد. لینک‌های نسبی حفظ می‌شوند و فرم‌های داخل بسته بعد از ثبت به کارتابل می‌روند.'
-                  : 'Build a ZIP with the flipbook HTML, page images, and optional PDF. A single root folder such as arka is fine. Relative links stay intact and forms inside the pack submit to the cartable.'}
+                  ? 'هر ZIP که داخلش HTML، فلیپ‌بوک، PDF، عکس یا اپ استاتیک باشد همین‌طور اجرا می‌شود. پوشهٔ ریشه مهم نیست. مسیرهای نسبی حفظ می‌شوند و فرم‌های داخل بسته به کارتابل می‌روند. اگر چند صفحه HTML دارد، صفحه شروع را انتخاب کنید.'
+                  : 'Any ZIP with HTML, a flipbook, PDF, images, or a static app runs the same way. A wrapper folder is fine. Relative paths stay intact and in-pack forms go to the cartable. If there are several HTML pages, pick the start page.'}
               </p>
             </div>
             <div className="text-[11px] leading-relaxed bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-600 font-mono dir-ltr text-left">
-              arka/<br />
-              &nbsp;&nbsp;go/index.html<br />
-              &nbsp;&nbsp;magazine/index.html<br />
-              &nbsp;&nbsp;magazine/pages/p-001.jpg<br />
-              &nbsp;&nbsp;magazine/thumbs.jpg<br />
-              &nbsp;&nbsp;needs/index.html
+              site/ یا app/<br />
+              &nbsp;&nbsp;index.html<br />
+              &nbsp;&nbsp;assets/app.js<br />
+              &nbsp;&nbsp;images/…<br />
+              &nbsp;&nbsp;file.pdf
             </div>
             <div>
               <label className={labelCls}>{lang === 'fa' ? 'عنوان' : 'Title'}</label>
@@ -2045,13 +2072,20 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 <IconUpload className="w-3.5 h-3.5" />
                 {lang === 'fa' ? 'ورود JSON' : 'Import JSON'}
               </button>
-              <button onClick={() => openHtmlModal()} className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 transition-colors">
+              <input
+                ref={hostFileRef}
+                type="file"
+                accept=".html,.htm,.zip,text/html,application/zip"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) ingestHostFile(file);
+                }}
+              />
+              <button onClick={() => hostFileRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 transition-colors">
                 <IconUpload className="w-3.5 h-3.5" />
-                {lang === 'fa' ? 'آپلود فرم HTML' : 'Upload HTML form'}
-              </button>
-              <button onClick={() => openPackModal()} className="flex items-center gap-1.5 px-3 py-2 border border-amber-200 text-amber-800 rounded-lg text-xs font-semibold hover:bg-amber-50 transition-colors">
-                <IconUpload className="w-3.5 h-3.5" />
-                {lang === 'fa' ? 'آپلود فلیپ‌بوک ZIP' : 'Upload flipbook ZIP'}
+                {lang === 'fa' ? 'آپلود HTML / ZIP / اپ' : 'Upload HTML / ZIP / app'}
               </button>
               <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors">
                 <IconPlus className="w-4 h-4" />
@@ -2138,7 +2172,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             {searchQ ? (lang === 'fa' ? 'فرمی پیدا نشد.' : 'No forms found.') : (lang === 'fa' ? 'هیچ فرمی وجود ندارد.' : 'No forms yet.')}
           </p>
           {!searchQ && isEditor && (
-            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'فرم جدید بسازید، HTML آپلود کنید یا ZIP فلیپ‌بوک بگذارید.' : 'Create a form, upload HTML, or add a flipbook ZIP.'}</p>
+            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'فرم بسازید یا HTML / ZIP / اپلیکیشن آپلود کنید تا با لینک عمومی اجرا شود.' : 'Create a form or upload HTML / ZIP / an app to run on a public link.'}</p>
           )}
         </div>
       ) : (
@@ -2163,7 +2197,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                     )}
                     {form.kind === 'pack' && (
                       <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                        ZIP
+                        ZIP / اپ
                       </span>
                     )}
                     {form.isPublic && (

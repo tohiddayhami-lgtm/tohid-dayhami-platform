@@ -32,7 +32,15 @@ const MIME = {
   woff: 'font/woff',
   woff2: 'font/woff2',
   ttf: 'font/ttf',
+  otf: 'font/otf',
   txt: 'text/plain; charset=utf-8',
+  wasm: 'application/wasm',
+  map: 'application/json',
+  webmanifest: 'application/manifest+json',
+  avif: 'image/avif',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  glb: 'model/gltf-binary',
 };
 
 function parseFields(fields) {
@@ -241,10 +249,11 @@ function zipEntry(zip, logical, root) {
   const ranked = names.map(n => ({ n, s: score(n) })).filter(x => x.s < 99).sort((a, b) => a.s - b.s);
   if (ranked.length) return zip.files[ranked[0].n];
   if (!want || want.endsWith('index.html') || !want.includes('.')) {
-    const html = names.find(n => /(?:^|\/)magazine\/index\.html$/i.test(n))
-      || names.find(n => /(?:^|\/)index\.html$/i.test(n) && !/\/go\//i.test(n))
-      || names.find(n => /(?:^|\/)go\/index\.html$/i.test(n))
-      || names.find(n => /\.html?$/i.test(n));
+    const html = names.find(n => /(?:^|\/)index\.html$/i.test(n) && n.split('/').filter(Boolean).length <= 2)
+      || names.find(n => /(?:^|\/)magazine\/index\.html$/i.test(n))
+      || names.find(n => /(?:^|\/)index\.html$/i.test(n))
+      || names.find(n => /\.html?$/i.test(n))
+      || names.find(n => /\.pdf$/i.test(n));
     if (html) return zip.files[html];
   }
   return null;
@@ -334,9 +343,12 @@ export default async function handler(req, res) {
     const legacy = resolveLegacyFile(form, logical);
     if (form.packZipUrl) {
       const zip = await loadPackZip(form.packZipUrl);
-      const entry = zipEntry(zip, logical, form.packRoot)
-        || zipEntry(zip, form.packEntry || 'magazine/index.html', form.packRoot)
-        || zipEntry(zip, '', form.packRoot);
+      let entry = zipEntry(zip, logical, form.packRoot);
+      const missingLooksLikeRoute = !requested || !/\.[a-z0-9]{1,8}$/i.test(requested) || isHtml(logical);
+      if (!entry && missingLooksLikeRoute) {
+        entry = zipEntry(zip, form.packEntry || 'index.html', form.packRoot)
+          || zipEntry(zip, '', form.packRoot);
+      }
       if (!entry) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(closedPage('فایل نیست', 'این مسیر داخل بسته وجود ندارد.'));
