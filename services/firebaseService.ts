@@ -606,6 +606,43 @@ const getStorageErrorMessage = (error: unknown) => {
     return `${message || "آپلود ناموفق. لطفاً اتصال اینترنت و تنظیمات Firebase Storage را بررسی کنید."} ${details}`;
 };
 
+export function hostedPackStoragePath(formId: string, relPath: string) {
+    const clean = String(relPath || '')
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '')
+        .split('/')
+        .filter(part => part && part !== '.' && part !== '..')
+        .join('/');
+    return assertCentralStoragePath(`${storageFolders.documents}/hosted-packs/${sanitizeFileName(formId)}/${clean}`);
+}
+
+export const uploadBytesAtPath = (
+    path: string,
+    data: Blob,
+    contentType?: string,
+    onProgress?: (progress: number) => void,
+): Promise<{ url: string; path: string }> => {
+    const storagePath = assertCentralStoragePath(path);
+    const storageRef = ref(storage, storagePath);
+    const uploadTask = uploadBytesResumable(storageRef, data, contentType ? { contentType } : undefined);
+    return new Promise((resolve, reject) => {
+        uploadTask.on(
+            'state_changed',
+            (snapshot) => {
+                onProgress?.((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+            },
+            (error) => {
+                Object.assign(error, { storageBucket: CENTRAL_STORAGE_BUCKET, storagePath, fileSize: data.size });
+                reject(error);
+            },
+            async () => {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve({ url, path: storagePath });
+            },
+        );
+    });
+};
+
 export const uploadFile = (
     file: File,
     folder: CentralStorageFolder = "uploads",
@@ -2282,8 +2319,17 @@ export const updateCustomFormInCloud = async (id: string, updates: Partial<Custo
 };
 
 export const deleteCustomFormFromCloud = async (id: string, actorName: string) => {
+    let packFiles: { url?: string }[] = [];
+    try {
+        const snap = await getDoc(doc(db, 'custom_forms', id));
+        if (snap.exists()) packFiles = ((snap.data() as CustomForm).packFiles || []);
+    } catch { /* still delete the form doc */ }
     await deleteDocCloud('custom_forms', id);
     try { await deleteDocCloud('html_form_bodies', id); } catch { /* optional companion doc */ }
+    for (const file of packFiles) {
+        if (!file?.url) continue;
+        try { await deleteFile(file.url); } catch { /* leftover pack asset */ }
+    }
     logSystemAction('DELETE', 'CustomForm', `فرم حذف شد`, actorName, id);
 };
 

@@ -159,6 +159,7 @@ function formPreviewMeta(form, defaults) {
     siteName: defaults.siteName,
     type: 'website',
     formSlug: formPublicSlug(form),
+    formKind: form.kind || '',
   };
 }
 
@@ -522,7 +523,7 @@ export default async function handler(req, res) {
   try {
     const meta = await resolveMeta(params, origin);
     const canonicalUrl = meta.formSlug
-      ? `${origin}/f/${encodeURIComponent(meta.formSlug)}`
+      ? `${origin}/${meta.formKind === 'pack' ? 'p' : 'f'}/${encodeURIComponent(meta.formSlug)}`
       : (htmlFormRef
         ? `${origin}/f/${encodeURIComponent(htmlFormRef)}`
         : (qs ? `${origin}/?${qs}` : `${origin}/`));

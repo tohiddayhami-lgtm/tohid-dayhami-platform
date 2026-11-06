@@ -22,6 +22,7 @@ export function formSlug(form: Pick<CustomForm, 'id' | 'title' | 'titleEn' | 'sl
 
 export function formPublicPath(form: Pick<CustomForm, 'id' | 'title' | 'titleEn' | 'slug' | 'kind'>): string {
   if (form.kind === 'html') return `/f/${formSlug(form)}`;
+  if (form.kind === 'pack') return `/p/${formSlug(form)}/`;
   return `/?form=${encodeURIComponent(form.id)}`;
 }
 

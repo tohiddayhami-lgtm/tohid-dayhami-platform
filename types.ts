@@ -589,9 +589,14 @@ export interface CustomForm {
   closedMessage?: string;        // optional custom message shown when the form is closed
   assigneePersonnelId?: string;  // assign to specific person
   assigneeRole?: string;         // assign to first person with this role
-  /** HTML-hosted public form (uploaded index.html) vs builder fields. */
-  kind?: 'fields' | 'html';
+  /** HTML-hosted public form (uploaded index.html) vs ZIP pack (flipbook) vs builder fields. */
+  kind?: 'fields' | 'html' | 'pack';
   htmlFileName?: string;
+  /** Entry HTML inside a hosted ZIP, e.g. go/index.html */
+  packEntry?: string;
+  /** Files extracted from the ZIP and stored in Firebase Storage */
+  packFiles?: { path: string; url: string }[];
+  packFileCount?: number;
   /** Public URL slug from the English title, e.g. export-services-course */
   slug?: string;
   createdAt: string;

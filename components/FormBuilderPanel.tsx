@@ -2,7 +2,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { CustomForm, FormField, FormFieldType, Personnel, Ticket, ServiceOption, TicketStatus } from '../types';
 import { Language } from '../App';
-import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud } from '../services/firebaseService';
+import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromCloud, updateTicketInCloud, saveHtmlFormBodyToCloud, getHtmlFormBodyFromCloud, hostedPackStoragePath, uploadBytesAtPath, deleteFile } from '../services/firebaseService';
+import { readHostedPackZip } from '../utils/hostedPack';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
 import { formPublicPath, uniqueFormSlug } from '../utils/formPublicUrl';
@@ -299,6 +300,18 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   const [htmlAssigneeRole, setHtmlAssigneeRole] = useState('');
   const [htmlSaving, setHtmlSaving] = useState(false);
   const htmlFileRef = useRef<HTMLInputElement>(null);
+  const packFileRef = useRef<HTMLInputElement>(null);
+  const [packModalOpen, setPackModalOpen] = useState(false);
+  const [packEditingId, setPackEditingId] = useState<string | null>(null);
+  const [packTitle, setPackTitle] = useState('');
+  const [packTitleEn, setPackTitleEn] = useState('');
+  const [packCategory, setPackCategory] = useState('Flipbook');
+  const [packFileName, setPackFileName] = useState('');
+  const [packZip, setPackZip] = useState<File | null>(null);
+  const [packAssigneePersonnelId, setPackAssigneePersonnelId] = useState('');
+  const [packAssigneeRole, setPackAssigneeRole] = useState('');
+  const [packSaving, setPackSaving] = useState(false);
+  const [packProgress, setPackProgress] = useState('');
   useEffect(() => { setReqUrlDraft(requestExternalUrl || ''); }, [requestExternalUrl]);
   const saveReqUrl = () => {
     onUpdateRequestUrl?.(reqUrlDraft.trim());
@@ -460,9 +473,144 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
     }
   };
 
+  const openPackModal = (form?: CustomForm) => {
+    setPackEditingId(form?.id || null);
+    setPackTitle(form?.title || '');
+    setPackTitleEn(form?.titleEn || '');
+    setPackCategory(form?.category || 'Flipbook');
+    setPackFileName(form?.htmlFileName || '');
+    setPackZip(null);
+    setPackAssigneePersonnelId(form?.assigneePersonnelId || '');
+    setPackAssigneeRole(form?.assigneeRole || '');
+    setPackProgress('');
+    setPackModalOpen(true);
+  };
+
+  const handlePackFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.zip$/i.test(file.name)) {
+      alert(lang === 'fa' ? 'فقط فایل ZIP قبول است.' : 'Only a ZIP file is accepted.');
+      return;
+    }
+    setPackZip(file);
+    setPackFileName(file.name);
+    if (!packTitle.trim()) setPackTitle(file.name.replace(/\.zip$/i, '').replace(/[-_]+/g, ' '));
+  };
+
+  const handleSavePackForm = async () => {
+    if (!packTitle.trim()) {
+      alert(lang === 'fa' ? 'عنوان را وارد کنید.' : 'Enter a title.');
+      return;
+    }
+    if (!packTitleEn.trim()) {
+      alert(lang === 'fa' ? 'عنوان انگلیسی را وارد کنید تا روی لینک نمایش داده شود.' : 'Enter the English title for the public link.');
+      return;
+    }
+    if (!packEditingId && !packZip) {
+      alert(lang === 'fa' ? 'فایل ZIP را انتخاب کنید.' : 'Choose a ZIP file.');
+      return;
+    }
+    setPackSaving(true);
+    setPackProgress(lang === 'fa' ? 'در حال خواندن ZIP...' : 'Reading ZIP...');
+    try {
+      const id = packEditingId || `pack_${Date.now()}`;
+      const existing = customForms.find(f => f.id === id);
+      let packFiles = existing?.packFiles || [];
+      let packEntry = existing?.packEntry || 'index.html';
+      if (packZip) {
+        const unpacked = await readHostedPackZip(packZip);
+        packEntry = unpacked.entry;
+        const uploaded: { path: string; url: string }[] = [];
+        let done = 0;
+        const queue = [...unpacked.files];
+        const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+          while (queue.length) {
+            const item = queue.shift();
+            if (!item) break;
+            const { url } = await uploadBytesAtPath(
+              hostedPackStoragePath(id, item.path),
+              item.blob,
+              item.mime,
+            );
+            uploaded.push({ path: item.path, url });
+            done += 1;
+            setPackProgress(lang === 'fa'
+              ? `آپلود فایل‌ها ${done} از ${unpacked.files.length}`
+              : `Uploading ${done} / ${unpacked.files.length}`);
+          }
+        });
+        await Promise.all(workers);
+        for (const old of packFiles) {
+          if (!old?.url) continue;
+          try { await deleteFile(old.url); } catch { /* leftover */ }
+        }
+        packFiles = uploaded;
+      }
+      const slug = uniqueFormSlug(packTitleEn.trim() || packTitle.trim(), customForms, id);
+      const meta: CustomForm = {
+        id,
+        title: packTitle.trim(),
+        titleEn: packTitleEn.trim() || undefined,
+        slug,
+        category: packCategory.trim() || 'Flipbook',
+        description: '',
+        fields: [],
+        allowedRoles: [],
+        isPublic: true,
+        kind: 'pack',
+        htmlFileName: packFileName || 'pack.zip',
+        packEntry,
+        packFiles,
+        packFileCount: packFiles.length,
+        assigneePersonnelId: packAssigneePersonnelId || undefined,
+        assigneeRole: packAssigneeRole || undefined,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        createdBy: existing?.createdBy || currentUser.fullName,
+      };
+      if (packEditingId) {
+        await updateCustomFormInCloud(id, {
+          title: meta.title,
+          titleEn: meta.titleEn,
+          slug,
+          category: meta.category,
+          kind: 'pack',
+          htmlFileName: meta.htmlFileName,
+          packEntry,
+          packFiles,
+          packFileCount: packFiles.length,
+          isPublic: true,
+          assigneePersonnelId: meta.assigneePersonnelId,
+          assigneeRole: meta.assigneeRole,
+        }, currentUser.fullName);
+      } else {
+        await saveCustomFormToCloud(meta, currentUser.fullName);
+      }
+      setPackModalOpen(false);
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
+      const msg = code === 'no_html'
+        ? (lang === 'fa' ? 'داخل ZIP باید حداقل یک فایل HTML باشد (مثلاً index.html).' : 'The ZIP must contain at least one HTML file (e.g. index.html).')
+        : code === 'zip_too_large'
+          ? (lang === 'fa' ? 'حجم محتویات ZIP بیش از حد مجاز است.' : 'Unzipped contents are too large.')
+          : code === 'too_many_files'
+            ? (lang === 'fa' ? 'تعداد فایل‌های داخل ZIP زیاد است.' : 'Too many files inside the ZIP.')
+            : (lang === 'fa' ? 'خطا در ذخیره فلیپ‌بوک. دوباره تلاش کنید.' : 'Could not save the flipbook. Try again.');
+      alert(msg);
+    } finally {
+      setPackSaving(false);
+      setPackProgress('');
+    }
+  };
+
   const openEdit = (form: CustomForm) => {
     if (form.kind === 'html') {
       openHtmlModal(form);
+      return;
+    }
+    if (form.kind === 'pack') {
+      openPackModal(form);
       return;
     }
     setEditingId(form.id);
@@ -480,7 +628,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
   };
 
   const openPreview = (form: CustomForm) => {
-    if (form.kind === 'html') {
+    if (form.kind === 'html' || form.kind === 'pack') {
       window.open(getPublicUrl(form), '_blank', 'noopener,noreferrer');
       return;
     }
@@ -1744,6 +1892,76 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
         </div>
       )}
 
+      {packModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="font-bold text-gray-900">{lang === 'fa' ? 'آپلود فلیپ‌بوک ZIP' : 'Upload flipbook ZIP'}</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                {lang === 'fa'
+                  ? 'یک فایل ZIP بسازید که HTML فلیپ‌بوک، عکس صفحات و در صورت نیاز PDF داخلش باشد. پوشهٔ ریشه می‌تواند یک پوشه مثل arka باشد. لینک‌های نسبی حفظ می‌شوند و فرم‌های داخل بسته بعد از ثبت به کارتابل می‌روند.'
+                  : 'Build a ZIP with the flipbook HTML, page images, and optional PDF. A single root folder such as arka is fine. Relative links stay intact and forms inside the pack submit to the cartable.'}
+              </p>
+            </div>
+            <div className="text-[11px] leading-relaxed bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-600 font-mono dir-ltr text-left">
+              arka/<br />
+              &nbsp;&nbsp;go/index.html<br />
+              &nbsp;&nbsp;magazine/index.html<br />
+              &nbsp;&nbsp;magazine/pages/p-001.jpg<br />
+              &nbsp;&nbsp;magazine/thumbs.jpg<br />
+              &nbsp;&nbsp;needs/index.html
+            </div>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'عنوان' : 'Title'}</label>
+              <input className={inputCls} value={packTitle} onChange={e => setPackTitle(e.target.value)} placeholder={lang === 'fa' ? 'مثلاً مجله آرکا' : 'e.g. ARKA Magazine'} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'عنوان انگلیسی (روی لینک)' : 'English title (in URL)'}</label>
+                <input className={inputCls} value={packTitleEn} onChange={e => setPackTitleEn(e.target.value)} dir="ltr" placeholder="e.g. ARKA Magazine" />
+              </div>
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'دسته‌بندی' : 'Category'}</label>
+                <input className={inputCls} value={packCategory} onChange={e => setPackCategory(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'ارجاع به پرسنل' : 'Assign to person'}</label>
+                <select className={inputCls} value={packAssigneePersonnelId} onChange={e => { setPackAssigneePersonnelId(e.target.value); if (e.target.value) setPackAssigneeRole(''); }}>
+                  <option value="">{lang === 'fa' ? '— انتخاب —' : '— none —'}</option>
+                  {activePersonnel.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{lang === 'fa' ? 'یا ارجاع به نقش' : 'Or assign by role'}</label>
+                <select className={inputCls} value={packAssigneeRole} onChange={e => { setPackAssigneeRole(e.target.value); if (e.target.value) setPackAssigneePersonnelId(''); }}>
+                  <option value="">{lang === 'fa' ? '— انتخاب —' : '— none —'}</option>
+                  {uniqueRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>{lang === 'fa' ? 'فایل ZIP' : 'ZIP file'}</label>
+              <input ref={packFileRef} type="file" accept=".zip,application/zip" className="hidden" onChange={handlePackFile} />
+              <button type="button" onClick={() => packFileRef.current?.click()} className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                {packFileName ? packFileName : (lang === 'fa' ? 'انتخاب فایل .zip' : 'Choose .zip file')}
+              </button>
+              {packEditingId && !packZip && (
+                <p className="text-[11px] text-gray-400 mt-1">{lang === 'fa' ? 'اگر ZIP جدید ندهید، فایل‌های قبلی نگه داشته می‌شوند.' : 'Leave empty to keep the files already uploaded.'}</p>
+              )}
+              {packProgress && <p className="text-xs text-indigo-600 mt-2 font-medium">{packProgress}</p>}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setPackModalOpen(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">{lang === 'fa' ? 'لغو' : 'Cancel'}</button>
+              <button type="button" onClick={handleSavePackForm} disabled={packSaving} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60">
+                {packSaving ? (lang === 'fa' ? 'در حال آپلود...' : 'Uploading...') : (lang === 'fa' ? 'ذخیره و ساخت لینک' : 'Save & create link')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirm */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -1808,6 +2026,10 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
               <button onClick={() => openHtmlModal()} className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 transition-colors">
                 <IconUpload className="w-3.5 h-3.5" />
                 {lang === 'fa' ? 'آپلود فرم HTML' : 'Upload HTML form'}
+              </button>
+              <button onClick={() => openPackModal()} className="flex items-center gap-1.5 px-3 py-2 border border-amber-200 text-amber-800 rounded-lg text-xs font-semibold hover:bg-amber-50 transition-colors">
+                <IconUpload className="w-3.5 h-3.5" />
+                {lang === 'fa' ? 'آپلود فلیپ‌بوک ZIP' : 'Upload flipbook ZIP'}
               </button>
               <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors">
                 <IconPlus className="w-4 h-4" />
@@ -1894,7 +2116,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
             {searchQ ? (lang === 'fa' ? 'فرمی پیدا نشد.' : 'No forms found.') : (lang === 'fa' ? 'هیچ فرمی وجود ندارد.' : 'No forms yet.')}
           </p>
           {!searchQ && isEditor && (
-            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'فرم جدید بسازید یا فایل HTML آپلود کنید.' : 'Create a form or upload an HTML file.'}</p>
+            <p className="text-xs text-gray-400 mt-1">{lang === 'fa' ? 'فرم جدید بسازید، HTML آپلود کنید یا ZIP فلیپ‌بوک بگذارید.' : 'Create a form, upload HTML, or add a flipbook ZIP.'}</p>
           )}
         </div>
       ) : (
@@ -1917,6 +2139,11 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                         HTML
                       </span>
                     )}
+                    {form.kind === 'pack' && (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                        ZIP
+                      </span>
+                    )}
                     {form.isPublic && (
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                         {lang === 'fa' ? 'عمومی' : 'Public'}
@@ -1936,7 +2163,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 {form.titleEn && <p className="text-xs text-gray-400 mb-1.5" dir="ltr">{form.titleEn}</p>}
                 {form.description && <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{form.description}</p>}
                 <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 flex-wrap">
-                  <span>{form.kind === 'html' ? (form.htmlFileName || 'index.html') : `${(form.fields || []).length} ${lang === 'fa' ? 'فیلد' : 'fields'}`}</span>
+                  <span>{form.kind === 'html' ? (form.htmlFileName || 'index.html') : form.kind === 'pack' ? (form.htmlFileName || `${form.packFileCount || 0} files`) : `${(form.fields || []).length} ${lang === 'fa' ? 'فیلد' : 'fields'}`}</span>
                   <button
                     type="button"
                     onClick={() => goToFormArchive(form.id)}
@@ -1972,7 +2199,7 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                 )}
                 {isEditor && (
                   <>
-                    {form.kind !== 'html' && (
+                    {form.kind !== 'html' && form.kind !== 'pack' && (
                       <>
                     <button
                       onClick={() => setGoogleFormFor(form)}

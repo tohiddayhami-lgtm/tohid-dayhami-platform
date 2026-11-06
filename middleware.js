@@ -33,6 +33,7 @@ function isPreviewCrawler(request) {
 export default function middleware(request) {
   const url = new URL(request.url);
   if (SKIP.test(url.pathname)) return;
+  if (/\.(jpg|jpeg|png|gif|webp|pdf|js|css|svg|woff2?|ico|mp4)$/i.test(url.pathname)) return;
   // After og-meta redirect — serve SPA (prevents redirect loop on mobile).
   if (url.searchParams.has('_p')) return;
   if (!isPreviewCrawler(request)) return;
@@ -40,6 +41,8 @@ export default function middleware(request) {
   const dest = new URL(request.url);
   dest.pathname = '/api/og-meta';
   const formPath = url.pathname.match(/^\/(?:f|form|htmlform)\/([^/]+)\/?$/);
+  const packPath = url.pathname.match(/^\/p\/([^/]+)(?:\/.*)?$/);
   if (formPath) dest.searchParams.set('htmlform', formPath[1]);
+  if (packPath) dest.searchParams.set('htmlform', packPath[1]);
   return rewrite(dest);
 }

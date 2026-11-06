@@ -1123,6 +1123,11 @@ export default async function handler(req, res) {
       const form = await findFormByRef(ref);
       const cfg = await getDoc('settings', 'appConfig');
       const favicon = cfg?.favicon || '';
+      if (form && form.kind === 'pack' && form.isPublic !== false) {
+        const slug = formPublicSlug(form);
+        res.setHeader('Location', `${origin}/p/${encodeURIComponent(slug)}/`);
+        return res.status(302).end();
+      }
       if (!form || form.kind !== 'html' || form.isPublic === false) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(closedPage('فرم یافت نشد', 'این فرم در دسترس نیست.', favicon));
@@ -1154,7 +1159,7 @@ export default async function handler(req, res) {
       if (!formId) return res.status(400).json({ error: 'formId required' });
 
       const form = await getDoc('custom_forms', formId);
-      if (!form || form.kind !== 'html' || form.isPublic === false) {
+      if (!form || (form.kind !== 'html' && form.kind !== 'pack') || form.isPublic === false) {
         return res.status(404).json({ error: 'form_not_found' });
       }
       if (form.isClosed) return res.status(403).json({ error: 'form_closed' });
