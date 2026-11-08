@@ -5,6 +5,8 @@ import { IconSettings, IconPlus, IconTrash, IconEdit, IconCheck, IconLayout, Ico
 import { compressImage, backupSystemData, clearSystemData, saveCustomFormToCloud, deleteCustomFormFromCloud, subscribeToCustomForms, updateCustomFormInCloud, firebaseConfig, subscribeToSettings } from '../services/firebaseService';
 import { generateFormFields } from '../services/geminiService';
 import { formatPersonnelLabel } from '../services/staffId';
+import { CartableIngestApiCard } from './CartableIngestApiCard';
+import { Language } from '../App';
 
 interface Props {
   config: AppConfig;
@@ -12,6 +14,7 @@ interface Props {
   metaBazaars?: MetaBazaar[];
   onUpdate: (newConfig: AppConfig) => void;
   isMaster?: boolean;
+  lang?: Language;
 }
 
 const getDefaultAssignmentConfig = (): AssignmentConfig => ({
@@ -29,7 +32,7 @@ const normalizeAssignmentConfig = (assignmentConfig?: AssignmentConfig): Assignm
   servicePersonnelMap: assignmentConfig?.servicePersonnelMap || {},
 });
 
-export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaars = [], onUpdate, isMaster = false }) => {
+export const SettingsManager: React.FC<Props> = ({ config, personnel, metaBazaars = [], onUpdate, isMaster = false, lang = 'fa' }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'form' | 'custom_forms' | 'invoice' | 'maintenance' | 'daily' | 'businesses' | 'google_forms' | 'assignment'>('general');
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [customForms, setCustomForms] = useState<CustomForm[]>([]);
@@ -556,6 +559,11 @@ function onFormSubmit(e) {
 
       {activeTab === 'general' && (
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+           {isMaster && (
+             <div className="mb-8">
+               <CartableIngestApiCard config={config} lang={lang} onUpdateConfig={onUpdate} />
+             </div>
+           )}
            <div className="flex items-center gap-3 mb-6"><div className="p-2 bg-gray-100 text-gray-600 rounded-lg"><IconSettings className="w-5 h-5" /></div><h3 className="text-lg font-bold text-gray-800">مشخصات و متون صفحه اصلی</h3></div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div><label className="block text-sm font-bold text-gray-700 mb-2">عنوان سایت (فارسی)</label><input className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow" value={generalData.appTitle} onChange={(e) => handleGeneralChange('appTitle', e.target.value)} /></div>

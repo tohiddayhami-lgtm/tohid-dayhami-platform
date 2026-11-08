@@ -33,7 +33,6 @@ import { SupplierManager } from './suppliers/SupplierManager';
 import { canAccessSuppliers } from '../utils/supplierAccess';
 import { CustomerBank } from './CustomerBank';
 import { CartableSheetImporter } from './CartableSheetImporter';
-import { CartableIngestApiCard } from './CartableIngestApiCard';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
@@ -1997,14 +1996,6 @@ export const AdminDashboard: React.FC<Props> = ({
         {activeTab === 'overview' && (
             <div className="space-y-8 animate-fade-in">
 
-                 {(isAdmin || isMaster) && (
-                   <CartableIngestApiCard
-                     config={config}
-                     lang={lang}
-                     onUpdateConfig={onUpdateConfig}
-                   />
-                 )}
-
                  <CartableSheetImporter
                    personnel={personnel}
                    services={services}
@@ -2417,7 +2408,7 @@ export const AdminDashboard: React.FC<Props> = ({
         )}
         {activeTab === 'services' && hasTariffAccess && <ServiceManager services={services} onUpdate={onUpdateServices} readonly={!isAdmin && !isMaster} lang={lang} config={config} />}
         {activeTab === 'personnel' && (isAdmin || isMaster) && <PersonnelManager personnel={personnel} metaShops={metaShops} config={config} onUpdate={onUpdatePersonnel} onUpdateConfig={onUpdateConfig} lang={lang} currentUser={currentUser} />}
-        {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} metaBazaars={metaBazaars} onUpdate={onUpdateConfig} isMaster={isMaster} />}
+        {activeTab === 'settings' && (isAdmin || isMaster) && <SettingsManager config={config} personnel={personnel} metaBazaars={metaBazaars} onUpdate={onUpdateConfig} isMaster={isMaster} lang={lang} />}
         {activeTab === 'notifications' && isMaster && <NotificationCenter config={config} personnel={personnel} onUpdateConfig={onUpdateConfig} lang={lang} />}
         {activeTab === 'reports' && isMaster && <PerformanceReports personnel={personnel} tickets={tickets} tasks={tasks} lang={lang} />}
         {activeTab === 'kpi' && isMaster && <KPIManager kpis={kpis} personnel={personnel} lang={lang} />}
