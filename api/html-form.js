@@ -8,6 +8,9 @@
 const PROJECT_ID = 'company-crm-103aa';
 const API_KEY = 'AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc';
 const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+const STORAGE_BUCKET = 'calculator-55611.firebasestorage.app';
+
+export const config = { api: { bodyParser: { sizeLimit: '9mb' } } };
 
 function parseFields(fields) {
   const obj = {};
@@ -427,6 +430,8 @@ function injectBridge(html, formId, origin) {
     var inFlight=false;
     var lastSentAt=0;
     var SNAP={};
+    var FILE_SNAP=[];
+    var DATA_URLS={};
     var SUBMIT_RE=/ثبت\\s*نهایی|ثبت\\s*فرم|ثبت\\s*درخواست|ارسال\\s*نهایی|ارسال\\s*فرم|ارسال\\s*درخواست|\\bsubmit\\b|confirm\\s*and\\s*send/i;
     var NAV_RE=/^(ادامه|بعدی|قبلی|بازگشت|ویرایش|لغو|انصراف|next|continue|back|prev|previous|edit|cancel)$/i;
     function flatten(v){
@@ -444,15 +449,34 @@ function injectBridge(html, formId, origin) {
       if(/Guest\\s+\\d+/i.test(s) && (s.match(/,/g)||[]).length>=1) return true;
       return false;
     }
+    function rememberFile(file,label){
+      if(!file || !(file.size>40)) return;
+      var lab=String(label||"فایل پیوست").replace(/\\s+/g," ").trim();
+      for(var i=0;i<FILE_SNAP.length;i++){
+        var prev=FILE_SNAP[i].file;
+        if(prev && prev.name===file.name && prev.size===file.size && prev.lastModified===file.lastModified) return;
+      }
+      FILE_SNAP.push({file:file,label:lab||"فایل پیوست"});
+    }
+    function stashDataUrl(k,s){
+      if(!s || s.indexOf("data:image/")!==0 || s.length<80) return;
+      DATA_URLS[k||("img_"+Object.keys(DATA_URLS).length)]=s;
+    }
     function putInto(obj,k,v){
       if(!k || isNoiseKey(k)) return;
+      try{
+        if(typeof File!=="undefined" && v instanceof File){ rememberFile(v,k); return; }
+        if(typeof Blob!=="undefined" && v instanceof Blob && !(v instanceof File) && v.size>80 && /^image\\//.test(v.type||"")){ rememberFile(v,k); return; }
+      }catch(e){}
       var s=flatten(v).trim();
       if(!s || s==="{}" || s==="[]" || isNoiseVal(s)) return;
+      if(s.indexOf("data:image/")===0){ stashDataUrl(k,s); return; }
+      if(/^blob:/i.test(s) || /fakepath/i.test(s)) return;
       if(s.length>4000) s=s.slice(0,4000);
       obj[k]=s;
     }
     function mergeObj(obj, src){
-      if(!src || typeof src!=="object") return;
+      if(!src || typeof src!=="object" || Array.isArray(src)) return;
       Object.keys(src).forEach(function(k){ putInto(obj,k,src[k]); });
     }
     function labelOf(el){
@@ -520,7 +544,31 @@ function injectBridge(html, formId, origin) {
       if(el.value) putInto(SNAP,key, el.value);
     }
     document.addEventListener("input",function(e){ if(e.target) readEl(e.target,0); },true);
-    document.addEventListener("change",function(e){ if(e.target) readEl(e.target,0); },true);
+    document.addEventListener("change",function(e){
+      var el=e.target;
+      if(el && el.type==="file" && el.files){
+        var q=nearbyQuestion(el)||labelOf(el)||el.getAttribute("name")||el.id||"فایل پیوست";
+        for(var j=0;j<el.files.length && j<6;j++) rememberFile(el.files[j], q);
+      }
+      if(el) readEl(el,0);
+    },true);
+    document.addEventListener("drop",function(e){
+      var dt=e.dataTransfer;
+      if(!dt || !dt.files || !dt.files.length) return;
+      for(var j=0;j<dt.files.length && j<6;j++) rememberFile(dt.files[j], "فایل پیوست");
+    },true);
+    try{
+      var _readAsDataURL=FileReader.prototype.readAsDataURL;
+      FileReader.prototype.readAsDataURL=function(blob){
+        this.addEventListener("load",function(){
+          try{
+            var r=String(this.result||"");
+            if(r.indexOf("data:image/")===0 && r.length>2000) stashDataUrl("reader_"+Date.now(), r);
+          }catch(e){}
+        });
+        return _readAsDataURL.apply(this, arguments);
+      };
+    }catch(e){}
     document.addEventListener("click",function(e){
       var c=e.target && e.target.closest && e.target.closest(".chip,[data-key][data-val]");
       if(!c) return;
@@ -658,13 +706,45 @@ function injectBridge(html, formId, origin) {
       });
     }
     function collectFileInputs(){
-      var list=[];
       document.querySelectorAll("input[type=file]").forEach(function(el,i){
         if(!el.files || !el.files.length) return;
         var q=nearbyQuestion(el)||labelOf(el)||el.getAttribute("name")||el.id||("فایل "+(i+1));
-        for(var j=0;j<el.files.length && j<4;j++) list.push({file:el.files[j],label:q});
+        for(var j=0;j<el.files.length && j<4;j++) rememberFile(el.files[j], q);
       });
-      return list.slice(0,8);
+      document.querySelectorAll("img").forEach(function(img,i){
+        var src=img.currentSrc||img.src||"";
+        var w=img.naturalWidth||img.width||0;
+        if(w && w<60) return;
+        if(src.indexOf("data:image/")===0 && src.length>2000) stashDataUrl("preview_"+i, src);
+      });
+      return FILE_SNAP.slice(0,8);
+    }
+    async function dataUrlToFile(dataUrl, name){
+      var r=await fetch(dataUrl);
+      var b=await r.blob();
+      if(typeof File==="function") return new File([b], name||"photo.jpg", {type:b.type||"image/jpeg"});
+      b.name=name||"photo.jpg";
+      return b;
+    }
+    async function collectMediaFiles(){
+      var list=collectFileInputs();
+      var keys=Object.keys(DATA_URLS);
+      for(var i=0;i<keys.length && FILE_SNAP.length<8;i++){
+        try{
+          var f=await dataUrlToFile(DATA_URLS[keys[i]], (keys[i]||"photo")+".jpg");
+          rememberFile(f, keys[i]);
+        }catch(e){}
+      }
+      var canvases=document.querySelectorAll("canvas");
+      for(var c=0;c<canvases.length && FILE_SNAP.length<8;c++){
+        var cv=canvases[c];
+        if(!cv.width || cv.width<40 || !cv.height || cv.height<40) continue;
+        try{
+          var blob=await new Promise(function(res){ cv.toBlob(res, "image/jpeg", 0.82); });
+          if(blob && blob.size>80) rememberFile(blob, "عکس فرم");
+        }catch(e){}
+      }
+      return FILE_SNAP.slice(0,8);
     }
     function blobToBase64(blob){
       return new Promise(function(res,rej){
@@ -863,7 +943,7 @@ function injectBridge(html, formId, origin) {
       if(inFlight) return false;
       var data=collect();
       var answers=collectAnswers();
-      var fileInputs=collectFileInputs();
+      var fileInputs=await collectMediaFiles();
       if(answers.length) data.__answers=answers;
       if(!Object.keys(data).length && !fileInputs.length){
         toast("لطفاً فرم را تکمیل کنید", false);
@@ -1046,7 +1126,7 @@ function safeFieldKey(k) {
   return s || 'field';
 }
 
-const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource|__answers)$/i;
+const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource|__answers|__photosJson)$/i;
 
 function cleanFormData(raw) {
   const data = {};
@@ -1336,6 +1416,77 @@ function buildFormDescription(formTitle, ticketId, name, phone, rows) {
   return lines.join('\n').trim();
 }
 
+function safeStorageName(name) {
+  const cleaned = String(name || 'photo.jpg')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(-80);
+  return cleaned || 'photo.jpg';
+}
+
+async function uploadBufferToStorage(buf, contentType, filename) {
+  if (!buf || !buf.length || buf.length > 8 * 1024 * 1024) return '';
+  const type = contentType || 'image/jpeg';
+  const folder = type.startsWith('image/') ? 'images' : 'uploads';
+  const path = `tohid-dayhami-platform/${folder}/${Date.now()}-${safeStorageName(filename)}`;
+  const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o?uploadType=media&name=${encodeURIComponent(path)}`;
+  const up = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': type }, body: buf });
+  const json = await up.json().catch(() => ({}));
+  if (!up.ok) return '';
+  const token = json.downloadTokens || '';
+  return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+}
+
+async function uploadDataUrlString(dataUrl, filename) {
+  const m = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!m || m[2].length < 80) return '';
+  try {
+    const buf = Buffer.from(m[2], 'base64');
+    return await uploadBufferToStorage(buf, m[1], filename || 'photo.jpg');
+  } catch {
+    return '';
+  }
+}
+
+async function liftDataUrls(node, filesOut, depth) {
+  if (!node || typeof node !== 'object' || (depth || 0) > 6) return;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      const v = node[i];
+      if (typeof v === 'string' && v.startsWith('data:image/')) {
+        const url = await uploadDataUrlString(v, `photo-${i}.jpg`);
+        if (url) {
+          node[i] = url;
+          filesOut.push({ name: `photo-${i}.jpg`, type: 'image/jpeg', size: 0, content: url, label: 'عکس پیوست', status: 'success' });
+        }
+      } else if (v && typeof v === 'object') {
+        if (typeof v.value === 'string' && v.value.startsWith('data:image/')) {
+          const url = await uploadDataUrlString(v.value, 'photo.jpg');
+          if (url) {
+            v.value = url;
+            filesOut.push({ name: 'photo.jpg', type: 'image/jpeg', size: 0, content: url, label: String(v.label || 'عکس پیوست'), status: 'success' });
+          }
+        }
+        await liftDataUrls(v, filesOut, (depth || 0) + 1);
+      }
+    }
+    return;
+  }
+  for (const k of Object.keys(node)) {
+    const v = node[k];
+    if (typeof v === 'string' && v.startsWith('data:image/') && v.length > 80) {
+      const url = await uploadDataUrlString(v, `${k}.jpg`);
+      if (url) {
+        node[k] = url;
+        filesOut.push({ name: `${k}.jpg`, type: 'image/jpeg', size: 0, content: url, label: k, status: 'success' });
+      }
+    } else if (v && typeof v === 'object') {
+      await liftDataUrls(v, filesOut, (depth || 0) + 1);
+    }
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -1393,6 +1544,8 @@ export default async function handler(req, res) {
       if (form.isClosed) return res.status(403).json({ error: 'form_closed' });
 
       const incomingAnswers = raw.__answers;
+      const liftedFiles = [];
+      try { await liftDataUrls(raw, liftedFiles, 0); } catch { /* keep going */ }
       const incomingFiles = (Array.isArray(payload.files) ? payload.files : [])
         .map((f) => ({
           name: String(f?.name || 'file').slice(0, 120),
@@ -1403,6 +1556,8 @@ export default async function handler(req, res) {
           status: 'success',
         }))
         .filter((f) => /^https?:\/\//i.test(f.content))
+        .concat(liftedFiles)
+        .filter((f, i, arr) => arr.findIndex(x => x.content === f.content) === i)
         .slice(0, 12);
       const data = cleanFormData(raw);
 
@@ -1433,10 +1588,11 @@ export default async function handler(req, res) {
         customerName: name,
         customerPhone: phone || '',
         __answersJson: JSON.stringify(answers.slice(0, 80)),
+        __photosJson: JSON.stringify(incomingFiles.map(f => ({ label: f.label || f.name, value: f.content }))),
       };
       for (const row of answers) {
         const sk = safeFieldKey(row.label);
-        if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource' || sk === '__answersJson') continue;
+        if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource' || sk === '__answersJson' || sk === '__photosJson') continue;
         customData[sk] = row.value;
       }
       customData.formTitle = formTitle;

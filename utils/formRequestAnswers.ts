@@ -11,9 +11,11 @@ export function isImageUrl(s: string): boolean {
   if (!v) return false;
   if (/^data:image\//i.test(v)) return true;
   if (!isHttpUrl(v)) return false;
+  if (/\.(pdf|zip|docx?|xlsx?|mp4|mov|webm)(\?|#|$)/i.test(v)) return false;
   if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|heic|avif)(\?|#|$)/i.test(v)) return true;
-  if (/firebasestorage\.googleapis\.com|firebasestorage\.app/i.test(v) && /\/images%2F|\/images\//i.test(v)) return true;
-  if (/[?&]alt=media\b/i.test(v) && /image/i.test(v)) return true;
+  if (/firebasestorage\.googleapis\.com|firebasestorage\.app/i.test(v)) return true;
+  if (/\/api\/ms-img\?/i.test(v)) return true;
+  if (/[?&]alt=media\b/i.test(v)) return true;
   return false;
 }
 
@@ -26,7 +28,7 @@ export function displayImageSrc(url: string): string {
   return v;
 }
 
-const META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified|__assigneePersonnelId|__assigneeRole|__answersJson|sheetName|sheetUrl)$/i;
+const META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified|__assigneePersonnelId|__assigneeRole|__answersJson|__photosJson|sheetName|sheetUrl)$/i;
 
 export function isFormTicket(ticket: Ticket | null | undefined): boolean {
   if (!ticket) return false;
@@ -127,6 +129,35 @@ export function parseTicketFormAnswers(ticket: Ticket, form?: CustomForm | null)
     rows.push({ label: f.name || 'فایل پیوست', value: url });
   }
   return rows;
+}
+
+export function ticketPhotoRows(ticket: Ticket, form?: CustomForm | null): FormAnswerRow[] {
+  const out: FormAnswerRow[] = [];
+  const seen = new Set<string>();
+  const add = (label: string, value: string) => {
+    const v = String(value || '').trim();
+    if (!v || seen.has(v) || META_KEYS.test(label)) return;
+    if (!isImageUrl(v) && !(isHttpUrl(v) && /عکس|تصویر|پیوست|ضمیمه|photo|image|pic|file/i.test(label))) return;
+    if (/\.(pdf|zip|docx?|xlsx?)(\?|#|$)/i.test(v)) return;
+    seen.add(v);
+    out.push({ label: label || 'عکس پیوست', value: v });
+  };
+  try {
+    const extra = JSON.parse(ticket.customData?.__photosJson || '[]');
+    if (Array.isArray(extra)) {
+      extra.forEach((item) => {
+        if (typeof item === 'string') add('عکس پیوست', item);
+        else if (item && typeof item === 'object') add(String((item as FormAnswerRow).label || 'عکس پیوست'), String((item as FormAnswerRow).value || ''));
+      });
+    }
+  } catch { /* ignore */ }
+  for (const f of ticket.files || []) add(f.name || 'فایل پیوست', String(f.content || ''));
+  for (const row of parseTicketFormAnswers(ticket, form)) add(row.label, row.value);
+  for (const [k, v] of Object.entries(ticket.customData || {})) {
+    if (META_KEYS.test(k) || k.startsWith('__')) continue;
+    add(k, String(v || ''));
+  }
+  return out;
 }
 
 export function escapeHtml(s: string): string {

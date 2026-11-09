@@ -307,10 +307,11 @@ export default async function handler(req, res) {
       const formId = String(payload.formId || payload.packId || '').trim();
       if (!formId) return res.status(400).json({ ok: false, error: 'formId required' });
       const data = flattenSubmit(payload);
+      const files = Array.isArray(payload.files) ? payload.files : (Array.isArray(data.files) ? data.files : []);
       const r = await fetch(`${origin}/api/html-form`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formId, data }),
+        body: JSON.stringify({ formId, data, files }),
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) return res.status(r.status).json({ ok: false, ...json });
