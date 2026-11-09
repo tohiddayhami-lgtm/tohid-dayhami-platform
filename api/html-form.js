@@ -464,6 +464,42 @@ function injectBridge(html, formId, origin) {
       if(wrap) return (wrap.innerText||"").split("\\n")[0].trim();
       return (el.getAttribute("aria-label")||el.getAttribute("placeholder")||"").trim();
     }
+    function nearbyQuestion(el){
+      if(!el) return "";
+      var wrap=el.closest && el.closest("fieldset,section,.q,.question,.field,.form-group,.item,.card,[data-q],[data-question]");
+      if(wrap){
+        var h=wrap.querySelector("legend,h1,h2,h3,h4,.q-title,.question-title,.label,.ttl,[data-q-title]");
+        if(h && h!==el && !(h.contains && h.contains(el))){
+          var ht=(h.innerText||"").replace(/\\s+/g," ").trim();
+          if(ht && ht.length<180) return ht.split("\\n")[0];
+        }
+      }
+      var n=el.parentElement;
+      for(var i=0;i<6 && n;i++){
+        var prev=n.previousElementSibling;
+        if(prev){
+          var t=(prev.innerText||"").replace(/\\s+/g," ").trim().split("\\n")[0];
+          if(t && t.length>=3 && t.length<160 && !NAV_RE.test(t) && !SUBMIT_RE.test(t)) return t;
+        }
+        n=n.parentElement;
+      }
+      return "";
+    }
+    function optionTextFor(el){
+      if(!el) return "";
+      if(el.tagName==="SELECT"){
+        if(el.multiple) return Array.prototype.map.call(el.selectedOptions||[],function(o){return (o.text||o.value||"").trim()}).filter(Boolean).join("، ");
+        var o=el.options && el.options[el.selectedIndex];
+        return o ? (o.text||o.value||"") : (el.value||"");
+      }
+      if(el.type==="radio"||el.type==="checkbox"){
+        var own=labelOf(el);
+        if(own && own.length<80 && el.value && el.value!=="on" && own.indexOf(el.value)<0) return own;
+        if(el.value && el.value!=="on") return el.value;
+        return own || "بله";
+      }
+      return el.value||"";
+    }
     function fieldKey(el,i){
       var key=el.getAttribute("data-k")||el.getAttribute("name")||el.id||labelOf(el);
       key=String(key||"").replace(/\\s+/g," ").trim();
@@ -554,6 +590,51 @@ function injectBridge(html, formId, origin) {
         putInto(data, el.getAttribute("data-key")||labelOf(el)||"choice_"+(i+1), el.getAttribute("data-val")||(el.innerText||"").trim());
       });
       return data;
+    }
+    function collectAnswers(){
+      var rows=[];
+      var byLabel={};
+      function add(label,value,name){
+        var lab=String(label||"").replace(/\\s+/g," ").trim();
+        var val=flatten(value).trim();
+        if(!lab || !val || isNoiseKey(lab) || isNoiseVal(val)) return;
+        if(val==="{}" || val==="[]") return;
+        if(lab.length>180) lab=lab.slice(0,180);
+        if(val.length>4000) val=val.slice(0,4000);
+        if(byLabel[lab]){
+          if(byLabel[lab].value.indexOf(val)<0) byLabel[lab].value += "، "+val;
+          return;
+        }
+        var row={label:lab,value:val,name:String(name||"").slice(0,80)};
+        byLabel[lab]=row;
+        rows.push(row);
+      }
+      var sum=fromSummary();
+      Object.keys(sum).forEach(function(k){ add(k,sum[k],k); });
+      document.querySelectorAll("input,textarea,select").forEach(function(el,i){
+        if(!el || el.type==="file" || el.type==="button" || el.type==="submit" || el.type==="reset" || el.type==="hidden") return;
+        if(el.id==="f-copytext") return;
+        var name=fieldKey(el,i||0);
+        var q=nearbyQuestion(el)||labelOf(el)||name;
+        if(el.type==="radio"){
+          if(el.checked) add(q, optionTextFor(el)||el.value, name);
+          return;
+        }
+        if(el.type==="checkbox"){
+          if(el.checked) add(q, optionTextFor(el), name);
+          return;
+        }
+        if(el.tagName==="SELECT"){
+          var sv=optionTextFor(el);
+          if(sv) add(q, sv, name);
+          return;
+        }
+        if(el.value) add(q, el.value, name);
+      });
+      document.querySelectorAll("[aria-pressed=true],[data-selected=true],.chip[aria-pressed=true]").forEach(function(el,i){
+        add(nearbyQuestion(el)||el.getAttribute("data-key")||labelOf(el)||"گزینه", el.getAttribute("data-val")||(el.innerText||"").trim(), el.getAttribute("data-key")||("choice_"+(i+1)));
+      });
+      return rows;
     }
     function btnText(el){
       return ((el.innerText||el.value||el.getAttribute("aria-label")||"")+" ").replace(/\\s+/g," ").trim();
@@ -710,6 +791,8 @@ function injectBridge(html, formId, origin) {
     async function submitToCrm(){
       if(inFlight) return false;
       var data=collect();
+      var answers=collectAnswers();
+      if(answers.length) data.__answers=answers;
       if(!Object.keys(data).length){
         toast("لطفاً فرم را تکمیل کنید", false);
         return false;
@@ -869,7 +952,7 @@ function safeFieldKey(k) {
   return s || 'field';
 }
 
-const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource)$/i;
+const SKIP_DATA_KEYS = /^(id|color|ts|v|L|lang|step|visitors|password|token|formId|formTitle|importSource|__answers)$/i;
 
 function cleanFormData(raw) {
   const data = {};
@@ -959,7 +1042,7 @@ const ARKA_GAPS = {
   brand: 'معرفی حرفه‌ای به مشتری خارجی',
 };
 
-const REPORT_META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified)$/i;
+const REPORT_META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified|__answers|__answersJson)$/i;
 const RAW_CODE_KEYS = /^(ans|field|fieldOther|exp|markets|goal|heard|nm|ph|wa|svc|msg)$/i;
 
 function maybeParseJson(v) {
@@ -1022,88 +1105,136 @@ function looksRawCode(s) {
   return /^[a-z][a-z0-9_-]{0,24}$/i.test(String(s || '').trim());
 }
 
-function reportRows(data) {
-  const name = pickReady(data, ['نام و نام خانوادگی', 'نام کامل', 'نام', 'fullName', 'full_name', 'name', 'nm']);
-  const phone = pickReady(data, ['موبایل / واتس‌اپ', 'موبایل', 'شماره تماس', 'تلفن', 'phone', 'mobile', 'ph', 'whatsapp']);
-  const email = pickReady(data, ['ایمیل', 'email']);
-  const city = pickReady(data, ['شهر / کشور', 'شهر', 'city']);
-  const fieldOther = pickReady(data, ['fieldOther', 'حوزه شما']);
-  let field = pickReady(data, ['حوزه کاری']) || mapCodes('field', data.field);
-  if ((!field || field === 'سایر' || data.field === 'other') && fieldOther) field = fieldOther;
-  else if (fieldOther && field && !field.includes(fieldOther)) field = `${field}، ${fieldOther}`;
-  const service = pickReady(data, ['خدمت قابل صدور', 'service']);
-  const exp = pickReady(data, ['تجربه', 'تجربه صادرات']) || mapCodes('exp', data.exp);
-  const goal = pickReady(data, ['هدف']) || mapCodes('goal', data.goal);
-  const markets = pickReady(data, ['بازارهای هدف']) || mapCodes('markets', data.markets);
-  const heard = pickReady(data, ['آشنایی از']) || mapCodes('heard', data.heard);
-  const note = pickReady(data, ['توضیح', 'توضیحات', 'یادداشت', 'note', 'message', 'msg']);
-  const assessmentReady = pickReady(data, ['نتیجه خودسنجی']);
-  const assessment = assessmentText(data.ans, assessmentReady);
-  const gaps = gapsFromAns(data.ans);
+function decodeToken(tok) {
+  const t = String(tok || '').trim();
+  if (!t) return '';
+  for (const dict of Object.values(ARKA_MAPS)) {
+    if (dict[t] || dict[t.toLowerCase()]) return dict[t] || dict[t.toLowerCase()];
+  }
+  if (ARKA_GAPS[t] || ARKA_GAPS[t.toLowerCase()]) return ARKA_GAPS[t] || ARKA_GAPS[t.toLowerCase()];
+  return t;
+}
 
+function humanizeValue(key, value) {
+  const k = String(key || '');
+  if (k === 'ans' || /خودسنجی|شکاف/.test(k)) {
+    const ready = assessmentText(value, '');
+    if (ready) return ready;
+  }
+  if (ARKA_MAPS[k]) return mapCodes(k, value) || flattenVal(value).trim();
+  const parsed = maybeParseJson(value);
+  if (Array.isArray(parsed)) return parsed.map(decodeToken).filter(Boolean).join('، ');
+  if (parsed && typeof parsed === 'object') {
+    const flags = Object.entries(parsed)
+      .filter(([, val]) => val === true || val === 'true' || val === 1 || val === '1' || val === 'yes')
+      .map(([kk]) => decodeToken(kk));
+    if (flags.length) return flags.join('، ');
+  }
+  const raw = flattenVal(value).trim();
+  if (!raw) return '';
+  if (looksRawCode(raw)) return decodeToken(raw);
+  if (/^[a-z0-9_-]+(?:[،,|/ ]+[a-z0-9_-]+)+$/i.test(raw)) {
+    return tokensOf(raw).map(decodeToken).join('، ');
+  }
+  return raw;
+}
+
+function niceLabel(label, name) {
+  const lab = String(label || '').replace(/\s+/g, ' ').trim();
+  if (FIELD_LABELS[lab]) return FIELD_LABELS[lab];
+  if (FIELD_LABELS[name]) return /[\u0600-\u06FF]/.test(lab) && lab.length > 2 ? lab : FIELD_LABELS[name];
+  if (/^field_\d+$/i.test(lab) && name) return FIELD_LABELS[name] || lab;
+  return lab || FIELD_LABELS[name] || name || 'پاسخ';
+}
+
+function coerceAnswerRows(raw) {
+  if (!raw) return [];
+  let v = raw;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch { return []; }
+  }
+  if (!Array.isArray(v)) return [];
+  return v.map((item) => {
+    if (!item || typeof item !== 'object') return null;
+    const label = String(item.label || item.name || item.key || '').trim();
+    const value = item.value == null ? '' : item.value;
+    const name = String(item.name || item.key || '').trim();
+    if (!label) return null;
+    return { label, value, name };
+  }).filter(Boolean);
+}
+
+function reportRows(data, incomingAnswers) {
   const rows = [];
   const used = new Set();
   const add = (label, value) => {
     const v = flattenVal(value).trim();
     if (!v || v === '{}' || v === '[]') return;
-    const sig = `${label}:${v.replace(/\s+/g, ' ')}`;
-    if (used.has(sig) || used.has(v.replace(/\s+/g, ' ').toLowerCase() + '@' + label)) return;
+    const lab = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!lab || REPORT_META_KEYS.test(lab) || SKIP_DATA_KEYS.test(lab)) return;
+    const sig = `${lab}:${v.replace(/\s+/g, ' ')}`;
+    if (used.has(sig)) return;
     used.add(sig);
-    rows.push({ label, value: v });
+    rows.push({ label: lab.slice(0, 200), value: v.slice(0, 8000) });
   };
 
-  add('نام', name);
-  add('موبایل', phone);
-  add('ایمیل', email);
-  add('شهر', city);
-  add('نتیجه خودسنجی', assessment);
-  if (gaps.length) add('موارد نیازمند آموزش', gaps.join('، '));
-  add('حوزه کاری', field);
-  add('خدمت قابل صدور', service);
-  add('تجربه صادرات', exp);
-  add('هدف', goal);
-  add('بازارهای هدف', markets);
-  add('آشنایی از', heard);
-  add('توضیح', note);
+  const payloadRows = coerceAnswerRows(incomingAnswers);
+  if (payloadRows.length) {
+    payloadRows.forEach((row) => {
+      add(niceLabel(row.label, row.name), humanizeValue(row.name || row.label, row.value));
+    });
+  }
 
-  const takenCanon = new Set(rows.map(r => r.label));
+  const knownArka = [
+    ['نام', pickReady(data, ['نام و نام خانوادگی', 'نام کامل', 'نام', 'fullName', 'full_name', 'name', 'nm'])],
+    ['موبایل', pickReady(data, ['موبایل / واتس‌اپ', 'موبایل', 'شماره تماس', 'تلفن', 'phone', 'mobile', 'ph', 'whatsapp'])],
+    ['ایمیل', pickReady(data, ['ایمیل', 'email'])],
+    ['شهر', pickReady(data, ['شهر / کشور', 'شهر', 'city'])],
+  ];
+  if (!payloadRows.length) {
+    knownArka.forEach(([lab, val]) => add(lab, val));
+    const fieldOther = pickReady(data, ['fieldOther', 'حوزه شما']);
+    let field = pickReady(data, ['حوزه کاری']) || mapCodes('field', data.field);
+    if ((!field || field === 'سایر' || data.field === 'other') && fieldOther) field = fieldOther;
+    else if (fieldOther && field && !field.includes(fieldOther)) field = `${field}، ${fieldOther}`;
+    add('نتیجه خودسنجی', assessmentText(data.ans, pickReady(data, ['نتیجه خودسنجی'])));
+    const gaps = gapsFromAns(data.ans);
+    if (gaps.length) add('موارد نیازمند آموزش', gaps.join('، '));
+    add('حوزه کاری', field);
+    add('خدمت قابل صدور', pickReady(data, ['خدمت قابل صدور', 'service']));
+    add('تجربه صادرات', pickReady(data, ['تجربه', 'تجربه صادرات']) || mapCodes('exp', data.exp));
+    add('هدف', pickReady(data, ['هدف']) || mapCodes('goal', data.goal));
+    add('بازارهای هدف', pickReady(data, ['بازارهای هدف']) || mapCodes('markets', data.markets));
+    add('آشنایی از', pickReady(data, ['آشنایی از']) || mapCodes('heard', data.heard));
+    add('توضیح', pickReady(data, ['توضیح', 'توضیحات', 'یادداشت', 'note', 'message', 'msg']));
+  }
+
   for (const [k, raw] of Object.entries(data || {})) {
-    if (REPORT_META_KEYS.test(k) || RAW_CODE_KEYS.test(k) || SKIP_DATA_KEYS.test(k)) continue;
-    if (/^(name|mobile|phone|email|city|service|note|message)$/i.test(k)) continue;
-    if (/نام|موبایل|ایمیل|شهر|خودسنجی|حوزه|تجربه|هدف|بازار|آشنایی|توضیح|خدمت/.test(k)) continue;
-    const v = flattenVal(maybeParseJson(raw)).trim();
-    if (!v || looksRawCode(v) || v.startsWith('{') || v.startsWith('[')) continue;
-    const label = FIELD_LABELS[k] || k;
-    if (takenCanon.has(label)) continue;
-    if (rows.some(r => r.value === v)) continue;
+    if (REPORT_META_KEYS.test(k) || SKIP_DATA_KEYS.test(k)) continue;
+    if (!payloadRows.length && RAW_CODE_KEYS.test(k)) continue;
+    const v = humanizeValue(k, raw);
+    if (!v || v.startsWith('{') || v.startsWith('[')) continue;
+    if (payloadRows.length && looksRawCode(k) && looksRawCode(String(raw))) continue;
+    const label = niceLabel(k, k);
+    if (rows.some(r => r.label === label || r.value === v)) continue;
     add(label, v);
   }
   return rows;
 }
 
-function buildFormDescription(formTitle, ticketId, name, phone, data) {
-  const rows = reportRows(data);
-  const identity = new Set(['نام', 'موبایل', 'ایمیل', 'شهر']);
+function buildFormDescription(formTitle, ticketId, name, phone, rows) {
   const lines = [
-    `موضوع: ${formTitle}`,
+    `فرم: ${formTitle}`,
     `شناسه درخواست: ${ticketId}`,
     '',
-    'مشخصات متقاضی',
   ];
-  const seen = new Set();
-  const put = (label, value) => {
-    const v = flattenVal(value).trim();
-    if (!v || seen.has(label)) return;
-    seen.add(label);
-    lines.push(`${label}: ${v}`);
-  };
-  if (name && name !== 'بدون نام') put('نام', name);
-  if (phone) put('موبایل', phone);
-  rows.filter(r => identity.has(r.label)).forEach(r => put(r.label, r.value));
-  const extra = rows.filter(r => !identity.has(r.label));
-  if (extra.length) {
-    lines.push('', 'پاسخ‌های فرم');
-    extra.forEach(r => lines.push(`${r.label}: ${r.value}`));
+  if (name && name !== 'بدون نام') lines.push(`نام: ${name}`);
+  if (phone) lines.push(`موبایل: ${phone}`);
+  if (rows.length) {
+    lines.push('', 'سوالات و پاسخ‌ها');
+    rows.forEach((r, i) => {
+      lines.push(`${i + 1}. ${r.label}: ${r.value}`);
+    });
   }
   return lines.join('\n').trim();
 }
@@ -1164,6 +1295,7 @@ export default async function handler(req, res) {
       }
       if (form.isClosed) return res.status(403).json({ error: 'form_closed' });
 
+      const incomingAnswers = raw.__answers;
       const data = cleanFormData(raw);
 
       const phone = extractPhone(data);
@@ -1177,8 +1309,8 @@ export default async function handler(req, res) {
       const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
-      const answers = reportRows(data);
-      const description = buildFormDescription(formTitle, ticketId, name, phone, data);
+      const answers = reportRows(data, incomingAnswers);
+      const description = buildFormDescription(formTitle, ticketId, name, phone, answers);
 
       const customData = {
         formId,
@@ -1187,10 +1319,11 @@ export default async function handler(req, res) {
         requestId: ticketId,
         customerName: name,
         customerPhone: phone || '',
+        __answersJson: JSON.stringify(answers.slice(0, 80)),
       };
       for (const row of answers) {
         const sk = safeFieldKey(row.label);
-        if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource') continue;
+        if (sk === 'formTitle' || sk === 'formId' || sk === 'importSource' || sk === '__answersJson') continue;
         customData[sk] = row.value;
       }
       customData.formTitle = formTitle;

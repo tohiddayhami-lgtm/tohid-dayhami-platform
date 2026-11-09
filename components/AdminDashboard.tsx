@@ -36,6 +36,8 @@ import { CartableSheetImporter } from './CartableSheetImporter';
 import { uploadFileWithProgress, logSystemAction, subscribeToSystemLogs, saveTaskToCloud, restoreEntityFromLog, sendInternalMessage, subscribeToCustomForms, saveReport, saveNotificationLog } from '../services/firebaseService';
 import { sendWhatsAppNotification, sendMasterCopy, renderTemplate, buildLog } from '../services/notificationService';
 import { Language } from '../App';
+import { FormRequestAnswers } from './FormRequestAnswers';
+import { isFormTicket } from '../utils/formRequestAnswers';
 
 interface Props {
   currentUser: Personnel;
@@ -1220,7 +1222,16 @@ export const AdminDashboard: React.FC<Props> = ({
                                             <div><span className="text-gray-500 block mb-1">{t.company}</span><span className="font-bold text-gray-800">{selectedTicket.companyName || '-'}</span></div>
                                             <div><span className="text-gray-500 block mb-1">{t.mobile}</span><span className="font-bold text-gray-800 dir-ltr block text-right">{selectedTicket.phoneNumber}</span></div>
                                             <div><span className="text-gray-500 block mb-1">{t.whatsapp}</span><span className="font-bold text-gray-800 dir-ltr block text-right">{selectedTicket.whatsappNumber}</span></div>
-                                            <div className="col-span-2"><span className="text-gray-500 block mb-1">{t.description}</span><p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p></div>
+                                            {isFormTicket(selectedTicket) ? (
+                                                <FormRequestAnswers
+                                                    ticket={selectedTicket}
+                                                    form={customForms.find(f => f.id === (selectedTicket.customData?.formId || selectedTicket.serviceId?.replace(/^form:/, '')))}
+                                                    formTitle={getServiceTitle(selectedTicket.serviceId, selectedTicket)}
+                                                    lang={lang === 'en' ? 'en' : 'fa'}
+                                                />
+                                            ) : (
+                                                <div className="col-span-2"><span className="text-gray-500 block mb-1">{t.description}</span><p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-lg leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p></div>
+                                            )}
                                             {(selectedTicket.files || []).length > 0 && (
                                                 <div className="col-span-2">
                                                     <span className="text-gray-500 block mb-2">{t.files}</span>

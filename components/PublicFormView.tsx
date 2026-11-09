@@ -210,16 +210,22 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       if (form?.assigneePersonnelId) customData.__assigneePersonnelId = form.assigneePersonnelId;
       if (form?.assigneeRole)        customData.__assigneeRole = form.assigneeRole;
 
+      const answerRows: { label: string; value: string }[] = [];
       // Text/select/checkbox fields
       (form?.fields ?? []).forEach(f => {
         if (f.type === 'header') return;
         if (f.type === 'file') {
           const ff = fieldFiles[f.id];
-          if (ff?.status === 'success') customData[f.key || f.id] = ff.content; // store URL
-        } else {
-          if (responses[f.id]) customData[f.key || f.id] = responses[f.id];
+          if (ff?.status === 'success') {
+            customData[f.key || f.id] = ff.content; // store URL
+            answerRows.push({ label: f.label || f.key || f.id, value: ff.content });
+          }
+        } else if (responses[f.id]) {
+          customData[f.key || f.id] = responses[f.id];
+          answerRows.push({ label: f.label || f.key || f.id, value: responses[f.id] });
         }
       });
+      if (answerRows.length) customData.__answersJson = JSON.stringify(answerRows);
 
       // Collect all uploaded files (field files + general attachments)
       const allFiles: AttachedFile[] = [

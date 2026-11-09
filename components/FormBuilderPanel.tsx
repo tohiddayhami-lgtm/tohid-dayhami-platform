@@ -6,6 +6,7 @@ import { saveCustomFormToCloud, updateCustomFormInCloud, deleteCustomFormFromClo
 import { listHostedPackZip } from '../utils/hostedPack';
 import { buildGoogleFormScript, buildServiceRequestGoogleScript, buildExistingFormConnectScript } from '../services/googleFormScript';
 import { IconPlus, IconTrash, IconEdit, IconClipboard, IconFolder, IconCopy, IconLink, IconCheck, IconFile, IconMagic, IconUpload } from './Icons';
+import { FormRequestAnswers } from './FormRequestAnswers';
 import { formPublicPath, uniqueFormSlug } from '../utils/formPublicUrl';
 
 interface Props {
@@ -1041,49 +1042,12 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                           </div>
                         </div>
                       )}
-                      {/* Field values */}
-                      {formFields.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {formFields.map(field => {
-                            const val = sub.customData?.[field.key || field.id];
-                            if (!val) return null;
-                            const isUrl = val.startsWith('http');
-                            const isImg = isUrl && /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i.test(val);
-                            return (
-                              <div key={field.id} className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-[10px] font-semibold text-gray-400 mb-1">{field.label}</p>
-                                {field.type === 'file' || isUrl ? (
-                                  isImg ? (
-                                    <a href={val} target="_blank" rel="noopener noreferrer">
-                                      <img src={val} alt={field.label} className="w-full max-h-40 object-contain rounded border border-gray-200 bg-white" />
-                                      <p className="text-xs text-blue-600 mt-1 hover:underline">{lang === 'fa' ? 'مشاهده / دانلود' : 'View / Download'}</p>
-                                    </a>
-                                  ) : (
-                                    <a href={val} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                                      <IconFile className="w-4 h-4 shrink-0" />
-                                      <span className="break-all">{lang === 'fa' ? 'مشاهده / دانلود فایل' : 'View / Download File'}</span>
-                                    </a>
-                                  )
-                                ) : (
-                                  <p className="text-sm text-gray-800 break-words">{val}</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        /* Fallback: show all customData */
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {Object.entries(sub.customData || {})
-                            .filter(([k]) => !k.startsWith('__') && k !== 'formId' && k !== 'formTitle')
-                            .map(([key, val]) => (
-                              <div key={key} className="bg-gray-50 rounded-lg p-3">
-                                <p className="text-[10px] font-semibold text-gray-400 mb-0.5">{key}</p>
-                                <p className="text-sm text-gray-800 break-words">{val}</p>
-                              </div>
-                            ))}
-                        </div>
-                      )}
+                      <FormRequestAnswers
+                        ticket={sub}
+                        form={customForms.find(f => f.id === (sub.customData?.formId || sub.serviceId?.replace(/^form:/, '')))}
+                        formTitle={formTitle}
+                        lang={lang === 'en' ? 'en' : 'fa'}
+                      />
 
                       {/* Attached files */}
                       {fileCount > 0 && (
@@ -1108,13 +1072,6 @@ export const FormBuilderPanel: React.FC<Props> = ({ customForms, currentUser, is
                         </div>
                       )}
 
-                      {/* Description fallback */}
-                      {sub.description && formFields.length === 0 && (
-                        <div className="bg-gray-50 rounded-lg p-3">
-                          <p className="text-[10px] font-semibold text-gray-400 mb-1">{lang === 'fa' ? 'محتوا' : 'Content'}</p>
-                          <pre className="text-xs text-gray-700 whitespace-pre-wrap">{sub.description}</pre>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
