@@ -423,6 +423,7 @@ function injectBridge(html, formId, origin) {
   const script = `<script>(function(){
     var FORM_ID=${JSON.stringify(formId)};
     var ENDPOINT=${JSON.stringify(endpoint)};
+    var UPLOAD=${JSON.stringify(`${origin}/api/html-form-file`)};
     var inFlight=false;
     var lastSentAt=0;
     var SNAP={};
@@ -636,6 +637,76 @@ function injectBridge(html, formId, origin) {
       });
       return rows;
     }
+    function compressImageFile(file){
+      return new Promise(function(resolve){
+        if(!file || !file.type || file.type.indexOf("image/")!==0 || file.size<700000){ resolve(file); return; }
+        var img=new Image();
+        var url=URL.createObjectURL(file);
+        img.onload=function(){
+          var max=1600, w=img.width, h=img.height;
+          if(w>max||h>max){ var s=Math.min(max/w,max/h); w=Math.round(w*s); h=Math.round(h*s); }
+          var c=document.createElement("canvas");
+          c.width=w; c.height=h;
+          c.getContext("2d").drawImage(img,0,0,w,h);
+          c.toBlob(function(b){
+            URL.revokeObjectURL(url);
+            resolve(b||file);
+          },"image/jpeg",0.82);
+        };
+        img.onerror=function(){ URL.revokeObjectURL(url); resolve(file); };
+        img.src=url;
+      });
+    }
+    function collectFileInputs(){
+      var list=[];
+      document.querySelectorAll("input[type=file]").forEach(function(el,i){
+        if(!el.files || !el.files.length) return;
+        var q=nearbyQuestion(el)||labelOf(el)||el.getAttribute("name")||el.id||("فایل "+(i+1));
+        for(var j=0;j<el.files.length && j<4;j++) list.push({file:el.files[j],label:q});
+      });
+      return list.slice(0,8);
+    }
+    function blobToBase64(blob){
+      return new Promise(function(res,rej){
+        var fr=new FileReader();
+        fr.onload=function(){ var s=String(fr.result||""); res(s.indexOf(",")>=0?s.split(",")[1]:s); };
+        fr.onerror=rej;
+        fr.readAsDataURL(blob);
+      });
+    }
+    async function uploadPublicFile(file){
+      var blob=await compressImageFile(file);
+      var name=String(file.name||"photo.jpg").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-80)||"photo.jpg";
+      var type=blob.type||file.type||"application/octet-stream";
+      var folder=type.indexOf("image/")===0?"images":"uploads";
+      var path="tohid-dayhami-platform/"+folder+"/"+Date.now()+"-"+name;
+      try{
+        var r=await fetch("https://firebasestorage.googleapis.com/v0/b/calculator-55611.firebasestorage.app/o?uploadType=media&name="+encodeURIComponent(path),{
+          method:"POST",
+          headers:{"Content-Type":type},
+          body:blob
+        });
+        if(r.ok){
+          var j=await r.json();
+          var token=j.downloadTokens||"";
+          return {
+            url:"https://firebasestorage.googleapis.com/v0/b/calculator-55611.firebasestorage.app/o/"+encodeURIComponent(path)+"?alt=media"+(token?"&token="+encodeURIComponent(token):""),
+            name:name,
+            type:type,
+            size:blob.size||file.size||0
+          };
+        }
+      }catch(e){}
+      var b64=await blobToBase64(blob);
+      var r2=await fetch(UPLOAD,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({formId:FORM_ID,filename:name,contentType:type,data:b64})
+      });
+      var j2=await r2.json().catch(function(){return {};});
+      if(!r2.ok || !j2.url) throw new Error("upload_failed");
+      return {url:j2.url,name:j2.name||name,type:j2.type||type,size:j2.size||blob.size||0};
+    }
     function btnText(el){
       return ((el.innerText||el.value||el.getAttribute("aria-label")||"")+" ").replace(/\\s+/g," ").trim();
     }
@@ -792,22 +863,45 @@ function injectBridge(html, formId, origin) {
       if(inFlight) return false;
       var data=collect();
       var answers=collectAnswers();
+      var fileInputs=collectFileInputs();
       if(answers.length) data.__answers=answers;
-      if(!Object.keys(data).length){
+      if(!Object.keys(data).length && !fileInputs.length){
         toast("لطفاً فرم را تکمیل کنید", false);
         return false;
       }
-      if(alreadySent(data)){
+      if(alreadySent(data) && !fileInputs.length){
         showSuccess();
         return true;
       }
       inFlight=true;
       showBusy();
+      var uploaded=[];
+      if(fileInputs.length){
+        try{
+          var busyEl=document.querySelector("#td-form-busy div div:nth-child(2)");
+          if(busyEl) busyEl.textContent="در حال ارسال عکس…";
+          for(var fi=0; fi<fileInputs.length; fi++){
+            var up=await uploadPublicFile(fileInputs[fi].file);
+            uploaded.push({name:up.name,type:up.type,size:up.size,content:up.url,label:fileInputs[fi].label});
+            answers.push({label:fileInputs[fi].label||"فایل پیوست",value:up.url,name:"file"});
+          }
+          data.__answers=answers;
+        }catch(e){
+          hideBusy();
+          inFlight=false;
+          toast("آپلود عکس ناموفق بود. دوباره تلاش کنید.", false);
+          return false;
+        }
+      }
+      if(alreadySent(data)){
+        showSuccess();
+        return true;
+      }
       try{
         var r=await fetch(ENDPOINT,{
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({formId:FORM_ID,data:data})
+          body:JSON.stringify({formId:FORM_ID,data:data,files:uploaded})
         });
         hideBusy();
         if(!r.ok){ toast("خطا در ثبت در سامانه. دوباره تلاش کنید.", false); return false; }
@@ -1116,6 +1210,8 @@ function decodeToken(tok) {
 }
 
 function humanizeValue(key, value) {
+  const raw0 = flattenVal(value).trim();
+  if (/^https?:\/\//i.test(raw0) || /^data:image\//i.test(raw0)) return raw0;
   const k = String(key || '');
   if (k === 'ans' || /خودسنجی|شکاف/.test(k)) {
     const ready = assessmentText(value, '');
@@ -1215,6 +1311,7 @@ function reportRows(data, incomingAnswers) {
     const v = humanizeValue(k, raw);
     if (!v || v.startsWith('{') || v.startsWith('[')) continue;
     if (payloadRows.length && looksRawCode(k) && looksRawCode(String(raw))) continue;
+    if (/fakepath/i.test(v) || /^[A-Za-z]:\\/.test(v)) continue;
     const label = niceLabel(k, k);
     if (rows.some(r => r.label === label || r.value === v)) continue;
     add(label, v);
@@ -1296,6 +1393,17 @@ export default async function handler(req, res) {
       if (form.isClosed) return res.status(403).json({ error: 'form_closed' });
 
       const incomingAnswers = raw.__answers;
+      const incomingFiles = (Array.isArray(payload.files) ? payload.files : [])
+        .map((f) => ({
+          name: String(f?.name || 'file').slice(0, 120),
+          type: String(f?.type || ''),
+          size: Number(f?.size) || 0,
+          content: String(f?.content || f?.url || ''),
+          label: String(f?.label || '').slice(0, 160),
+          status: 'success',
+        }))
+        .filter((f) => /^https?:\/\//i.test(f.content))
+        .slice(0, 12);
       const data = cleanFormData(raw);
 
       const phone = extractPhone(data);
@@ -1310,6 +1418,11 @@ export default async function handler(req, res) {
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
       const answers = reportRows(data, incomingAnswers);
+      for (const f of incomingFiles) {
+        if (!answers.some((a) => a.value === f.content)) {
+          answers.push({ label: f.label || f.name || 'فایل پیوست', value: f.content });
+        }
+      }
       const description = buildFormDescription(formTitle, ticketId, name, phone, answers);
 
       const customData = {
@@ -1357,6 +1470,9 @@ export default async function handler(req, res) {
         assignedTo: form.assigneePersonnelId || undefined,
         timeline,
         customData,
+        files: incomingFiles.length
+          ? incomingFiles.map(({ name, type, size, content, status }) => ({ name, type, size, content, status }))
+          : undefined,
       };
 
       await setDoc('tickets', ticketId, ticket);

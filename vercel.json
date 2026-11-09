@@ -44,6 +44,9 @@
     "api/html-form.js": {
       "maxDuration": 30
     },
+    "api/html-form-file.js": {
+      "maxDuration": 30
+    },
     "api/hosted-pack.js": {
       "maxDuration": 60
     },

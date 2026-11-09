@@ -2,6 +2,30 @@ import { CustomForm, Ticket } from '../types';
 
 export type FormAnswerRow = { label: string; value: string };
 
+export function isHttpUrl(s: string): boolean {
+  return /^https?:\/\//i.test(String(s || '').trim());
+}
+
+export function isImageUrl(s: string): boolean {
+  const v = String(s || '').trim();
+  if (!v) return false;
+  if (/^data:image\//i.test(v)) return true;
+  if (!isHttpUrl(v)) return false;
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|heic|avif)(\?|#|$)/i.test(v)) return true;
+  if (/firebasestorage\.googleapis\.com|firebasestorage\.app/i.test(v) && /\/images%2F|\/images\//i.test(v)) return true;
+  if (/[?&]alt=media\b/i.test(v) && /image/i.test(v)) return true;
+  return false;
+}
+
+export function displayImageSrc(url: string): string {
+  const v = String(url || '').trim();
+  if (!isHttpUrl(v)) return v;
+  if (/firebasestorage\.googleapis\.com|firebasestorage\.app/i.test(v)) {
+    return `/api/ms-img?u=${encodeURIComponent(v)}`;
+  }
+  return v;
+}
+
 const META_KEYS = /^(formId|formTitle|importSource|requestId|customerName|customerPhone|whatsappNotified|__assigneePersonnelId|__assigneeRole|__answersJson|sheetName|sheetUrl)$/i;
 
 export function isFormTicket(ticket: Ticket | null | undefined): boolean {
@@ -87,13 +111,22 @@ function rowsFromFormFields(ticket: Ticket, form?: CustomForm | null): FormAnswe
 }
 
 export function parseTicketFormAnswers(ticket: Ticket, form?: CustomForm | null): FormAnswerRow[] {
-  const fromJson = coerceRows(ticket.customData?.__answersJson);
-  if (fromJson.length) return fromJson;
-  const fromFields = rowsFromFormFields(ticket, form);
-  if (fromFields.length) return fromFields;
-  const fromDesc = rowsFromDescription(ticket.description);
-  if (fromDesc.length >= 2) return fromDesc;
-  return rowsFromCustomData(ticket.customData);
+  let rows: FormAnswerRow[] = coerceRows(ticket.customData?.__answersJson);
+  if (!rows.length) rows = rowsFromFormFields(ticket, form);
+  if (!rows.length) {
+    const fromDesc = rowsFromDescription(ticket.description);
+    if (fromDesc.length >= 2) rows = fromDesc;
+  }
+  if (!rows.length) rows = rowsFromCustomData(ticket.customData);
+
+  const seen = new Set(rows.map(r => r.value));
+  for (const f of ticket.files || []) {
+    const url = String(f.content || '').trim();
+    if (!isHttpUrl(url) || seen.has(url)) continue;
+    seen.add(url);
+    rows.push({ label: f.name || 'فایل پیوست', value: url });
+  }
+  return rows;
 }
 
 export function escapeHtml(s: string): string {

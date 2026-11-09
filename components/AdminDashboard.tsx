@@ -1174,26 +1174,59 @@ export const AdminDashboard: React.FC<Props> = ({
 
   const renderTicketModal = () => {
     if (!selectedTicket) return null;
+    const formSheet = isFormTicket(selectedTicket);
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setSelectedTicketId(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh] animate-fade-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-indigo-600 text-white px-3 py-1 rounded-lg font-mono font-bold">{selectedTicket.id}</div>
-                        <div className="flex bg-gray-200 rounded-lg p-1">
-                            <button onClick={() => setActiveModalTab('info')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeModalTab === 'info' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>{t.ticketInfo}</button>
-                            <button onClick={() => setActiveModalTab('project')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeModalTab === 'project' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>{t.projectMgmt}</button>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setSelectedTicketId(null)}>
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-md" aria-hidden />
+            <div className={`relative bg-white rounded-t-2xl sm:rounded-2xl w-full ${formSheet ? 'max-w-[560px]' : 'max-w-3xl'} shadow-[0_24px_80px_rgba(0,0,0,0.18)] border border-gray-200/70 flex flex-col max-h-[92dvh] sm:max-h-[min(88dvh,760px)] overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+                <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-[11px] font-medium text-gray-500 font-mono truncate">{selectedTicket.id}</div>
+                        <div className="flex bg-gray-100 rounded-full p-0.5">
+                            <button onClick={() => setActiveModalTab('info')} className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-all ${activeModalTab === 'info' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{t.ticketInfo}</button>
+                            <button onClick={() => setActiveModalTab('project')} className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-all ${activeModalTab === 'project' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{t.projectMgmt}</button>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => toggleFlag(selectedTicket)} title={isFlaggedOf(selectedTicket) ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full border transition-colors shadow-sm w-8 h-8 flex items-center justify-center ${isFlaggedOf(selectedTicket) ? 'bg-yellow-50 border-yellow-300 text-yellow-500' : 'bg-white border-gray-200 text-gray-300 hover:text-yellow-400'}`}>
+                    <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => toggleFlag(selectedTicket)} title={isFlaggedOf(selectedTicket) ? 'حذف فلگ' : 'فلگ کردن به عنوان مهم'} className={`p-2 rounded-full transition-colors w-8 h-8 flex items-center justify-center ${isFlaggedOf(selectedTicket) ? 'text-yellow-500 bg-yellow-50' : 'text-gray-300 hover:text-yellow-400 hover:bg-gray-50'}`}>
                             <IconStar className={`w-4 h-4 ${isFlaggedOf(selectedTicket) ? 'fill-yellow-400' : ''}`} />
                         </button>
-                        <button onClick={() => setSelectedTicketId(null)} className="bg-white text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-full border border-gray-200 transition-colors shadow-sm w-8 h-8 flex items-center justify-center">✕</button>
+                        <button onClick={() => setSelectedTicketId(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">✕</button>
                     </div>
                 </div>
-                <div className="flex-grow overflow-y-auto p-6 bg-gray-50/50">
-                    {activeModalTab === 'info' ? (
+                <div className={`flex-grow overflow-y-auto ${formSheet && activeModalTab === 'info' ? 'p-4 bg-white' : 'p-5 bg-gray-50/50'}`}>
+                    {activeModalTab === 'info' && formSheet ? (
+                        <div className="space-y-3">
+                            <div className="rounded-2xl bg-gray-50 px-3.5 py-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+                                <div><span className="block text-[11px] text-gray-400 mb-0.5">{t.fullName}</span><span className="font-semibold text-gray-900">{selectedTicket.customerName}</span></div>
+                                <div><span className="block text-[11px] text-gray-400 mb-0.5">{t.mobile}</span><span className="font-semibold text-gray-900 dir-ltr block text-right">{selectedTicket.phoneNumber}</span></div>
+                                {selectedTicket.companyName ? <div><span className="block text-[11px] text-gray-400 mb-0.5">{t.company}</span><span className="font-semibold text-gray-900">{selectedTicket.companyName}</span></div> : null}
+                                {selectedTicket.location && selectedTicket.location !== '-' ? <div><span className="block text-[11px] text-gray-400 mb-0.5">{t.location}</span><span className="font-semibold text-gray-900">{selectedTicket.location}</span></div> : null}
+                            </div>
+                            <FormRequestAnswers
+                                ticket={selectedTicket}
+                                form={customForms.find(f => f.id === (selectedTicket.customData?.formId || selectedTicket.serviceId?.replace(/^form:/, '')))}
+                                formTitle={getServiceTitle(selectedTicket.serviceId, selectedTicket)}
+                                lang={lang === 'en' ? 'en' : 'fa'}
+                                compact
+                            />
+                            <div className="rounded-2xl border border-gray-100 p-3 space-y-2.5">
+                                <div className="flex items-center gap-2">
+                                    <select className={`flex-1 p-2 rounded-xl border text-[13px] font-semibold outline-none ${getStatusBadge(selectedTicket.status)}`} value={selectedTicket.status} onChange={(e) => handleUpdateTicketStatus(e.target.value as TicketStatus)}>{Object.values(TicketStatus).map(s => <option key={s} value={s}>{s}</option>)}</select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <select className="flex-1 p-2 rounded-xl border border-gray-200 text-[13px] outline-none bg-white" value={tempAssignedTo} onChange={(e) => setTempAssignedTo(e.target.value)} disabled={!canAssign}>
+                                        <option value="">{t.notAssigned}</option>
+                                        {personnel.filter(p => p.status === 'active').map(p => <option key={p.id} value={p.id}>{formatPersonnelLabel(p, { withRole: true })}</option>)}
+                                    </select>
+                                    <button onClick={handleAssignTicket} disabled={!canAssign || tempAssignedTo === selectedTicket.assignedTo} className="bg-gray-900 text-white px-3.5 py-2 rounded-full text-[12px] font-semibold hover:bg-black disabled:opacity-40">{t.assign}</button>
+                                </div>
+                            </div>
+                            {(isAdmin || isMaster) && (
+                                <button onClick={() => handleDelete(selectedTicket.id)} className="w-full text-red-500 text-[12px] font-medium py-2">{t.delete}</button>
+                            )}
+                        </div>
+                    ) : activeModalTab === 'info' ? (
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="lg:col-span-2 space-y-6">
                                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">

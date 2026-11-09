@@ -1,10 +1,24 @@
 import { Ticket } from '../types';
 import { exportPdfFromPreviewElement } from './exportPreviewPdf';
-import { escapeHtml, FormAnswerRow } from './formRequestAnswers';
+import { displayImageSrc, escapeHtml, FormAnswerRow, isHttpUrl, isImageUrl } from './formRequestAnswers';
 import { formatJalaliDateFa } from './persianDateTime';
 
-function isUrl(s: string): boolean {
-  return /^https?:\/\//i.test(s.trim());
+function answerHtml(row: FormAnswerRow, i: number): string {
+  const raw = String(row.value || '').trim();
+  const url = isHttpUrl(raw);
+  const img = isImageUrl(raw);
+  const linkLine = url
+    ? `<div class="link">لینک فایل: <span dir="ltr">${escapeHtml(raw)}</span></div>`
+    : '';
+  const body = img
+    ? `<img src="${escapeHtml(displayImageSrc(raw))}" alt="" class="photo" />${linkLine}`
+    : url
+      ? linkLine
+      : escapeHtml(raw).replace(/\n/g, '<br/>');
+  return `<section class="qa">
+      <div class="q"><span class="n">${i + 1}</span>${escapeHtml(row.label)}</div>
+      <div class="a">${body}</div>
+    </section>`;
 }
 
 export async function exportFormRequestPdf(opts: {
@@ -15,15 +29,7 @@ export async function exportFormRequestPdf(opts: {
 }): Promise<void> {
   const { ticket, formTitle, answers } = opts;
   const dateFa = ticket.createdAt ? formatJalaliDateFa(ticket.createdAt, true) : '';
-  const qa = answers.map((row, i) => {
-    const valHtml = isUrl(row.value)
-      ? `<a href="${escapeHtml(row.value)}" style="color:#1d4ed8;word-break:break-all">${escapeHtml(row.value)}</a>`
-      : escapeHtml(row.value).replace(/\n/g, '<br/>');
-    return `<section class="qa">
-      <div class="q"><span class="n">${i + 1}</span>${escapeHtml(row.label)}</div>
-      <div class="a">${valHtml}</div>
-    </section>`;
-  }).join('');
+  const qa = answers.map((row, i) => answerHtml(row, i)).join('');
 
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-240vw;top:0;opacity:0.01;pointer-events:none;z-index:-1';
@@ -38,6 +44,8 @@ export async function exportFormRequestPdf(opts: {
       .q { background: #ecfdf5; color: #134e4a; font-size: 13px; font-weight: 700; padding: 9px 12px; display: flex; gap: 8px; align-items: flex-start; }
       .n { display:inline-flex; min-width: 22px; height: 22px; border-radius: 999px; background:#0f766e; color:#fff; font-size:11px; align-items:center; justify-content:center; margin-top:1px; }
       .a { padding: 10px 12px 12px; font-size: 13px; line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
+      .photo { display:block; max-width:100%; max-height:280px; object-fit:contain; border-radius:8px; background:#fff; margin:0 0 8px; }
+      .link { font-size: 11px; color: #1d4ed8; word-break: break-all; line-height: 1.6; white-space: normal; }
       .foot { margin-top: 18px; font-size: 11px; color: #64748b; }
     </style>
     <div class="hdr">
