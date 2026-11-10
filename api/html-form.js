@@ -409,6 +409,7 @@ ${faviconTags(favicon)}
 function injectBridge(html, formId, origin) {
   const endpoint = `${origin}/api/html-form`;
   const freshKey = `td-html-fresh-${formId}`;
+  html = String(html || '').replace(/const\s+SUBMIT_URL\s*=\s*(['"])[^'"]*\1/, `const SUBMIT_URL=${JSON.stringify(endpoint)}`);
   const boot = `<script>(function(){
     try{
       if(!sessionStorage.getItem(${JSON.stringify(freshKey)})) return;
@@ -427,6 +428,40 @@ function injectBridge(html, formId, origin) {
     var FORM_ID=${JSON.stringify(formId)};
     var ENDPOINT=${JSON.stringify(endpoint)};
     var UPLOAD=${JSON.stringify(`${origin}/api/html-form-file`)};
+    var origFetch=window.fetch;
+    window.fetch=function(u,o){
+      try{
+        var s=String(typeof u==="string"?u:(u&&u.url)||"");
+        var ours=s.indexOf("/api/html-form")>=0||s.indexOf("/api/hosted-pack")>=0||s.indexOf("/api/arka-forms")>=0;
+        if(ours && o && typeof FormData!=="undefined" && o.body instanceof FormData){
+          return (async function(){
+            var fd=o.body;
+            var raw=fd.get("data");
+            var data={};
+            try{ data=typeof raw==="string"?JSON.parse(raw):(raw&&typeof raw==="object"?raw:{}); }catch(e){ data={}; }
+            fd.forEach(function(val,key){
+              if(key==="data"||key==="photos[]"||key==="photos"||key==="formId"||key==="honeypot"||key==="file") return;
+              if(typeof val==="string" && val && data[key]==null) data[key]=val;
+            });
+            var files=[];
+            var photos=[].concat(fd.getAll("photos[]")||[], fd.getAll("photos")||[]);
+            for(var i=0;i<photos.length;i++){
+              var f=photos[i];
+              if(!f || !f.name) continue;
+              var b64=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(String(fr.result||"").split(",")[1]||""); }; fr.onerror=rej; fr.readAsDataURL(f); });
+              var up=await origFetch(UPLOAD,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:FORM_ID,filename:String(f.name).slice(-80),contentType:f.type||"image/jpeg",data:b64})});
+              var j=await up.json().catch(function(){return {};});
+              if(j.url) files.push({name:f.name,type:f.type||"image/jpeg",size:f.size||0,content:j.url,label:"عکس پیوست"});
+            }
+            return origFetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:FORM_ID,data:data,files:files})});
+          })();
+        }
+        if(ours && o && typeof o.body==="string"){
+          try{ var j=JSON.parse(o.body); j.formId=j.formId||FORM_ID; o=Object.assign({},o,{body:JSON.stringify(j)}); }catch(e){}
+        }
+      }catch(e){}
+      return origFetch.apply(this, arguments);
+    };
     var inFlight=false;
     var lastSentAt=0;
     var SNAP={};
@@ -587,17 +622,20 @@ function injectBridge(html, formId, origin) {
       if(looksLikeVisitor(o)) return false;
       if(o.S && typeof o.S==="object" && !Array.isArray(o.S)) return true;
       var keys=Object.keys(o).join(" ").toLowerCase();
-      return /(nm|ph|mobile|phone|whatsapp|fullName|fullname|نام|موبایل|email|شرکت)/i.test(keys);
+      return /(nm|ph|mobile|phone|whatsapp|fullName|fullname|نام|موبایل|email|شرکت|idea|industry|answers)/i.test(keys);
     }
     function takeFormObj(out,o){
       if(!looksLikeFormState(o)) return;
-      if(o.S && typeof o.S==="object") mergeObj(out,o.S);
-      else mergeObj(out,o);
+      var src=o.S && typeof o.S==="object" ? o.S : o;
+      mergeObj(out,src);
+      ["ans","answers","areas","suggested","ids"].forEach(function(k){
+        if(src[k] && typeof src[k]==="object") out[k]=src[k];
+      });
     }
     function fromStorage(){
       var out={};
       try{
-        var prefer=["arka-exs","arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID];
+        var prefer=["arka-feasibility-form-v1","arka-exs","arka-req","htmlform-"+FORM_ID,"form-"+FORM_ID,FORM_ID];
         prefer.forEach(function(key){
           var raw=localStorage.getItem(key);
           if(!raw) return;
@@ -705,7 +743,9 @@ function injectBridge(html, formId, origin) {
         img.src=url;
       });
     }
+    var imgBlobUrls=[];
     function collectFileInputs(){
+      imgBlobUrls=[];
       document.querySelectorAll("input[type=file]").forEach(function(el,i){
         if(!el.files || !el.files.length) return;
         var q=nearbyQuestion(el)||labelOf(el)||el.getAttribute("name")||el.id||("فایل "+(i+1));
@@ -716,6 +756,9 @@ function injectBridge(html, formId, origin) {
         var w=img.naturalWidth||img.width||0;
         if(w && w<60) return;
         if(src.indexOf("data:image/")===0 && src.length>2000) stashDataUrl("preview_"+i, src);
+        if(/^blob:/i.test(src) && (!w || w>=40)){
+          try{ imgBlobUrls.push({src:src,label:img.getAttribute("alt")||"عکس پیوست"}); }catch(e){}
+        }
       });
       return FILE_SNAP.slice(0,8);
     }
@@ -733,6 +776,12 @@ function injectBridge(html, formId, origin) {
         try{
           var f=await dataUrlToFile(DATA_URLS[keys[i]], (keys[i]||"photo")+".jpg");
           rememberFile(f, keys[i]);
+        }catch(e){}
+      }
+      for(var b=0;b<imgBlobUrls.length && FILE_SNAP.length<8;b++){
+        try{
+          var f=await dataUrlToFile(imgBlobUrls[b].src, "photo.jpg");
+          rememberFile(f, imgBlobUrls[b].label||"عکس پیوست");
         }catch(e){}
       }
       var canvases=document.querySelectorAll("canvas");
@@ -806,6 +855,7 @@ function injectBridge(html, formId, origin) {
       if(isWhatsAppEl(btn) || btn.closest && btn.closest("a[href*='whatsapp'],a[href*='wa.me'],.wa-link,#wa,#b-wa")) return null;
       var t=btnText(btn);
       if(NAV_RE.test(t)) return null;
+      if((btn.id||"")==="b-submit") return null;
       if(/whatsapp|واتس\\s*اپ/i.test(t) && !/ثبت|ارسال\\s*نهایی/i.test(t)) return null;
       if((btn.getAttribute("type")||"").toLowerCase()==="submit") return btn;
       if(SUBMIT_RE.test(t)) return btn;
@@ -1054,6 +1104,7 @@ function isJunkText(s, key) {
   if (/^Guest\s+\d+$/i.test(t)) return true;
   if (/Guest\s+\d+/i.test(t) && t.includes(',')) return true;
   if (isContactKey(key)) return false;
+  if (/^(idea|industry|stage|market|budget|company|city|score|level)$/i.test(String(key || ''))) return false;
   if (t.length > 180 && t.split(',').length > 4) return true;
   return false;
 }
@@ -1095,7 +1146,9 @@ function extractPhone(data) {
     'موبایل / واتس‌اپ', 'موبایل / واتس‌اپ (با کد کشور)', 'واتس‌اپ',
   ], { phone: true });
   if (direct) return direct;
-  for (const v of Object.values(data || {})) {
+  for (const [k, v] of Object.entries(data || {})) {
+    if (v && typeof v === 'object') continue;
+    if (/^(ans|answers|areas|score|level)$/i.test(k)) continue;
     const d = digits(v);
     if (d.length >= 8 && d.length <= 15) return flattenVal(v).trim();
   }
@@ -1132,9 +1185,17 @@ function cleanFormData(raw) {
   const data = {};
   for (const [k, v] of Object.entries(raw || {})) {
     if (SKIP_DATA_KEYS.test(k)) continue;
+    if (v && typeof v === 'object' && ['ans', 'answers', 'areas', 'suggested', 'ids'].includes(k)) {
+      data[k] = v;
+      continue;
+    }
+    if (typeof v === 'number' || typeof v === 'boolean') {
+      data[k] = v;
+      continue;
+    }
     const s = flattenVal(v).trim();
     if (!s || isJunkText(s, k)) continue;
-    data[k] = s.slice(0, 4000);
+    data[k] = (k === 'idea' ? s.slice(0, 8000) : s.slice(0, 4000));
   }
   return data;
 }
@@ -1340,6 +1401,80 @@ function coerceAnswerRows(raw) {
   }).filter(Boolean);
 }
 
+const FEAS_IND = { food: 'غذایی و کشاورزی', cosm: 'آرایشی و بهداشتی', craft: 'صنایع دستی و هنری', fashion: 'پوشاک و نساجی', manu: 'تولیدی و صنعتی', svc: 'خدماتی', online: 'فروشگاه آنلاین و فناوری', other: 'سایر' };
+const FEAS_STAGE = { idea: 'فقط ایده دارم', proto: 'نمونه اولیه دارم', early: 'فروش محدود دارم', run: 'فعال هستم و می‌خواهم گسترش دهم' };
+const FEAS_MKT = { ir: 'داخل ایران', gcc: 'عمان و کشورهای خلیج فارس', exp: 'سایر کشورها (صادرات)', tbd: 'هنوز مشخص نیست' };
+const FEAS_HEARD = { ig: 'اینستاگرام', ref: 'معرفی دوستان', web: 'سایت', fair: 'نمایشگاه', other: 'سایر' };
+const FEAS_YN = { 2: 'بله', 1: 'تا حدی', 0: 'هنوز نه' };
+const FEAS_AREAS = { mkt: 'بازار و مشتری', prod: 'محصول و تأمین', brand: 'برند و بسته‌بندی', fin: 'مالی و قیمت‌گذاری', team: 'تیم و الزامات قانونی', sales: 'کانال فروش' };
+const FEAS_QS = [
+  ['q1', 'mkt', 'مشتری هدفتان را دقیق می‌شناسید؟ (چه کسی، کجا، با چه نیازی)'],
+  ['q2', 'mkt', 'رقبای اصلی و قیمت‌هایشان را می‌شناسید؟'],
+  ['q3', 'mkt', 'نشانه‌ای از تقاضا دارید؟ مثل پیش‌سفارش، فروش آزمایشی یا درخواست مشتری'],
+  ['q4', 'prod', 'محصول یا خدمتتان دقیق تعریف شده و نمونه دارد؟'],
+  ['q5', 'prod', 'تأمین مواد اولیه یا روش تولید و اجرا را حل کرده‌اید؟'],
+  ['q6', 'brand', 'نام، لوگو و بسته‌بندی آماده عرضه دارید؟'],
+  ['q7', 'fin', 'سرمایه لازم برای راه‌اندازی را در اختیار دارید؟'],
+  ['q8', 'fin', 'قیمت تمام‌شده و قیمت فروش را حساب کرده‌اید؟'],
+  ['q9', 'team', 'تیم یا نیروی اجرایی لازم را دارید؟'],
+  ['q10', 'team', 'مجوزها، ثبت شرکت و الزامات قانونی کارتان را می‌شناسید؟'],
+  ['q11', 'sales', 'می‌دانید از چه کانالی می‌فروشید؟ آنلاین، فروشگاه، عمده‌فروشی یا صادرات'],
+];
+
+function mapFeasCode(dict, v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  if (dict[s] || dict[s.toLowerCase()]) return dict[s] || dict[s.toLowerCase()];
+  if (/[\u0600-\u06FF]/.test(s) || s.length > 12) return s;
+  return s;
+}
+
+function expandFeasibilityRows(data) {
+  const d = data || {};
+  const ans = maybeParseJson(d.answers || d.ans);
+  const hasQuiz = ans && typeof ans === 'object' && !Array.isArray(ans) && FEAS_QS.some(([id]) => ans[id] != null && ans[id] !== '');
+  const hasIdea = !!(d.idea || d.industry || d.ind || d.stage || d.mkt);
+  if (!hasQuiz && !hasIdea) return [];
+  const rows = [];
+  const add = (label, value) => {
+    const v = flattenVal(value).trim();
+    if (!label || !v || v === '{}' || v === '[]') return;
+    rows.push({ label, value: v.slice(0, 8000) });
+  };
+  add('ایده', d.idea);
+  add('حوزه', d.industry || mapFeasCode(FEAS_IND, d.ind));
+  add('مرحله', mapFeasCode(FEAS_STAGE, d.stage) || d.stage);
+  add('بازار هدف', d.market || mapFeasCode(FEAS_MKT, d.mkt));
+  add('بودجه', d.budget);
+  if (hasQuiz) {
+    FEAS_QS.forEach(([id, area, q]) => {
+      const raw = ans[id];
+      if (raw == null || raw === '') return;
+      const mapped = FEAS_YN[raw] || FEAS_YN[String(raw)] || String(raw);
+      add(`${q} (${FEAS_AREAS[area] || area})`, mapped);
+    });
+  }
+  const areas = maybeParseJson(d.areas);
+  if (areas && typeof areas === 'object' && !Array.isArray(areas)) {
+    Object.keys(FEAS_AREAS).forEach((k) => {
+      if (areas[k] == null || areas[k] === '') return;
+      add(`امتیاز ${FEAS_AREAS[k]}`, `${areas[k]}٪`);
+    });
+  }
+  const score = d.score != null && d.score !== '' ? d.score : '';
+  const level = d.level || '';
+  if (score !== '' || level) add('امتیاز امکان‌سنجی', [score !== '' ? `${score}٪` : '', level].filter(Boolean).join(' · '));
+  const sug = Array.isArray(d.suggested) ? d.suggested.filter(Boolean).join('، ') : d.suggested;
+  add('خدمات پیشنهادی', sug);
+  add('نام', d.name);
+  add('کسب‌وکار', d.company);
+  add('موبایل', d.mobile);
+  add('ایمیل', d.email);
+  add('شهر / کشور', d.city);
+  add('آشنایی از', d.heard || mapFeasCode(FEAS_HEARD, d.heard));
+  return rows;
+}
+
 function reportRows(data, incomingAnswers) {
   const rows = [];
   const used = new Set();
@@ -1387,6 +1522,7 @@ function reportRows(data, incomingAnswers) {
 
   for (const [k, raw] of Object.entries(data || {})) {
     if (REPORT_META_KEYS.test(k) || SKIP_DATA_KEYS.test(k)) continue;
+    if (/^(ans|answers|areas|suggested|ids|ind|mkt|agree|form|score|level)$/i.test(k)) continue;
     if (!payloadRows.length && RAW_CODE_KEYS.test(k)) continue;
     const v = humanizeValue(k, raw);
     if (!v || v.startsWith('{') || v.startsWith('[')) continue;
@@ -1572,7 +1708,10 @@ export default async function handler(req, res) {
       const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
-      const answers = reportRows(data, incomingAnswers);
+      const feasRows = expandFeasibilityRows({ ...raw, ...data });
+      const incoming = coerceAnswerRows(incomingAnswers);
+      const seed = feasRows.length >= 3 ? feasRows : (incoming.length ? incoming : feasRows);
+      const answers = reportRows(data, seed);
       for (const f of incomingFiles) {
         if (!answers.some((a) => a.value === f.content)) {
           answers.push({ label: f.label || f.name || 'فایل پیوست', value: f.content });
@@ -1708,7 +1847,7 @@ export default async function handler(req, res) {
         /* ticket is saved even if WhatsApp fails */
       }
 
-      return res.status(200).json({ ok: true, ticketId });
+      return res.status(200).json({ ok: true, ticketId, tracking_code: ticketId });
     }
 
     return res.status(405).json({ error: 'method_not_allowed' });

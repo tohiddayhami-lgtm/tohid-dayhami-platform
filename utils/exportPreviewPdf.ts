@@ -70,7 +70,7 @@ async function captureEl(el: HTMLElement): Promise<HTMLCanvasElement> {
     windowWidth: PAGE_W,
     scrollX: 0,
     scrollY: 0,
-    foreignObjectRendering: true,
+    foreignObjectRendering: false,
     onclone: (_d, node) => {
       const n = node as HTMLElement;
       n.style.width = `${PAGE_W}px`;

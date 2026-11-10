@@ -274,7 +274,43 @@ function injectPackHtml(html, { formId, origin, slug, filePath, favicon }) {
   if (favicon && !/rel=["']icon["']/i.test(out)) {
     out = out.replace(/<head([^>]*)>/i, `<head$1>\n<link rel="icon" href="${favicon}">`);
   }
-  const script = `<script>(function(){var ID=${JSON.stringify(formId)};var orig=window.fetch;window.fetch=function(u,o){try{var s=String(typeof u==="string"?u:(u&&u.url)||"");if(s.indexOf("/api/hosted-pack")>=0||s.indexOf("/api/arka-forms")>=0){o=o||{};if(typeof o.body==="string"){var j=JSON.parse(o.body);j.formId=ID;o=Object.assign({},o,{body:JSON.stringify(j)});}}}catch(e){}return orig.apply(this,arguments);};})();<\/script>`;
+  const endpoint = `${origin}/api/html-form`;
+  const upload = `${origin}/api/html-form-file`;
+  const script = `<script>(function(){
+    var ID=${JSON.stringify(formId)};
+    var ENDPOINT=${JSON.stringify(endpoint)};
+    var UPLOAD=${JSON.stringify(upload)};
+    var orig=window.fetch;
+    window.fetch=function(u,o){
+      try{
+        var s=String(typeof u==="string"?u:(u&&u.url)||"");
+        var ours=s.indexOf("/api/hosted-pack")>=0||s.indexOf("/api/html-form")>=0||s.indexOf("/api/arka-forms")>=0;
+        if(ours && o && typeof FormData!=="undefined" && o.body instanceof FormData){
+          return (async function(){
+            var fd=o.body;
+            var raw=fd.get("data");
+            var data={};
+            try{ data=typeof raw==="string"?JSON.parse(raw):(raw&&typeof raw==="object"?raw:{}); }catch(e){ data={}; }
+            var files=[];
+            var photos=[].concat(fd.getAll("photos[]")||[], fd.getAll("photos")||[]);
+            for(var i=0;i<photos.length;i++){
+              var f=photos[i];
+              if(!f||!f.name) continue;
+              var b64=await new Promise(function(res,rej){ var fr=new FileReader(); fr.onload=function(){ res(String(fr.result||"").split(",")[1]||""); }; fr.onerror=rej; fr.readAsDataURL(f); });
+              var up=await orig(UPLOAD,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:ID,filename:String(f.name).slice(-80),contentType:f.type||"image/jpeg",data:b64})});
+              var j=await up.json().catch(function(){return {};});
+              if(j.url) files.push({name:f.name,type:f.type||"image/jpeg",size:f.size||0,content:j.url,label:"عکس پیوست"});
+            }
+            return orig(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:ID,data:data,files:files})});
+          })();
+        }
+        if(ours && o && typeof o.body==="string"){
+          try{ var j=JSON.parse(o.body); j.formId=j.formId||ID; o=Object.assign({},o,{body:JSON.stringify(j)}); }catch(e){}
+        }
+      }catch(e){}
+      return orig.apply(this,arguments);
+    };
+  })();<\/script>`;
   if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, `${script}</body>`);
   return `${out}\n${script}`;
 }
@@ -284,7 +320,11 @@ function closedPage(title, message) {
 }
 
 function flattenSubmit(payload) {
-  const inner = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  let inner = payload.data;
+  if (typeof inner === 'string') {
+    try { inner = JSON.parse(inner); } catch { inner = {}; }
+  }
+  if (!inner || typeof inner !== 'object' || Array.isArray(inner)) inner = {};
   return {
     ...inner,
     form: payload.form || inner.form,
