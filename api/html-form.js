@@ -1235,10 +1235,48 @@ function pick(data, keys, opts = {}) {
   const lowerKeys = keys.map(k => String(k).toLowerCase());
   for (const [dk, dv] of Object.entries(data || {})) {
     const dl = String(dk).toLowerCase();
-    if (lowerKeys.some(k => dl === k || dl.includes(k) || k.includes(dl))) {
+    if (lowerKeys.some(k => labelMatchesKey(dl, k))) {
       const s = allow(dv);
       if (s) return s;
     }
+  }
+  return '';
+}
+
+function labelMatchesKey(dataKey, needle) {
+  const dl = String(dataKey || '').toLowerCase().trim();
+  const k = String(needle || '').toLowerCase().trim();
+  if (!dl || !k) return false;
+  if (dl === k) return true;
+  // «نام» باید ابتدای برچسب باشد، نه وسط کلمه‌ای مثل «گواهینامه»
+  if (dl.startsWith(k) && (dl.length === k.length || /[\s/:،,_\-]/.test(dl[k.length]))) return true;
+  if (k.length >= 4 && dl.includes(k)) return true;
+  return false;
+}
+
+function isPersonNameLabel(label) {
+  const t = String(label || '').replace(/\*+/g, '').replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 40) return false;
+  if (/گواهی|دوره|توضیح|موضوع|سوابق|تدریس|مهارت|تحصیل|پروژه|تجربه/.test(t)) return false;
+  return /^(نام( و نام خانوادگی| کامل| متقاضی| مشتری)?|full name|fullname|full_name|customer name|customername|name|nm)$/i.test(t);
+}
+
+function isPlausiblePersonName(value) {
+  const t = String(value || '').trim();
+  if (t.length < 2 || t.length > 80) return false;
+  if (/[?؟\n]/.test(t)) return false;
+  if ((t.match(/[.،,]/g) || []).length > 3) return false;
+  return true;
+}
+
+function personNameFromRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue;
+    const label = String(row.label || row.key || '').replace(/\s+/g, ' ').trim();
+    const value = flattenVal(row.value).trim();
+    if (!isPersonNameLabel(label) || !isPlausiblePersonName(value)) continue;
+    return value;
   }
   return '';
 }
@@ -1262,19 +1300,23 @@ function extractPhone(data) {
   return '';
 }
 
-function extractName(data, phone) {
+function extractName(data, phone, answers) {
+  const fromRows = personNameFromRows(answers)
+    || personNameFromRows(data?.__answers)
+    || personNameFromRows(data?.answers);
+  if (fromRows && digits(fromRows) !== digits(phone)) return fromRows;
   const direct = pick(data, [
-    'nm', 'name', 'fullName', 'full_name', 'customerName', 'نام', 'نام و نام خانوادگی', 'نام کامل',
+    'نام و نام خانوادگی', 'نام کامل', 'نام متقاضی', 'نام مشتری',
+    'fullName', 'full_name', 'customerName', 'name', 'nm', 'نام',
   ]);
-  if (direct && digits(direct) !== digits(phone)) return direct;
+  if (direct && digits(direct) !== digits(phone) && isPlausiblePersonName(direct)) return direct;
   for (const [k, v] of Object.entries(data || {})) {
-    if (!isContactKey(k) && /svc|field|goal|exp|market|ans|note|heard/i.test(k)) continue;
+    if (!isPersonNameLabel(k)) continue;
     const t = flattenVal(v).trim();
-    if (t.length >= 3 && t.length <= 80 && /[^\d+]/.test(t) && digits(t) !== digits(phone) && !isJunkText(t, k)) {
-      if (/نام/.test(k) || /^name$/i.test(k)) return t;
-    }
+    if (!isPlausiblePersonName(t) || digits(t) === digits(phone)) continue;
+    return t;
   }
-  return direct || '';
+  return '';
 }
 
 function safeFieldKey(k) {
@@ -1949,7 +1991,7 @@ export default async function handler(req, res) {
       const data = cleanFormData(raw);
 
       const phone = extractPhone(data);
-      const name = extractName(data, phone) || 'بدون نام';
+      const name = extractName(data, phone, incomingAnswers) || 'بدون نام';
       const email = pick(data, ['email', 'ایمیل']);
       const company = pick(data, ['company', 'companyName', 'شرکت', 'شرکت / برند']);
       const city = pick(data, ['city', 'location', 'country', 'شهر', 'شهر / کشور']) || '-';
