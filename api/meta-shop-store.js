@@ -111,9 +111,18 @@ function page(title, message) {
   return `<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font-family:Tahoma,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f8fafc;color:#0f172a"><div style="text-align:center;padding:24px"><h1 style="font-size:20px">${title}</h1><p>${message}</p></div></body></html>`;
 }
 
+function rewriteProductHash(html) {
+  return String(html || '')
+    .replace(
+      /P\.find\(x=>x\.id===id\)/g,
+      'P.find(x=>x.id===id||String(x.sku||"")===id||String(x.sku||"").toLowerCase()===String(id||"").toLowerCase())',
+    )
+    .replace(/openP\(h\.slice\(3\)\)/g, 'openP(decodeURIComponent(h.slice(3)))');
+}
+
 function injectOrderBridge(html, { slug, origin, filePath }) {
   const endpoint = `${origin}/api/meta-shop-order?shop=${encodeURIComponent(slug)}`;
-  let out = String(html || '');
+  let out = rewriteProductHash(html);
   out = out.replace(/const\s+SUBMIT_URL\s*=\s*[^;]+;/, `const SUBMIT_URL=${JSON.stringify(endpoint)};`);
   if (filePath && !/<base\s/i.test(out)) {
     const dir = filePath.includes('/') ? filePath.replace(/\/[^/]+$/, '/') : '';
@@ -140,6 +149,27 @@ function injectOrderBridge(html, { slug, origin, filePath }) {
       }catch(e){}
       return orig.apply(this, arguments);
     };
+    function openHashedProduct(){
+      var h=location.hash||"";
+      if(h.indexOf("#p-")!==0) return;
+      var key="";
+      try{ key=decodeURIComponent(h.slice(3)); }catch(e){ key=h.slice(3); }
+      if(!key) return;
+      var btn=document.querySelector('[data-open="'+key.replace(/"/g,"")+'"]');
+      if(btn){ btn.click(); return; }
+      var node=document.getElementById("shop-data");
+      if(!node) return;
+      var d; try{ d=JSON.parse(node.textContent||"{}"); }catch(e){ return; }
+      var ps=(d.products&&d.products.length?d.products:(d.shop&&d.shop.products)||[]);
+      var want=key.toLowerCase();
+      var p=ps.find(function(x){ return x&&(x.id===key||String(x.sku||"")===key||String(x.sku||"").toLowerCase()===want); });
+      if(!p||!p.id) return;
+      var real=document.querySelector('[data-open="'+String(p.id).replace(/"/g,"")+'"]');
+      if(real) real.click();
+    }
+    window.addEventListener("hashchange", openHashedProduct);
+    openHashedProduct();
+    setTimeout(openHashedProduct, 50);
   })();<\/script>`;
   if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, `${script}</body>`);
   return `${out}\n${script}`;
