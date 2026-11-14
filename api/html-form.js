@@ -486,6 +486,18 @@ function injectBridge(html, formId, origin) {
       try{
         var s=String(typeof u==="string"?u:(u&&u.url)||"");
         var ours=s.indexOf("/api/html-form")>=0||s.indexOf("/api/hosted-pack")>=0||s.indexOf("/api/arka-forms")>=0;
+        function revealTracking(resp){
+          return resp.then? resp.then(function(r){ return readTracking(r); }) : readTracking(resp);
+        }
+        async function readTracking(resp){
+          if(s.indexOf("html-form-file")>=0) return resp;
+          try{
+            var j=await resp.clone().json();
+            var code=j && (j.tracking_code||j.ticketId);
+            if(resp.ok && code && code!=="OK") showSuccess(code);
+          }catch(e){}
+          return resp;
+        }
         if(ours && o && typeof FormData!=="undefined" && o.body instanceof FormData){
           return (async function(){
             var fd=o.body;
@@ -508,7 +520,7 @@ function injectBridge(html, formId, origin) {
             }
             var packed={formId:FORM_ID,data:data,files:files};
             packed=await attachSnapshot(packed);
-            return origFetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(packed)});
+            return revealTracking(origFetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(packed)}));
           })();
         }
         if(ours && o && typeof o.body==="string"){
@@ -525,7 +537,7 @@ function injectBridge(html, formId, origin) {
                 j.data=wrapped;
               }
               j=await attachSnapshot(j);
-              return origFetch.call(this, u, Object.assign({}, o, {body:JSON.stringify(j)}));
+              return revealTracking(origFetch.call(this, u, Object.assign({}, o, {body:JSON.stringify(j)})));
             }catch(e){
               return origFetch.call(this, u, o);
             }
@@ -1040,25 +1052,40 @@ function injectBridge(html, formId, origin) {
         try{ location.reload(); }catch(e2){}
       }
     }
-    function showSuccess(){
+    function showSuccess(code){
       hideBusy();
       wipeFormMemory();
       try{ sessionStorage.setItem(freshKey(),"1"); }catch(e){}
+      var c=String(code||"").trim();
+      if(c==="OK") c="";
+      if(c) window.__tdTrack=c;
+      else c=String(window.__tdTrack||"");
       try{
         var old=document.getElementById("td-form-ok");
+        if(old && old.getAttribute("data-code")===c) return;
         if(old) old.remove();
         var el=document.createElement("div");
         el.id="td-form-ok";
         el.setAttribute("role","dialog");
-        el.style.cssText="position:fixed;inset:0;z-index:100002;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tahoma,sans-serif";
-        el.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:18px;padding:28px 24px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25)"><div style="width:52px;height:52px;border-radius:50%;background:#d1fae5;color:#047857;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font:700 26px/1 Tahoma,sans-serif">✓</div><div style="font:700 16px/1.8 Tahoma,sans-serif">فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند</div><button type="button" id="td-form-ok-btn" style="margin-top:18px;background:#0f766e;color:#fff;border:0;border-radius:12px;padding:12px 22px;font:700 14px Tahoma,sans-serif;cursor:pointer">شروع فرم جدید</button></div>';
+        el.setAttribute("data-code", c);
+        el.style.cssText="position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.32);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);display:flex;align-items:flex-end;justify-content:center;padding:12px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Tahoma,sans-serif";
+        var codeBlock=c?'<div style="margin:22px 0 4px;font-size:13px;color:#6e6e73">کد رهگیری</div><div id="td-track-code" dir="ltr" style="font-size:32px;font-weight:600;letter-spacing:.14em;color:#1d1d1f">'+c.replace(/[&<>]/g,"")+'</div><button type="button" id="td-copy-code" style="margin-top:16px;width:100%;background:#1d1d1f;color:#fff;border:0;border-radius:980px;padding:12px 18px;font:600 15px/1 -apple-system,Tahoma,sans-serif;cursor:pointer">کپی کد</button><a id="td-track-link" style="display:block;margin-top:12px;color:#0071e3;font-size:14px;text-decoration:none" target="_blank" rel="noopener">پیگیری با این کد</a>':'';
+        el.innerHTML='<div style="background:#f5f5f7;color:#1d1d1f;border-radius:28px;padding:28px 22px 18px;max-width:400px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.18)"><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">ثبت شد</div><div style="font-size:14px;color:#6e6e73;margin-top:6px;line-height:1.6">این کد را نگه دارید و برای پیگیری کارتان بدهید.</div>'+codeBlock+'<button type="button" id="td-form-ok-btn" style="margin-top:14px;background:transparent;color:#6e6e73;border:0;padding:8px;font:500 14px/1 -apple-system,Tahoma,sans-serif;cursor:pointer">فرم جدید</button></div>';
         document.body.appendChild(el);
+        var copyBtn=document.getElementById("td-copy-code");
+        if(copyBtn) copyBtn.onclick=function(ev){
+          ev.preventDefault(); ev.stopPropagation();
+          var text=(document.getElementById("td-track-code")||{}).textContent||c;
+          var done=function(){ copyBtn.textContent="کپی شد"; };
+          if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(done);
+          else done();
+        };
+        var link=document.getElementById("td-track-link");
+        if(link && c) link.href=location.origin+"/?page=tracking&code="+encodeURIComponent(c);
         var btn=document.getElementById("td-form-ok-btn");
         if(btn) btn.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); resetToStart(); };
-        setTimeout(resetToStart, 2500);
       }catch(e){
-        toast("فرم شما با موفقیت ثبت شد و همکاران ما با شما ارتباط می‌گیرند", true);
-        setTimeout(resetToStart, 1800);
+        toast(c ? ("ثبت شد. کد رهگیری: "+c) : "فرم شما ثبت شد", true);
       }
     }
     async function submitToCrm(){
@@ -1110,11 +1137,13 @@ function injectBridge(html, formId, origin) {
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({formId:FORM_ID,data:data,files:uploaded})
         });
+        var code="";
+        try{ var j=await r.clone().json(); code=j.tracking_code||j.ticketId||""; }catch(e){}
         hideBusy();
         if(!r.ok){ toast("خطا در ثبت در سامانه. دوباره تلاش کنید.", false); return false; }
         lastSentAt=Date.now();
         markSent(data);
-        showSuccess();
+        showSuccess(code);
         return true;
       }catch(e){
         hideBusy();
@@ -1721,6 +1750,39 @@ function reportRows(data, incomingAnswers) {
   return rows;
 }
 
+function clientTrackingCode(data) {
+  const keys = ['کد پیگیری', 'trackingCode', 'tracking_code'];
+  for (const k of keys) {
+    const v = String(data?.[k] || '').trim();
+    if (/^[A-Za-z0-9][A-Za-z0-9-]{3,28}$/.test(v)) return v.toUpperCase();
+  }
+  return '';
+}
+
+function makePublicCode(prefix) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = `${prefix}-`;
+  for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+
+async function allocTrackingCode(form, data) {
+  const prefix = form?.kind === 'pack' ? 'ARK' : 'FRM';
+  const candidates = [];
+  const given = clientTrackingCode(data);
+  if (given) candidates.push(given);
+  for (let i = 0; i < 5; i++) candidates.push(makePublicCode(prefix));
+  for (const id of candidates) {
+    try {
+      const existing = await getDoc('tickets', id);
+      if (!existing) return id;
+    } catch {
+      return id;
+    }
+  }
+  return `${makePublicCode(prefix)}${Date.now().toString().slice(-4)}`;
+}
+
 function buildFormDescription(formTitle, ticketId, name, phone, rows) {
   const lines = [
     `فرم: ${formTitle}`,
@@ -1894,7 +1956,7 @@ export default async function handler(req, res) {
       const phoneNorm = digits(phone);
 
       const now = new Date().toISOString();
-      const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
+      const ticketId = await allocTrackingCode(form, data);
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
       const merged = { ...raw, ...data };
@@ -1925,6 +1987,7 @@ export default async function handler(req, res) {
         formTitle,
         importSource: 'html_form',
         requestId: ticketId,
+        trackingCode: ticketId,
         customerName: name,
         customerPhone: phone || '',
         __answersJson: JSON.stringify(answers.slice(0, 80)),

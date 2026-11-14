@@ -4,7 +4,7 @@ import { CustomForm, Ticket, TicketStatus, AttachedFile } from '../types';
 import { Language } from '../App';
 import { getCustomFormById, uploadFileWithProgress } from '../services/firebaseService';
 import { applyPageMeta, metaFromForm } from '../utils/pageMeta';
-import { IconCheck, IconClipboard, IconCopy, IconSearch, IconFile, IconTrash, IconUpload } from './Icons';
+import { IconClipboard, IconFile, IconTrash, IconUpload } from './Icons';
 
 interface Props {
   formId: string;
@@ -291,12 +291,12 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       phoneLabel: 'شماره تماس', phonePlaceholder: 'مثال: 09120000000',
       required: 'این فیلد الزامی است',
       submit: 'ثبت فرم', submitting: 'در حال ثبت...',
-      successTitle: 'فرم با موفقیت ثبت شد',
+      successTitle: 'ثبت شد',
       successSub: 'کارشناسان ما در اسرع وقت با شما تماس می‌گیرند.',
-      trackingLabel: 'کد رهگیری شما:',
-      copy: 'کپی', copied: 'کپی شد', download: 'دانلود رسید',
-      trackBtn: 'پیگیری وضعیت', fillAnother: 'ارسال فرم جدید',
-      keepCode: 'این کد را نگه دارید — برای پیگیری وضعیت درخواستتان نیاز دارید.',
+      trackingLabel: 'کد رهگیری',
+      copy: 'کپی کد', copied: 'کپی شد', download: 'رسید',
+      trackBtn: 'پیگیری', fillAnother: 'فرم جدید',
+      keepCode: 'این کد را نگه دارید و برای پیگیری کارتان بدهید.',
       attachSection: 'ضمیمه فایل اضافی (اختیاری)',
       attachHint: `تا ${MAX_GENERAL_FILES} فایل — هر فایل حداکثر ${MAX_FILE_SIZE_MB} مگابایت`,
       selectFiles: 'انتخاب فایل‌ها',
@@ -315,12 +315,12 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
       phoneLabel: 'Phone Number', phonePlaceholder: 'e.g. +1 555 000 0000',
       required: 'This field is required',
       submit: 'Submit Form', submitting: 'Submitting...',
-      successTitle: 'Form Submitted Successfully',
+      successTitle: 'Submitted',
       successSub: 'Our experts will contact you as soon as possible.',
-      trackingLabel: 'Your Tracking ID:',
-      copy: 'Copy', copied: 'Copied', download: 'Download Receipt',
-      trackBtn: 'Track Status', fillAnother: 'Submit Another',
-      keepCode: 'Keep this code — you will need it to track your request.',
+      trackingLabel: 'Tracking code',
+      copy: 'Copy code', copied: 'Copied', download: 'Receipt',
+      trackBtn: 'Track', fillAnother: 'New form',
+      keepCode: 'Keep this code and use it to follow up.',
       attachSection: 'Additional Files (Optional)',
       attachHint: `Up to ${MAX_GENERAL_FILES} files — max ${MAX_FILE_SIZE_MB} MB each`,
       selectFiles: 'Select Files',
@@ -381,37 +381,22 @@ export const PublicFormView: React.FC<Props> = ({ formId, lang: appLang, appTitl
   );
 
   if (submitted) return (
-    <div className="max-w-lg mx-auto py-16 animate-fade-in" dir={formLang === 'fa' ? 'rtl' : 'ltr'}>
-      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-8">
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <IconCheck className="w-7 h-7 text-emerald-500" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">{t.successTitle}</h2>
-          <p className="text-sm text-gray-500">{t.successSub}</p>
+    <div className="max-w-[400px] mx-auto py-16 animate-fade-in" dir={formLang === 'fa' ? 'rtl' : 'ltr'}>
+      <div className="bg-[#f5f5f7] rounded-[28px] px-6 pt-8 pb-5 text-center">
+        <h2 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">{t.successTitle}</h2>
+        <p className="text-[14px] text-[#6e6e73] mt-1.5 leading-relaxed">{t.keepCode}</p>
+        <p className="text-[13px] text-[#6e6e73] mt-6">{t.trackingLabel}</p>
+        <p className="font-mono text-[32px] font-semibold tracking-[0.14em] text-[#1d1d1f] mt-1" dir="ltr">{trackingCode}</p>
+        <button onClick={copyTracking} className="mt-5 w-full py-3 rounded-full bg-[#1d1d1f] text-white text-[15px] font-semibold">
+          {copied ? t.copied : t.copy}
+        </button>
+        <div className="mt-3 flex items-center justify-center gap-5 text-[14px]">
+          <button onClick={onGoToTracking} className="text-[#0071e3] font-medium">{t.trackBtn}</button>
+          <button onClick={() => downloadReceipt(trackingCode, contactName, form?.title || '', formLang, trackingUrl)} className="text-[#6e6e73]">{t.download}</button>
         </div>
-        <p className="text-xs font-semibold text-gray-400 mb-2">{t.trackingLabel}</p>
-        <div className="bg-gray-50 border-2 border-gray-200 rounded-xl px-4 py-4 mb-2 text-center">
-          <span className="font-mono text-2xl font-bold text-gray-900 tracking-widest">{trackingCode}</span>
-        </div>
-        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">⚠ {t.keepCode}</p>
-        <div className="flex gap-2 mb-4">
-          <button onClick={copyTracking} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-colors ${copied ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
-            {copied ? <IconCheck className="w-4 h-4" /> : <IconCopy className="w-4 h-4" />}
-            {copied ? t.copied : t.copy}
-          </button>
-          <button onClick={() => downloadReceipt(trackingCode, contactName, form?.title || '', formLang, trackingUrl)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
-            <IconFile className="w-4 h-4" />{t.download}
-          </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          <button onClick={onGoToTracking} className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold hover:bg-black transition-colors flex items-center justify-center gap-2">
-            <IconSearch className="w-4 h-4" />{t.trackBtn}
-          </button>
-          <button onClick={resetForm} className="w-full px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
-            {t.fillAnother}
-          </button>
-        </div>
+        <button onClick={resetForm} className="mt-4 text-[14px] text-[#6e6e73]">
+          {t.fillAnother}
+        </button>
       </div>
     </div>
   );

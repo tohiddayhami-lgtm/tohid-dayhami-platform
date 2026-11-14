@@ -1178,10 +1178,10 @@ export const AdminDashboard: React.FC<Props> = ({
     return (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4" onClick={() => setSelectedTicketId(null)}>
             <div className="absolute inset-0 bg-black/35 backdrop-blur-md" aria-hidden />
-            <div className={`relative bg-white rounded-t-2xl sm:rounded-2xl w-full ${formSheet ? 'max-w-[560px]' : 'max-w-3xl'} shadow-[0_24px_80px_rgba(0,0,0,0.18)] border border-gray-200/70 flex flex-col max-h-[92dvh] sm:max-h-[min(88dvh,760px)] overflow-hidden`} onClick={(e) => e.stopPropagation()}>
+            <div className={`relative bg-white w-full ${formSheet ? 'max-w-[420px] rounded-t-[28px] sm:rounded-[28px]' : 'max-w-3xl rounded-t-2xl sm:rounded-2xl border border-gray-200/70'} shadow-[0_24px_80px_rgba(0,0,0,0.18)] flex flex-col max-h-[92dvh] sm:max-h-[min(88dvh,760px)] overflow-hidden`} onClick={(e) => e.stopPropagation()}>
                 <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-2 min-w-0">
-                        <div className="text-[11px] font-medium text-gray-500 font-mono truncate">{selectedTicket.id}</div>
+                        <button type="button" onClick={() => { navigator.clipboard?.writeText(selectedTicket.id); }} title={formSheet ? (lang === 'fa' ? 'کپی کد رهگیری' : 'Copy tracking code') : undefined} className={`font-mono truncate text-start ${formSheet ? 'text-[15px] font-semibold tracking-wide text-gray-900' : 'text-[11px] font-medium text-gray-500'}`}>{selectedTicket.id}</button>
                         <div className="flex bg-gray-100 rounded-full p-0.5">
                             <button onClick={() => setActiveModalTab('info')} className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-all ${activeModalTab === 'info' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{t.ticketInfo}</button>
                             <button onClick={() => setActiveModalTab('project')} className={`px-3 py-1 rounded-full text-[12px] font-semibold transition-all ${activeModalTab === 'project' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{t.projectMgmt}</button>
@@ -1210,7 +1210,7 @@ export const AdminDashboard: React.FC<Props> = ({
                                 lang={lang === 'en' ? 'en' : 'fa'}
                                 compact
                             />
-                            <div className="rounded-2xl border border-gray-100 p-3 space-y-2.5">
+                            <div className="rounded-2xl bg-gray-50 p-3 space-y-2.5">
                                 <div className="flex items-center gap-2">
                                     <select className={`flex-1 p-2 rounded-xl border text-[13px] font-semibold outline-none ${getStatusBadge(selectedTicket.status)}`} value={selectedTicket.status} onChange={(e) => handleUpdateTicketStatus(e.target.value as TicketStatus)}>{Object.values(TicketStatus).map(s => <option key={s} value={s}>{s}</option>)}</select>
                                 </div>
@@ -1221,6 +1221,35 @@ export const AdminDashboard: React.FC<Props> = ({
                                     </select>
                                     <button onClick={handleAssignTicket} disabled={!canAssign || tempAssignedTo === selectedTicket.assignedTo} className="bg-gray-900 text-white px-3.5 py-2 rounded-full text-[12px] font-semibold hover:bg-black disabled:opacity-40">{t.assign}</button>
                                 </div>
+                            </div>
+                            <div className="pt-1">
+                                <p className="text-[13px] font-semibold text-gray-900 mb-2">{lang === 'fa' ? 'مکاتبه' : 'Messages'}</p>
+                                <div className="space-y-2 max-h-44 overflow-y-auto mb-3">
+                                    {(selectedTicket.timeline || []).filter(e => e.visibility === 'internal' || e.type === 'comment' || e.type === 'customer_upload' || e.type === 'update').length === 0 && (
+                                        <p className="text-[12px] text-gray-400">{lang === 'fa' ? 'هنوز پیامی نیست' : 'No messages yet'}</p>
+                                    )}
+                                    {(selectedTicket.timeline || []).filter(e => e.visibility === 'internal' || e.type === 'comment' || e.type === 'customer_upload' || e.type === 'update').map((entry, idx) => (
+                                        <div key={idx} className={`rounded-2xl px-3 py-2 ${entry.visibility === 'internal' ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] text-gray-500">{entry.actorName}</span>
+                                                <span className="text-[10px] text-gray-400">{entry.visibility === 'internal' ? (lang === 'fa' ? 'محرمانه' : 'Private') : (lang === 'fa' ? 'مشتری می‌بیند' : 'Customer')}</span>
+                                            </div>
+                                            {entry.description && <p className="text-[13px] text-gray-900 mt-0.5 whitespace-pre-wrap leading-relaxed">{entry.description}</p>}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-1 p-0.5 bg-gray-100 rounded-full w-fit mb-2">
+                                    <button type="button" onClick={() => setCommentVisibility('public')} className={`px-3 py-1 rounded-full text-[12px] font-medium ${commentVisibility === 'public' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{lang === 'fa' ? 'پیام مشتری' : 'Customer'}</button>
+                                    <button type="button" onClick={() => setCommentVisibility('internal')} className={`px-3 py-1 rounded-full text-[12px] font-medium ${commentVisibility === 'internal' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>{lang === 'fa' ? 'محرمانه' : 'Private'}</button>
+                                </div>
+                                <textarea
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    rows={2}
+                                    placeholder={commentVisibility === 'internal' ? (lang === 'fa' ? 'یادداشت بین پرسنل؛ مشتری نمی‌بیند' : 'Staff only') : (lang === 'fa' ? 'این پیام در پیگیری مشتری دیده می‌شود' : 'Visible on tracking')}
+                                    className="w-full bg-gray-50 rounded-2xl px-3 py-2 text-[13px] outline-none resize-none"
+                                />
+                                <button type="button" onClick={handleAddComment} disabled={!newComment.trim()} className="mt-2 bg-gray-900 text-white text-[12px] font-semibold rounded-full px-4 py-1.5 disabled:opacity-40">{t.send}</button>
                             </div>
                             {(isAdmin || isMaster) && (
                                 <button onClick={() => handleDelete(selectedTicket.id)} className="w-full text-red-500 text-[12px] font-medium py-2">{t.delete}</button>

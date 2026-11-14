@@ -1537,7 +1537,7 @@ const App: React.FC = () => {
     const currentTicket = tickets.find(t => t.id === id);
     let newEntry: TimelineEntry | null = null;
     if (actionNote) {
-      newEntry = { type: updates.projectData ? 'project_update' : (updates.status ? 'status_change' : (updates.assignedTo ? 'assignment' : 'comment')), title: updates.status ? 'تغییر وضعیت' : (updates.assignedTo ? 'تغییر مسئول' : (updates.projectData ? 'بروزرسانی پروژه' : 'یادداشت')), description: actionNote, timestamp: new Date().toISOString(), actorName, visibility, ...(files && files.length > 0 && { files }) };
+      newEntry = { type: updates.projectData ? 'project_update' : (updates.status ? 'status_change' : (updates.assignedTo ? 'assignment' : 'comment')), title: updates.status ? 'تغییر وضعیت' : (updates.assignedTo ? 'تغییر مسئول' : (updates.projectData ? 'بروزرسانی پروژه' : (visibility === 'internal' ? 'یادداشت محرمانه' : 'یادداشت'))), description: actionNote, timestamp: new Date().toISOString(), actorName, visibility, ...(files && files.length > 0 && { files }) };
     } else if (updates.status && updates.status !== currentTicket?.status) {
       newEntry = { type: 'status_change', title: `تغییر وضعیت به ${updates.status}`, timestamp: new Date().toISOString(), actorName, visibility: 'public' };
     }
@@ -1596,6 +1596,23 @@ const App: React.FC = () => {
   const handleCustomerLogout = () => {
     setCurrentCustomerUser(null);
     try { localStorage.removeItem(STORAGE_KEYS.CUSTOMER_SESSION); } catch {}
+  };
+
+  const handleCustomerComment = async (ticketId: string, message: string) => {
+    const text = message.trim().slice(0, 2000);
+    if (!text) return;
+    let ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) ticket = await getTicketById(ticketId) ?? undefined;
+    if (!ticket) throw new Error('پرونده یافت نشد');
+    const entry: TimelineEntry = {
+      type: 'comment',
+      title: 'پیام مشتری',
+      description: text,
+      actorName: ticket.customerName || 'مشتری',
+      timestamp: new Date().toISOString(),
+      visibility: 'public',
+    };
+    await updateTicketInCloud(ticketId, { timeline: [...(ticket.timeline || []), entry] });
   };
 
   const handleCustomerUploadSubmit = async (ticketId: string, message: string, files: AttachedFile[]) => {
@@ -2704,7 +2721,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'tracking' && (
-              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} lookupContactByCode={lookupContactByCode} lookupShopOrder={(code) => lookupMetaShopOrdersByTracking(code.trim().toUpperCase())} openContactTick={contactTick} />
+              <TrackingView tickets={tickets} services={services} config={appConfig} lang={lang} onCustomerUpload={handleCustomerUploadSubmit} onCustomerComment={handleCustomerComment} onContactSubmit={handleContactSubmit} lookupContactMessages={lookupContactMessages} lookupContactByCode={lookupContactByCode} lookupShopOrder={(code) => lookupMetaShopOrdersByTracking(code.trim().toUpperCase())} openContactTick={contactTick} />
             )}
 
             {view === 'custom-form' && (

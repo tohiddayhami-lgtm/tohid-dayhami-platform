@@ -11,6 +11,7 @@ interface Props {
   lang: Language;
   config?: AppConfig;
   onCustomerUpload?: (ticketId: string, message: string, files: AttachedFile[]) => Promise<void>;
+  onCustomerComment?: (ticketId: string, message: string) => Promise<void>;
   onContactSubmit?: (data: { name: string; phone: string; departmentId: string; message: string }) => Promise<string | void>;
   lookupContactMessages?: (name: string, phone: string) => InternalMessage[];
   lookupContactByCode?: (code: string) => InternalMessage | null;
@@ -18,7 +19,7 @@ interface Props {
   openContactTick?: number; // bumped by the parent to switch to the "Contact Us" tab
 }
 
-export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onContactSubmit, lookupContactMessages, lookupContactByCode, lookupShopOrder, openContactTick }) => {
+export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config, onCustomerUpload, onCustomerComment, onContactSubmit, lookupContactMessages, lookupContactByCode, lookupShopOrder, openContactTick }) => {
   const [tab, setTab] = useState<'track' | 'recover' | 'contact'>('track');
 
   // When the parent requests the Contact Us tab (e.g. from the header nav), switch to it
@@ -41,6 +42,10 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
   const [uploadDone, setUploadDone] = useState(false);
   const uploadFileInputRef = useRef<HTMLInputElement>(null);
+  const [customerNote, setCustomerNote] = useState('');
+  const [customerNoteSending, setCustomerNoteSending] = useState(false);
+  const [customerNoteDone, setCustomerNoteDone] = useState(false);
+  const [customerNoteError, setCustomerNoteError] = useState('');
 
   // Contact-us state
   const [contactName, setContactName] = useState('');
@@ -153,9 +158,8 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
     },
   }[lang];
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = searchId.trim();
+  const runSearch = async (raw: string) => {
+    const clean = raw.trim();
     if (!clean) return;
 
     // Correspondence tracking code (MK-...) → look up the conversation instead of a ticket
@@ -212,6 +216,32 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
       setTrackLoading(false);
     }
   };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    runSearch(searchId);
+  };
+
+  useEffect(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get('code') || '';
+      if (!code) return;
+      setSearchId(code);
+      setTab('track');
+      runSearch(code);
+    } catch { /* ignore */ }
+    // Open the ticket when the success sheet links here with ?code=
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setFoundTicket(prev => {
+      if (!prev) return prev;
+      const fresh = tickets.find(t => t.id === prev.id);
+      if (fresh && fresh.timeline !== prev.timeline) return fresh;
+      return prev;
+    });
+  }, [tickets]);
 
   const handleRecover = (e: React.FormEvent) => {
     e.preventDefault();
@@ -522,6 +552,53 @@ export const TrackingView: React.FC<Props> = ({ tickets, services, lang, config,
                   </div>
                 </div>
               </div>
+
+              {onCustomerComment && (
+                <form
+                  className="rounded-[20px] bg-[#f5f5f7] px-4 py-4"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const text = customerNote.trim();
+                    if (!text || customerNoteSending) return;
+                    setCustomerNoteSending(true);
+                    setCustomerNoteError('');
+                    try {
+                      await onCustomerComment(foundTicket.id, text);
+                      setFoundTicket(prev => prev ? {
+                        ...prev,
+                        timeline: [...(prev.timeline || []), {
+                          type: 'comment',
+                          title: lang === 'fa' ? 'پیام مشتری' : 'Customer message',
+                          description: text,
+                          actorName: prev.customerName,
+                          timestamp: new Date().toISOString(),
+                          visibility: 'public',
+                        }],
+                      } : prev);
+                      setCustomerNote('');
+                      setCustomerNoteDone(true);
+                    } catch {
+                      setCustomerNoteError(lang === 'fa' ? 'ارسال پیام نشد. دوباره تلاش کنید.' : 'Could not send. Try again.');
+                    } finally {
+                      setCustomerNoteSending(false);
+                    }
+                  }}
+                >
+                  <p className="text-[13px] font-semibold text-[#1d1d1f] mb-2">{lang === 'fa' ? 'پیام شما' : 'Your message'}</p>
+                  <textarea
+                    value={customerNote}
+                    onChange={e => { setCustomerNote(e.target.value); setCustomerNoteDone(false); }}
+                    rows={3}
+                    placeholder={lang === 'fa' ? 'اگر توضیحی دارید همین‌جا بنویسید' : 'Add a note for the team'}
+                    className="w-full bg-white rounded-2xl px-3 py-2.5 text-sm text-gray-900 outline-none resize-none"
+                  />
+                  <button type="submit" disabled={customerNoteSending || !customerNote.trim()} className="mt-2 bg-[#1d1d1f] text-white rounded-full px-4 py-2 text-sm font-medium disabled:opacity-40">
+                    {customerNoteSending ? (lang === 'fa' ? 'در حال ارسال…' : 'Sending…') : (lang === 'fa' ? 'ارسال' : 'Send')}
+                  </button>
+                  {customerNoteDone && <p className="text-[12px] text-[#6e6e73] mt-2">{lang === 'fa' ? 'پیام ثبت شد.' : 'Message saved.'}</p>}
+                  {customerNoteError && <p className="text-[12px] text-red-500 mt-2">{customerNoteError}</p>}
+                </form>
+              )}
 
               {/* ── Customer upload window ── */}
               {(() => {

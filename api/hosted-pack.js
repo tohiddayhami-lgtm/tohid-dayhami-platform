@@ -414,8 +414,8 @@ export default async function handler(req, res) {
       });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) return res.status(r.status).json({ ok: false, ...json });
-      const tracking = String(json.ticketId || '').replace(/^HTML-/, 'ARK-') || `ARK-${Date.now().toString().slice(-6)}`;
-      return res.status(200).json({ ok: true, tracking_code: tracking, ticketId: json.ticketId });
+      const tracking = String(json.tracking_code || json.ticketId || '');
+      return res.status(200).json({ ok: true, tracking_code: tracking, ticketId: json.ticketId || tracking });
     }
 
     if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' });
