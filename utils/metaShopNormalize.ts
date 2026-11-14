@@ -448,6 +448,11 @@ export const normalizeMetaShopForCloud = (raw: MetaShop & Record<string, unknown
     storefrontTagline: raw.storefrontTagline,
     storefrontTaglineEn: raw.storefrontTaglineEn,
     storefrontColor: raw.storefrontColor,
+    storefrontKind: raw.storefrontKind === 'html' || raw.storefrontKind === 'pack' ? raw.storefrontKind : undefined,
+    storefrontFileName: raw.storefrontFileName || undefined,
+    storefrontHtmlUrl: raw.storefrontKind === 'html' ? (raw.storefrontHtmlUrl || undefined) : undefined,
+    storefrontPackZipUrl: raw.storefrontKind === 'pack' ? (raw.storefrontPackZipUrl || undefined) : undefined,
+    storefrontPackEntry: raw.storefrontKind === 'pack' ? (raw.storefrontPackEntry || 'index.html') : undefined,
     createdAt: raw.createdAt || new Date().toISOString(),
     categories: Array.isArray(raw.categories)
       ? raw.categories.map(normalizeCategory).filter(c => (typeof c === 'string' ? c : c.fa || c.en))

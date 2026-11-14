@@ -7,7 +7,7 @@ import { rewrite } from '@vercel/functions';
 /** Meta / social preview bots — never used for human navigation. */
 const CRAWLER_UA = /facebookexternalhit|facebot|meta-externalagent|twitterbot|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|ia_archiver|embedly|pinterest|vkshare|w3c_validator/i;
 
-const SKIP = /^\/(api\/|assets\/|sitemap\.xml|robots\.txt|favicon\.ico)/;
+const SKIP = /^\/(api\/|assets\/|sitemap\.xml|robots\.txt|favicon\.ico|s\/)/;
 
 export const config = {
   matcher: ['/((?!api/|assets/).*)'],

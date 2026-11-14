@@ -2304,6 +2304,10 @@ const App: React.FC = () => {
         && (resolvedShop.productCount ?? 0) > 0
         && (resolvedShop.products?.length ?? 0) < (resolvedShop.productCount ?? 0);
       if (catalogWaiting) return <ShopShutterLoader lang={lang} />;
+      if (!catalogMode && (resolvedShop.storefrontKind === 'html' || resolvedShop.storefrontKind === 'pack')) {
+        window.location.replace(`/s/${encodeURIComponent(resolvedShop.slug)}`);
+        return <ShopShutterLoader lang={lang} />;
+      }
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)
       if (catalogMode) return <MetaShopCatalog shop={resolvedShop} lang={lang} autoPrint />;
       return <MetaShopView shop={resolvedShop} lang={lang} embed={isEmbed} onSubmitOrder={(d) => handleMetaShopOrder(resolvedShop, d)} onSubmitReferral={resolvedShop.type === 'realestate' ? (d) => handleMetaShopReferral(resolvedShop, d) : undefined} onSubmitSupplierCollaboration={resolvedShop.type === 'products' && resolvedShop.supplierCollaborationEnabled ? (d) => handleMetaShopSupplierCollaboration(resolvedShop, d) : undefined} onLookup={handleMetaShopLookup} />;

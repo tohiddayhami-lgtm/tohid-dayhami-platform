@@ -1507,6 +1507,12 @@ export interface MetaShop {
   floatingStickers?: MetaShopFloatingSticker[];
   /** Default VIP discount % for members marked VIP (overridable per member). */
   vipDefaultDiscountPercent?: number;
+  /** Custom public storefront: uploaded HTML page or a ZIP site, served at /s/<slug>. */
+  storefrontKind?: 'html' | 'pack';
+  storefrontFileName?: string;
+  storefrontHtmlUrl?: string;
+  storefrontPackZipUrl?: string;
+  storefrontPackEntry?: string;
   /** Link-share / Open Graph (WhatsApp, Telegram, …) — overrides defaults when set. */
   seoTitle?: string;
   seoDescription?: string;

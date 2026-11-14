@@ -227,6 +227,8 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [embedShop, setEmbedShop] = useState<MetaShop | null>(null); // Google Site / iframe embed export modal
   const [embedHeight, setEmbedHeight] = useState(1200);
   const [saving, setSaving] = useState(false);
+  const [storefrontBusy, setStorefrontBusy] = useState(false);
+  const storefrontFileRef = useRef<HTMLInputElement>(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsSyncing, setProductsSyncing] = useState(false);
   const [productsFullyLoaded, setProductsFullyLoaded] = useState(false);
@@ -831,6 +833,38 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const refStatusLabel = (s: MetaShopPropertyReferral['status']) => s === 'approved' ? t.refApproved : s === 'rejected' ? t.refRejected : t.refPending;
   const refStatusCls = (s: MetaShopPropertyReferral['status']) => s === 'approved' ? 'bg-emerald-100 text-emerald-700' : s === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700';
   const upd = (patch: Partial<MetaShop>) => setDraft(d => d ? { ...d, ...patch } : d);
+  const customStoreUrl = (slug: string) => {
+    try {
+      const u = new URL(shopBaseUrl, typeof window !== 'undefined' ? window.location.origin : 'https://www.tohiddayhami.com');
+      return `${u.origin}/s/${encodeURIComponent(slug)}`;
+    } catch {
+      return `/s/${encodeURIComponent(slug)}`;
+    }
+  };
+  const uploadStorefront = (file: File) => {
+    const zip = /\.zip$/i.test(file.name);
+    const html = /\.html?$/i.test(file.name) || /html/i.test(file.type);
+    if (!zip && !html) {
+      alert(T ? 'فایل HTML یا ZIP انتخاب کنید.' : 'Choose an HTML or ZIP file.');
+      return;
+    }
+    setStorefrontBusy(true);
+    uploadFileWithProgress(
+      file,
+      () => {},
+      (url) => {
+        if (zip) {
+          upd({ storefrontKind: 'pack', storefrontFileName: file.name, storefrontPackZipUrl: url, storefrontHtmlUrl: undefined, storefrontPackEntry: 'index.html' });
+        } else {
+          upd({ storefrontKind: 'html', storefrontFileName: file.name, storefrontHtmlUrl: url, storefrontPackZipUrl: undefined, storefrontPackEntry: undefined });
+        }
+        setStorefrontBusy(false);
+      },
+      (err) => { setStorefrontBusy(false); alert(err.message); },
+      'documents',
+      file.type || (zip ? 'application/zip' : 'text/html'),
+    );
+  };
   const updShopI18n = (code: string, field: string, val: string) => {
     const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };
     i18n[code] = { ...(i18n[code] || {}), [field]: val };
@@ -1876,6 +1910,30 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             : `Loading remaining products… (${draft.products.length}${draft.productCount ? ` / ${draft.productCount}` : ''})`}
         </div>
       )}
+
+      <div className={card}>
+        <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2"><IconUpload className="w-4 h-4 text-indigo-500" />{T ? 'ویترین HTML / ZIP' : 'HTML / ZIP storefront'}</h4>
+        <p className="text-xs text-gray-500 mb-3 leading-relaxed">{T ? 'فایل HTML فروشگاه یا یک ZIP (سایت چندفایلی) را بارگذاری کنید. لینک عمومی ساخته می‌شود و هر سفارشی که مشتری در همان صفحه ثبت کند، در سفارش‌های این فروشگاه با کد پیگیری ذخیره می‌شود.' : 'Upload a shop HTML file or a multi-file ZIP. A public link is created, and each order is saved on this shop with a tracking code.'}</p>
+        <input ref={storefrontFileRef} type="file" accept=".html,.htm,.zip,text/html,application/zip" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadStorefront(f); }} />
+        <div className="flex flex-wrap items-center gap-2">
+          {!readonly && (
+            <button type="button" disabled={storefrontBusy} onClick={() => storefrontFileRef.current?.click()} className="text-xs px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+              {storefrontBusy ? (T ? 'در حال بارگذاری…' : 'Uploading…') : (T ? 'بارگذاری HTML یا ZIP' : 'Upload HTML or ZIP')}
+            </button>
+          )}
+          {draft.storefrontKind && (
+            <button type="button" onClick={() => upd({ storefrontKind: undefined, storefrontFileName: undefined, storefrontHtmlUrl: undefined, storefrontPackZipUrl: undefined, storefrontPackEntry: undefined })} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              {T ? 'بازگشت به ویترین پیش‌فرض' : 'Use the built-in storefront'}
+            </button>
+          )}
+        </div>
+        {draft.storefrontKind && draft.slug && (
+          <div className="mt-3 space-y-1">
+            <div className="text-[11px] text-gray-500">{draft.storefrontFileName || (draft.storefrontKind === 'pack' ? 'ZIP' : 'HTML')} · {T ? 'بعد از ذخیره فروشگاه فعال می‌شود' : 'Goes live after you save the shop'}</div>
+            <a href={customStoreUrl(draft.slug)} target="_blank" rel="noreferrer" className="block text-xs text-indigo-600 dir-ltr text-left break-all hover:underline">{customStoreUrl(draft.slug)}</a>
+          </div>
+        )}
+      </div>
 
       {showAllOrders && !readonly && (
         <MetaShopBackupPanel

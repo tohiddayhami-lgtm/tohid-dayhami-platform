@@ -281,6 +281,45 @@ function injectPackHtml(html, { formId, origin, slug, filePath, favicon }) {
     var ENDPOINT=${JSON.stringify(endpoint)};
     var UPLOAD=${JSON.stringify(upload)};
     var orig=window.fetch;
+    function grabPanel(){
+      var el=document.querySelector("#wiz.on dl.wrev")||document.querySelector("#wiz.on .wbody")||document.querySelector("#sheet.on")||document.querySelector("#ceobody")||document.querySelector("dl.rev,dl.wrev,.report,#result")||document.querySelector("#app");
+      var text=el && (el.innerText||"").replace(/[ \\t]+\\n/g,"\\n").replace(/\\n{3,}/g,"\\n\\n").trim()||"";
+      return {el:el,text:text};
+    }
+    function paintFormCopy(text){
+      var lines=String(text||"").split(/\\n/).map(function(s){return s.replace(/\\s+/g," ").trim()}).filter(Boolean).slice(0,42);
+      if(lines.length<2) return "";
+      var pad=28, lineH=28, w=920, h=Math.min(pad*2+56+lines.length*lineH,1600);
+      var c=document.createElement("canvas"); c.width=w; c.height=h;
+      var ctx=c.getContext("2d");
+      ctx.fillStyle="#f8fafc"; ctx.fillRect(0,0,w,h);
+      ctx.fillStyle="#0f766e"; ctx.fillRect(0,0,w,8);
+      ctx.fillStyle="#0f172a"; ctx.font="700 20px Tahoma,sans-serif"; ctx.direction="rtl"; ctx.textAlign="right";
+      var x=w-pad, y=pad+18;
+      ctx.fillText("نتیجه ارزیابی و پاسخ‌های فرم", x, y); y+=40;
+      ctx.font="400 16px Tahoma,sans-serif"; ctx.fillStyle="#1e293b";
+      for(var i=0;i<lines.length && y<h-18;i++){ var s=lines[i]; if(s.length>72) s=s.slice(0,72)+"…"; ctx.fillText(s,x,y); y+=lineH; }
+      return c.toDataURL("image/jpeg",0.86);
+    }
+    async function attachSnapshot(j){
+      if(!j||typeof j!=="object") return j;
+      if(!j.data||typeof j.data!=="object"||Array.isArray(j.data)) j.data={};
+      j.files=Array.isArray(j.files)?j.files:[];
+      var panel=grabPanel();
+      if(panel.text&&panel.text.length>20&&!j.data.__formCopy) j.data.__formCopy=panel.text.slice(0,8000);
+      if(j.files.some(function(f){return f&&/فرم|نتیجه|copy|snapshot|result/i.test(String(f.label||f.name||""));})) return j;
+      var dataUrl="";
+      try{ if(window.html2canvas&&panel.el){ var cv=await window.html2canvas(panel.el,{scale:1.4,backgroundColor:"#ffffff",useCORS:true,logging:false}); if(cv&&cv.width>40) dataUrl=cv.toDataURL("image/jpeg",0.84);} }catch(e){}
+      if(!dataUrl) dataUrl=paintFormCopy(panel.text);
+      if(!dataUrl||dataUrl.length<80) return j;
+      var b64=dataUrl.split(",")[1]||""; if(!b64) return j;
+      try{
+        var up=await orig(UPLOAD,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:ID,filename:"form-result.jpg",contentType:"image/jpeg",data:b64})});
+        var uj=await up.json().catch(function(){return {};});
+        if(uj.url) j.files.push({name:"form-result.jpg",type:"image/jpeg",size:0,content:uj.url,label:"تصویر نتیجه ارزیابی"});
+      }catch(e){}
+      return j;
+    }
     window.fetch=function(u,o){
       try{
         var s=String(typeof u==="string"?u:(u&&u.url)||"");
@@ -301,11 +340,30 @@ function injectPackHtml(html, { formId, origin, slug, filePath, favicon }) {
               var j=await up.json().catch(function(){return {};});
               if(j.url) files.push({name:f.name,type:f.type||"image/jpeg",size:f.size||0,content:j.url,label:"عکس پیوست"});
             }
-            return orig(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:ID,data:data,files:files})});
+            var packed={formId:ID,data:data,files:files};
+            packed=await attachSnapshot(packed);
+            return orig(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(packed)});
           })();
         }
         if(ours && o && typeof o.body==="string"){
-          try{ var j=JSON.parse(o.body); j.formId=j.formId||ID; o=Object.assign({},o,{body:JSON.stringify(j)}); }catch(e){}
+          return (async function(){
+            try{
+              var j=JSON.parse(o.body);
+              j.formId=j.formId||ID;
+              if(!j.data || typeof j.data!=="object" || Array.isArray(j.data)){
+                var wrapped={};
+                Object.keys(j).forEach(function(k){
+                  if(k==="formId"||k==="files"||k==="data") return;
+                  wrapped[k]=j[k];
+                });
+                j.data=wrapped;
+              }
+              j=await attachSnapshot(j);
+              return orig.call(this,u,Object.assign({},o,{body:JSON.stringify(j)}));
+            }catch(e){
+              return orig.call(this,u,o);
+            }
+          }).call(this);
         }
       }catch(e){}
       return orig.apply(this,arguments);
@@ -325,11 +383,12 @@ function flattenSubmit(payload) {
     try { inner = JSON.parse(inner); } catch { inner = {}; }
   }
   if (!inner || typeof inner !== 'object' || Array.isArray(inner)) inner = {};
-  return {
-    ...inner,
-    form: payload.form || inner.form,
-    lang: payload.lang || inner.lang,
-  };
+  const out = { ...inner };
+  for (const [k, v] of Object.entries(payload || {})) {
+    if (['formId', 'packId', 'files', 'data'].includes(k) || v === undefined) continue;
+    if (out[k] === undefined) out[k] = v;
+  }
+  return out;
 }
 
 export default async function handler(req, res) {

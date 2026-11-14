@@ -21,6 +21,9 @@
     { "source": "/p/:slug",               "destination": "/api/hosted-pack?slug=:slug" },
     { "source": "/p/:slug/",              "destination": "/api/hosted-pack?slug=:slug" },
     { "source": "/p/:slug/:path*",        "destination": "/api/hosted-pack?slug=:slug&path=:path*" },
+    { "source": "/s/:slug",               "destination": "/api/meta-shop-store?slug=:slug" },
+    { "source": "/s/:slug/",              "destination": "/api/meta-shop-store?slug=:slug" },
+    { "source": "/s/:slug/:path*",        "destination": "/api/meta-shop-store?slug=:slug&path=:path*" },
     {
       "source": "/:path*",
       "has": [
@@ -49,6 +52,12 @@
     },
     "api/hosted-pack.js": {
       "maxDuration": 60
+    },
+    "api/meta-shop-store.js": {
+      "maxDuration": 60
+    },
+    "api/meta-shop-order.js": {
+      "maxDuration": 30
     },
     "api/cartable.js": {
       "maxDuration": 30

@@ -429,6 +429,59 @@ function injectBridge(html, formId, origin) {
     var ENDPOINT=${JSON.stringify(endpoint)};
     var UPLOAD=${JSON.stringify(`${origin}/api/html-form-file`)};
     var origFetch=window.fetch;
+    function grabPanel(){
+      var el=document.querySelector("#wiz.on dl.wrev")||document.querySelector("#wiz.on .wbody")||document.querySelector("#sheet.on")||document.querySelector("#ceobody")||document.querySelector("dl.rev")||document.querySelector("dl.wrev")||document.querySelector(".report,#result,[data-result],.sum")||document.querySelector("#app");
+      var text=el && (el.innerText||"").replace(/[ \\t]+\\n/g,"\\n").replace(/\\n{3,}/g,"\\n\\n").trim()||"";
+      return {el:el,text:text};
+    }
+    function paintFormCopy(text){
+      var lines=String(text||"").split(/\\n/).map(function(s){return s.replace(/\\s+/g," ").trim()}).filter(Boolean).slice(0,42);
+      if(lines.length<2) return "";
+      var pad=28, lineH=28, w=920, h=Math.min(pad*2+56+lines.length*lineH, 1600);
+      var c=document.createElement("canvas");
+      c.width=w; c.height=h;
+      var ctx=c.getContext("2d");
+      ctx.fillStyle="#f8fafc"; ctx.fillRect(0,0,w,h);
+      ctx.fillStyle="#0f766e"; ctx.fillRect(0,0,w,8);
+      ctx.fillStyle="#0f172a"; ctx.font="700 20px Tahoma,sans-serif";
+      ctx.direction="rtl"; ctx.textAlign="right";
+      var x=w-pad, y=pad+18;
+      ctx.fillText("نتیجه ارزیابی و پاسخ‌های فرم", x, y);
+      y+=40;
+      ctx.font="400 16px Tahoma,sans-serif"; ctx.fillStyle="#1e293b";
+      for(var i=0;i<lines.length && y<h-18;i++){
+        var s=lines[i];
+        if(s.length>72) s=s.slice(0,72)+"…";
+        ctx.fillText(s, x, y);
+        y+=lineH;
+      }
+      return c.toDataURL("image/jpeg",0.86);
+    }
+    async function attachSnapshot(j){
+      if(!j || typeof j!=="object") return j;
+      if(!j.data || typeof j.data!=="object" || Array.isArray(j.data)) j.data={};
+      j.files=Array.isArray(j.files)?j.files:[];
+      var panel=grabPanel();
+      if(panel.text && panel.text.length>20 && !j.data.__formCopy) j.data.__formCopy=panel.text.slice(0,8000);
+      if(j.files.some(function(f){return f && /فرم|نتیجه|copy|snapshot|result/i.test(String(f.label||f.name||""));})) return j;
+      var dataUrl="";
+      try{
+        if(window.html2canvas && panel.el){
+          var cv=await window.html2canvas(panel.el,{scale:1.4,backgroundColor:"#ffffff",useCORS:true,logging:false});
+          if(cv && cv.width>40) dataUrl=cv.toDataURL("image/jpeg",0.84);
+        }
+      }catch(e){}
+      if(!dataUrl) dataUrl=paintFormCopy(panel.text);
+      if(!dataUrl || dataUrl.length<80) return j;
+      var b64=dataUrl.split(",")[1]||"";
+      if(!b64) return j;
+      try{
+        var up=await origFetch(UPLOAD,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:FORM_ID,filename:"form-result.jpg",contentType:"image/jpeg",data:b64})});
+        var uj=await up.json().catch(function(){return {};});
+        if(uj.url) j.files.push({name:"form-result.jpg",type:"image/jpeg",size:0,content:uj.url,label:"تصویر نتیجه ارزیابی"});
+      }catch(e){}
+      return j;
+    }
     window.fetch=function(u,o){
       try{
         var s=String(typeof u==="string"?u:(u&&u.url)||"");
@@ -453,11 +506,30 @@ function injectBridge(html, formId, origin) {
               var j=await up.json().catch(function(){return {};});
               if(j.url) files.push({name:f.name,type:f.type||"image/jpeg",size:f.size||0,content:j.url,label:"عکس پیوست"});
             }
-            return origFetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({formId:FORM_ID,data:data,files:files})});
+            var packed={formId:FORM_ID,data:data,files:files};
+            packed=await attachSnapshot(packed);
+            return origFetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(packed)});
           })();
         }
         if(ours && o && typeof o.body==="string"){
-          try{ var j=JSON.parse(o.body); j.formId=j.formId||FORM_ID; o=Object.assign({},o,{body:JSON.stringify(j)}); }catch(e){}
+          return (async function(){
+            try{
+              var j=JSON.parse(o.body);
+              j.formId=j.formId||FORM_ID;
+              if(!j.data || typeof j.data!=="object" || Array.isArray(j.data)){
+                var wrapped={};
+                Object.keys(j).forEach(function(k){
+                  if(k==="formId"||k==="files"||k==="data") return;
+                  wrapped[k]=j[k];
+                });
+                j.data=wrapped;
+              }
+              j=await attachSnapshot(j);
+              return origFetch.call(this, u, Object.assign({}, o, {body:JSON.stringify(j)}));
+            }catch(e){
+              return origFetch.call(this, u, o);
+            }
+          }).call(this);
         }
       }catch(e){}
       return origFetch.apply(this, arguments);
@@ -561,7 +633,7 @@ function injectBridge(html, formId, origin) {
       return el.value||"";
     }
     function fieldKey(el,i){
-      var key=el.getAttribute("data-k")||el.getAttribute("name")||el.id||labelOf(el);
+      var key=el.getAttribute("data-k")||el.getAttribute("data-c")||el.getAttribute("name")||el.id||labelOf(el);
       key=String(key||"").replace(/\\s+/g," ").trim();
       if(!key || key==="f-copytext") return "field_"+(i+1);
       return key.slice(0,80);
@@ -855,7 +927,7 @@ function injectBridge(html, formId, origin) {
       if(isWhatsAppEl(btn) || btn.closest && btn.closest("a[href*='whatsapp'],a[href*='wa.me'],.wa-link,#wa,#b-wa")) return null;
       var t=btnText(btn);
       if(NAV_RE.test(t)) return null;
-      if((btn.id||"")==="b-submit") return null;
+      if((btn.id||"")==="b-submit" || (btn.id||"")==="c-send" || (btn.id||"")==="w-send") return null;
       if(/whatsapp|واتس\\s*اپ/i.test(t) && !/ثبت|ارسال\\s*نهایی/i.test(t)) return null;
       if((btn.getAttribute("type")||"").toLowerCase()==="submit") return btn;
       if(SUBMIT_RE.test(t)) return btn;
@@ -994,6 +1066,11 @@ function injectBridge(html, formId, origin) {
       var data=collect();
       var answers=collectAnswers();
       var fileInputs=await collectMediaFiles();
+      try{
+        var panel=document.querySelector("#sheet.on")||document.querySelector("#ceobody")||document.querySelector("dl.rev")||document.querySelector("#app");
+        var copy=panel && (panel.innerText||"").replace(/[ \\t]+\\n/g,"\\n").replace(/\\n{3,}/g,"\\n\\n").trim();
+        if(copy && copy.length>20 && !data.__formCopy) data.__formCopy=copy.slice(0,8000);
+      }catch(e){}
       if(answers.length) data.__answers=answers;
       if(!Object.keys(data).length && !fileInputs.length){
         toast("لطفاً فرم را تکمیل کنید", false);
@@ -1050,6 +1127,7 @@ function injectBridge(html, formId, origin) {
     }
     document.addEventListener("click",function(e){
       if(e.target && e.target.closest && e.target.closest("a[href*='whatsapp'],a[href*='wa.me'],.wa-link,#wa,#b-wa")) return;
+      if(e.target && e.target.closest && e.target.closest("#c-send,#b-submit,#w-send")) return;
       var btn=isSubmitEl(e.target);
       if(!btn) return;
       e.preventDefault();
@@ -1104,7 +1182,7 @@ function isJunkText(s, key) {
   if (/^Guest\s+\d+$/i.test(t)) return true;
   if (/Guest\s+\d+/i.test(t) && t.includes(',')) return true;
   if (isContactKey(key)) return false;
-  if (/^(idea|industry|stage|market|budget|company|city|score|level)$/i.test(String(key || ''))) return false;
+  if (/^(idea|industry|stage|market|budget|company|city|score|level|message|msg|note|__formCopy|topic)$/i.test(String(key || ''))) return false;
   if (t.length > 180 && t.split(',').length > 4) return true;
   return false;
 }
@@ -1185,7 +1263,7 @@ function cleanFormData(raw) {
   const data = {};
   for (const [k, v] of Object.entries(raw || {})) {
     if (SKIP_DATA_KEYS.test(k)) continue;
-    if (v && typeof v === 'object' && ['ans', 'answers', 'areas', 'suggested', 'ids'].includes(k)) {
+    if (v && typeof v === 'object' && ['ans', 'answers', 'areas', 'suggested', 'ids', 'services'].includes(k)) {
       data[k] = v;
       continue;
     }
@@ -1194,8 +1272,13 @@ function cleanFormData(raw) {
       continue;
     }
     const s = flattenVal(v).trim();
-    if (!s || isJunkText(s, k)) continue;
-    data[k] = (k === 'idea' ? s.slice(0, 8000) : s.slice(0, 4000));
+    if (!s) continue;
+    if (/^(__formCopy|idea|message|msg|note)$/i.test(k)) {
+      data[k] = s.slice(0, 8000);
+      continue;
+    }
+    if (isJunkText(s, k)) continue;
+    data[k] = s.slice(0, 4000);
   }
   return data;
 }
@@ -1433,7 +1516,7 @@ function expandFeasibilityRows(data) {
   const d = data || {};
   const ans = maybeParseJson(d.answers || d.ans);
   const hasQuiz = ans && typeof ans === 'object' && !Array.isArray(ans) && FEAS_QS.some(([id]) => ans[id] != null && ans[id] !== '');
-  const hasIdea = !!(d.idea || d.industry || d.ind || d.stage || d.mkt);
+  const hasIdea = !!(d.idea || d.ind || d.mkt || d.form === 'business-feasibility' || (d.score != null && d.score !== ''));
   if (!hasQuiz && !hasIdea) return [];
   const rows = [];
   const add = (label, value) => {
@@ -1473,6 +1556,109 @@ function expandFeasibilityRows(data) {
   add('شهر / کشور', d.city);
   add('آشنایی از', d.heard || mapFeasCode(FEAS_HEARD, d.heard));
   return rows;
+}
+
+const FORM_KIND_LABEL = {
+  'ceo-message': 'پیام به مدیرعامل',
+  'arka-export-city': 'درخواست خدمات دفتر آرکا',
+  'arka-office-request': 'درخواست دفتر آرکا',
+  'business-feasibility': 'امکان‌سنجی کسب‌وکار',
+};
+
+const GENERIC_FIELD_LABEL = {
+  name: 'نام',
+  fullName: 'نام',
+  mobile: 'موبایل',
+  phone: 'موبایل',
+  email: 'ایمیل',
+  company: 'شرکت / برند',
+  city: 'شهر / کشور',
+  topic: 'موضوع',
+  message: 'پیام',
+  msg: 'پیام',
+  note: 'توضیح بیشتر',
+  idea: 'ایده',
+  industry: 'محصول یا حوزه کاری‌تان چیست؟',
+  stage: 'کسب‌وکارتان در چه مرحله‌ای است؟',
+  market: 'بازار هدفتان کجاست؟',
+  budget: 'بودجه',
+  timing: 'چه زمانی می‌خواهید شروع کنید؟',
+  contact_by: 'چطور با شما در تماس باشیم؟',
+  goal: 'هدف مراجعه (ارزیابی اولیه)',
+  services: 'کدام خدمات را لازم دارید؟',
+  form: 'نوع درخواست',
+  heard: 'آشنایی از',
+  not_sure: 'مطمئن نیستم؛ راهنمایی‌ام کنید',
+};
+
+const GOAL_GUIDE = {
+  start: { title: 'می‌خواهم کسب‌وکار راه بیندازم', rec: 'مشاوره کسب‌وکار، ثبت شرکت، طراحی بسته‌بندی' },
+  brand: { title: 'برند و بسته‌بندی می‌خواهم', rec: 'طراحی بسته‌بندی، فروشگاه متا' },
+  export: { title: 'می‌خواهم صادرات کنم', rec: 'مدیریت صادرات، فروشگاه متا، تورهای تجاری' },
+  source: { title: 'دنبال تأمین کالا هستم', rec: 'تأمین کالا، فروش کالا' },
+  grow: { title: 'فروشم رشد نمی‌کند', rec: 'مشاوره کسب‌وکار، راهکار جامع، مدیریت صادرات' },
+  learn: { title: 'می‌خواهم یاد بگیرم', rec: 'آکادمی آموزش، محصولات دانشی' },
+};
+
+function prettyFormValue(v) {
+  if (v == null || v === '') return '';
+  if (typeof v === 'boolean') return v ? 'بله' : 'خیر';
+  if (Array.isArray(v)) {
+    return v.map((item) => {
+      if (item && typeof item === 'object') return item.title || item.label || item.name || item.code || '';
+      return String(item || '');
+    }).filter(Boolean).join('، ');
+  }
+  if (typeof v === 'object') return '';
+  return String(v).trim();
+}
+
+function genericFormRows(data) {
+  const d = data || {};
+  const skip = /^(formId|files|honeypot|agree|ids|password|token|lang|__formCopy|__answers|__photosJson)$/i;
+  const rows = [];
+  const seen = new Set();
+  const add = (label, value) => {
+    const v = prettyFormValue(value);
+    if (!label || !v || v === '{}' || v === '[]') return;
+    if (seen.has(label)) return;
+    seen.add(label);
+    rows.push({ label, value: v.slice(0, 8000) });
+  };
+  if (d.form) add('نوع درخواست', FORM_KIND_LABEL[d.form] || d.form);
+  if (d.goal) {
+    const g = GOAL_GUIDE[d.goal] || GOAL_GUIDE[String(d.goal).toLowerCase()];
+    add('هدف مراجعه (ارزیابی اولیه)', g ? g.title : d.goal);
+    if (g) add('نتیجه ارزیابی / مسیر پیشنهادی به مشتری', g.rec);
+  }
+  const order = ['services', 'not_sure', 'stage', 'industry', 'market', 'timing', 'contact_by', 'name', 'fullName', 'mobile', 'phone', 'email', 'company', 'city', 'topic', 'message', 'msg', 'note', 'idea', 'budget', 'heard'];
+  order.forEach((k) => { if (d[k] != null && d[k] !== '') add(GENERIC_FIELD_LABEL[k] || k, d[k]); });
+  Object.entries(d).forEach(([k, v]) => {
+    if (skip.test(k) || order.includes(k) || k === 'form' || k === 'goal' || k === 'ans' || k === 'answers' || k === 'areas' || k === 'suggested') return;
+    if (v && typeof v === 'object' && !Array.isArray(v)) return;
+    add(GENERIC_FIELD_LABEL[k] || k, v);
+  });
+  if (d.__formCopy && String(d.__formCopy).trim().length > 40) {
+    add('رونوشت صفحه فرم', String(d.__formCopy).trim().slice(0, 8000));
+  }
+  return rows;
+}
+
+function flattenIncomingPayload(payload) {
+  let raw = {};
+  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    raw = { ...payload.data };
+  } else if (typeof payload.data === 'string') {
+    try {
+      const parsed = JSON.parse(payload.data);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) raw = parsed;
+    } catch { /* ignore */ }
+  }
+  for (const [k, v] of Object.entries(payload || {})) {
+    if (['formId', 'files', 'data'].includes(k) || v === undefined) continue;
+    if (raw[k] === undefined) raw[k] = v;
+  }
+  return raw;
 }
 
 function reportRows(data, incomingAnswers) {
@@ -1522,7 +1708,7 @@ function reportRows(data, incomingAnswers) {
 
   for (const [k, raw] of Object.entries(data || {})) {
     if (REPORT_META_KEYS.test(k) || SKIP_DATA_KEYS.test(k)) continue;
-    if (/^(ans|answers|areas|suggested|ids|ind|mkt|agree|form|score|level)$/i.test(k)) continue;
+    if (/^(ans|answers|areas|suggested|ids|ind|mkt|agree|form|score|level|__formCopy|honeypot|goal|services|not_sure)$/i.test(k)) continue;
     if (!payloadRows.length && RAW_CODE_KEYS.test(k)) continue;
     const v = humanizeValue(k, raw);
     if (!v || v.startsWith('{') || v.startsWith('[')) continue;
@@ -1670,7 +1856,10 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const payload = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const formId = String(payload.formId || '').trim();
-      const raw = payload.data && typeof payload.data === 'object' ? payload.data : {};
+      const raw = flattenIncomingPayload(payload);
+      if (raw.honeypot || payload.honeypot) {
+        return res.status(200).json({ ok: true, ticketId: 'OK', tracking_code: 'OK' });
+      }
       if (!formId) return res.status(400).json({ error: 'formId required' });
 
       const form = await getDoc('custom_forms', formId);
@@ -1708,10 +1897,22 @@ export default async function handler(req, res) {
       const ticketId = `HTML-${Date.now().toString().slice(-8)}-${formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 8).toUpperCase() || 'FORM'}`;
 
       const formTitle = displayFormTitle(form) || form.title || form.titleEn || 'فرم آنلاین';
-      const feasRows = expandFeasibilityRows({ ...raw, ...data });
+      const merged = { ...raw, ...data };
+      const feasRows = expandFeasibilityRows(merged);
+      const genRows = genericFormRows(merged);
       const incoming = coerceAnswerRows(incomingAnswers);
-      const seed = feasRows.length >= 3 ? feasRows : (incoming.length ? incoming : feasRows);
+      const seed = feasRows.length >= 3
+        ? [...feasRows, ...genRows.filter((g) => !feasRows.some((f) => f.label === g.label))]
+        : (genRows.length >= 2 ? genRows : (incoming.length ? incoming : genRows));
       const answers = reportRows(data, seed);
+      if (raw.form && FORM_KIND_LABEL[raw.form] && !answers.some((a) => a.label === 'نوع درخواست')) {
+        answers.unshift({ label: 'نوع درخواست', value: FORM_KIND_LABEL[raw.form] });
+      }
+      if (!answers.length && genRows.length) answers.push(...genRows);
+      const copyText = String(data.__formCopy || raw.__formCopy || '').trim();
+      if (copyText.length > 40 && !answers.some((a) => a.label === 'رونوشت صفحه فرم')) {
+        answers.push({ label: 'رونوشت صفحه فرم', value: copyText.slice(0, 8000) });
+      }
       for (const f of incomingFiles) {
         if (!answers.some((a) => a.value === f.content)) {
           answers.push({ label: f.label || f.name || 'فایل پیوست', value: f.content });
