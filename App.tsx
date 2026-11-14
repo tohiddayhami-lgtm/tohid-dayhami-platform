@@ -494,7 +494,10 @@ const App: React.FC = () => {
       const shopLang = params.get('lang');
       const productId = params.get('product') || params.get('p');
       if (productId) {
-        const product = (publicShop.products || []).find(p => p.id === productId && p.active !== false);
+        const key = productId.trim().toLowerCase();
+        const product = (publicShop.products || []).find(p => p.active !== false && (
+          String(p.id || '').trim().toLowerCase() === key || String(p.sku || '').trim().toLowerCase() === key
+        ));
         if (product) {
           applyPageMeta({ ...metaFromMetaShopProduct(publicShop, product, origin, shopLang), url: window.location.href }, siteMeta);
           return;
@@ -1718,8 +1721,19 @@ const App: React.FC = () => {
     const working = cached?.length && !(shell.products || []).length
       ? { ...shell, products: cached }
       : shell;
-    if ((working.products || []).length > 0 && !shopProductsNeedFullHydration(working)) return;
-    if (!shopProductsNeedFullHydration(shell) && !(cached?.length)) return;
+    const linkedRef = (() => {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        return (q.get('product') || q.get('p') || '').trim().toLowerCase();
+      } catch { return ''; }
+    })();
+    const linkedLoaded = !!linkedRef && (working.products || []).some(p =>
+      String(p.id || '').trim().toLowerCase() === linkedRef || String(p.sku || '').trim().toLowerCase() === linkedRef,
+    );
+    if (!linkedRef || linkedLoaded) {
+      if ((working.products || []).length > 0 && !shopProductsNeedFullHydration(working)) return;
+      if (!shopProductsNeedFullHydration(shell) && !(cached?.length)) return;
+    }
     if (shopProductHydrateRef.current === shell.id) return;
     shopProductHydrateRef.current = shell.id;
     const shopId = shell.id;
@@ -2305,7 +2319,9 @@ const App: React.FC = () => {
         && (resolvedShop.products?.length ?? 0) < (resolvedShop.productCount ?? 0);
       if (catalogWaiting) return <ShopShutterLoader lang={lang} />;
       if (!catalogMode && (resolvedShop.storefrontKind === 'html' || resolvedShop.storefrontKind === 'pack')) {
-        window.location.replace(`/s/${encodeURIComponent(resolvedShop.slug)}`);
+        const linked = new URLSearchParams(window.location.search).get('product') || new URLSearchParams(window.location.search).get('p');
+        const hash = linked ? `#p-${encodeURIComponent(linked)}` : '';
+        window.location.replace(`/s/${encodeURIComponent(resolvedShop.slug)}${hash}`);
         return <ShopShutterLoader lang={lang} />;
       }
       // ?catalog=1 / ?pdf=1 → printable A4 PDF catalog (same shop, different render)

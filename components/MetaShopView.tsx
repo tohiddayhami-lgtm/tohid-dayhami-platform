@@ -620,12 +620,26 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
 
   const searchOutOfSync = !!search.trim() && search.trim() !== searchQuery;
   const searchBusy = isComposing || searchOutOfSync;
-  // Deep link: ?shop=<slug>&product=<id> — indexable per-product URLs
+  const productMatchesRef = (p: MetaShopProduct, ref: string) => {
+    const key = ref.trim().toLowerCase();
+    if (!key) return false;
+    if (String(p.id || '').trim().toLowerCase() === key) return true;
+    if (String(p.sku || '').trim().toLowerCase() === key) return true;
+    return false;
+  };
+  // Deep link: ?shop=<slug>&product=<id or sku> — indexable per-product URLs
   const readProductParam = () => {
     try {
       const p = new URLSearchParams(window.location.search);
       return p.get('product') || p.get('p');
     } catch { return null; }
+  };
+  const findLinkedProduct = (ref: string | null) => {
+    if (!ref) return null;
+    const list = shop.products || [];
+    return list.find(p => p.active !== false && productMatchesRef(p, ref))
+      || list.find(p => productMatchesRef(p, ref))
+      || null;
   };
   const syncProductUrl = (productId: string | null) => {
     if (embed) return;
@@ -641,9 +655,9 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   useEffect(() => {
     const pid = readProductParam();
     if (!pid) return;
-    const p = products.find(x => x.id === pid);
+    const p = findLinkedProduct(pid);
     if (p) { setDetail(p); setTab('products'); }
-  }, [products]);
+  }, [products, shop.products]);
   useEffect(() => {
     try {
       const p = new URLSearchParams(window.location.search);
@@ -657,7 +671,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
     const onPop = () => {
       const pid = readProductParam();
       if (!pid) { setDetail(null); return; }
-      setDetail(products.find(x => x.id === pid) || null);
+      setDetail(findLinkedProduct(pid));
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -709,7 +723,7 @@ export const MetaShopView: React.FC<Props> = ({ shop, lang, onSubmitOrder, onSub
   const onStickerNav = useCallback((action: FloatingStickerNavAction) => {
     switch (action.type) {
       case 'product': {
-        const p = products.find(x => x.id === action.target);
+        const p = products.find(x => productMatchesRef(x, action.target));
         if (p) { setDetail(p); setTab('products'); syncProductUrl(p.id); }
         break;
       }
