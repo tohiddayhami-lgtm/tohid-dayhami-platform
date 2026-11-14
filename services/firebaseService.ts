@@ -1609,6 +1609,8 @@ export const hydrateMetaShop = async (shop: MetaShop | null): Promise<MetaShop |
 export type MetaShopSaveOptions = {
   /** Set when the editor intentionally saved an empty product list. */
   allowEmptyProducts?: boolean;
+  /** Write shop settings without replacing product chunks (catalog still loading). */
+  preserveProducts?: boolean;
 };
 
 /** Try to restore products from chunk docs when shell metadata was wiped by mistake. */
@@ -1743,6 +1745,18 @@ export const hydrateMetaShopProgressive = async (
 
 export const saveMetaShopToCloud = async (shop: MetaShop, opts?: MetaShopSaveOptions) => {
   const normalized = normalizeMetaShopForCloud(shop);
+  if (opts?.preserveProducts) {
+    const patch: Record<string, unknown> = { ...normalized };
+    delete patch.products;
+    delete patch.productCount;
+    delete patch.productChunkCount;
+    delete patch.productRefs;
+    delete patch.productRefChunkCount;
+    delete patch.extrasOffloaded;
+    await updateDocCloud('metaShops', normalized.id, patch);
+    logSystemAction('UPDATE', 'MetaShop', `تنظیمات فروشگاه ${normalized.name} ذخیره شد (محصولات دست نخورده)`, 'Master', normalized.id);
+    return;
+  }
   let products = normalized.products || [];
   const priorCount = shop.productCount ?? 0;
   const priorChunks = shop.productChunkCount ?? 0;

@@ -228,6 +228,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
   const [embedHeight, setEmbedHeight] = useState(1200);
   const [saving, setSaving] = useState(false);
   const [storefrontBusy, setStorefrontBusy] = useState(false);
+  const [storefrontNote, setStorefrontNote] = useState('');
   const storefrontFileRef = useRef<HTMLInputElement>(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsSyncing, setProductsSyncing] = useState(false);
@@ -856,22 +857,26 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const shopId = draft.id;
     const previousChunks = draft.storefrontChunkCount || 0;
     setStorefrontBusy(true);
+    setStorefrontNote(T ? `در حال خواندن «${file.name}»…` : `Reading “${file.name}”…`);
     const reader = new FileReader();
     reader.onerror = () => {
       setStorefrontBusy(false);
-      alert(T ? 'خواندن فایل ناموفق بود.' : 'Could not read the file.');
+      setStorefrontNote(T ? 'خواندن فایل ناموفق بود.' : 'Could not read the file.');
     };
     reader.onload = async () => {
       try {
+        setStorefrontNote(T ? 'در حال ذخیره فایل در فروشگاه…' : 'Saving the file on the shop…');
         const raw = String(reader.result || '');
         const encoding: 'utf8' | 'base64' = zip ? 'base64' : 'utf8';
         const body = zip ? (raw.includes(',') ? raw.split(',')[1] : raw) : raw;
         const saved = await saveMetaShopStorefrontFile(shopId, { fileName: file.name, encoding, body, previousChunks });
+        setStorefrontNote(T ? `فایل «${file.name}» آماده است. دکمه «ذخیره فروشگاه» را بزنید.` : `“${file.name}” is ready. Click Save shop.`);
         upd(zip
           ? { storefrontKind: 'pack', storefrontFileName: file.name, storefrontEncoding: 'base64', storefrontChunkCount: saved.chunkCount, storefrontPackEntry: 'index.html', storefrontHtmlUrl: undefined, storefrontPackZipUrl: undefined }
           : { storefrontKind: 'html', storefrontFileName: file.name, storefrontEncoding: 'utf8', storefrontChunkCount: saved.chunkCount, storefrontPackEntry: undefined, storefrontHtmlUrl: undefined, storefrontPackZipUrl: undefined });
       } catch (err) {
-        alert(err instanceof Error ? err.message : (T ? 'ذخیره فایل ناموفق بود.' : 'Could not save the file.'));
+        const msg = err instanceof Error ? err.message : '';
+        setStorefrontNote(msg || (T ? 'ذخیره فایل ناموفق بود.' : 'Could not save the file.'));
       } finally {
         setStorefrontBusy(false);
       }
@@ -905,20 +910,11 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
 
   const save = async () => {
     if (!draft) return;
-    if (productsLoading || productsSyncing) {
-      alert(T ? 'لطفاً تا بارگذاری کامل محصولات صبر کنید.' : 'Please wait until all products are loaded.');
+    if (storefrontBusy) {
+      alert(T ? 'فایل ویترین هنوز در حال ذخیره است. چند لحظه صبر کنید.' : 'The storefront file is still saving. Wait a moment.');
       return;
     }
-    if (productsLoadFailed) {
-      alert(T
-        ? 'محصولات از سرور بارگذاری نشدند. ابتدا «بازیابی محصولات» را بزنید یا JSON کامل import کنید — ذخیره نکنید.'
-        : 'Products failed to load from the server. Use Recover or import full JSON first — do not save.');
-      return;
-    }
-    if (shopNeedsProductHydration(draft) && !productsFullyLoaded) {
-      alert(T ? 'محصولات هنوز کامل بارگذاری نشده‌اند. کمی صبر کنید و دوباره ذخیره کنید.' : 'Products are not fully loaded yet. Wait and try again.');
-      return;
-    }
+    const productsIncomplete = metaShops.some(s => s.id === draft.id) && (productsLoading || productsSyncing || productsLoadFailed || (shopNeedsProductHydration(draft) && !productsFullyLoaded));
     if (!draft.name.trim()) { alert(T ? 'نام فروشگاه را وارد کنید.' : 'Enter a shop name.'); return; }
     const slug = (draft.slug || '').trim() || slugify(draft.name);
     // ensure unique slug
@@ -927,7 +923,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
     const code = (draft.code && draft.code.trim()) ? draft.code.trim().toUpperCase() : uniqueShopCode(metaShops);
     setSaving(true);
     try {
-      const allowEmptyProducts = productsFullyLoaded && draft.products.length === 0;
+      const allowEmptyProducts = !productsIncomplete && productsFullyLoaded && draft.products.length === 0;
       const manualActions = detectManualPriceEdits(priceBaselineRef.current, draft.products, draft.currency);
       const priceHistory = appendPriceHistoryMany(draft.priceHistory, manualActions, backupActorName);
       await onSaveMetaShop({
@@ -936,7 +932,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
         code,
         isActive: draft.isActive !== false,
         priceHistory,
-      }, { allowEmptyProducts });
+      }, { allowEmptyProducts, preserveProducts: productsIncomplete });
       setMode('list'); setDraft(null);
       priceBaselineRef.current = null;
       priceBaselineShopIdRef.current = null;
@@ -1896,7 +1892,7 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
           <a href={draft.slug ? catalogUrl(draft) : undefined} target="_blank" rel="noreferrer" title={t.catalogTitle} className={`text-xs px-3 py-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center gap-1 ${!draft.slug ? 'opacity-40 pointer-events-none' : ''}`}>📄 {t.catalog}</a>
           <button onClick={() => downloadShopJson(draft)} title={t.downloadJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">⤓ JSON</button>
           {!readonly && <button onClick={() => triggerUpdate(draft)} title={t.updateJson} className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-emerald-600 hover:bg-emerald-50">⤒ JSON</button>}
-          {!readonly && <button onClick={save} disabled={saving || productsLoading || productsSyncing} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{t.save}</button>}
+          {!readonly && <button onClick={save} disabled={saving || storefrontBusy} className="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5"><IconCheck className="w-4 h-4" />{saving ? (T ? 'در حال ذخیره…' : 'Saving…') : t.save}</button>}
         </div>
       </div>
 
@@ -1941,11 +1937,19 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
             </button>
           )}
         </div>
+        {(storefrontBusy || storefrontNote) && (
+          <div className={`mt-3 rounded-xl px-3 py-2 text-sm ${storefrontBusy ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}>
+            {storefrontNote || (T ? 'در حال کار روی فایل…' : 'Working on the file…')}
+          </div>
+        )}
         {draft.storefrontKind && draft.slug && (
           <div className="mt-3 space-y-1">
             <div className="text-[11px] text-gray-500">{draft.storefrontFileName || (draft.storefrontKind === 'pack' ? 'ZIP' : 'HTML')} · {T ? 'بعد از ذخیره فروشگاه فعال می‌شود' : 'Goes live after you save the shop'}</div>
             <a href={customStoreUrl(draft.slug)} target="_blank" rel="noreferrer" className="block text-xs text-indigo-600 dir-ltr text-left break-all hover:underline">{customStoreUrl(draft.slug)}</a>
           </div>
+        )}
+        {(productsLoading || productsSyncing || (shopNeedsProductHydration(draft) && !productsFullyLoaded)) && draft.storefrontKind && (
+          <p className="mt-2 text-xs text-gray-500">{T ? 'کاتالوگ محصولات جداگانه بارگذاری می‌شود. ذخیره فروشگاه منتظر آن نمی‌ماند و محصولات فعلی پاک نمی‌شوند.' : 'The product catalog loads separately. Saving the shop does not wait for it and does not erase current products.'}</p>
         )}
       </div>
 
