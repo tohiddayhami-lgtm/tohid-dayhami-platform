@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MetaShop, MetaShopProduct, MetaShopOrder, MetaShopPropertyReferral, MetaShopSupplierCollaboration, MetaShopType, Personnel, AppConfig, Department, MetaShopEvent, CustomerAccount } from '../types';
 import { referralToProduct, supplierCollaborationToProduct } from '../utils/metaShopReferral';
 import { IconPlus, IconTrash, IconEdit, IconCheck, IconCopy, IconLink, IconSearch, IconUsers, IconSettings, IconUpload, IconGlobe, IconTag } from './Icons';
-import { subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive, loadMetaShopProductsFull, recoverMetaShopFromChunks, recoverAllMetaShopsProducts, probeMetaShopProductsAvailable, uploadFileWithProgress, type MetaShopSaveOptions } from '../services/firebaseService';
+import { subscribeToMetaShops, saveMetaShopToCloud, deleteMetaShopFromCloud, fetchMetaShopShellBySlug, enrichMetaShopShell, hydrateMetaShop, hydrateMetaShopProgressive, loadMetaShopProductsFull, recoverMetaShopFromChunks, recoverAllMetaShopsProducts, probeMetaShopProductsAvailable, uploadFileWithProgress, saveMetaShopStorefrontFile, type MetaShopSaveOptions } from '../services/firebaseService';
 import { shopNeedsProductHydration, isShellOnlyMetaShopJson } from '../utils/metaShopChunks';
 import { downloadSample } from './metaShopSamples';
 import { MetaBazaarManager } from './MetaBazaarManager';
@@ -848,22 +848,36 @@ export const MetaShopManager: React.FC<Props> = ({ metaShops, metaShopOrders, me
       alert(T ? 'فایل HTML یا ZIP انتخاب کنید.' : 'Choose an HTML or ZIP file.');
       return;
     }
+    if (!draft?.id) return;
+    if (file.size > 12 * 1024 * 1024) {
+      alert(T ? 'حجم فایل بیشتر از ۱۲ مگابایت است.' : 'File is larger than 12 MB.');
+      return;
+    }
+    const shopId = draft.id;
+    const previousChunks = draft.storefrontChunkCount || 0;
     setStorefrontBusy(true);
-    uploadFileWithProgress(
-      file,
-      () => {},
-      (url) => {
-        if (zip) {
-          upd({ storefrontKind: 'pack', storefrontFileName: file.name, storefrontPackZipUrl: url, storefrontHtmlUrl: undefined, storefrontPackEntry: 'index.html' });
-        } else {
-          upd({ storefrontKind: 'html', storefrontFileName: file.name, storefrontHtmlUrl: url, storefrontPackZipUrl: undefined, storefrontPackEntry: undefined });
-        }
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setStorefrontBusy(false);
+      alert(T ? 'خواندن فایل ناموفق بود.' : 'Could not read the file.');
+    };
+    reader.onload = async () => {
+      try {
+        const raw = String(reader.result || '');
+        const encoding: 'utf8' | 'base64' = zip ? 'base64' : 'utf8';
+        const body = zip ? (raw.includes(',') ? raw.split(',')[1] : raw) : raw;
+        const saved = await saveMetaShopStorefrontFile(shopId, { fileName: file.name, encoding, body, previousChunks });
+        upd(zip
+          ? { storefrontKind: 'pack', storefrontFileName: file.name, storefrontEncoding: 'base64', storefrontChunkCount: saved.chunkCount, storefrontPackEntry: 'index.html', storefrontHtmlUrl: undefined, storefrontPackZipUrl: undefined }
+          : { storefrontKind: 'html', storefrontFileName: file.name, storefrontEncoding: 'utf8', storefrontChunkCount: saved.chunkCount, storefrontPackEntry: undefined, storefrontHtmlUrl: undefined, storefrontPackZipUrl: undefined });
+      } catch (err) {
+        alert(err instanceof Error ? err.message : (T ? 'ذخیره فایل ناموفق بود.' : 'Could not save the file.'));
+      } finally {
         setStorefrontBusy(false);
-      },
-      (err) => { setStorefrontBusy(false); alert(err.message); },
-      'documents',
-      file.type || (zip ? 'application/zip' : 'text/html'),
-    );
+      }
+    };
+    if (zip) reader.readAsDataURL(file);
+    else reader.readAsText(file);
   };
   const updShopI18n = (code: string, field: string, val: string) => {
     const i18n: Record<string, Record<string, string>> = { ...(draft?.i18n || {}) };

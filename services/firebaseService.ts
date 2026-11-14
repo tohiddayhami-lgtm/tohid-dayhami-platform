@@ -689,6 +689,33 @@ export const deleteFile = async (pathOrUrl: string) => {
     await deleteObject(ref(storage, path));
 };
 
+const STOREFRONT_CHUNK_COL = 'metaShopStorefrontChunks';
+const STOREFRONT_CHUNK_CHARS = 320_000;
+
+/** Store an uploaded shop HTML/ZIP in Firestore so Storage rules are not required. */
+export async function saveMetaShopStorefrontFile(
+  shopId: string,
+  file: { fileName: string; encoding: 'utf8' | 'base64'; body: string; previousChunks?: number },
+): Promise<{ chunkCount: number }> {
+  const body = String(file.body || '');
+  const parts: string[] = [];
+  for (let i = 0; i < body.length; i += STOREFRONT_CHUNK_CHARS) {
+    parts.push(body.slice(i, i + STOREFRONT_CHUNK_CHARS));
+  }
+  if (!parts.length) parts.push('');
+  await Promise.all(parts.map((data, index) => setDocCloud(STOREFRONT_CHUNK_COL, `${shopId}_${index}`, {
+    id: `${shopId}_${index}`,
+    shopId,
+    index,
+    data,
+  })));
+  const prev = Number(file.previousChunks) || 0;
+  for (let i = parts.length; i < prev; i++) {
+    try { await deleteDocCloud(STOREFRONT_CHUNK_COL, `${shopId}_${i}`); } catch { /* leftover chunk */ }
+  }
+  return { chunkCount: parts.length };
+}
+
 export const uploadFileWithProgress = async (
     file: File,
     onProgress: (progress: number) => void,

@@ -10,6 +10,8 @@
  *   DELETE /api/fb?col=<collection>&doc=<id>         → delete document
  */
 
+export const config = { api: { bodyParser: { sizeLimit: '4mb' } } };
+
 const PROJECT_ID = 'company-crm-103aa';
 const API_KEY    = 'AIzaSyBK5nSP_2RPtL2puqd_3y06zJeDPv3Ueoc';
 const BASE       = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;

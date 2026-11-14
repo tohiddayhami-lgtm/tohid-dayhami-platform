@@ -65,6 +65,20 @@ async function queryByField(col, field, value) {
   return doc?.fields ? parseDoc(doc) : null;
 }
 
+async function loadStorefrontBytes(shop) {
+  const n = Number(shop.storefrontChunkCount) || 0;
+  if (n < 1) return null;
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    const doc = await getDoc('metaShopStorefrontChunks', `${shop.id}_${i}`);
+    if (!doc || doc.data == null) throw new Error('storefront_chunk_missing');
+    parts.push(String(doc.data));
+  }
+  const joined = parts.join('');
+  if (shop.storefrontEncoding === 'base64') return Buffer.from(joined, 'base64');
+  return Buffer.from(joined, 'utf8');
+}
+
 async function findShop(slug) {
   const byId = await getDoc('metaShops', slug);
   if (byId && (byId.slug === slug || byId.id === slug)) return byId;
@@ -172,27 +186,37 @@ export default async function handler(req, res) {
     const origin = originFromReq(req);
     const requested = pathFromReq(req);
 
+    const stored = await loadStorefrontBytes(shop);
+
     if (shop.storefrontKind === 'html') {
-      if (!shop.storefrontHtmlUrl) {
+      let text = stored ? stored.toString('utf8') : '';
+      if (!text && shop.storefrontHtmlUrl) {
+        const r = await fetch(shop.storefrontHtmlUrl);
+        if (!r.ok) {
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.status(502).send(page('خطا', 'خواندن فایل فروشگاه ناموفق بود.'));
+        }
+        text = await r.text();
+      }
+      if (!text) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(page('فایل نیست', 'فایل HTML این فروشگاه ذخیره نشده.'));
       }
-      const r = await fetch(shop.storefrontHtmlUrl);
-      if (!r.ok) {
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(502).send(page('خطا', 'خواندن فایل فروشگاه ناموفق بود.'));
-      }
-      const html = injectOrderBridge(await r.text(), { slug: shop.slug || slug, origin, filePath: '' });
+      const html = injectOrderBridge(text, { slug: shop.slug || slug, origin, filePath: '' });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(200).send(html);
     }
 
-    if (!shop.storefrontPackZipUrl) {
+    let zip;
+    if (stored && stored.length) {
+      zip = await JSZip.loadAsync(stored);
+    } else if (shop.storefrontPackZipUrl) {
+      zip = await loadZip(shop.storefrontPackZipUrl);
+    } else {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(page('فایل نیست', 'بسته ZIP این فروشگاه ذخیره نشده.'));
     }
-    const zip = await loadZip(shop.storefrontPackZipUrl);
     const logical = requested || shop.storefrontPackEntry || 'index.html';
     const entry = findEntry(zip, logical);
     if (!entry) {

@@ -1513,6 +1513,9 @@ export interface MetaShop {
   storefrontHtmlUrl?: string;
   storefrontPackZipUrl?: string;
   storefrontPackEntry?: string;
+  /** File body lives in metaShopStorefrontChunks (avoids Storage rules). */
+  storefrontChunkCount?: number;
+  storefrontEncoding?: 'utf8' | 'base64';
   /** Link-share / Open Graph (WhatsApp, Telegram, …) — overrides defaults when set. */
   seoTitle?: string;
   seoDescription?: string;
